@@ -89,6 +89,21 @@ signIdentityToken(
 Any JWT library works: `sub` and `exp` are required. A forged or expired token
 is refused with 401, and a token never grants the agent UI.
 
+## Theming
+
+Both UIs read CSS custom properties set on an ancestor, so they inherit into
+the widget's shadow root. Shared: `--helpdesk-font`, `-bg`, `-fg`, `-muted`,
+`-border`, `-subtle`, `-accent`, `-accent-hover`, `-accent-fg`, `-focus`,
+`-danger`, `-radius`. The widget adds `--helpdesk-launcher-bg`/`-fg`,
+`--helpdesk-panel-header-bg`/`-fg` (both default to the accent),
+`--helpdesk-panel-border` and `--helpdesk-offset-bottom`; the agent UI adds
+`--helpdesk-header-bg` (table heads and avatars), `--helpdesk-note`,
+`--helpdesk-note-border` and `--helpdesk-warning`.
+
+For a dark theme, set the panel header too: a light accent reads well on
+buttons and links, but not as the header's background. Without variables,
+`theme="auto"` on the widget follows the OS.
+
 ## Development
 
 ```sh
