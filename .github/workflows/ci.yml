@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: db
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres@localhost:5432/db
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run test
+      - run: pnpm run test:integration
+      # pnpm pack, not npm pack: only pnpm applies publishConfig's dist exports.
+      - run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+      - name: Smoke-test the tarball outside the repo
+        run: |
+          mkdir "$RUNNER_TEMP/smoke" && cd "$RUNNER_TEMP/smoke"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz pg react react-dom
+          node --input-type=module -e "
+            const m = await import('better-helpdesk');
+            const token = m.signIdentityToken({ sub: 'u' }, 's');
+            if (m.verifyIdentityToken(token, 's')?.user.id !== 'u') process.exit(1);
+            await import('better-helpdesk/rich');
+          "
+          test -s node_modules/better-helpdesk/dist/widget.js
+          HELPDESK_DATABASE_URL="$TEST_DATABASE_URL" npx better-helpdesk-migrate

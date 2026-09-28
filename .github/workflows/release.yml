@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing (OIDC) and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - name: Tag must match package.json version
+        run: |
+          if [ "${GITHUB_REF_NAME#v}" != "$(node -p "require('./package.json').version")" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json" >&2
+            exit 1
+          fi
+      - run: pnpm run lint
+      - run: pnpm run test
+      - run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+      # Configure this repository and workflow as the trusted publisher of
+      # better-helpdesk on npmjs.com; no token is stored.
+      - run: npm publish "$RUNNER_TEMP"/pack/*.tgz --provenance --access public
