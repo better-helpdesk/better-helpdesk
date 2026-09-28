@@ -27,6 +27,10 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run test
       - run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+      - name: Is this version already on npm?
+        id: npm
+        run: echo "published=$(npm view "$(node -p "require('./package.json').name")@${GITHUB_REF_NAME#v}" version 2>/dev/null)" >> "$GITHUB_OUTPUT"
       # Configure this repository and workflow as the trusted publisher of
       # better-helpdesk on npmjs.com; no token is stored.
-      - run: npm publish "$RUNNER_TEMP"/pack/*.tgz --provenance --access public
+      - if: steps.npm.outputs.published == ''
+        run: npm publish "$RUNNER_TEMP"/pack/*.tgz --provenance --access public
