@@ -21,23 +21,43 @@ const row = (id: string): ConversationRow => ({
   assigneeId: null,
 });
 
-it('keeps the highlighted conversation when the rows re-sort', () => {
+const context = {
+  t: translator('en'),
+  locale: 'en',
+  href: () => '#',
+  inboxName: (key: string) => key,
+} as unknown as AdminContext;
+
+const table = (rows: ConversationRow[], onOpen: (id: string) => void) => (
+  <AdminProvider value={context}>
+    <ConversationTable rows={rows} onOpen={onOpen} keyboard />
+  </AdminProvider>
+);
+
+it('highlights no conversation until the first j or k, which lands on the first row', () => {
   const onOpen = vi.fn();
-  const context = {
-    t: translator('en'),
-    locale: 'en',
-    href: () => '#',
-    inboxName: (key: string) => key,
-  } as unknown as AdminContext;
-  const table = (rows: ConversationRow[]) => (
-    <AdminProvider value={context}>
-      <ConversationTable rows={rows} onOpen={onOpen} keyboard />
-    </AdminProvider>
-  );
-  const { rerender } = render(table([row('a'), row('b')]));
+  const { container } = render(table([row('a'), row('b')], onOpen));
+  const active = () =>
+    [...container.querySelectorAll('tr[data-active="true"]')].map(
+      tr => tr.textContent
+    );
+
+  expect(active()).toEqual([]);
+  fireEvent.keyDown(document.body, { key: 'Enter' });
+  expect(onOpen).not.toHaveBeenCalled();
 
   fireEvent.keyDown(document.body, { key: 'j' });
-  rerender(table([row('b'), row('a'), row('c')]));
+  expect(active()).toHaveLength(1);
+  expect(active()[0]).toContain('DG-a');
+});
+
+it('keeps the highlighted conversation when the rows re-sort', () => {
+  const onOpen = vi.fn();
+  const { rerender } = render(table([row('a'), row('b')], onOpen));
+
+  fireEvent.keyDown(document.body, { key: 'j' });
+  fireEvent.keyDown(document.body, { key: 'j' });
+  rerender(table([row('b'), row('a'), row('c')], onOpen));
   fireEvent.keyDown(document.body, { key: 'Enter' });
 
   expect(onOpen).toHaveBeenCalledWith('b');
