@@ -1,0 +1,102 @@
+{
+  "name": "better-helpdesk",
+  "version": "0.1.0",
+  "description": "Support inbox, ticketing and lightweight CRM that mounts into a Next.js app.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-helpdesk/better-helpdesk.git"
+  },
+  "homepage": "https://github.com/better-helpdesk/better-helpdesk#readme",
+  "bugs": {
+    "url": "https://github.com/better-helpdesk/better-helpdesk/issues"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./widget": "./src/widget/index.ts",
+    "./admin": "./src/admin/index.tsx",
+    "./next": "./next.mjs",
+    "./rich": "./src/ui/rich.tsx"
+  },
+  "bin": {
+    "better-helpdesk-migrate": "bin/migrate.mjs"
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "bin",
+    "next.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./widget": {
+        "types": "./dist/widget/index.d.ts",
+        "default": "./dist/widget/index.js"
+      },
+      "./admin": {
+        "types": "./dist/admin/index.d.ts",
+        "default": "./dist/admin/index.js"
+      },
+      "./next": "./next.mjs",
+      "./rich": {
+        "types": "./dist/ui/rich.d.ts",
+        "default": "./dist/ui/rich.js"
+      },
+      "./widget.js": "./dist/widget.js",
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "lint": "biome check && tsc --noEmit",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:generate": "drizzle-kit generate",
+    "migrate": "node bin/migrate.mjs",
+    "build:dist": "node scripts/build.mjs",
+    "prepack": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.8",
+    "@testing-library/react": "^16.3.2",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^24",
+    "@types/pg": "^8.18.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "19.2.7",
+    "drizzle-kit": "0.31.7",
+    "esbuild": "^0.28.1",
+    "jsdom": "^29.1.1",
+    "pg": "^8.16.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "mailauth": "^5.0.3",
+    "mailparser": "^3.9.0",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "pg": "^8.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "packageManager": "pnpm@11.24.0"
+}

@@ -1,0 +1,1 @@
+CREATE INDEX "identity_contact_idx" ON "helpdesk"."identity" USING btree ("contact_id");
