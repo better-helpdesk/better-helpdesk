@@ -263,8 +263,8 @@ export function ConversationTable({
   const { t, href, locale, inboxName } = useAdmin();
   // By id: polling re-sorts the rows and a filter swaps them.
   const [activeId, setActiveId] = useState<string | null>(null);
-  const found = rows.findIndex(r => r.id === activeId);
-  const active = found === -1 ? 0 : found;
+  // -1 until the first j/k: the cursor shows only once someone uses it.
+  const active = rows.findIndex(r => r.id === activeId);
   const showPriority = rows.some(
     r => r.priority === 'high' || r.priority === 'urgent'
   );
@@ -281,8 +281,9 @@ export function ConversationTable({
       }
       const row = rows[active];
       const move = (to: number) => setActiveId(rows[to]?.id ?? null);
-      if (e.key === 'j') move(Math.min(active + 1, rows.length - 1));
-      else if (e.key === 'k') move(Math.max(active - 1, 0));
+      if (e.key === 'j')
+        move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1));
+      else if (e.key === 'k') move(active === -1 ? 0 : Math.max(active - 1, 0));
       else if (e.key === 'Enter' && row) onOpen(row.id);
     };
     window.addEventListener('keydown', onKey);
