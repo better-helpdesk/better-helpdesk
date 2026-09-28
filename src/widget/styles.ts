@@ -12,6 +12,8 @@ export const widgetCss = `
   --s-focus: var(--helpdesk-focus, #f55068);
   --s-launcher-bg: var(--helpdesk-launcher-bg, var(--s-accent));
   --s-launcher-fg: var(--helpdesk-launcher-fg, var(--s-accent-fg));
+  --s-head-bg: var(--helpdesk-panel-header-bg, var(--s-accent));
+  --s-head-fg: var(--helpdesk-panel-header-fg, var(--s-accent-fg));
   --s-radius: var(--helpdesk-radius, 12px);
   --s-offset: var(--helpdesk-offset-bottom, 20px);
   font-family: var(--helpdesk-font, system-ui, -apple-system, 'Segoe UI', sans-serif);
@@ -32,7 +34,7 @@ button { cursor: pointer; }
 .launcher {
   height: 56px; min-width: 56px; border-radius: 28px; border: 0; padding: 0 16px;
   background: var(--s-launcher-bg); color: var(--s-launcher-fg);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--s-launcher-bg) 35%, transparent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
   display: flex; align-items: center; justify-content: center; gap: 8px; position: relative;
   font-weight: 600; transition: transform 120ms ease;
 }
@@ -68,7 +70,7 @@ button { cursor: pointer; }
   width: min(400px, calc(100vw - 40px)); height: min(640px, calc(100vh - 100px - var(--s-offset)));
   background: var(--s-bg); border: var(--helpdesk-panel-border, 1px solid var(--s-border));
   border-radius: var(--s-radius);
-  box-shadow: 0 16px 48px color-mix(in srgb, var(--s-fg) 22%, transparent);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.22);
   display: flex; flex-direction: column; overflow: hidden;
   animation: panel-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -84,7 +86,7 @@ button { cursor: pointer; }
   input, textarea, select, .rt-input { font-size: 16px !important; }
 }
 
-.head { background: var(--s-accent); color: var(--s-accent-fg); padding: 8px 10px 14px 16px; }
+.head { background: var(--s-head-bg); color: var(--s-head-fg); padding: 8px 10px 14px 16px; }
 .head-row { display: flex; align-items: center; gap: 4px; }
 .head-title { flex: 1; min-width: 0; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .subject { display: block; overflow-wrap: anywhere; }
@@ -100,8 +102,9 @@ button { cursor: pointer; }
 .avatars { display: flex; }
 .avatar {
   width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none;
-  font-size: 11px; font-weight: 700; background: var(--s-subtle); color: var(--s-accent);
-  border: 2px solid var(--s-accent);
+  --s-avatar-bg: color-mix(in srgb, var(--s-fg) 12%, var(--s-subtle));
+  font-size: 11px; font-weight: 700; background: var(--s-avatar-bg); color: var(--s-accent);
+  border: 2px solid var(--s-avatar-bg);
 }
 .avatars .avatar + .avatar { margin-left: -8px; }
 
@@ -125,8 +128,9 @@ img.avatar { object-fit: cover; padding: 0; }
   display: grid; grid-template-columns: 36px 1fr 16px; align-items: center; gap: 12px;
   text-align: left; padding: 12px; border: 1px solid var(--s-border);
   border-radius: 10px; background: var(--s-bg);
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
-.type:hover { border-color: var(--s-accent); background: var(--s-subtle); }
+.type:hover { border-color: color-mix(in srgb, var(--s-accent) 30%, var(--s-border)); background: color-mix(in srgb, var(--s-subtle) 50%, var(--s-bg)); }
 .type-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--s-subtle); display: grid; place-items: center; color: var(--s-accent); }
 .type-icon svg { width: 18px; height: 18px; }
 .type strong { display: block; font-weight: 600; }
@@ -283,6 +287,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
     --s-accent: var(--helpdesk-accent, #f0f4f8);
     --s-accent-hover: var(--helpdesk-accent-hover, #d9e2ec);
     --s-accent-fg: var(--helpdesk-accent-fg, #0c2034);
+    --s-head-bg: var(--helpdesk-panel-header-bg, #243b53);
+    --s-head-fg: var(--helpdesk-panel-header-fg, #f0f4f8);
   }
 }
 `;
