@@ -108,12 +108,14 @@ buttons and links, but not as the header's background. Without variables,
 
 ```sh
 pnpm install
+pnpm lint
 pnpm test
 TEST_DATABASE_URL=postgres://postgres@localhost:5432/db pnpm test:integration
 ```
 
-Integration tests create a `helpdesk_test` database next to the one the URL
-names. Releases publish from a `v*` tag whose version matches `package.json`.
+`pnpm lint` is Biome plus `tsc --noEmit`, and CI runs it first. Integration
+tests create a `helpdesk_test` database next to the one the URL names.
+Releases publish from a `v*` tag whose version matches `package.json`.
 
 ## License
 
