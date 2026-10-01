@@ -34,3 +34,73 @@ jobs:
       # better-helpdesk on npmjs.com; no token is stored.
       - if: steps.npm.outputs.published == ''
         run: npm publish "$RUNNER_TEMP"/pack/*.tgz --provenance --access public
+
+  # Runs only once the publish job has succeeded. It installs nothing and runs
+  # no project code, so the write below never meets a dependency or a build
+  # script.
+  release:
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the GitHub Release for this tag
+      pull-requests: read # read the titles of the merged pull requests
+    steps:
+      # persist-credentials: false keeps the token out of .git/config, so the
+      # only thing that can write is the step handed GH_TOKEN below.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists"
+            exit 0
+          fi
+          previous=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          commits=$RUNNER_TEMP/commits.tsv
+          notes=$RUNNER_TEMP/release-notes.md
+          # A command of its own, so a git failure fails the job. Read from a
+          # process substitution its exit status would be invisible to set -e
+          # and the notes would come out silently empty.
+          git log --reverse --format='%H%x09%s' "${previous:+$previous..}$GITHUB_REF_NAME" > "$commits"
+          seen=
+          changed=
+          while IFS=$'\t' read -r sha subject; do
+            # The version bump is the release, not a change within it. Both
+            # "0.1.3" and a prefixed "chore(release): 0.1.3" are that commit.
+            case "$subject" in
+            "${GITHUB_REF_NAME#v}" | *": ${GITHUB_REF_NAME#v}") continue ;;
+            esac
+            pull=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" \
+              --jq 'first(.[]) | "\(.number)\t\(.title)"' </dev/null 2>/dev/null || true)
+            if [ -z "$pull" ]; then
+              changed=$changed"- $subject."$'\n'
+              continue
+            fi
+            number=${pull%%$'\t'*}
+            case " $seen " in *" $number "*) continue ;; esac
+            seen="$seen $number"
+            changed=$changed"- ${pull#*$'\t'} (#$number)."$'\n'
+          done < "$commits"
+          {
+            echo '**What changed**'
+            echo
+            # A release whose only commit is the version bump has no bullets.
+            if [ -n "$changed" ]; then
+              printf '%s' "$changed"
+            else
+              echo '- Maintenance release.'
+            fi
+            echo
+            echo '**Notes**'
+            echo
+            echo 'Published to npm with provenance via trusted publishing.'
+            if [ -n "$previous" ]; then
+              echo
+              echo "**Full changelog:** https://github.com/$GITHUB_REPOSITORY/compare/$previous...$GITHUB_REF_NAME"
+            fi
+          } > "$notes"
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$notes"
