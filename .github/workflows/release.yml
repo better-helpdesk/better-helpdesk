@@ -70,16 +70,29 @@ jobs:
           changed=
           while IFS=$'\t' read -r sha subject; do
             # The version bump is the release, not a change within it. Both
-            # "0.1.3" and a prefixed "chore(release): 0.1.3" are that commit.
+            # "0.1.3" and a prefixed "chore(release): 0.1.3" are that commit,
+            # as it reads when the bump branch was rebased or fast-forwarded.
             case "$subject" in
             "${GITHUB_REF_NAME#v}" | *": ${GITHUB_REF_NAME#v}") continue ;;
             esac
             pull=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" \
               --jq 'first(.[]) | "\(.number)\t\(.title)"' </dev/null 2>/dev/null || true)
             if [ -z "$pull" ]; then
+              # A merge commit names a branch, not a change. Its pull request
+              # title is the change, and the lookup that reads it just failed,
+              # so there is nothing here worth announcing. The commits it
+              # merged are in this range too and speak for themselves.
+              case "$subject" in
+              'Merge pull request #'* | 'Merge branch '*) continue ;;
+              esac
               changed=$changed"- $subject."$'\n'
               continue
             fi
+            # The bump again, reached through its pull request: a merge commit
+            # or a squash subject the test above cannot see the version in.
+            case "${pull#*$'\t'}" in
+            "${GITHUB_REF_NAME#v}" | *": ${GITHUB_REF_NAME#v}") continue ;;
+            esac
             number=${pull%%$'\t'*}
             case " $seen " in *" $number "*) continue ;; esac
             seen="$seen $number"
