@@ -3,3 +3,9 @@ dist
 coverage
 *.tsbuildinfo
 *.tgz
+.next
+next-env.d.ts
+.env.local
+# Written by `next dev`, for whichever agent reads them.
+examples/*/AGENTS.md
+examples/*/CLAUDE.md

@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    "allowJs": true,
     "esModuleInterop": true,
     "incremental": true,
     "isolatedModules": true,
@@ -9,13 +10,19 @@
     "module": "preserve",
     "moduleDetection": "force",
     "moduleResolution": "bundler",
+    "noEmit": true,
     "noUncheckedIndexedAccess": true,
-    "outDir": "./dist",
+    "plugins": [{ "name": "next" }],
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2022"
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "dist", "examples"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
 }
