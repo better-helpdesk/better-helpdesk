@@ -41,6 +41,18 @@ Two consequences of the link worth knowing:
 - The app is excluded from the root `tsconfig.json` and from
   `pnpm run lint`'s type check; `next build` type-checks it instead.
 
+## On CI
+
+The `example` job in `.github/workflows/ci.yml` copies this app out of the
+repository, installs the packed tarball into the copy with npm, builds it and
+then uses it: a widget session, the agent UI, and one conversation written to
+Postgres. It runs on the current major of Next.js and the previous one for
+every pull request, and on `next@canary` every Monday, where a failure is news
+rather than a blocked merge.
+
+Next.js 15 cannot drive the TypeScript 7 compiler, so that leg of the matrix
+installs TypeScript 6 over this app's own devDependency.
+
 ## Three things it deliberately gets wrong
 
 - **Identity is a cookie.** `lib/helpdesk.ts` hands anyone who sets

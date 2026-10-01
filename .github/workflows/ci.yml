@@ -4,9 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Monday morning, to find out what next@canary broke while nobody looked.
+  schedule:
+    - cron: '0 6 * * 1'
 
 jobs:
   check:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -26,7 +30,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      # The example app is a workspace package now; it has no part in this job
+      # and its Next.js install is not worth downloading here.
+      - run: pnpm install --filter better-helpdesk --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm run test
       - run: pnpm run test:integration
@@ -45,3 +51,75 @@ jobs:
           "
           test -s node_modules/better-helpdesk/dist/widget.js
           HELPDESK_DATABASE_URL="$TEST_DATABASE_URL" npx better-helpdesk-migrate
+
+  # Builds and runs examples/demo against the packed tarball, which resolves
+  # the published dist exports rather than the workspace link the app uses in
+  # development. A host app is where that difference shows up.
+  example:
+    name: example (next@${{ matrix.target.next }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Today's Next.js and the previous major on every pull request; the
+        # weekly run swaps in canary, where a failure blocks nobody. Next.js 15
+        # cannot drive the TypeScript 7 compiler, so each entry brings its own.
+        target: >-
+          ${{ fromJSON(github.event_name == 'schedule' &&
+          '[{"next":"canary","typescript":"7"}]' ||
+          '[{"next":"latest","typescript":"7"},{"next":"15","typescript":"6"}]')
+          }}
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: db
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      HELPDESK_DATABASE_URL: postgres://postgres@localhost:5432/db
+      DEMO_URL: http://localhost:3000
+      DEMO_UNSAFE_AUTH: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --filter better-helpdesk --frozen-lockfile
+      - run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+      # Outside the repository, so the workspace link cannot resolve and npm,
+      # not pnpm, does the installing: a missing peer or transitive dependency
+      # has to surface here rather than hide behind pnpm's stricter tree.
+      - name: Install the example against the tarball
+        run: |
+          cp -r examples/demo "$RUNNER_TEMP/app"
+          cd "$RUNNER_TEMP/app"
+          npm pkg set dependencies.better-helpdesk="file:$(echo "$RUNNER_TEMP"/pack/*.tgz)"
+          npm install --no-audit --no-fund \
+            "next@${{ matrix.target.next }}" "typescript@${{ matrix.target.typescript }}"
+          node -p "'next ' + require('next/package.json').version"
+      - name: Migrate, build, start
+        run: |
+          cd "$RUNNER_TEMP/app"
+          node node_modules/better-helpdesk/bin/migrate.mjs
+          npm run build
+          npm start &
+          for _ in $(seq 1 30); do
+            sleep 2
+            curl -fsS -o /dev/null http://localhost:3000/ && break
+          done
+      # A build alone misses what only fails when the code runs: the server
+      # bundle's imports, the client chunks, and the database round trip.
+      - name: Use it
+        run: |
+          curl -fsS -o /dev/null 'http://localhost:3000/api/helpdesk/widget/session/?inbox=support'
+          curl -fsS -o /dev/null http://localhost:3000/helpdesk/
+          curl -fsS -o /dev/null -X POST \
+            -H 'content-type: application/json' \
+            -H 'Origin: http://localhost:3000' \
+            -d '{"inbox":"support","type":"question","body":"Does this install still work?","email":"ci@example.test"}' \
+            http://localhost:3000/api/helpdesk/widget/conversations/

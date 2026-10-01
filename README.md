@@ -117,6 +117,11 @@ TEST_DATABASE_URL=postgres://postgres@localhost:5432/db pnpm test:integration
 tests create a `helpdesk_test` database next to the one the URL names.
 Releases publish from a `v*` tag whose version matches `package.json`.
 
+[`examples/demo`](examples/demo) is a Next.js app with all of the above
+installed — somewhere to see it work, and what CI builds against the packed
+tarball on the current and the previous major of Next.js, and against
+`next@canary` once a week.
+
 ## License
 
 MIT
