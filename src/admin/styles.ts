@@ -28,6 +28,44 @@ export const adminCss = `
 .sa :focus-visible { outline: 2px solid var(--a-focus); outline-offset: 2px; }
 .sa .num { font-variant-numeric: tabular-nums; }
 
+/*
+ * Top-level section chrome: a rail of tabs on a hairline, one level above the
+ * page's own .sa-seg filter, so an agent never reads the two as one control.
+ * Weight is uniform — switching it on the active tab would reflow the row.
+ */
+.sa-nav {
+  display: flex; align-items: stretch; gap: 2px; height: 44px; padding: 0 2px;
+  border-bottom: 1px solid var(--a-border);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; scroll-padding-inline: 16px;
+}
+.sa-nav::-webkit-scrollbar { display: none; }
+.sa .sa-nav button {
+  position: relative; flex: none; height: 100%; padding: 0 12px;
+  border: 0; border-radius: 8px 8px 0 0; background: transparent;
+  color: var(--a-muted); font-size: 13px; font-weight: 600; white-space: nowrap;
+  transition: color 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+/* The marker grows from the centre, so only transform and opacity animate. */
+.sa .sa-nav button::after {
+  content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px;
+  border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--a-fg) 25%, transparent);
+  transform: scaleX(0); transition: transform 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+.sa .sa-nav button:hover { color: var(--a-fg); }
+.sa .sa-nav button:hover::after { transform: scaleX(1); }
+.sa .sa-nav button:active { transform: translateY(1px); }
+.sa .sa-nav button[aria-current="page"] { color: var(--a-fg); }
+.sa .sa-nav button[aria-current="page"]::after { background: var(--a-accent); transform: scaleX(1); }
+/* An offset ring would be clipped by the scroll container at either end. */
+.sa .sa-nav :focus-visible { outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .sa .sa-nav button, .sa .sa-nav button::after { transition: none; }
+}
+/* Six labels cannot fit a phone; the fade says the rail scrolls. */
+@media (max-width: 720px) {
+  .sa-nav { mask-image: linear-gradient(90deg, #000 0 calc(100% - 20px), transparent); }
+}
+
 .sa-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .sa-toolbar .sa-grow { flex: 1; min-width: 200px; }
 .sa-input, .sa-select, .sa-textarea {

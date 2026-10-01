@@ -7,7 +7,15 @@ import {
   screen,
   within,
 } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 import { ApiError } from '../ui/api';
 import { HelpdeskAdmin } from './index';
@@ -148,6 +156,28 @@ describe('HelpdeskAdmin', () => {
     ).toBeTruthy();
     expect(composer.textContent).toBe('');
     expect(posts.filter(u => u.includes('/messages'))).toHaveLength(1);
+  });
+
+  it('marks the section it is in and scrolls that tab into the rail', async () => {
+    // jsdom has no layout, so the method the rail calls does not exist there.
+    const scrollIntoView = vi.fn();
+    const absent = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = absent;
+    });
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    const nav = await screen.findByRole('navigation', { name: 'Sections' });
+    const current = within(nav).getByRole('button', { current: 'page' });
+    expect(current.textContent).toBe('Settings');
+    expect(scrollIntoView).toHaveBeenCalled();
+
+    fireEvent.click(within(nav).getByRole('button', { name: 'Deals' }));
+    expect(
+      within(nav).getByRole('button', { current: 'page' }).textContent
+    ).toBe('Deals');
   });
 
   it('says so when saving the settings fails', async () => {

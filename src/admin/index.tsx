@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Locale } from '../config';
 import { type Api, ApiError, createApi, useResource } from '../ui/api';
@@ -106,6 +106,18 @@ export function HelpdeskAdmin({
           ? 'companies'
           : view;
 
+  // On a phone the rail scrolls, and the section you are in can start off-screen.
+  // `ready` is in the deps because the nav is not mounted until `me` lands.
+  const navRef = useRef<HTMLElement>(null);
+  const ready = Boolean(me.data);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the tab to show is the one the section moved to.
+  useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      // Optional: jsdom has no layout and so does not implement it.
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [section, ready]);
+
   return (
     <>
       <style href="support-admin" precedence="default">
@@ -134,7 +146,10 @@ export function HelpdeskAdmin({
           }}>
           <div className="sa">
             {nav && (
-              <nav className="sa-nav">
+              <nav
+                className="sa-nav"
+                ref={navRef}
+                aria-label={t('admin.sections')}>
                 {VIEWS.map(v => (
                   <button
                     key={v}
