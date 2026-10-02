@@ -301,7 +301,7 @@ export function Widget(props: WidgetProps) {
       api<Session>(
         `widget/session?inbox=${encodeURIComponent(inbox)}&locale=${locale}`
       ),
-    `session:${inbox}:${locale}`,
+    `session:${inbox}:${locale}:${props.identityToken ?? ''}`,
     open || isAgent ? 60_000 : awaitingTeam ? 300_000 : undefined
   );
   useEffect(() => {
@@ -579,6 +579,7 @@ export function Widget(props: WidgetProps) {
           )}
           {view.name === 'thread' && (
             <Thread
+              key={props.identityToken}
               api={api}
               apiBase={props.api.replace(/\/$/, '')}
               linkFiles={Boolean(data?.identified)}

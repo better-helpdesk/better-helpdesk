@@ -1271,4 +1271,40 @@ describe('Widget', () => {
       expect(rule.slice(0, rule.indexOf('{'))).toMatch(/:focus/);
     }
   });
+
+  it('reloads the session when the host signs in or out after mount', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: string, init?: RequestInit) => {
+        const signedIn = new Headers(init?.headers).has('x-helpdesk-identity');
+        return new Response(
+          JSON.stringify(
+            signedIn ? session : { ...session, identified: false, orgs: [] }
+          ),
+          { status: 200 }
+        );
+      })
+    );
+    const widget = (identityToken?: string) => (
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['question']}
+        identityToken={identityToken}
+        errors={() => []}
+      />
+    );
+    const { rerender } = render(widget());
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    expect(await screen.findByLabelText('Work email')).toBeTruthy();
+
+    rerender(widget('signed-token'));
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Work email')).toBeNull()
+    );
+
+    rerender(widget());
+    expect(await screen.findByLabelText('Work email')).toBeTruthy();
+  });
 });
