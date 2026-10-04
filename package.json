@@ -1,6 +1,6 @@
 {
   "name": "better-helpdesk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Support inbox, ticketing and lightweight CRM that mounts into a Next.js app.",
   "license": "MIT",
   "repository": {
