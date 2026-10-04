@@ -88,7 +88,7 @@ it as `identity-token` (`identityToken` in React):
 import { signIdentityToken } from 'better-helpdesk';
 
 signIdentityToken(
-  { sub: user.id, email: user.email, email_verified: true, name: user.name, orgs: [{ id: org.id, name: org.name }] },
+  { sub: user.id, email: user.email, email_verified: user.emailVerified, name: user.name, orgs: [{ id: org.id, name: org.name }] },
   process.env.HELPDESK_IDENTITY_SECRET,
   { expiresInSeconds: 3600 }
 );

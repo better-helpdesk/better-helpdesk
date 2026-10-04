@@ -239,6 +239,10 @@ describe('HelpdeskAdmin', () => {
     const removeButtons = screen.getAllByRole('button', { name: 'Remove' });
     expect(removeButtons).toHaveLength(1);
     fireEvent.click(removeButtons[0] as HTMLElement);
+    expect(removed).toEqual([]);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove and unassign?' })
+    );
 
     await vi.waitFor(() => expect(screen.queryByText('Former')).toBeNull());
     expect(removed).toEqual(['a2']);

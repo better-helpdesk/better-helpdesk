@@ -1066,7 +1066,15 @@ export function createStore(db: Db) {
     async deleteCompany(id: string, contactIds: string[]) {
       await db.transaction(async tx => {
         if (contactIds.length > 0) {
-          await tx.delete(contacts).where(inArray(contacts.id, contactIds));
+          // One may have opened a conversation since; that one stays.
+          await tx
+            .delete(contacts)
+            .where(
+              and(
+                inArray(contacts.id, contactIds),
+                sql`NOT EXISTS (SELECT 1 FROM helpdesk.conversation c WHERE c.contact_id = ${contacts.id})`
+              )
+            );
         }
         await tx
           .update(contacts)
