@@ -28,6 +28,15 @@ const NUMBER = /^\s*(\d+)[.)]\s+/;
 const INLINE =
   /\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)|\*\*(?=\S)([\s\S]{1,1000}?)(?<=\S)\*\*|\+\+(?=\S)([\s\S]{1,1000}?)(?<=\S)\+\+|(?<![\p{L}\p{N}_])_(?=\S)([\s\S]{1,1000}?)(?<=\S)_(?![\p{L}\p{N}_])|(https?:\/\/[^\s<>()]{0,2000}[^\s<>().,;:!?'"])/u;
 
+/** `[label](url)` becomes `label (url)`, so the target shows wherever only labels do. */
+export function unlabelLinks(text: string) {
+  return text.replace(
+    /\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)/g,
+    (_, label: string, href: string) =>
+      label.trim() === href ? href : `${label} (${href})`
+  );
+}
+
 /** Only these open as links; anything else stays text. */
 export function safeHref(href: string) {
   return /^(https?:\/\/|mailto:)/i.test(href) ? href : null;

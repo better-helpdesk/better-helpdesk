@@ -84,6 +84,8 @@ export const identities = helpdesk.table(
     externalId: text('external_id').notNull(),
     verified: boolean('verified').notNull(),
     createdAt: createdAt(),
+    /** A visitor token unused for too long stops opening its contact. */
+    lastUsedAt: ts('last_used_at').notNull().defaultNow(),
   },
   t => [
     uniqueIndex('identity_verified_key')
@@ -111,6 +113,8 @@ export const agents = helpdesk.table(
     /** Set while away; the widget promises a reply after it instead of the usual one. */
     awayUntil: ts('away_until'),
     lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
+    /** Set once the host no longer counts them as an agent; they get no more mail. */
+    deactivatedAt: ts('deactivated_at'),
   },
   t => [uniqueIndex('agent_external_user_id_key').on(t.externalUserId)]
 );
@@ -222,6 +226,11 @@ export const messages = helpdesk.table(
     }),
     body: text('body').notNull(),
     internal: boolean('internal').notNull().default(false),
+    /**
+     * A customer message whose author proved who they are: a host user, or
+     * mail their domain signed. Null on messages written before this was kept.
+     */
+    verified: boolean('verified'),
     emailMessageId: text('email_message_id'),
     createdAt: createdAt(),
     search: tsvector('search').generatedAlwaysAs(

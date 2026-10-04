@@ -101,6 +101,40 @@ export function createStore(db: Db) {
       return row?.contact ?? null;
     },
 
+    /**
+     * The contact behind a visitor token, if the token was used recently;
+     * each use keeps it alive for another `idleDays`.
+     */
+    async findVisitor(tokenHash: string, idleDays: number) {
+      const [row] = await db
+        .select({ identity: identities, contact: contacts })
+        .from(identities)
+        .innerJoin(contacts, eq(contacts.id, identities.contactId))
+        .where(
+          and(
+            eq(identities.channel, 'visitor'),
+            eq(identities.externalId, tokenHash),
+            gt(
+              identities.lastUsedAt,
+              sql`now() - make_interval(days => ${idleDays})`
+            )
+          )
+        )
+        .limit(1);
+      if (!row) return null;
+      // The widget polls; one write an hour is enough to measure idleness.
+      await db
+        .update(identities)
+        .set({ lastUsedAt: sql`now()` })
+        .where(
+          and(
+            eq(identities.id, row.identity.id),
+            lt(identities.lastUsedAt, sql`now() - interval '1 hour'`)
+          )
+        );
+      return row.contact;
+    },
+
     async createContact(
       values: typeof contacts.$inferInsert,
       identity?: IdentityInput
@@ -389,6 +423,7 @@ export function createStore(db: Db) {
               email: user.email ?? null,
               avatarUrl: user.avatarUrl ?? null,
               lastSeenAt: sql`now()`,
+              deactivatedAt: null,
             },
           })
           .returning()
@@ -397,7 +432,18 @@ export function createStore(db: Db) {
     },
 
     async listAgents() {
-      return db.select().from(agents).orderBy(asc(agents.name));
+      return db
+        .select()
+        .from(agents)
+        .where(isNull(agents.deactivatedAt))
+        .orderBy(asc(agents.name));
+    },
+
+    async deactivateAgent(where: SQL) {
+      await db
+        .update(agents)
+        .set({ deactivatedAt: sql`now()` })
+        .where(and(where, isNull(agents.deactivatedAt)));
     },
 
     async getSetting<T>(key: string): Promise<T | null> {
@@ -427,11 +473,20 @@ export function createStore(db: Db) {
       return row ?? null;
     },
 
+    async getActiveAgent(id: string) {
+      const [row] = await db
+        .select()
+        .from(agents)
+        .where(and(eq(agents.id, id), isNull(agents.deactivatedAt)));
+      return row ?? null;
+    },
+
     async createConversation(
       values: Omit<typeof conversations.$inferInsert, 'number'>,
       firstMessage: {
         body: string;
         contactId: string;
+        verified: boolean;
         emailMessageId?: string;
       }
     ): Promise<{ conversation: Conversation; message: Message }> {
@@ -450,6 +505,7 @@ export function createStore(db: Db) {
               authorType: 'contact',
               contactId: firstMessage.contactId,
               body: firstMessage.body,
+              verified: firstMessage.verified,
               emailMessageId: firstMessage.emailMessageId ?? null,
             })
             .returning()
@@ -606,7 +662,12 @@ export function createStore(db: Db) {
           awayUntil: agents.awayUntil,
         })
         .from(agents)
-        .where(gt(agents.lastSeenAt, sql`now() - interval '30 days'`))
+        .where(
+          and(
+            gt(agents.lastSeenAt, sql`now() - interval '30 days'`),
+            isNull(agents.deactivatedAt)
+          )
+        )
         .orderBy(desc(agents.lastSeenAt))
         .limit(limit);
     },
@@ -634,6 +695,18 @@ export function createStore(db: Db) {
         .where(eq(conversations.id, id))
         .returning();
       return row ?? null;
+    },
+
+    /** Changes sharing only while the thread is still with `companyId`. */
+    async setSharing(id: string, companyId: string, shared: boolean) {
+      const [row] = await db
+        .update(conversations)
+        .set({ sharedWithCompany: shared })
+        .where(
+          and(eq(conversations.id, id), eq(conversations.companyId, companyId))
+        )
+        .returning({ id: conversations.id });
+      return Boolean(row);
     },
 
     /**
@@ -956,6 +1029,20 @@ export function createStore(db: Db) {
       await db.delete(contacts).where(where);
     },
 
+    /** Contacts of the company that `deleteCompany` will drop: those without a conversation of their own. */
+    async contactsLeftWithNothing(companyId: string) {
+      const rows = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.companyId, companyId),
+            sql`NOT EXISTS (SELECT 1 FROM helpdesk.conversation c WHERE c.contact_id = ${contacts.id})`
+          )
+        );
+      return rows.map(r => r.id);
+    },
+
     /** Drops a company, the contacts left with nothing, and the link from the rest. */
     async deleteCompany(id: string) {
       await db.transaction(async tx => {
@@ -989,6 +1076,21 @@ export function createStore(db: Db) {
           )
         );
       return rows.map(r => r.key);
+    },
+
+    /** Whether the contact wrote anything nobody proved was theirs. */
+    async hasUnverifiedMessages(contactId: string) {
+      const [row] = await db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.contactId, contactId),
+            sql`${messages.verified} IS NOT TRUE`
+          )
+        )
+        .limit(1);
+      return Boolean(row);
     },
 
     async deleteMessagesBy(contactId: string) {

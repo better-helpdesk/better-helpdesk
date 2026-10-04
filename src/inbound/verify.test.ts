@@ -3,7 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { dkimSign } from 'mailauth';
 import { describe, expect, it } from 'vitest';
 
-import { fromDomainSigned, signsFrom } from './verify';
+import { fromDomainSigned, signatureCount, signsFrom } from './verify';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -107,6 +107,40 @@ describe('fromDomainSigned', () => {
     expect(await fromDomainSigned(raw, 'anna@example.ch', resolver)).toBe(
       false
     );
+  });
+});
+
+describe('bounded verification', () => {
+  it('refuses a message with more signatures than real mail carries, without looking any up', async () => {
+    const one = await signed('anna@example.ch', 'example.ch');
+    const header = one
+      .toString()
+      .split('\r\n\r\n')[0]
+      ?.split(/\r\nFrom:/)[0];
+    const many = Buffer.concat([Buffer.from(`${header}\r\n`.repeat(5)), one]);
+    expect(signatureCount(many)).toBe(6);
+    let lookups = 0;
+    expect(
+      await fromDomainSigned(many, 'anna@example.ch', async (name, type) => {
+        lookups++;
+        return resolver(name, type);
+      })
+    ).toBe(false);
+    expect(lookups).toBe(0);
+  });
+
+  it('gives up as unverified when key lookups never answer', async () => {
+    const raw = await signed('anna@example.ch', 'example.ch');
+    const started = Date.now();
+    expect(
+      await fromDomainSigned(
+        raw,
+        'anna@example.ch',
+        () => new Promise(() => {}),
+        { deadlineMs: 100 }
+      )
+    ).toBe(false);
+    expect(Date.now() - started).toBeLessThan(2_000);
   });
 });
 

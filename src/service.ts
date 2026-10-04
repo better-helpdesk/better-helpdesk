@@ -23,8 +23,9 @@ import { formatReference, parseReference } from './domain';
 import { verifyIdentityToken } from './identity-token';
 import { plainText } from './rich';
 import { nextWorkday } from './ui/i18n';
+import { unlabelLinks } from './ui/rich';
 
-const { contacts, conversations } = schema;
+const { agents, contacts, conversations } = schema;
 
 export type Customer = {
   identity: Identity | null;
@@ -42,6 +43,13 @@ export class HelpdeskError extends Error {
 }
 
 const MAX_RECEIPTS_PER_HOUR = 200;
+const MAX_AGENT_NOTICES_PER_HOUR = 200;
+const MAX_TRIAGES_PER_HOUR = 100;
+const MAX_INBOUND_PER_SENDER_PER_HOUR = 30;
+const VISITOR_IDLE_DAYS = 30;
+export const MAX_ATTACHMENTS = 20;
+export const ATTACHMENT_TYPES =
+  /^(image\/(png|jpeg|gif|webp)|application\/pdf|text\/plain)$/;
 const VISITOR_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -83,9 +91,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
     formatReference(config.referencePrefix, c.number);
 
   /**
-   * Attaches a verified identity to `contact`. If another contact already
-   * holds it, the two are the same person: the newer contact is merged into
-   * the one that proved it first.
+   * Attaches a verified identity to `contact` and returns who the proven
+   * person is. If another contact already holds it, the newer contact is
+   * merged into the one that proved it first, unless the newer one wrote
+   * something before anyone proved the address: that stays where it is, and
+   * the proven contact is returned on its own.
    */
   async function linkVerified(
     contact: Contact,
@@ -100,6 +110,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       { verifiedOnly: true }
     );
     if (owner && owner.id !== contact.id) {
+      if (await store.hasUnverifiedMessages(contact.id)) return owner;
       await store.mergeContacts(owner.id, contact.id);
       return (await store.getContact(owner.id)) ?? owner;
     }
@@ -144,9 +155,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     const token = request.headers.get('x-helpdesk-visitor');
     const contact =
       token && VISITOR_TOKEN.test(token)
-        ? await store.findContactByIdentity('visitor', hashToken(token), {
-            verifiedOnly: false,
-          })
+        ? await store.findVisitor(hashToken(token), VISITOR_IDLE_DAYS)
         : null;
     return { identity: null, contact, companies: [] };
   }
@@ -204,6 +213,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return new Date(Math.min(...returns));
   }
 
+  /** Stops mail to someone the host no longer counts as an agent; their next agent request undoes it. */
+  async function removeAgent(externalUserId: string) {
+    await store.deactivateAgent(eq(agents.externalUserId, externalUserId));
+  }
+
   async function requireAgent(request: Request) {
     const identity = await config.identify(request);
     if (!identity) throw new HelpdeskError(401, 'Unauthenticated');
@@ -233,11 +247,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
         viewport: z.string().max(50).optional(),
         locale: z.string().max(20).optional(),
         appVersion: z.string().max(100).optional(),
-        host: z.record(z.string(), z.string().max(500)).optional(),
+        host: boundedRecord(500),
         errors: z.array(z.string().max(2000)).max(20).optional(),
         referrer: z.string().max(2000).optional(),
         landingPage: z.string().max(2000).optional(),
-        utm: z.record(z.string(), z.string().max(200)).optional(),
+        utm: boundedRecord(200),
       })
       .optional(),
     segment: z.string().max(100).optional(),
@@ -301,6 +315,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
     const contact = customer.contact;
     if (!contact) throw new HelpdeskError(401, 'Unauthenticated');
+    if (customer.identity) await limitContact(contact.id);
 
     let companyId: string | null = null;
     if (data.orgId) {
@@ -335,9 +350,13 @@ export function createHelpdesk(input: HelpdeskConfig) {
           ...(segment ? { host: { ...data.context?.host, segment } } : {}),
         },
       },
-      { body: data.body, contactId: contact.id }
+      {
+        body: data.body,
+        contactId: contact.id,
+        verified: Boolean(customer.identity),
+      }
     );
-    await afterNewConversation(conversation);
+    await afterNewConversation(conversation, Boolean(customer.identity));
     return { conversation, visitorToken };
   }
 
@@ -349,6 +368,22 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
   }
 
+  /** A signed-in customer's writes share one hourly budget. */
+  async function limitContact(contactId: string) {
+    const hits = await store.hitRateLimit(`contact:${contactId}`);
+    if (hits > config.customerRateLimit) {
+      throw new HelpdeskError(429, 'Too many requests');
+    }
+  }
+
+  async function limitCustomer(request: Request, customer: Customer) {
+    if (customer.identity && customer.contact) {
+      await limitContact(customer.contact.id);
+    } else {
+      await limitAnonymous(request);
+    }
+  }
+
   async function addCustomerMessage(
     request: Request,
     customer: Customer,
@@ -356,20 +391,33 @@ export function createHelpdesk(input: HelpdeskConfig) {
     body: string
   ) {
     if (!customer.contact) throw new HelpdeskError(401, 'Unauthenticated');
-    if (!customer.identity) await limitAnonymous(request);
+    await limitCustomer(request, customer);
     const message = await store.appendMessage({
       conversationId: conversation.id,
       authorType: 'contact',
       contactId: customer.contact.id,
       body,
+      verified: Boolean(customer.identity),
     });
     return message;
   }
 
-  async function afterNewConversation(conversation: Conversation) {
-    await store.enqueueJob('notify-agents', {
-      conversationId: conversation.id,
-    });
+  /**
+   * Each new conversation costs mail to every agent and, with AI, model
+   * calls; hourly caps keep a flood from multiplying into either. Triage
+   * waits for an agent to ask when nobody proved who wrote it.
+   */
+  async function afterNewConversation(
+    conversation: Conversation,
+    verified: boolean
+  ) {
+    if (
+      (await store.hitRateLimit('agent-notices')) <= MAX_AGENT_NOTICES_PER_HOUR
+    ) {
+      await store.enqueueJob('notify-agents', {
+        conversationId: conversation.id,
+      });
+    }
     // A receipt goes to whatever address the form was given; the cap keeps a
     // flood of forms from making us a mail cannon.
     if (
@@ -380,7 +428,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
         conversationId: conversation.id,
       });
     }
-    if (config.ai) {
+    if (
+      config.ai &&
+      verified &&
+      (await store.hitRateLimit('triages')) <= MAX_TRIAGES_PER_HOUR
+    ) {
       await store.enqueueJob('ai-triage', { conversationId: conversation.id });
     }
   }
@@ -425,7 +477,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
   async function agentRecipients(conversation: Conversation) {
     if (conversation.assigneeId) {
-      const assignee = await store.getAgent(conversation.assigneeId);
+      const assignee = await store.getActiveAgent(conversation.assigneeId);
       if (assignee?.email) return [assignee];
     }
     return (await store.listAgents()).filter(a => a.email);
@@ -482,18 +534,18 @@ export function createHelpdesk(input: HelpdeskConfig) {
       const agent = message.agentId
         ? await store.getAgent(message.agentId)
         : null;
-      const inbound = (
+      const thread = (
         await store.listMessages(conversation.id, { includeInternal: false })
-      )
-        .map(r => r.message)
-        .filter(m => m.emailMessageId)
-        .at(-1);
+      ).map(r => r.message);
+      const inbound = thread.filter(m => m.emailMessageId).at(-1);
       const ref = reference(conversation);
-      // Anyone can type any address into a public form; only a proven one gets
-      // their own words back in a subject we sign.
-      const proven = (await store.listIdentities(contact.id)).some(
-        i => i.verified
-      );
+      // Anyone can type any address into a public form; only words their
+      // author proved come back in a subject we sign. Proving the address
+      // later does not vouch for what was written before.
+      const opening = thread.find(m => m.authorType === 'contact');
+      const proven =
+        opening?.verified ??
+        (await store.listIdentities(contact.id)).some(i => i.verified);
       await sendEmail({
         kind: 'customer-reply',
         to: contact.email,
@@ -584,6 +636,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
   async function handleInbound(mail: InboundMessage) {
     if (await store.findMessageByEmailId([mail.messageId])) return;
     const from = normalizeEmail(mail.from.address);
+    // A signed sender has a budget of their own; an unsigned one shares its
+    // domain's, since anyone can put any address in From.
+    const sender = mail.verified ? from : `@${from.split('@')[1] ?? ''}`;
+    if (
+      (await store.hitRateLimit(`inbound:${sender}`)) >
+      MAX_INBOUND_PER_SENDER_PER_HOUR
+    ) {
+      throw new HelpdeskError(429, 'Too many messages from this sender');
+    }
 
     let conversation: Conversation | null = null;
     const threaded = await store.findMessageByEmailId(
@@ -604,22 +665,41 @@ export function createHelpdesk(input: HelpdeskConfig) {
       }
     }
 
+    // An out-of-office or a bounce is kept for agents as a note on its
+    // thread; it never reopens one, opens one, or proves anyone's address.
+    if (mail.automated) {
+      if (conversation) {
+        await store.appendMessage({
+          conversationId: conversation.id,
+          authorType: 'system',
+          internal: true,
+          body: mail.text,
+          emailMessageId: mail.messageId,
+        });
+      }
+      return;
+    }
+
     if (conversation && mail.verified) {
       const owner = await store.getContact(conversation.contactId);
       const participants = await store.listParticipants(conversation.id);
-      const sender = [owner, ...participants.map(p => p.contact)].find(
+      const author = [owner, ...participants.map(p => p.contact)].find(
         c => c?.email && normalizeEmail(c.email) === from
       );
-      if (sender) {
-        const contact = await linkVerified(sender, {
+      if (author) {
+        const contact = await linkVerified(author, {
           channel: 'email',
           externalId: from,
         });
+        if (contact.id !== author.id) {
+          await store.addParticipant(conversation.id, contact.id);
+        }
         const message = await store.appendMessage({
           conversationId: conversation.id,
           authorType: 'contact',
           contactId: contact.id,
           body: mail.text,
+          verified: true,
           emailMessageId: mail.messageId,
         });
         await storeInboundAttachments(conversation.id, message.id, mail);
@@ -648,14 +728,19 @@ export function createHelpdesk(input: HelpdeskConfig) {
         companyId: contact.companyId,
         context: {},
       },
-      { body: mail.text, contactId: contact.id, emailMessageId: mail.messageId }
+      {
+        body: mail.text,
+        contactId: contact.id,
+        verified: mail.verified,
+        emailMessageId: mail.messageId,
+      }
     );
     await storeInboundAttachments(
       created.conversation.id,
       created.message.id,
       mail
     );
-    await afterNewConversation(created.conversation);
+    await afterNewConversation(created.conversation, mail.verified);
   }
 
   async function storeInboundAttachments(
@@ -664,8 +749,12 @@ export function createHelpdesk(input: HelpdeskConfig) {
     mail: InboundMessage
   ) {
     if (!config.storage) return;
+    let room = MAX_ATTACHMENTS - (await store.countAttachments(conversationId));
     for (const file of mail.attachments) {
+      if (room <= 0) break;
       if (file.content.byteLength > config.maxAttachmentBytes) continue;
+      if (!ATTACHMENT_TYPES.test(file.contentType)) continue;
+      room--;
       const key = attachmentKey(conversationId, file.filename);
       await config.storage.put(key, file.content, file.contentType);
       await store.createAttachment({
@@ -724,6 +813,12 @@ export function createHelpdesk(input: HelpdeskConfig) {
       sql`${conversations.companyId} = ${company.id}::uuid OR ${conversations.contactId} IN (SELECT id FROM helpdesk.contact WHERE company_id = ${company.id}::uuid AND id NOT IN (SELECT contact_id FROM helpdesk.conversation WHERE company_id IS DISTINCT FROM ${company.id}::uuid))`
     );
     await purgeConversations(ids);
+    // Contacts dropped with the company take what they wrote in other
+    // organizations' threads with them, as `deleteContact` does.
+    for (const contactId of await store.contactsLeftWithNothing(company.id)) {
+      await deleteObjects(await store.attachmentKeysBy(contactId));
+      await store.deleteMessagesBy(contactId);
+    }
     await store.deleteCompany(company.id);
     return { conversations: ids.length };
   }
@@ -897,7 +992,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
         )}\n</documentation>\n<conversation>\n${text}\n</conversation>`,
       schema: z.object({ reply: z.string() }),
     });
-    return result.reply;
+    // The editor shows a link's label only, and the customer wrote what the
+    // model read; the agent should see where every link goes before sending.
+    return unlabelLinks(result.reply);
   }
 
   async function companyContext(companyId: string) {
@@ -969,12 +1066,14 @@ export function createHelpdesk(input: HelpdeskConfig) {
     addCustomerMessage,
     addAgentMessage,
     limitAnonymous,
+    limitCustomer,
     handleInbound,
     attachmentKey,
     deleteObjects,
     runJobs,
     deleteCompany,
     deleteContact,
+    removeAgent,
     track,
     triage,
     draftReply,
@@ -995,6 +1094,14 @@ export function deriveSubject(body: string) {
   const cut = line.slice(0, 70);
   const space = cut.lastIndexOf(' ');
   return `${(space > 40 ? cut.slice(0, space) : cut).replace(/[\s,.;:–-]+$/, '')}…`;
+}
+
+/** A string map from the browser, capped in keys as well as values. */
+function boundedRecord(maxValue: number) {
+  return z
+    .record(z.string().max(100), z.string().max(maxValue))
+    .refine(r => Object.keys(r).length <= 20)
+    .optional();
 }
 
 function truncate(text: string, max: number) {

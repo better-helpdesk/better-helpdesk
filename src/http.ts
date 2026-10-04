@@ -8,7 +8,13 @@ import type { Agent, Conversation } from './db/store';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
 import { plainText } from './rich';
-import { type Customer, type Helpdesk, HelpdeskError } from './service';
+import {
+  ATTACHMENT_TYPES,
+  type Customer,
+  type Helpdesk,
+  HelpdeskError,
+  MAX_ATTACHMENTS,
+} from './service';
 import { sourceOf } from './source';
 
 type Params = { id: string; attachmentId: string };
@@ -44,7 +50,8 @@ type ConfirmationSetting = Partial<Record<Locale, string>>;
 // Timestamps compared with message and job times come from the same clock:
 // the database's; the app host's may drift from it.
 const dbNow = () => sql`now()` as unknown as Date;
-const MAX_ATTACHMENTS = 20;
+// A message is at most 20,000 characters; this leaves room for its context.
+const MAX_JSON_BYTES = 256 * 1024;
 const MAX_INBOUND_BYTES = 25 * 1024 * 1024;
 const MAX_INBOUND_HEADER_BYTES = 64 * 1024;
 
@@ -251,7 +258,17 @@ export function createHandler(support: Helpdesk) {
       ) {
         throw new HelpdeskError(403, 'Not a member of that organization');
       }
-      await store.updateConversation(conversation.id, data);
+      // An agent may move the thread between the check above and this write.
+      if (
+        !conversation.companyId ||
+        !(await store.setSharing(
+          conversation.id,
+          conversation.companyId,
+          data.sharedWithCompany
+        ))
+      ) {
+        throw new HelpdeskError(409, 'Conversation moved');
+      }
       return json({ ok: true });
     }
   );
@@ -275,9 +292,7 @@ export function createHandler(support: Helpdesk) {
 
   const uploadInput = z.object({
     filename: z.string().trim().min(1).max(200),
-    contentType: z
-      .string()
-      .regex(/^(image\/(png|jpeg|gif|webp)|application\/pdf|text\/plain)$/),
+    contentType: z.string().regex(ATTACHMENT_TYPES),
     size: z.number().int().positive(),
   });
 
@@ -353,7 +368,7 @@ export function createHandler(support: Helpdesk) {
       if (conversation.contactId !== customer.contact?.id) {
         throw new HelpdeskError(403, 'Only the author can attach files');
       }
-      if (!customer.identity) await support.limitAnonymous(request);
+      await support.limitCustomer(request, customer);
       return json(await startUpload(conversation, await body()), 201);
     }
   );
@@ -366,6 +381,9 @@ export function createHandler(support: Helpdesk) {
         create: false,
       });
       const conversation = await support.requireVisible(customer, params.id);
+      if (conversation.contactId !== customer.contact?.id) {
+        throw new HelpdeskError(403, 'Only the author can attach files');
+      }
       return json(await completeUpload(conversation, params.attachmentId));
     }
   );
@@ -494,6 +512,12 @@ export function createHandler(support: Helpdesk) {
     json({ agents: await store.listAgents() })
   );
 
+  agentRoute('DELETE', 'agents/:id', async ({ params }) => {
+    const target = await requireRow(params.id, store.getAgent);
+    await support.removeAgent(target.externalUserId);
+    return json({ ok: true });
+  });
+
   agentRoute('GET', 'conversations', async ({ url, agent }) => {
     const p = url.searchParams;
     const id = (key: string) => uuid.optional().parse(p.get(key) || undefined);
@@ -588,7 +612,7 @@ export function createHandler(support: Helpdesk) {
         companyId: uuid.nullable().optional(),
       })
       .parse(await body());
-    if (data.assigneeId && !(await store.getAgent(data.assigneeId))) {
+    if (data.assigneeId && !(await store.getActiveAgent(data.assigneeId))) {
       throw new HelpdeskError(400, 'Unknown agent');
     }
     if (data.companyId && !(await store.getCompany(data.companyId))) {
@@ -964,7 +988,7 @@ export function createHandler(support: Helpdesk) {
         custom: customValues('deal').optional(),
       })
       .parse(await body());
-    if (data.ownerId && !(await store.getAgent(data.ownerId))) {
+    if (data.ownerId && !(await store.getActiveAgent(data.ownerId))) {
       throw new HelpdeskError(400, 'Unknown agent');
     }
     const updated = await store.updateDeal(deal.id, {
@@ -1146,7 +1170,7 @@ export function createHandler(support: Helpdesk) {
           request,
           params,
           url,
-          body: () => request.json(),
+          body: () => readJson(request),
         });
         for (const [key, value] of Object.entries(cors)) {
           response.headers.set(key, value);
@@ -1158,6 +1182,27 @@ export function createHandler(support: Helpdesk) {
     }
     return json({ error: 'Not found' }, 404, cors);
   };
+}
+
+/** The JSON body, refused past `MAX_JSON_BYTES` before more of it is read. */
+async function readJson(request: Request): Promise<unknown> {
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_JSON_BYTES) {
+    throw new HelpdeskError(413, 'Too large');
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = request.body?.getReader();
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_JSON_BYTES) {
+      await reader.cancel();
+      throw new HelpdeskError(413, 'Too large');
+    }
+    chunks.push(value);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
 type RouteDefiner = (method: string, path: string, run: Route['run']) => void;

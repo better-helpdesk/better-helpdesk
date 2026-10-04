@@ -216,6 +216,11 @@ const en = {
   'admin.assignCompany': 'Assign',
   'admin.verified': 'Verified',
   'admin.unverified': 'Unverified',
+  'admin.automated': 'Automatic reply',
+  'admin.teamTitle': 'Team',
+  'admin.teamHint':
+    'Everyone here gets new conversations by email. Remove someone who no longer answers; opening the admin again adds them back.',
+  'admin.teamRemove': 'Remove',
   'admin.customerContext': 'Customer',
   'admin.capturedContext': 'Captured context',
   'admin.attachments': 'Attachments',
@@ -493,6 +498,11 @@ const de: Record<MessageKey, string> = {
   'admin.assignCompany': 'Zuordnen',
   'admin.verified': 'Verifiziert',
   'admin.unverified': 'Nicht verifiziert',
+  'admin.automated': 'Automatische Antwort',
+  'admin.teamTitle': 'Team',
+  'admin.teamHint':
+    'Alle hier erhalten neue Konversationen per E-Mail. Entfernen Sie, wer nicht mehr antwortet; wer den Admin wieder öffnet, ist wieder dabei.',
+  'admin.teamRemove': 'Entfernen',
   'admin.customerContext': 'Kunde',
   'admin.capturedContext': 'Erfasster Kontext',
   'admin.attachments': 'Anhänge',

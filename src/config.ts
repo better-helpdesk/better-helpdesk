@@ -128,6 +128,8 @@ export type InboundMessage = {
   references: string[];
   /** The From domain signed the message (aligned DKIM), and From is a single address. */
   verified: boolean;
+  /** An out-of-office, a bounce or other mail no person wrote. */
+  automated: boolean;
   attachments: { filename: string; contentType: string; content: Uint8Array }[];
 };
 
@@ -190,6 +192,8 @@ export type HelpdeskConfig = {
   maxAttachmentBytes?: number;
   /** Anonymous posts allowed per IP per hour. */
   anonymousRateLimit?: number;
+  /** Conversations, messages and uploads a signed-in customer may start per hour. */
+  customerRateLimit?: number;
 };
 
 export const DEFAULT_TYPES = ['question', 'bug', 'feature', 'lead'];
@@ -211,6 +215,7 @@ export type ResolvedConfig = HelpdeskConfig & {
   dealStages: string[];
   maxAttachmentBytes: number;
   anonymousRateLimit: number;
+  customerRateLimit: number;
 };
 
 export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
@@ -222,5 +227,6 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
     dealStages: config.dealStages ?? DEFAULT_DEAL_STAGES,
     maxAttachmentBytes: config.maxAttachmentBytes ?? 10 * 1024 * 1024,
     anonymousRateLimit: config.anonymousRateLimit ?? 20,
+    customerRateLimit: config.customerRateLimit ?? 60,
   };
 }

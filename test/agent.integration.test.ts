@@ -308,6 +308,7 @@ describe('inbound email', () => {
     text: 'I cannot log in',
     references: [],
     verified: true,
+    automated: false,
     attachments: [],
     ...overrides,
   });
@@ -750,6 +751,7 @@ describe('inbound threading trust', () => {
       text: 'forged',
       references: [],
       verified: false,
+      automated: false,
       attachments: [],
     });
     const [row] = await rows<{ count: number }>(

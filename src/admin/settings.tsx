@@ -11,6 +11,51 @@ const LOCALES: { key: Locale; label: string }[] = [
   { key: 'de', label: 'Deutsch' },
 ];
 
+type TeamMember = { id: string; name: string | null; email: string | null };
+
+/** Everyone who still gets agent mail; removing someone stops it until they open the admin again. */
+function Team() {
+  const { api, t, me } = useAdmin();
+  const team = useResource(
+    () => api<{ agents: TeamMember[] }>('agent/agents'),
+    'agents'
+  );
+  const [error, setError] = useState(false);
+  return (
+    <div className="sa-card">
+      <h3>{t('admin.teamTitle')}</h3>
+      <p className="sa-muted">{t('admin.teamHint')}</p>
+      {team.data?.agents.map(a => (
+        <div key={a.id} className="sa-toolbar">
+          <span className="sa-grow">
+            {a.name ?? a.email}
+            {a.name && a.email && (
+              <span className="sa-muted"> · {a.email}</span>
+            )}
+          </span>
+          {a.id !== me.agent.id && (
+            <button
+              type="button"
+              className="sa-btn sa-ghost"
+              onClick={async () => {
+                setError(false);
+                try {
+                  await api(`agent/agents/${a.id}`, { method: 'DELETE' });
+                  await team.refresh();
+                } catch {
+                  setError(true);
+                }
+              }}>
+              {t('admin.teamRemove')}
+            </button>
+          )}
+        </div>
+      ))}
+      {error && <p className="sa-error">{t('admin.error')}</p>}
+    </div>
+  );
+}
+
 export function Settings() {
   const { api, t } = useAdmin();
   const toast = useToast();
@@ -70,6 +115,7 @@ export function Settings() {
         {error && <p className="sa-error">{t('admin.error')}</p>}
         {toast.node}
       </form>
+      <Team />
     </div>
   );
 }

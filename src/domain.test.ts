@@ -11,6 +11,12 @@ describe('references', () => {
     expect(parseReference('DG', ' dg-7 ')).toBe(7);
   });
 
+  it('rejects a number the int4 column cannot hold', () => {
+    expect(parseReference('DG', 'DG-2147483647')).toBe(2_147_483_647);
+    expect(parseReference('DG', 'DG-2147483648')).toBeUndefined();
+    expect(parseReference('DG', 'DG-99999999999999999999')).toBeUndefined();
+  });
+
   it('rejects another prefix or trailing text', () => {
     expect(parseReference('DG', 'DIV-7')).toBeUndefined();
     expect(parseReference('DG', 'DG-7x')).toBeUndefined();
