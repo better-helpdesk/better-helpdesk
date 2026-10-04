@@ -4,7 +4,7 @@ import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
-import { Avatar, Dialog, paths, Svg } from './ui';
+import { Avatar, Dialog, paths, Skeleton, Svg } from './ui';
 
 export type ConversationRow = {
   id: string;
@@ -154,9 +154,7 @@ export function Inbox() {
       </div>
       {list.error && <p className="sa-error">{t('admin.error')}</p>}
       {!list.data && !list.error && (
-        <div className="sa-table-wrap" aria-busy="true">
-          <p className="sa-empty">{t('admin.loading')}</p>
-        </div>
+        <Skeleton kind="table" label={t('admin.loading')} />
       )}
       {list.data && (
         <ConversationTable

@@ -8,7 +8,7 @@ import { FREE_MAIL } from './conversation';
 import { DealDialog } from './deals';
 import { type ConversationRow, ConversationTable } from './inbox';
 import { CompanyPicker, ContactPicker } from './pickers';
-import { Avatar, Dialog, Loading, money, paths, Svg } from './ui';
+import { Avatar, Dialog, money, paths, Skeleton, Svg } from './ui';
 
 type Contact = {
   id: string;
@@ -193,67 +193,76 @@ export function ContactList() {
           </select>
         }
       />
-      <div className="sa-table-wrap">
-        {list.data?.contacts.length === 0 ? (
-          <p className="sa-empty">{t('admin.empty')}</p>
-        ) : (
-          <table className="sa-table">
-            <thead>
-              <tr>
-                <th>{t('admin.name')}</th>
-                <th>{t('admin.email')}</th>
-                <th>{t('admin.leadStage')}</th>
-                <th>{t('admin.source')}</th>
-                <th>{t('admin.conversationCount')}</th>
-                <th>{t('admin.lastWrote')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data?.contacts.map(c => (
-                <tr key={c.id} onClick={() => navigate({ contact: c.id })}>
-                  <td>
-                    <span className="sa-who">
-                      <Avatar name={c.name ?? c.email} />
-                      <span>
-                        {c.name ?? '—'}
-                        {c.isTeam && (
-                          <span className="sa-pill sa-team">
-                            {t('admin.team')}
-                          </span>
-                        )}
-                        {c.tags.length > 0 && (
-                          <div className="sa-fine">
-                            {c.tags
-                              .map(
-                                tag => me.segments?.[tag]?.badge[locale] ?? tag
-                              )
-                              .join(', ')}
-                          </div>
-                        )}
-                      </span>
-                    </span>
-                  </td>
-                  <td>{c.email}</td>
-                  <td>
-                    {c.leadStage && (
-                      <span className="sa-pill">
-                        {t(`stage.${c.leadStage}`)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="sa-muted">{c.source ?? t('admin.direct')}</td>
-                  <td className="num">{c.conversationCount ?? 0}</td>
-                  <td className="sa-muted">
-                    {c.lastMessageAt
-                      ? relativeTime(c.lastMessageAt, locale)
-                      : '—'}
-                  </td>
+      {list.error && <p className="sa-error">{t('admin.error')}</p>}
+      {!list.data && !list.error && (
+        <Skeleton kind="table" columns={6} label={t('admin.loading')} />
+      )}
+      {list.data && (
+        <div className="sa-table-wrap">
+          {list.data.contacts.length === 0 ? (
+            <p className="sa-empty">{t('admin.empty')}</p>
+          ) : (
+            <table className="sa-table">
+              <thead>
+                <tr>
+                  <th>{t('admin.name')}</th>
+                  <th>{t('admin.email')}</th>
+                  <th>{t('admin.leadStage')}</th>
+                  <th>{t('admin.source')}</th>
+                  <th>{t('admin.conversationCount')}</th>
+                  <th>{t('admin.lastWrote')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {list.data.contacts.map(c => (
+                  <tr key={c.id} onClick={() => navigate({ contact: c.id })}>
+                    <td>
+                      <span className="sa-who">
+                        <Avatar name={c.name ?? c.email} />
+                        <span>
+                          {c.name ?? '—'}
+                          {c.isTeam && (
+                            <span className="sa-pill sa-team">
+                              {t('admin.team')}
+                            </span>
+                          )}
+                          {c.tags.length > 0 && (
+                            <div className="sa-fine">
+                              {c.tags
+                                .map(
+                                  tag =>
+                                    me.segments?.[tag]?.badge[locale] ?? tag
+                                )
+                                .join(', ')}
+                            </div>
+                          )}
+                        </span>
+                      </span>
+                    </td>
+                    <td>{c.email}</td>
+                    <td>
+                      {c.leadStage && (
+                        <span className="sa-pill">
+                          {t(`stage.${c.leadStage}`)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="sa-muted">
+                      {c.source ?? t('admin.direct')}
+                    </td>
+                    <td className="num">{c.conversationCount ?? 0}</td>
+                    <td className="sa-muted">
+                      {c.lastMessageAt
+                        ? relativeTime(c.lastMessageAt, locale)
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       <CreateDialog
         open={creating}
         title={t('admin.newContact')}
@@ -296,7 +305,9 @@ export function ContactView({ id }: { id: string }) {
     id
   );
   const data = detail.data;
-  if (!data) return <Loading label={t('admin.loading')} />;
+  if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
+  if (!data)
+    return <Skeleton kind="cards" summary label={t('admin.loading')} />;
   const c = data.contact;
   const segments = c.tags.filter(tag => me.segments?.[tag]);
   const otherTags = c.tags.filter(tag => !me.segments?.[tag]);
@@ -593,43 +604,49 @@ export function CompanyList() {
         newLabel={t('admin.newCompany')}
         onNew={() => setCreating(true)}
       />
-      <div className="sa-table-wrap">
-        {list.data?.companies.length === 0 ? (
-          <p className="sa-empty">{t('admin.empty')}</p>
-        ) : (
-          <table className="sa-table">
-            <thead>
-              <tr>
-                <th>{t('admin.name')}</th>
-                <th>{t('admin.domain')}</th>
-                <th>{t('admin.leadStage')}</th>
-                <th>{t('admin.tags')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data?.companies.map(c => (
-                <tr key={c.id} onClick={() => navigate({ company: c.id })}>
-                  <td>
-                    <span className="sa-who">
-                      <Avatar name={c.name} />
-                      {c.name}
-                    </span>
-                  </td>
-                  <td className="sa-muted">{c.domain}</td>
-                  <td>
-                    {c.leadStage && (
-                      <span className="sa-pill">
-                        {t(`stage.${c.leadStage}`)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="sa-muted">{c.tags.join(', ')}</td>
+      {list.error && <p className="sa-error">{t('admin.error')}</p>}
+      {!list.data && !list.error && (
+        <Skeleton kind="table" columns={4} label={t('admin.loading')} />
+      )}
+      {list.data && (
+        <div className="sa-table-wrap">
+          {list.data.companies.length === 0 ? (
+            <p className="sa-empty">{t('admin.empty')}</p>
+          ) : (
+            <table className="sa-table">
+              <thead>
+                <tr>
+                  <th>{t('admin.name')}</th>
+                  <th>{t('admin.domain')}</th>
+                  <th>{t('admin.leadStage')}</th>
+                  <th>{t('admin.tags')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {list.data.companies.map(c => (
+                  <tr key={c.id} onClick={() => navigate({ company: c.id })}>
+                    <td>
+                      <span className="sa-who">
+                        <Avatar name={c.name} />
+                        {c.name}
+                      </span>
+                    </td>
+                    <td className="sa-muted">{c.domain}</td>
+                    <td>
+                      {c.leadStage && (
+                        <span className="sa-pill">
+                          {t(`stage.${c.leadStage}`)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="sa-muted">{c.tags.join(', ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
       <CreateDialog
         open={creating}
         title={t('admin.newCompany')}
@@ -665,7 +682,8 @@ export function CompanyView({ id }: { id: string }) {
     id
   );
   const data = detail.data;
-  if (!data) return <Loading label={t('admin.loading')} />;
+  if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
+  if (!data) return <Skeleton kind="cards" label={t('admin.loading')} />;
   const c = data.company;
 
   return (

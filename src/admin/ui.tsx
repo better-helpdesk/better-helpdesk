@@ -25,11 +25,146 @@ export function Svg({ d }: { d: string }) {
   );
 }
 
-export function Loading({ label }: { label: string }) {
-  return (
-    <p className="sa-empty" aria-busy="true">
+const bone = (width: number | string, height?: number, round = false) => (
+  <span
+    className="sa-bone"
+    style={{ width, height, borderRadius: round ? 999 : undefined }}
+  />
+);
+
+export function Skeleton({
+  kind,
+  label,
+  columns,
+  summary = false,
+}: {
+  kind: 'table' | 'thread' | 'cards';
+  label: string;
+  /** For a CRM list: one avatar-and-name column, then plain ones. Without it, the inbox's row. */
+  columns?: number;
+  /** The contact page's summary card under the page head. */
+  summary?: boolean;
+}) {
+  const rows = [0, 1, 2, 3, 4, 5];
+  const status = (
+    <span className="sa-sr-only" role="status">
       {label}
-    </p>
+    </span>
+  );
+  if (kind === 'table') {
+    return (
+      <div className="sa-table-wrap sa-skeleton" aria-busy="true">
+        {status}
+        <table className="sa-table" aria-hidden="true">
+          <thead>
+            <tr>
+              {rows.slice(0, columns ?? 4).map(c => (
+                <th key={c}>{bone(64)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(i => (
+              <tr key={i}>
+                {columns ? (
+                  <>
+                    <td>
+                      <span className="sa-who">
+                        {bone(28, 28, true)}
+                        {bone(`${[50, 38, 56, 44, 60, 34][i]}%`)}
+                      </span>
+                    </td>
+                    {rows.slice(1, columns).map(c => (
+                      <td key={c}>{bone(72)}</td>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <td>{bone(44, 22, true)}</td>
+                    <td>
+                      <div className="sa-cell">
+                        {bone(26, 26)}
+                        <div className="sa-cell-title">
+                          <span>{bone(`${[62, 48, 70, 55, 66, 44][i]}%`)}</span>
+                          <span className="sa-fine">{bone(120)}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="sa-who">
+                        {bone(28, 28, true)}
+                        {bone(96)}
+                      </span>
+                    </td>
+                    <td>{bone(56, 22, true)}</td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  return (
+    <div className="sa sa-skeleton" aria-busy="true">
+      {status}
+      <div className="sa-page-head" aria-hidden="true">
+        {bone(80, 32)}
+        <h2>{bone('min(320px, 50vw)')}</h2>
+      </div>
+      {summary && (
+        <div className="sa-card sa-summary" aria-hidden="true">
+          {bone(44, 44, true)}
+          <div className="sa-cell-title">
+            <h2>{bone(180)}</h2>
+            <span className="sa-muted">{bone(240)}</span>
+          </div>
+        </div>
+      )}
+      <div className="sa-split" aria-hidden="true">
+        {kind === 'thread' ? (
+          <div className="sa">
+            <div className="sa-toolbar sa-fields">
+              {rows.slice(1).map(i => (
+                <span key={i}>{bone('100%', 36)}</span>
+              ))}
+            </div>
+            <div className="sa-thread">
+              {[60, 45, 70].map((width, i) => (
+                <div
+                  key={width}
+                  className="sa-msg"
+                  data-author={i === 1 ? 'agent' : 'contact'}>
+                  {bone(28, 28, true)}
+                  <div>
+                    <header>{bone(140)}</header>
+                    <div className="sa-msg-body" style={{ width: `${width}%` }}>
+                      {bone('90%')}
+                      <br />
+                      {bone('60%')}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <section className="sa-card">
+            <h3>{bone(96)}</h3>
+            {bone('100%', 160)}
+          </section>
+        )}
+        <aside className="sa">
+          {[96, 140, 72].map(height => (
+            <div key={height} className="sa-card">
+              <h3>{bone(96)}</h3>
+              {bone('100%', height)}
+            </div>
+          ))}
+        </aside>
+      </div>
+    </div>
   );
 }
 
