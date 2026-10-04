@@ -260,7 +260,7 @@ export function createHandler(support: Helpdesk) {
       }
       // An agent may move the thread between the check above and this write.
       if (
-        !conversation.companyId ||
+        conversation.companyId &&
         !(await store.setSharing(
           conversation.id,
           conversation.companyId,

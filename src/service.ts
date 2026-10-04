@@ -46,6 +46,7 @@ const MAX_RECEIPTS_PER_HOUR = 200;
 const MAX_AGENT_NOTICES_PER_HOUR = 200;
 const MAX_TRIAGES_PER_HOUR = 100;
 const MAX_INBOUND_PER_SENDER_PER_HOUR = 30;
+const MAX_UNSIGNED_INBOUND_PER_DOMAIN_PER_HOUR = 100;
 const VISITOR_IDLE_DAYS = 30;
 export const MAX_ATTACHMENTS = 20;
 export const ATTACHMENT_TYPES =
@@ -411,8 +412,12 @@ export function createHelpdesk(input: HelpdeskConfig) {
     conversation: Conversation,
     verified: boolean
   ) {
+    // Separate budgets, so a flood of unproven conversations cannot use up
+    // the notices for real ones.
     if (
-      (await store.hitRateLimit('agent-notices')) <= MAX_AGENT_NOTICES_PER_HOUR
+      (await store.hitRateLimit(
+        `agent-notices:${verified ? 'verified' : 'unverified'}`
+      )) <= MAX_AGENT_NOTICES_PER_HOUR
     ) {
       await store.enqueueJob('notify-agents', {
         conversationId: conversation.id,
@@ -636,13 +641,18 @@ export function createHelpdesk(input: HelpdeskConfig) {
   async function handleInbound(mail: InboundMessage) {
     if (await store.findMessageByEmailId([mail.messageId])) return;
     const from = normalizeEmail(mail.from.address);
-    // A signed sender has a budget of their own; an unsigned one shares its
-    // domain's, since anyone can put any address in From.
-    const sender = mail.verified ? from : `@${from.split('@')[1] ?? ''}`;
-    if (
-      (await store.hitRateLimit(`inbound:${sender}`)) >
-      MAX_INBOUND_PER_SENDER_PER_HOUR
-    ) {
+    // Each address has a budget. Unsigned mail also shares one per domain,
+    // since anyone can put any address in From; signed mail never draws on
+    // it, so a forged flood cannot crowd out a domain's real senders.
+    const overSender =
+      (await store.hitRateLimit(
+        `inbound:${mail.verified ? '' : 'unsigned:'}${from}`
+      )) > MAX_INBOUND_PER_SENDER_PER_HOUR;
+    const overDomain =
+      !mail.verified &&
+      (await store.hitRateLimit(`inbound:unsigned:@${from.split('@')[1]}`)) >
+        MAX_UNSIGNED_INBOUND_PER_DOMAIN_PER_HOUR;
+    if (overSender || overDomain) {
       throw new HelpdeskError(429, 'Too many messages from this sender');
     }
 
@@ -667,8 +677,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
     // An out-of-office or a bounce is kept for agents as a note on its
     // thread; it never reopens one, opens one, or proves anyone's address.
+    // Unsigned, it could be anyone's text, so it is dropped.
     if (mail.automated) {
-      if (conversation) {
+      if (conversation && mail.verified) {
         await store.appendMessage({
           conversationId: conversation.id,
           authorType: 'system',
