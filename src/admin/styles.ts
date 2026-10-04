@@ -68,6 +68,8 @@ export const adminCss = `
 
 .sa-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .sa-toolbar .sa-grow { flex: 1; min-width: 200px; }
+.sa-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.sa-fields .sa-select { width: 100%; min-width: 0; text-overflow: ellipsis; }
 .sa-input, .sa-select, .sa-textarea {
   height: 36px; padding: 0 12px; border: 1px solid var(--a-border); border-radius: 8px;
   background: var(--a-bg); width: 100%; font-size: 14px;
@@ -84,6 +86,7 @@ export const adminCss = `
 .sa-btn {
   height: 36px; padding: 0 14px; border: 1px solid var(--a-border); border-radius: 8px;
   background: var(--a-bg); display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap;
+  text-decoration: none;
 }
 .sa-btn:hover { background: var(--a-subtle); }
 .sa-btn svg { width: 16px; height: 16px; }
@@ -152,6 +155,7 @@ export const adminCss = `
 /* 32px, the h2's line box, so the button sits on the title's first line. */
 .sa .sa-back { height: 32px; padding: 0 10px 0 6px; flex: none; }
 .sa-split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+.sa-split > * { min-width: 0; grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 1100px) { .sa-split { grid-template-columns: 1fr; } }
 .sa-kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 13px; margin: 0; }
 .sa-kv dt { color: var(--a-muted); }
@@ -175,7 +179,11 @@ export const adminCss = `
 .sa-msg { display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
 .sa-msg-body { border-radius: var(--a-radius); padding: 10px 14px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--a-border); background: var(--a-bg); }
 .sa-msg[data-author="agent"] .sa-msg-body { position: relative; background: var(--a-subtle); }
-.sa-msg[data-author="agent"] .sa-msg-body::before { content: ''; position: absolute; left: -1px; top: 6px; bottom: 6px; width: 2px; background: var(--a-accent); }
+.sa-msg[data-author="agent"] { grid-template-columns: 1fr 28px; }
+.sa-msg[data-author="agent"] > :first-child { order: 2; }
+.sa-msg > div { display: grid; justify-items: start; min-width: 0; }
+.sa-msg[data-author="agent"] > div { justify-items: end; }
+.sa-msg-body { max-width: 100%; }
 .sa-msg[data-internal="true"] .sa-msg-body { background: var(--a-note); border: 1px dashed var(--a-note-border); }
 .sa-msg header { font-size: 12px; color: var(--a-muted); margin-bottom: 4px; white-space: normal; }
 .sa-msg header strong { color: var(--a-fg); font-weight: 600; }
@@ -246,7 +254,7 @@ export const adminCss = `
 .sa-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--a-accent); color: var(--a-accent-fg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 50; }
 .sa-timeline { display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }
 .sa-timeline li { border-left: 2px solid var(--a-border); padding-left: 12px; }
-.sa-kbd { font-size: 12px; color: var(--a-muted); }
+.sa-kbd { font-size: 12px; color: var(--a-muted); white-space: nowrap; }
 .sa-hint { white-space: nowrap; }
 .sa-team { margin-left: 6px; }
 .sa-deal [data-stale] { color: var(--a-warn); font-weight: 600; }
