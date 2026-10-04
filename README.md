@@ -1,135 +1,504 @@
-# better-helpdesk
+<h1 align="center">Better Helpdesk</h1>
 
-A support inbox, ticketing and lightweight CRM that mounts into your app: one
-route handler, a React agent UI, and an embeddable widget. Data lives in its
-own `helpdesk` schema in your Postgres.
+<p align="center">
+  The open-source helpdesk that lives inside your Next.js app.<br>
+  Support inbox, ticketing and a lightweight CRM, in your Postgres, behind your login.
+</p>
 
-## Install
+<p align="center">
+  <a href="https://github.com/better-helpdesk/better-helpdesk/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/better-helpdesk/better-helpdesk/ci.yml?branch=main&label=CI"></a>
+  <a href="https://www.npmjs.com/package/better-helpdesk"><img alt="npm version" src="https://img.shields.io/npm/v/better-helpdesk"></a>
+  <a href="https://github.com/better-helpdesk/better-helpdesk/blob/main/LICENSE"><img alt="MIT licence" src="https://img.shields.io/github/license/better-helpdesk/better-helpdesk"></a>
+  <a href="https://nodejs.org/"><img alt="Node.js version" src="https://img.shields.io/node/v/better-helpdesk"></a>
+</p>
+
+<p align="center">
+  <a href="#why-better-helpdesk">Why</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#guides">Guides</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo">Demo</a> ·
+  <a href="https://github.com/better-helpdesk/better-helpdesk/releases">Releases</a>
+</p>
+
+Better Helpdesk is an npm package, not a service. You mount one route
+handler, render one React component for your support team and drop one
+widget onto your site. Conversations, contacts and companies live in a
+`helpdesk` schema inside the Postgres you already run, and your app's own
+session decides who is a customer and who is on the team. There is no second
+system to deploy, no users to sync and no per-seat bill.
 
 ```sh
-npm install better-helpdesk pg react react-dom
+npm install better-helpdesk pg
+```
+
+## Why Better Helpdesk
+
+Hosted helpdesks keep your customer data on their servers and charge per
+seat. Self-hosted ones are a second application with its own login, database
+and deploy pipeline, which you then integrate with your product. Better
+Helpdesk is a library. It reuses what your app already has: its session, its
+database, its deploy and its design tokens.
+
+|                | Better Helpdesk              | Hosted (Intercom, Zendesk) | Self-hosted apps (Chatwoot, Libredesk) |
+| -------------- | ---------------------------- | -------------------------- | -------------------------------------- |
+| Runs           | inside your Next.js app      | on the vendor's servers    | as a separate app you operate          |
+| Customer data  | your Postgres                | the vendor's database      | its own database                       |
+| Sign-in        | your existing session        | separate agent accounts    | separate agent accounts                |
+| Look and feel  | your CSS custom properties   | vendor theming             | vendor theming                         |
+| Cost           | MIT, free                    | per seat, per month        | free, plus the hosting                 |
+
+## Features
+
+- **Shared inbox.** Several inboxes (say, support and sales), priorities,
+  human-readable references like `ACME-1042`, internal notes, canned replies,
+  keyboard navigation, and reminder emails when a customer has waited too
+  long.
+- **Lightweight CRM.** Contacts and companies taken from your app's identity,
+  lead stages, deals with stages and values, logged activities, tags and
+  custom fields.
+- **Widget.** A `<helpdesk-widget>` web component with a React wrapper and a
+  standalone script for sites that are not React. Cross-origin capable, with
+  one qualifying question, a privacy link, a booking link, receipts for
+  anonymous visitors, captured page context (URL, viewport, recent errors,
+  referrer, UTM) and a dark theme.
+- **Email.** Outbound through your own sender. Inbound through a webhook from
+  any relay, verified against DKIM and threaded back into the conversation.
+- **Everything optional is an adapter.** File storage, AI suggestions and
+  draft replies, help-centre search and scheduled jobs are small interfaces
+  you implement, or leave out.
+- **Your identity, your data.** No passwords and no sessions are stored.
+  Your `identify(request)`, or a signed identity token from another origin,
+  decides who someone is. Retention and rate limits are yours to set.
+- **English and German**, with every string overridable. Theming through
+  `--helpdesk-*` CSS custom properties.
+- **TypeScript, ESM, four runtime dependencies**: `drizzle-orm`, `zod`,
+  `mailparser` and `mailauth`. Peer dependencies are `pg` and React 19.
+
+## How it works
+
+One route handler serves four groups of routes under `basePath`. Your
+`identify` function runs on every request, and everything is written to the
+`helpdesk` schema in your database.
+
+| Who                     | Uses                                                        | Talks to               |
+| ----------------------- | ----------------------------------------------------------- | ---------------------- |
+| Visitors and customers  | `<HelpdeskWidget />`, or `widget.js` on any site            | `{basePath}/widget/*`  |
+| Your support team       | `<HelpdeskAdmin />`, open only when `identify` says `isAgent` | `{basePath}/agent/*`   |
+| Your mail relay         | POSTs each raw inbound email                                | `{basePath}/inbound`   |
+| Your scheduler          | `helpdesk.runJobs()`, or a POST with a bearer secret        | `{basePath}/jobs`      |
+
+In this project an *agent* is a member of your support team. It is never an
+AI; AI only ever produces a suggestion or a draft that a person reviews.
+
+## Requirements
+
+- Node.js 20 or newer
+- PostgreSQL 14 or newer
+- React 19 and `pg`, as peer dependencies
+- Next.js 15 or newer for the examples below. The handler is a plain
+  function from `Request` to `Response`, so any server with that shape can
+  mount it.
+
+## Quickstart
+
+### 1. Install
+
+```sh
+npm install better-helpdesk pg
+```
+
+`react` and `react-dom` are peer dependencies that a Next.js app already has.
+
+### 2. Create the schema
+
+```sh
 HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-migrate
 ```
 
-`better-helpdesk-migrate` uses one connection and can run in your release step.
+The CLI opens one connection, creates the `helpdesk` schema and its tables,
+and exits, so it fits into a release step next to your own migrations. It
+also reads `APP_DATABASE_URL`, and `DATABASE_SSL=true` turns on TLS.
 
-## Mount the handler
+### 3. Let Next.js compile the package
+
+```js
+// next.config.mjs
+import { withHelpdesk } from 'better-helpdesk/next';
+
+export default withHelpdesk({
+  // Both UIs request paths with a trailing slash. Without this every call
+  // pays a redirect first, and a widget on another origin fails its CORS
+  // preflight.
+  trailingSlash: true,
+});
+```
+
+### 4. Build the helpdesk and mount the handler
 
 ```ts
-// app/api/helpdesk/[...slug]/route.ts (Next.js; any Request → Response server works)
+// lib/helpdesk.ts
 import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
 import pg from 'pg';
 
-const helpdesk = buildHelpdesk({
-  db: postgresAdapter({ pool: new pg.Pool({ connectionString: process.env.HELPDESK_DATABASE_URL }) }),
+const pool = new pg.Pool({ connectionString: process.env.HELPDESK_DATABASE_URL });
+
+export const helpdesk = buildHelpdesk({
+  db: postgresAdapter({ pool }),
   referencePrefix: 'ACME',
   adminUrl: 'https://app.example.com/helpdesk/',
-  inboxes: { support: {}, sales: { public: true, allowedOrigins: ['https://www.example.com'] } },
+  inboxes: {
+    support: { receipt: true },
+    sales: { public: true, allowedOrigins: ['https://www.example.com'] },
+  },
   identify: async request => {
-    // Your session → { user, orgs, isAgent }, or null for anonymous visitors.
-    return null;
+    const session = await getSession(request); // however your app does it
+    if (!session) return null; // an anonymous visitor
+    return {
+      user: { id: session.user.id, email: session.user.email, emailVerified: true, name: session.user.name },
+      orgs: session.orgs.map(org => ({ id: org.id, name: org.name })),
+      isAgent: session.user.role === 'support',
+    };
   },
 });
+```
+
+```ts
+// app/api/helpdesk/[...slug]/route.ts
+import { helpdesk } from '@/lib/helpdesk';
 
 const handle = (request: Request) => helpdesk.handler(request);
 export { handle as GET, handle as POST, handle as PATCH, handle as DELETE, handle as OPTIONS };
 ```
 
-Wrap your Next config with `withHelpdesk` from `better-helpdesk/next`.
-Everything else in `HelpdeskConfig` (storage, email, inbound email, AI, help
-search, jobs) is optional; call `helpdesk.runJobs()` on a schedule or POST
-`{basePath}/jobs` with `jobsSecret`.
+Two things to get right here:
 
-When someone stops being an agent in your app, call
-`helpdesk.removeAgent(user.id)`: they stop getting agent emails until they
-next open the agent UI as an agent. Agents can also remove each other under
-Settings.
+- `isAgent` is the only thing that grants the agent UI, and `orgs` must list
+  only the organisations the user is an active member of.
+- `adminUrl` must be the URL your team actually opens in the browser. The
+  handler refuses mutations from any other origin, so a mismatch turns every
+  reply into a 403.
 
-## Agent UI
+### 5. Render the agent UI
 
 ```tsx
-'use client';
+// app/helpdesk/[[...slug]]/page.tsx
 import { HelpdeskAdmin } from 'better-helpdesk/admin';
 
-export default () => <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale="en" />;
+export default function Page() {
+  return <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale="en" />;
+}
 ```
 
-## Widget
+Put the page behind your own agent check as well. The API refuses anyone who
+is not an agent either way.
 
-In React:
+### 6. Add the widget
 
 ```tsx
 import { HelpdeskWidget } from 'better-helpdesk/widget';
 
-<HelpdeskWidget inbox="support" locale="en" />;
+export function Layout({ children }) {
+  return (
+    <>
+      {children}
+      <HelpdeskWidget inbox="support" locale="en" />
+    </>
+  );
+}
 ```
 
-On any page, serve `better-helpdesk/widget.js` (a self-contained script)
-and load it:
+Send a message from the widget, open `/helpdesk` as an agent and answer it.
+That is the whole loop. [`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
+has it wired up end to end.
+
+## Guides
+
+### The widget
+
+`HelpdeskWidget` takes `api`, `inbox`, `locale`, `types`, `orgId`,
+`identityToken`, `appVersion`, `context` and `label`. `context` is a map of
+strings that is attached to every conversation the widget opens, alongside
+what it captures itself.
+
+On a page that is not React, serve `widget.js` from the published package
+(for instance by copying `node_modules/better-helpdesk/dist/widget.js` into
+`public/` during your build) and load it:
 
 ```html
-<script src="/helpdesk/widget.js" data-api="https://app.example.com/api/helpdesk" data-inbox="sales" async></script>
+<script
+  src="https://app.example.com/helpdesk/widget.js"
+  data-api="https://app.example.com/api/helpdesk"
+  data-inbox="sales"
+  data-locale="de"
+  async
+></script>
 ```
 
-The script brings only the widget it creates to life; a `<helpdesk-widget>`
-already in the page's markup stays inert.
+Every `data-*` attribute maps to a widget prop. The script brings only the
+widget it creates to life; a `<helpdesk-widget>` already in the page's markup
+stays inert. `theme="auto"` on the element follows the operating system's
+dark mode.
 
-The widget requests paths with a trailing slash. On another origin, a host
-that redirects them (Next.js without `trailingSlash: true`) fails the CORS
-preflight.
+To run the widget on another origin, list that origin in the inbox's
+`allowedOrigins` and keep `trailingSlash: true` in your Next config: a host
+that redirects the widget's requests fails the CORS preflight.
+
+The widget dispatches DOM events such as `helpdesk:open`,
+`helpdesk:message-sent` and `helpdesk:booking-clicked`, so analytics can
+listen without touching the package.
 
 ### Signed-in users on another origin
 
-When the widget runs on an origin where `identify` cannot see your session,
-your backend signs an HS256 JWT with `identityTokenSecret` and the page passes
-it as `identity-token` (`identityToken` in React):
+When the widget runs where `identify` cannot see your session, your backend
+signs an HS256 JWT with `identityTokenSecret` and the page passes it as
+`identity-token` (`identityToken` in React):
 
 ```ts
 import { signIdentityToken } from 'better-helpdesk';
 
-signIdentityToken(
-  { sub: user.id, email: user.email, email_verified: user.emailVerified, name: user.name, orgs: [{ id: org.id, name: org.name }] },
-  process.env.HELPDESK_IDENTITY_SECRET,
+const token = signIdentityToken(
+  {
+    sub: user.id,
+    email: user.email,
+    email_verified: user.emailVerified,
+    name: user.name,
+    orgs: [{ id: org.id, name: org.name }],
+  },
+  process.env.HELPDESK_IDENTITY_SECRET!,
   { expiresInSeconds: 3600 }
 );
 ```
 
-Any JWT library works: `sub` and `exp` are required. A forged or expired token
-is refused with 401, and a token never grants the agent UI.
+Any JWT library works: `sub` and `exp` are required. A forged or expired
+token is refused with 401, and a token never grants the agent UI.
 
-## Theming
+### Email
 
-Both UIs read CSS custom properties set on an ancestor, so they inherit into
-the widget's shadow root. Shared: `--helpdesk-font`, `-bg`, `-fg`, `-muted`,
-`-border`, `-subtle`, `-accent`, `-accent-hover`, `-accent-fg`, `-focus`,
-`-danger`, `-radius`. The widget adds `--helpdesk-launcher-bg`/`-fg`,
-`--helpdesk-panel-header-bg`/`-fg` (both default to the accent),
-`--helpdesk-panel-border` and `--helpdesk-offset-bottom`; the agent UI adds
-`--helpdesk-header-bg` (table heads and avatars), `--helpdesk-note`,
-`--helpdesk-note-border` and `--helpdesk-warning`.
+**Outbound** mail goes through your sender. The adapter receives one of four
+message kinds and decides how each is rendered and sent:
+
+```ts
+email: {
+  async send(message) {
+    switch (message.kind) {
+      case 'customer-reply':
+        return mailer.send({
+          to: message.to,
+          subject: `Re: ${message.subject ?? message.reference}`,
+          text: message.body,
+          replyTo: message.replyTo,
+          inReplyTo: message.inReplyTo,
+        });
+      case 'customer-receipt':
+        return mailer.send({ to: message.to, subject: `We got your message (${message.reference})`, text: receiptText(message) });
+      case 'agent-new':
+      case 'agent-reminder':
+        return mailer.send({ to: message.to, subject: message.subject, text: `${message.body}\n\n${message.url}` });
+    }
+  },
+},
+```
+
+`mailer` and `receiptText` stand for whatever you send mail with. A receipt
+carries the responder's name, their away date when the team is out, and the
+inbox's booking link, so your template can show them.
+
+**Inbound** mail arrives through a webhook. Any relay that can forward a raw
+message to a URL will do; [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays)
+has a Cloudflare Email Worker. Configure:
+
+```ts
+inboundWebhookSecret: process.env.HELPDESK_INBOUND_SECRET,
+inboundInbox: 'support',
+replyToAddress: reference => `support+${reference}@example.com`,
+```
+
+The relay POSTs the message as `message/rfc822` to `{basePath}/inbound/`
+with `Authorization: Bearer <secret>`. A reply finds its conversation through
+`In-Reply-To` and `References`, or through the plus-addressed reference that
+`replyToAddress` put into the Reply-To header. DKIM is verified against the
+From domain; set `dnsResolver` if the system resolver is not the one to use.
+
+### Jobs and retention
+
+Run the scheduled work from your own scheduler, either in process or over
+HTTP:
+
+```ts
+await helpdesk.runJobs({ budgetMs: 20_000 });
+```
+
+```sh
+curl -X POST -H "Authorization: Bearer $HELPDESK_JOBS_SECRET" https://app.example.com/api/helpdesk/jobs/
+```
+
+A run sends due reminder emails, deletes resolved conversations that are
+older than `retentionDays`, then works through queued jobs until the budget
+is spent.
+
+### Storage, AI and help search
+
+- `storage` presigns uploads and downloads and stores attachments, so an
+  S3-compatible bucket fits directly. The package stores keys and metadata.
+  `maxAttachmentBytes` caps the size.
+- `ai.generate({ system, prompt, schema })` returns an object that satisfies
+  the given Zod schema. The package uses it for triage suggestions (type,
+  priority, title, likely duplicates) and for draft replies that an agent
+  accepts, edits or dismisses.
+- `help.search(query, locale)` returns `{ title, url, excerpt }` results that
+  the widget suggests to customers.
+
+### When someone leaves the team
+
+Call `helpdesk.removeAgent(user.id)` when a user stops being an agent in your
+app. They stop receiving agent emails until they next open the agent UI as an
+agent. Agents can also remove each other under Settings.
+
+### Theming
+
+Both UIs read CSS custom properties from an ancestor, so they inherit into
+the widget's shadow root:
+
+```css
+:root {
+  --helpdesk-accent: #0f766e;
+  --helpdesk-accent-hover: #115e59;
+  --helpdesk-accent-fg: #ffffff;
+  --helpdesk-radius: 8px;
+}
+```
+
+| Scope     | Properties                                                                                                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared    | `--helpdesk-font`, `-bg`, `-fg`, `-muted`, `-border`, `-subtle`, `-accent`, `-accent-hover`, `-accent-fg`, `-focus`, `-danger`, `-radius`                                             |
+| Widget    | `--helpdesk-launcher-bg`, `-launcher-fg`, `-panel-header-bg`, `-panel-header-fg` (both default to the accent), `-panel-border`, `-offset-bottom`                                        |
+| Agent UI  | `--helpdesk-header-bg` (table heads and avatars), `-note`, `-note-border`, `-warning`                                                                                                 |
 
 For a dark theme, set the panel header too: a light accent reads well on
-buttons and links, but not as the header's background. Without variables,
-`theme="auto"` on the widget follows the OS.
+buttons and links, but not as the header's background.
 
-## Development
+### Languages
+
+Both UIs ship in English and German (`locale="en"` or `"de"`). The widget
+falls back to the browser's language. Inbox copy such as `name`, `title`,
+`replyPromise` and the qualifying question is given per locale in the
+config, and `HelpdeskAdmin` takes a `messages` prop that overrides any of the
+package's own strings by key, for example `admin.inbox`.
+
+## Configuration
+
+Everything `buildHelpdesk` accepts. The types in `better-helpdesk` carry the
+full documentation.
+
+| Field                                                                 | Required | What it does                                                                                            |
+| --------------------------------------------------------------------- | :------: | ------------------------------------------------------------------------------------------------------- |
+| `db`                                                                  |   yes    | `postgresAdapter({ pool })` over a `pg.Pool`.                                                           |
+| `referencePrefix`                                                     |   yes    | Prefix of the references customers and emails use, as in `ACME-1042`.                                  |
+| `adminUrl`                                                            |   yes    | Absolute URL of the agent UI. Agent emails link to it, and mutations must come from its origin.         |
+| `inboxes`                                                             |   yes    | The inboxes by key. See the table below.                                                                |
+| `identify(request)`                                                   |   yes    | Your session as `{ user, orgs, isAgent }`, or `null` for an anonymous visitor.                         |
+| `basePath`                                                            |          | Mount path of the handler. Default `/api/helpdesk`.                                                     |
+| `types`                                                               |          | Conversation types. Default `question`, `bug`, `feature`, `lead`.                                       |
+| `teamName`, `agentTitles`                                             |          | How the team and individual agents are named where they sign, per locale.                               |
+| `identityTokenSecret`                                                 |          | Verifies identity tokens from other origins. Consulted only when `identify` returns `null`.             |
+| `resolveContext(externalOrgId)`, `orgNames(externalOrgIds)`           |          | Extra context and display names for your organisations.                                                 |
+| `storage`, `maxAttachmentBytes`                                       |          | Attachments. Without `storage` there are none.                                                          |
+| `email.send(message)`                                                 |          | Outbound mail.                                                                                          |
+| `inboundWebhookSecret`, `inboundInbox`, `replyToAddress`, `dnsResolver` |        | Inbound mail.                                                                                           |
+| `help.search(query, locale)`                                          |          | Help-centre search for the widget.                                                                      |
+| `ai.generate({ system, prompt, schema })`                             |          | Triage suggestions and draft replies for agents.                                                        |
+| `jobsSecret`                                                          |          | Bearer secret for `POST {basePath}/jobs`.                                                               |
+| `clientIp(request)`                                                   |          | How to read the caller's address behind your proxy. Default: the last `X-Forwarded-For` hop.           |
+| `leadStages`, `dealStages`, `customFields`                            |          | The CRM's ladders and fields for contacts, companies and deals.                                         |
+| `retentionDays`                                                       |          | Delete resolved conversations this many days after resolution.                                          |
+| `anonymousRateLimit`, `customerRateLimit`                             |          | Posts allowed per hour, per anonymous IP and per signed-in customer.                                    |
+
+Each inbox is configured on its own:
+
+| Field                            | What it does                                                                        |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| `name`                           | What agents see instead of the key, per locale.                                     |
+| `public`                         | Anonymous visitors may open conversations here.                                     |
+| `allowedOrigins`                 | Origins allowed to call the widget API cross-origin.                                |
+| `reminderAfterHours`             | Email the agents when a customer has waited this long.                              |
+| `defaultPriority`                | Priority new conversations start with, for example `high` for sales.                |
+| `title`, `replyPromise`          | The widget's header and what it promises about replies, per locale.                 |
+| `qualify`                        | One qualifying question with options, asked before the first message.               |
+| `privacyUrl`                     | Linked under the first-message form, per locale.                                    |
+| `receipt`                        | Email a receipt to people who write in.                                             |
+| `bookingUrl`, `bookingLink(ref)` | A meeting link offered once someone has written, in the widget and in the receipt.  |
+
+Statuses are `open`, `pending` and `resolved`, read from the customer's
+side. Priorities are `low`, `normal`, `high` and `urgent`. The default lead
+stages are `lead`, `qualified`, `customer`, `churned`, and the default deal
+stages `new`, `qualified`, `proposal`, `won`, `lost`.
+
+## Demo
+
+[`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
+is Harbor, a pretend shipping product with the package installed the way this
+README describes: one route handler, the agent UI at `/helpdesk`, the widget
+in the corner. With a local Postgres running:
 
 ```sh
 pnpm install
-pnpm lint
-pnpm test
+cp examples/demo/.env.example examples/demo/.env.local
+pnpm --filter better-helpdesk-demo db:migrate
+pnpm --filter better-helpdesk-demo dev
+```
+
+Its README explains the role switcher and what the demo deliberately gets
+wrong. CI builds and runs the same app against the packed tarball on the
+current and the previous major of Next.js, and against `next@canary` once a
+week.
+
+## Status
+
+Better Helpdesk is young and under active development. Until 1.0 a minor
+version may change the API, and every release's notes list the pull requests
+it contains. Releases are published to npm with provenance through trusted
+publishing. The architecture is settled, though: embedded in the host, Next.js
+first, Postgres only, the host owns identity. A standalone server, a hosted
+mode or its own login are not planned.
+
+## Contributing
+
+Issues and pull requests are welcome. Before you start, read
+[`AGENTS.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/AGENTS.md)
+for how the repository works and what is off-limits, and
+[`CONTEXT.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/CONTEXT.md)
+for the vocabulary the code uses.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm lint                 # Biome, then tsc --noEmit
+pnpm test                 # unit tests
 TEST_DATABASE_URL=postgres://postgres@localhost:5432/db pnpm test:integration
 ```
 
-`pnpm lint` is Biome plus `tsc --noEmit`, and CI runs it first. Integration
-tests create a `helpdesk_test` database next to the one the URL names.
-Releases publish from a `v*` tag whose version matches `package.json`.
+The integration tests create a `helpdesk_test` database next to the one the
+URL names. A `postgres:18-alpine` container started with
+`POSTGRES_HOST_AUTH_METHOD=trust` is enough. Green CI (lint, both test
+suites, the tarball smoke test and the demo build) is the bar for every pull
+request. Commit messages follow the conventional form in the history
+(`fix(widget): …`, `feat(admin): …`), and pull request titles become the
+release notes, so write them as changelog lines.
 
-[`examples/demo`](examples/demo) is a Next.js app with all of the above
-installed — somewhere to see it work, and what CI builds against the packed
-tarball on the current and the previous major of Next.js, and against
-`next@canary` once a week.
+## Security
+
+Better Helpdesk stores no passwords and no sessions. Mutations are checked
+against the agent UI's origin, inbound mail is verified against DKIM,
+identity tokens are signed and expire, and anonymous and customer traffic is
+rate limited. Attachments go to your storage, never through the package's
+own hosting.
+
+If you find a vulnerability, please do not open a public issue. Report it
+privately through
+[GitHub's security advisories](https://github.com/better-helpdesk/better-helpdesk/security/advisories/new)
+for this repository.
 
 ## License
 
-MIT
+[MIT](https://github.com/better-helpdesk/better-helpdesk/blob/main/LICENSE) © 2026 devguard AG
