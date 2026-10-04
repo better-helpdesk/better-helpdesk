@@ -2,6 +2,7 @@ import type { DNSResolver } from 'mailauth';
 import type { z } from 'zod';
 
 import type { HelpdeskStore } from './db/store';
+import type { HelpdeskEvent } from './events';
 
 export type Locale = 'en' | 'de';
 
@@ -178,6 +179,12 @@ export type HelpdeskConfig = {
   inboundInbox?: string;
   help?: { search(query: string, locale: Locale): Promise<HelpResult[]> };
   ai?: AiAdapter;
+  /**
+   * Told about each new conversation, message and agent change once it is
+   * stored. Awaited inside the request, so keep it fast or enqueue; what it
+   * throws is logged, never returned to the caller.
+   */
+  onEvent?(event: HelpdeskEvent): Promise<void>;
   /** Bearer secret for `POST {basePath}/jobs`. */
   jobsSecret?: string;
   /** The caller's address as your proxy reports it; the default takes the last X-Forwarded-For hop. */

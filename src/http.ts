@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
 import type { Agent, Conversation } from './db/store';
+import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
 import { plainText } from './rich';
@@ -593,7 +594,7 @@ export function createHandler(support: Helpdesk) {
     });
   });
 
-  agentRoute('PATCH', 'conversations/:id', async ({ params, body }) => {
+  agentRoute('PATCH', 'conversations/:id', async ({ params, body, agent }) => {
     const conversation = await requireConversation(params.id);
     const data = z
       .object({
@@ -644,6 +645,7 @@ export function createHandler(support: Helpdesk) {
       }
     }
     const updated = await store.updateConversation(conversation.id, patch);
+    await emitUpdated(config, conversation, updated, patch, agent.id);
     return json({ conversation: updated && agentView(updated) });
   });
 
@@ -697,7 +699,7 @@ export function createHandler(support: Helpdesk) {
   agentRoute(
     'POST',
     'conversations/:id/suggestion',
-    async ({ params, body }) => {
+    async ({ params, body, agent }) => {
       const conversation = await requireConversation(params.id);
       const suggestion = conversation.aiSuggestion;
       if (!suggestion) throw new HelpdeskError(404, 'No suggestion');
@@ -707,13 +709,15 @@ export function createHandler(support: Helpdesk) {
       if (data.action === 'dismiss') {
         await store.updateConversation(conversation.id, { aiSuggestion: null });
       } else {
-        await store.updateConversation(conversation.id, {
+        const patch = {
           type: suggestion.type ?? conversation.type,
           priority: suggestion.priority ?? conversation.priority,
           // An agent's own title stands; the banner never offered to replace it.
           title: conversation.title ?? suggestion.title,
           aiSuggestion: { ...suggestion, acceptedAt: new Date().toISOString() },
-        });
+        };
+        const updated = await store.updateConversation(conversation.id, patch);
+        await emitUpdated(config, conversation, updated, patch, agent.id);
       }
       return json({ ok: true });
     }

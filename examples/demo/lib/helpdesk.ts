@@ -108,4 +108,12 @@ export const helpdesk = buildHelpdesk({
       console.log(`[helpdesk email] ${message.kind} → ${message.to}`, message);
     },
   },
+  // The README's Slack recipe, with the terminal standing in for Slack.
+  onEvent: async event => {
+    if (event.kind !== 'conversation.created') return;
+    const { conversation } = event;
+    console.log(
+      `[helpdesk event] New ${conversation.type} ${helpdesk.reference(conversation)}: ${conversation.subject}`
+    );
+  },
 });

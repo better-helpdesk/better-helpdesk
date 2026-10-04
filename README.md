@@ -338,6 +338,63 @@ A run sends due reminder emails, deletes resolved conversations that are
 older than `retentionDays`, then works through queued jobs until the budget
 is spent.
 
+### Events
+
+`onEvent` is told about every new conversation, every new message and every
+change an agent makes, once it is stored. Use it to post to Slack, open an
+issue in your tracker, record an analytics event or assign the conversation.
+There is no webhook: your own function is the integration.
+
+| `kind`                 | Fields                                                                     |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `conversation.created` | `conversation`, `message` (the first one). From the widget or by email.    |
+| `message.created`      | `conversation` as it stands after the message, `message`, `internal`.      |
+| `conversation.updated` | `conversation`, `before` (the changed fields as they were), `agentId`.     |
+
+The handler is awaited inside the request, including the email relay's
+webhook, so keep it fast or put the work on your own queue. What it throws is
+logged and never changes the response.
+
+```ts
+export const helpdesk = buildHelpdesk({
+  // …
+  onEvent: async event => {
+    const { conversation } = event;
+    const urgentBug = conversation.type === 'bug' && conversation.priority === 'urgent';
+    const justBecameOne =
+      event.kind === 'conversation.created' ||
+      (event.kind === 'conversation.updated' && ('type' in event.before || 'priority' in event.before));
+    if (!urgentBug || !justBecameOne) return;
+    await fetch(process.env.SLACK_WEBHOOK_URL!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text: `Urgent bug ${helpdesk.reference(conversation)}: ${conversation.subject}`,
+      }),
+    });
+  },
+});
+```
+
+Round-robin assignment to the agents who are not away:
+
+```ts
+onEvent: async event => {
+  if (event.kind !== 'conversation.created') return;
+  const now = new Date();
+  const agents = (await helpdesk.store.listAgents()).filter(
+    agent => !agent.awayUntil || agent.awayUntil <= now
+  );
+  const next = agents[event.conversation.number % agents.length];
+  if (!next) return;
+  await helpdesk.store.updateConversation(event.conversation.id, { assigneeId: next.id });
+},
+```
+
+Writes through `helpdesk.store` raise no events, so a handler cannot set off
+itself. A customer reply that reopens a resolved conversation raises only
+`message.created`; its `conversation.status` is `open` again.
+
 ### Storage, AI and help search
 
 - `storage` presigns uploads and downloads and stores attachments, so an
@@ -411,6 +468,7 @@ full documentation.
 | `inboundWebhookSecret`, `inboundInbox`, `replyToAddress`, `dnsResolver` |        | Inbound mail.                                                                                           |
 | `help.search(query, locale)`                                          |          | Help-centre search for the widget.                                                                      |
 | `ai.generate({ system, prompt, schema })`                             |          | Triage suggestions and draft replies for agents.                                                        |
+| `onEvent(event)`                                                      |          | Told about new conversations, new messages and agent changes. See [Events](#events).                   |
 | `jobsSecret`                                                          |          | Bearer secret for `POST {basePath}/jobs`.                                                               |
 | `clientIp(request)`                                                   |          | How to read the caller's address behind your proxy. Default: the last `X-Forwarded-For` hop.           |
 | `leadStages`, `dealStages`, `customFields`                            |          | The CRM's ladders and fields for contacts, companies and deals.                                         |

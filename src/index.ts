@@ -3,8 +3,14 @@ import { createHandler } from './http';
 import { createHelpdesk } from './service';
 
 export type * from './config';
-export { type HelpdeskStore, postgresAdapter } from './db/store';
+export {
+  type Conversation,
+  type HelpdeskStore,
+  type Message,
+  postgresAdapter,
+} from './db/store';
 export { formatReference, parseReference } from './domain';
+export type { HelpdeskEvent } from './events';
 export {
   type IdentityClaims,
   signIdentityToken,
