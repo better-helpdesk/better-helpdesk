@@ -17,9 +17,11 @@ import {
   type Contact,
   type Conversation,
   type IdentityInput,
+  type Message,
   schema,
 } from './db/store';
 import { formatReference, parseReference } from './domain';
+import { emit } from './events';
 import { verifyIdentityToken } from './identity-token';
 import { plainText } from './rich';
 import { nextWorkday } from './ui/i18n';
@@ -352,7 +354,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         tags: [...contact.tags, segment],
       });
     }
-    const { conversation } = await store.createConversation(
+    const created = await store.createConversation(
       {
         inbox: data.inbox,
         type: data.type,
@@ -373,11 +375,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
         verified: Boolean(customer.identity?.user.emailVerified),
       }
     );
-    await afterNewConversation(
-      conversation,
-      customer.identity ? 'host' : 'other'
-    );
-    return { conversation, visitorToken };
+    await afterNewConversation(created, customer.identity ? 'host' : 'other');
+    return { conversation: created.conversation, visitorToken };
   }
 
   /** Anonymous writes share one hourly budget per address. */
@@ -420,7 +419,20 @@ export function createHelpdesk(input: HelpdeskConfig) {
       // A host user's words are theirs only if the host proved their address.
       verified: Boolean(customer.identity?.user.emailVerified),
     });
+    await messageCreated(message);
     return message;
+  }
+
+  async function messageCreated(message: Message) {
+    if (!config.onEvent) return;
+    const conversation = await store.getConversation(message.conversationId);
+    if (!conversation) return;
+    await emit(config, {
+      kind: 'message.created',
+      conversation,
+      message,
+      internal: message.internal,
+    });
   }
 
   /**
@@ -430,7 +442,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
    * domain they own, so only the host's word sets them apart.
    */
   async function afterNewConversation(
-    conversation: Conversation,
+    { conversation, message }: { conversation: Conversation; message: Message },
     origin: 'host' | 'other'
   ) {
     if (
@@ -457,6 +469,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     ) {
       await store.enqueueJob('ai-triage', { conversationId: conversation.id });
     }
+    await emit(config, { kind: 'conversation.created', conversation, message });
   }
 
   async function addAgentMessage(
@@ -479,6 +492,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         { runAt: new Date(Date.now() + 2 * 60_000) }
       );
     }
+    await messageCreated(message);
     return message;
   }
 
@@ -743,6 +757,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
           emailMessageId: mail.messageId,
         });
         await storeInboundAttachments(conversation.id, message.id, mail);
+        await messageCreated(message);
         return;
       }
     }
@@ -780,7 +795,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       created.message.id,
       mail
     );
-    await afterNewConversation(created.conversation, 'other');
+    await afterNewConversation(created, 'other');
   }
 
   async function onConversation(conversation: Conversation, email: string) {
