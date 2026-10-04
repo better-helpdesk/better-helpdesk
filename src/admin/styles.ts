@@ -266,4 +266,16 @@ export const adminCss = `
 .sa-drop-hint { margin: 0; padding: 14px 8px; border: 1px dashed var(--a-border); border-radius: var(--a-radius); text-align: center; font-size: 12px; color: var(--a-muted); }
 @media (max-width: 1400px) { .sa-hint { display: none; } }
 .sa-kbd kbd { font: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid var(--a-border); border-bottom-width: 2px; border-radius: 5px; background: var(--a-bg); }
+
+.sa-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Held back briefly so a fast load does not flash it; the space is kept meanwhile. */
+.sa-skeleton { animation: sa-wait 0s 300ms backwards; }
+@keyframes sa-wait { from { opacity: 0; } }
+.sa-bone {
+  display: inline-block; vertical-align: middle; flex: none; max-width: 100%; height: 1em;
+  border-radius: 6px; background: color-mix(in srgb, var(--a-fg) 8%, var(--a-bg));
+  animation: sa-pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+}
+@keyframes sa-pulse { to { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .sa-bone { animation: none; } }
 `;

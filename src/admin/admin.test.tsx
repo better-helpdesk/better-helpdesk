@@ -291,6 +291,68 @@ describe('HelpdeskAdmin', () => {
     expect(auto?.textContent).toContain('(evil.test)');
   });
 
+  it.each([
+    ['/support/conversations/', 'agent/conversations/?', 'thead th', 4],
+    ['/support/conversations/c1/', 'agent/conversations/c1/', '.sa-fields', 1],
+    ['/support/contacts/', 'agent/contacts/', 'thead th', 6],
+    ['/support/companies/', 'agent/companies/', 'thead th', 4],
+    ['/support/contacts/p1/', 'agent/contacts/p1/', '.sa-summary', 1],
+    ['/support/companies/o1/', 'agent/companies/o1/', '.sa-summary', 0],
+  ])(
+    'shows %s as a busy skeleton of the page until it loads',
+    async (path, pending, shape, count) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: string) => {
+          const url = String(input);
+          if (url.includes(pending)) return new Promise(() => {});
+          if (url.includes('agent/me/'))
+            return Promise.resolve(new Response(JSON.stringify(me)));
+          return Promise.resolve(new Response('{}'));
+        })
+      );
+      window.history.replaceState(null, '', path);
+      const { container } = render(
+        <HelpdeskAdmin basePath="/support" locale="en" />
+      );
+
+      const busy = await vi.waitFor(() => {
+        const found = container.querySelector('[aria-busy="true"]');
+        if (!found) throw new Error('nothing busy');
+        return found;
+      });
+      expect(busy.textContent).toBe('Loading…');
+      expect(container.querySelectorAll('[aria-busy="true"]')).toHaveLength(1);
+      expect(busy.querySelectorAll(shape)).toHaveLength(count);
+    }
+  );
+
+  it.each([
+    '/support/contacts/',
+    '/support/companies/',
+    '/support/contacts/p1/',
+    '/support/companies/o1/',
+  ])(
+    'replaces the skeleton of %s with an error when loading fails',
+    async path => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string) =>
+          String(input).includes('agent/me/')
+            ? new Response(JSON.stringify(me))
+            : new Response('{}', { status: 500 })
+        )
+      );
+      window.history.replaceState(null, '', path);
+      const { container } = render(
+        <HelpdeskAdmin basePath="/support" locale="en" />
+      );
+
+      expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+      expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    }
+  );
+
   it('keeps an unhandled action failure on screen under a host router', async () => {
     render(
       <HelpdeskAdmin

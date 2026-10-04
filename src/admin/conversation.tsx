@@ -10,8 +10,8 @@ import {
   Avatar,
   browserLabel,
   humanizeKey,
-  Loading,
   paths,
+  Skeleton,
   Svg,
   useToast,
 } from './ui';
@@ -119,7 +119,7 @@ export function ConversationView({ id }: { id: string }) {
 
   const data = detail.data;
   if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
-  if (!data) return <Loading label={t('admin.loading')} />;
+  if (!data) return <Skeleton kind="thread" label={t('admin.loading')} />;
   const c = data.conversation;
 
   const patch = async (values: Record<string, unknown>) => {
