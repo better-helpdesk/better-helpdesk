@@ -78,6 +78,23 @@ describe('automated mail', () => {
     ).toEqual([{ verified: false }]);
   });
 
+  it('drops an unsigned automated mail even when it names a thread', async () => {
+    const { conversation } = await lead();
+    await h.support.handleInbound(
+      mail({
+        to: [`support+${conversation.reference}@devguard.test`],
+        text: 'Planted note',
+        automated: true,
+        verified: false,
+      })
+    );
+    expect(
+      await rows(
+        sql`SELECT 1 FROM helpdesk.message WHERE body = 'Planted note'`
+      )
+    ).toHaveLength(0);
+  });
+
   it('drops an automated mail that belongs to no thread', async () => {
     await h.support.handleInbound(mail({ automated: true }));
     expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
@@ -230,6 +247,23 @@ describe('budgets', () => {
     );
   });
 
+  it('budgets unsigned mail per address, under a cap for its whole domain', async () => {
+    let refused = 0;
+    for (let i = 0; i < 101; i++) {
+      try {
+        await h.support.handleInbound(
+          mail({ from: { address: `x${i}@example.test` }, verified: false })
+        );
+      } catch {
+        refused++;
+      }
+    }
+    expect(refused).toBe(1);
+    await expect(
+      h.support.handleInbound(mail({ subject: 'signed' }))
+    ).resolves.toBeUndefined();
+  });
+
   it('triages only what a proven author wrote', async () => {
     let calls = 0;
     const ai = createHarness({
@@ -375,6 +409,23 @@ describe('smaller hardening', () => {
         sql`SELECT shared_with_company FROM helpdesk.conversation WHERE id = ${id}::uuid`
       )
     ).toEqual([{ shared_with_company: false }]);
+  });
+
+  it('still lets the author stop sharing a thread that has no company', async () => {
+    h.addUser('ada');
+    const created = await h.call('POST', 'widget/conversations', {
+      user: 'ada',
+      body: { inbox: 'support', type: 'question', body: 'hi' },
+    });
+    expect(
+      (
+        await h.call(
+          'PATCH',
+          `widget/conversations/${created.data.conversation.id}`,
+          { user: 'ada', body: { sharedWithCompany: false } }
+        )
+      ).status
+    ).toBe(200);
   });
 
   it('deletes what a dropped contact wrote in another organization’s thread', async () => {

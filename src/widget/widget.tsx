@@ -690,8 +690,10 @@ function NewMessage({
   const technical = TECHNICAL.has(type);
   const qualify = session.inbox?.qualify;
 
+  // Read once per form: the checkboxes refer to these entries, and the page
+  // keeps recording new ones while the form is open.
+  const [recent] = useState(errors);
   const context = useMemo(() => {
-    const recent = errors();
     return {
       url: location.href,
       title: document.title,
@@ -705,7 +707,7 @@ function NewMessage({
         ? { host: hostContext }
         : {}),
     };
-  }, [errors, appVersion, hostContext, locale]);
+  }, [recent, appVersion, hostContext, locale]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   // Errors are page text the person never typed; each is shown and can go.
   const [droppedErrors, setDroppedErrors] = useState<Set<number>>(new Set());
