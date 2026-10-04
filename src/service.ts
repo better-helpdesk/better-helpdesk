@@ -25,7 +25,7 @@ import { plainText } from './rich';
 import { nextWorkday } from './ui/i18n';
 import { unlabelLinks } from './ui/rich';
 
-const { agents, contacts, conversations } = schema;
+const { contacts, conversations } = schema;
 
 export type Customer = {
   identity: Identity | null;
@@ -46,7 +46,7 @@ const MAX_RECEIPTS_PER_HOUR = 200;
 const MAX_AGENT_NOTICES_PER_HOUR = 200;
 const MAX_TRIAGES_PER_HOUR = 100;
 const MAX_INBOUND_PER_SENDER_PER_HOUR = 30;
-const MAX_UNSIGNED_INBOUND_PER_DOMAIN_PER_HOUR = 100;
+const MAX_INBOUND_PER_DOMAIN_PER_HOUR = 100;
 const VISITOR_IDLE_DAYS = 30;
 export const MAX_ATTACHMENTS = 20;
 export const ATTACHMENT_TYPES =
@@ -94,9 +94,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
   /**
    * Attaches a verified identity to `contact` and returns who the proven
    * person is. If another contact already holds it, the newer contact is
-   * merged into the one that proved it first, unless the newer one wrote
-   * something before anyone proved the address: that stays where it is, and
-   * the proven contact is returned on its own.
+   * merged into the one that proved it first. A contact that wrote something
+   * before anyone proved its address is never merged or proven: the proven
+   * person is a contact of their own, so they never inherit those words.
    */
   async function linkVerified(
     contact: Contact,
@@ -110,14 +110,25 @@ export function createHelpdesk(input: HelpdeskConfig) {
       identity.externalId,
       { verifiedOnly: true }
     );
-    if (owner && owner.id !== contact.id) {
-      if (await store.hasUnverifiedMessages(contact.id)) return owner;
+    if (owner?.id === contact.id) return contact;
+    if (await store.hasUnverifiedMessages(contact.id)) {
+      return (
+        owner ??
+        store.createContact(
+          {
+            name: contact.name,
+            email: identity.channel === 'email' ? identity.externalId : null,
+            locale: contact.locale,
+          },
+          { ...identity, verified: true }
+        )
+      );
+    }
+    if (owner) {
       await store.mergeContacts(owner.id, contact.id);
       return (await store.getContact(owner.id)) ?? owner;
     }
-    if (!owner) {
-      await store.addIdentity(contact.id, { ...identity, verified: true });
-    }
+    await store.addIdentity(contact.id, { ...identity, verified: true });
     return contact;
   }
 
@@ -216,7 +227,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
   /** Stops mail to someone the host no longer counts as an agent; their next agent request undoes it. */
   async function removeAgent(externalUserId: string) {
-    await store.deactivateAgent(eq(agents.externalUserId, externalUserId));
+    await store.deactivateAgent(externalUserId);
   }
 
   async function requireAgent(request: Request) {
@@ -357,7 +368,10 @@ export function createHelpdesk(input: HelpdeskConfig) {
         verified: Boolean(customer.identity),
       }
     );
-    await afterNewConversation(conversation, Boolean(customer.identity));
+    await afterNewConversation(
+      conversation,
+      customer.identity ? 'host' : 'other'
+    );
     return { conversation, visitorToken };
   }
 
@@ -405,19 +419,17 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
   /**
    * Each new conversation costs mail to every agent and, with AI, model
-   * calls; hourly caps keep a flood from multiplying into either. Triage
-   * waits for an agent to ask when nobody proved who wrote it.
+   * calls; hourly caps keep a flood from multiplying into either. The host's
+   * signed-in users have budgets of their own: anyone can sign mail for a
+   * domain they own, so only the host's word sets them apart.
    */
   async function afterNewConversation(
     conversation: Conversation,
-    verified: boolean
+    origin: 'host' | 'other'
   ) {
-    // Separate budgets, so a flood of unproven conversations cannot use up
-    // the notices for real ones.
     if (
-      (await store.hitRateLimit(
-        `agent-notices:${verified ? 'verified' : 'unverified'}`
-      )) <= MAX_AGENT_NOTICES_PER_HOUR
+      (await store.hitRateLimit(`agent-notices:${origin}`)) <=
+      MAX_AGENT_NOTICES_PER_HOUR
     ) {
       await store.enqueueJob('notify-agents', {
         conversationId: conversation.id,
@@ -435,8 +447,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
     if (
       config.ai &&
-      verified &&
-      (await store.hitRateLimit('triages')) <= MAX_TRIAGES_PER_HOUR
+      (await store.hitRateLimit(`triages:${origin}`)) <= MAX_TRIAGES_PER_HOUR
     ) {
       await store.enqueueJob('ai-triage', { conversationId: conversation.id });
     }
@@ -640,19 +651,21 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
   async function handleInbound(mail: InboundMessage) {
     if (await store.findMessageByEmailId([mail.messageId])) return;
+    // Unsigned, an out-of-office could be anyone's text.
+    if (mail.automated && !mail.verified) return;
     const from = normalizeEmail(mail.from.address);
-    // Each address has a budget. Unsigned mail also shares one per domain,
-    // since anyone can put any address in From; signed mail never draws on
-    // it, so a forged flood cannot crowd out a domain's real senders.
-    const overSender =
-      (await store.hitRateLimit(
-        `inbound:${mail.verified ? '' : 'unsigned:'}${from}`
-      )) > MAX_INBOUND_PER_SENDER_PER_HOUR;
-    const overDomain =
-      !mail.verified &&
-      (await store.hitRateLimit(`inbound:unsigned:@${from.split('@')[1]}`)) >
-        MAX_UNSIGNED_INBOUND_PER_DOMAIN_PER_HOUR;
-    if (overSender || overDomain) {
+    // Budgets per address and per domain, signed and unsigned apart, so a
+    // forged flood cannot crowd out a domain's signed senders. Unsigned mail
+    // over budget is dropped quietly: refusing it would bounce it to whoever
+    // its forged From names, or hand it to the relay's fallback mailbox.
+    const kind = mail.verified ? 'signed' : 'unsigned';
+    const over =
+      (await store.hitRateLimit(`inbound:${kind}:${from}`)) >
+        MAX_INBOUND_PER_SENDER_PER_HOUR ||
+      (await store.hitRateLimit(`inbound:${kind}:@${from.split('@')[1]}`)) >
+        MAX_INBOUND_PER_DOMAIN_PER_HOUR;
+    if (over) {
+      if (!mail.verified) return;
       throw new HelpdeskError(429, 'Too many messages from this sender');
     }
 
@@ -675,11 +688,16 @@ export function createHelpdesk(input: HelpdeskConfig) {
       }
     }
 
+    const author = conversation
+      ? await onConversation(conversation, from)
+      : undefined;
+
     // An out-of-office or a bounce is kept for agents as a note on its
-    // thread; it never reopens one, opens one, or proves anyone's address.
-    // Unsigned, it could be anyone's text, so it is dropped.
+    // thread; it never reopens one, opens one, or proves anyone's address. A
+    // reference number alone is easy to guess, so it has to answer our mail
+    // or come from someone on the thread.
     if (mail.automated) {
-      if (conversation && mail.verified) {
+      if (conversation && (threaded || author)) {
         await store.appendMessage({
           conversationId: conversation.id,
           authorType: 'system',
@@ -692,11 +710,6 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
 
     if (conversation && mail.verified) {
-      const owner = await store.getContact(conversation.contactId);
-      const participants = await store.listParticipants(conversation.id);
-      const author = [owner, ...participants.map(p => p.contact)].find(
-        c => c?.email && normalizeEmail(c.email) === from
-      );
       if (author) {
         const contact = await linkVerified(author, {
           channel: 'email',
@@ -751,7 +764,16 @@ export function createHelpdesk(input: HelpdeskConfig) {
       created.message.id,
       mail
     );
-    await afterNewConversation(created.conversation, mail.verified);
+    await afterNewConversation(created.conversation, 'other');
+  }
+
+  async function onConversation(conversation: Conversation, email: string) {
+    const owner = await store.getContact(conversation.contactId);
+    const participants = await store.listParticipants(conversation.id);
+    return [owner, ...participants.map(p => p.contact)].find(
+      (c): c is Contact =>
+        Boolean(c?.email && normalizeEmail(c.email) === email)
+    );
   }
 
   async function storeInboundAttachments(
@@ -760,20 +782,20 @@ export function createHelpdesk(input: HelpdeskConfig) {
     mail: InboundMessage
   ) {
     if (!config.storage) return;
-    let room = MAX_ATTACHMENTS - (await store.countAttachments(conversationId));
-    for (const file of mail.attachments) {
-      if (room <= 0) break;
+    for (const file of mail.attachments.slice(0, MAX_ATTACHMENTS)) {
       if (file.content.byteLength > config.maxAttachmentBytes) continue;
-      if (!ATTACHMENT_TYPES.test(file.contentType)) continue;
-      room--;
+      // Kept, but never served as a type the widget would refuse.
+      const contentType = ATTACHMENT_TYPES.test(file.contentType)
+        ? file.contentType
+        : 'application/octet-stream';
       const key = attachmentKey(conversationId, file.filename);
-      await config.storage.put(key, file.content, file.contentType);
+      await config.storage.put(key, file.content, contentType);
       await store.createAttachment({
         conversationId,
         messageId,
         key,
         filename: file.filename,
-        contentType: file.contentType,
+        contentType,
         size: file.content.byteLength,
         uploaded: true,
       });
@@ -826,11 +848,12 @@ export function createHelpdesk(input: HelpdeskConfig) {
     await purgeConversations(ids);
     // Contacts dropped with the company take what they wrote in other
     // organizations' threads with them, as `deleteContact` does.
-    for (const contactId of await store.contactsLeftWithNothing(company.id)) {
+    const dropped = await store.contactsLeftWithNothing(company.id);
+    for (const contactId of dropped) {
       await deleteObjects(await store.attachmentKeysBy(contactId));
       await store.deleteMessagesBy(contactId);
     }
-    await store.deleteCompany(company.id);
+    await store.deleteCompany(company.id, dropped);
     return { conversations: ids.length };
   }
 
@@ -1076,7 +1099,6 @@ export function createHelpdesk(input: HelpdeskConfig) {
     createConversation,
     addCustomerMessage,
     addAgentMessage,
-    limitAnonymous,
     limitCustomer,
     handleInbound,
     attachmentKey,

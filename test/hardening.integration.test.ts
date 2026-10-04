@@ -95,6 +95,23 @@ describe('automated mail', () => {
     ).toHaveLength(0);
   });
 
+  it('ignores a signed automated mail from someone not on the thread', async () => {
+    const { conversation } = await lead();
+    await h.support.handleInbound(
+      mail({
+        from: { address: 'x@attacker.test' },
+        to: [`support+${conversation.reference}@devguard.test`],
+        text: '[Reset your password](https://evil.test)',
+        automated: true,
+      })
+    );
+    expect(
+      await rows(
+        sql`SELECT 1 FROM helpdesk.message WHERE author_type = 'system'`
+      )
+    ).toHaveLength(0);
+  });
+
   it('drops an automated mail that belongs to no thread', async () => {
     await h.support.handleInbound(mail({ automated: true }));
     expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
@@ -153,6 +170,36 @@ describe('verification per message', () => {
     expect(visitor.data.conversations).toHaveLength(0);
   });
 
+  it('proves the replying address as a contact of its own, which a later sign-in joins', async () => {
+    const { conversation } = await lead();
+    await h.support.handleInbound(
+      mail({
+        to: [`support+${conversation.reference}@devguard.test`],
+        text: 'It was me',
+      })
+    );
+    h.addUser('carol', { email: 'carol@example.test' });
+    await h.call('POST', 'widget/conversations', {
+      user: 'carol',
+      body: { inbox: 'support', type: 'question', body: 'in-app' },
+    });
+
+    const thread = await h.call(
+      'GET',
+      `widget/conversations/${conversation.id}`,
+      { user: 'carol' }
+    );
+    expect(
+      thread.data.messages.map((m: { body: string; own: boolean }) => [
+        m.body,
+        m.own,
+      ])
+    ).toEqual([
+      ['Words nobody proved', false],
+      ['It was me', true],
+    ]);
+  });
+
   it('keeps a typed subject out of replies even after the address is proven', async () => {
     h.addUser('agent', { isAgent: true });
     const { conversation } = await lead();
@@ -179,6 +226,16 @@ describe('removed agents', () => {
     await h.call('GET', 'agent/me', { user: 'agent' });
     const me = await h.call('GET', 'agent/me', { user: 'former' });
     const formerId = me.data.agent.id as string;
+    const assigned = await h.call('POST', 'widget/conversations', {
+      user: 'ada',
+      body: { inbox: 'support', type: 'question', body: 'earlier' },
+    });
+    await h.call(
+      'PATCH',
+      `agent/conversations/${assigned.data.conversation.id}`,
+      { user: 'agent', body: { assigneeId: formerId } }
+    );
+    h.emails.length = 0;
 
     expect(
       (
@@ -192,10 +249,18 @@ describe('removed agents', () => {
       user: 'ada',
       body: { inbox: 'support', type: 'question', body: 'help' },
     });
+    await h.support.store.db.execute(
+      sql`DELETE FROM helpdesk.job WHERE payload->>'conversationId' = ${assigned.data.conversation.id}`
+    );
     await h.runDueJobs();
     expect(h.emails.filter(e => e.kind === 'agent-new').map(e => e.to)).toEqual(
       ['agent@devguard.test']
     );
+    expect(
+      await rows(
+        sql`SELECT assignee_id FROM helpdesk.conversation WHERE id = ${assigned.data.conversation.id}::uuid`
+      )
+    ).toEqual([{ assignee_id: null }]);
     expect(
       (
         await h.call(
@@ -247,7 +312,7 @@ describe('budgets', () => {
     );
   });
 
-  it('budgets unsigned mail per address, under a cap for its whole domain', async () => {
+  it('drops unsigned mail past its domain’s budget quietly, and refuses signed mail past its own', async () => {
     let refused = 0;
     for (let i = 0; i < 101; i++) {
       try {
@@ -258,13 +323,24 @@ describe('budgets', () => {
         refused++;
       }
     }
+    expect(refused).toBe(0);
+    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
+      100
+    );
+
+    for (let i = 0; i < 101; i++) {
+      try {
+        await h.support.handleInbound(
+          mail({ from: { address: `s${i}@attacker.test` } })
+        );
+      } catch {
+        refused++;
+      }
+    }
     expect(refused).toBe(1);
-    await expect(
-      h.support.handleInbound(mail({ subject: 'signed' }))
-    ).resolves.toBeUndefined();
   });
 
-  it('triages only what a proven author wrote', async () => {
+  it('keeps a triage budget for the host’s signed-in users that others cannot use up', async () => {
     let calls = 0;
     const ai = createHarness({
       ai: {
@@ -281,8 +357,8 @@ describe('budgets', () => {
         },
       },
     });
-    try {
-      await ai.call('POST', 'widget/conversations', {
+    const anonymousLead = () =>
+      ai.call('POST', 'widget/conversations', {
         body: {
           inbox: 'sales',
           type: 'lead',
@@ -290,6 +366,16 @@ describe('budgets', () => {
           email: 'x@example.test',
         },
       });
+    try {
+      await anonymousLead();
+      await ai.runDueJobs();
+      expect(calls).toBeGreaterThan(0);
+
+      calls = 0;
+      await ai.support.store.db.execute(
+        sql`UPDATE helpdesk.rate_limit SET count = 100 WHERE key = 'triages:other'`
+      );
+      await anonymousLead();
       await ai.runDueJobs();
       expect(calls).toBe(0);
 
@@ -339,7 +425,7 @@ describe('bounded input', () => {
     expect(res.status).toBe(400);
   });
 
-  it('stores only allowed inbound attachments, up to the per-thread cap', async () => {
+  it('keeps up to the cap of a mail’s attachments, serving unknown types as plain bytes', async () => {
     const file = (contentType: string) => ({
       filename: 'f',
       contentType,
@@ -354,10 +440,13 @@ describe('bounded input', () => {
       })
     );
     const stored = await rows<{ content_type: string }>(
-      sql`SELECT content_type FROM helpdesk.attachment`
+      sql`SELECT content_type FROM helpdesk.attachment ORDER BY created_at`
     );
     expect(stored).toHaveLength(20);
-    expect(stored.every(a => a.content_type === 'image/png')).toBe(true);
+    expect(stored.map(a => a.content_type).sort()[0]).toBe(
+      'application/octet-stream'
+    );
+    expect(stored.every(a => a.content_type !== 'text/html')).toBe(true);
   });
 
   it('ignores a plus-address reference too large for a conversation number', async () => {
