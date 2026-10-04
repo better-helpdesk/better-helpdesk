@@ -261,7 +261,7 @@ describe('HelpdeskAdmin', () => {
         {
           id: 'm2',
           authorType: 'system',
-          body: 'I am out of office',
+          body: 'I am out of office, see [my calendar](https://evil.test/c)',
           internal: true,
           verified: null,
           createdAt: new Date().toISOString(),
@@ -280,10 +280,11 @@ describe('HelpdeskAdmin', () => {
       'article'
     );
     expect(typed?.querySelector('header')?.textContent).toContain('Unverified');
-    const auto = screen.getByText('I am out of office').closest('article');
+    const auto = screen.getByText('my calendar').closest('article');
     expect(auto?.querySelector('header')?.textContent).toContain(
       'Automatic reply'
     );
+    expect(auto?.textContent).toContain('(evil.test)');
   });
 
   it('keeps an unhandled action failure on screen under a host router', async () => {

@@ -245,7 +245,19 @@ export function ConversationView({ id }: { id: string }) {
       </div>
       <div className="sa-split">
         <div className="sa">
-          <div className="sa-toolbar">
+          <div className="sa-toolbar sa-fields">
+            <Select
+              label={t('admin.assignee')}
+              value={c.assigneeId ?? ''}
+              options={['', ...(agents.data?.agents.map(a => a.id) ?? [])]}
+              render={id => {
+                const agent = agents.data?.agents.find(a => a.id === id);
+                return agent
+                  ? (agent.name ?? agent.email ?? id)
+                  : t('admin.unassigned');
+              }}
+              onChange={v => patch({ assigneeId: v || null })}
+            />
             <Select
               label={t('admin.status')}
               value={c.status}
@@ -274,18 +286,6 @@ export function ConversationView({ id }: { id: string }) {
               render={inboxName}
               onChange={v => patch({ inbox: v })}
             />
-            <select
-              className="sa-select"
-              aria-label={t('admin.assignee')}
-              value={c.assigneeId ?? ''}
-              onChange={e => patch({ assigneeId: e.target.value || null })}>
-              <option value="">{t('admin.unassigned')}</option>
-              {agents.data?.agents.map(a => (
-                <option key={a.id} value={a.id}>
-                  {a.name ?? a.email}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="sa-thread">
@@ -315,7 +315,7 @@ export function ConversationView({ id }: { id: string }) {
                     <div className="sa-msg-body">
                       <RichText
                         text={m.body}
-                        hosts={m.authorType === 'contact'}
+                        hosts={m.authorType !== 'agent'}
                       />
                     </div>
                   </div>
@@ -501,13 +501,14 @@ export function ConversationView({ id }: { id: string }) {
                 </button>
               )}
               <span className="sa-grow sa-kbd">
-                <kbd>⌘↵</kbd> {t('admin.send')} · <kbd>⌘⇧↵</kbd>{' '}
-                {t('admin.sendResolve')}
+                <kbd>⌘↵</kbd> {t('admin.send')}
               </span>
               {!internal && c.status !== 'resolved' && (
                 <button
                   type="button"
                   className="sa-btn"
+                  title="⌘⇧↵"
+                  aria-keyshortcuts="Meta+Shift+Enter"
                   disabled={busy !== null || !body.trim()}
                   onClick={() => void send(true)}>
                   {t('admin.sendResolve')}
