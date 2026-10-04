@@ -100,7 +100,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
    */
   async function linkVerified(
     contact: Contact,
-    identity: Omit<IdentityInput, 'verified'>
+    identity: Omit<IdentityInput, 'verified'>,
+    provenName?: string
   ): Promise<Contact> {
     // Whoever holds this contact's visitor token only typed an address; now
     // that the address is proven, the token must not inherit what it unlocks.
@@ -116,7 +117,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         owner ??
         store.createContact(
           {
-            name: contact.name,
+            name: provenName ?? null,
             email: identity.channel === 'email' ? identity.externalId : null,
             locale: contact.locale,
           },
@@ -365,7 +366,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
       {
         body: data.body,
         contactId: contact.id,
-        verified: Boolean(customer.identity),
+        // A host user's words are theirs only if the host proved their address.
+        verified: Boolean(customer.identity?.user.emailVerified),
       }
     );
     await afterNewConversation(
@@ -412,7 +414,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
       authorType: 'contact',
       contactId: customer.contact.id,
       body,
-      verified: Boolean(customer.identity),
+      // A host user's words are theirs only if the host proved their address.
+      verified: Boolean(customer.identity?.user.emailVerified),
     });
     return message;
   }
@@ -654,20 +657,6 @@ export function createHelpdesk(input: HelpdeskConfig) {
     // Unsigned, an out-of-office could be anyone's text.
     if (mail.automated && !mail.verified) return;
     const from = normalizeEmail(mail.from.address);
-    // Budgets per address and per domain, signed and unsigned apart, so a
-    // forged flood cannot crowd out a domain's signed senders. Unsigned mail
-    // over budget is dropped quietly: refusing it would bounce it to whoever
-    // its forged From names, or hand it to the relay's fallback mailbox.
-    const kind = mail.verified ? 'signed' : 'unsigned';
-    const over =
-      (await store.hitRateLimit(`inbound:${kind}:${from}`)) >
-        MAX_INBOUND_PER_SENDER_PER_HOUR ||
-      (await store.hitRateLimit(`inbound:${kind}:@${from.split('@')[1]}`)) >
-        MAX_INBOUND_PER_DOMAIN_PER_HOUR;
-    if (over) {
-      if (!mail.verified) return;
-      throw new HelpdeskError(429, 'Too many messages from this sender');
-    }
 
     let conversation: Conversation | null = null;
     const threaded = await store.findMessageByEmailId(
@@ -692,6 +681,29 @@ export function createHelpdesk(input: HelpdeskConfig) {
       ? await onConversation(conversation, from)
       : undefined;
 
+    // Budgets per address and per domain, signed and unsigned apart. A
+    // signed reply from someone on the thread spends only its own, so a flood
+    // from one domain's other addresses cannot cut a conversation off.
+    // Unsigned mail over budget is dropped quietly: refusing it would bounce
+    // it to whoever its forged From names, or hand it to the relay's
+    // fallback mailbox.
+    const kind = mail.verified ? 'signed' : 'unsigned';
+    const domain = `inbound:${kind}:@${from.split('@')[1]}`;
+    let over =
+      (await store.hitRateLimit(`inbound:${kind}:${from}`)) >
+      MAX_INBOUND_PER_SENDER_PER_HOUR;
+    if (!over && !(mail.verified && author)) {
+      const hits = await store.hitRateLimit(domain);
+      if (hits === MAX_INBOUND_PER_DOMAIN_PER_HOUR + 1) {
+        console.warn(`[helpdesk] ${domain} is over its hourly budget`);
+      }
+      over = hits > MAX_INBOUND_PER_DOMAIN_PER_HOUR;
+    }
+    if (over) {
+      if (!mail.verified) return;
+      throw new HelpdeskError(429, 'Too many messages from this sender');
+    }
+
     // An out-of-office or a bounce is kept for agents as a note on its
     // thread; it never reopens one, opens one, or proves anyone's address. A
     // reference number alone is easy to guess, so it has to answer our mail
@@ -711,10 +723,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
     if (conversation && mail.verified) {
       if (author) {
-        const contact = await linkVerified(author, {
-          channel: 'email',
-          externalId: from,
-        });
+        const contact = await linkVerified(
+          author,
+          { channel: 'email', externalId: from },
+          mail.from.name
+        );
         if (contact.id !== author.id) {
           await store.addParticipant(conversation.id, contact.id);
         }

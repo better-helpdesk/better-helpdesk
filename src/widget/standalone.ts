@@ -23,7 +23,9 @@ function mount() {
   const element = document.createElement('helpdesk-widget');
   owned.add(element);
   for (const [name, value] of Object.entries(script?.dataset ?? {})) {
-    if (value !== undefined) element.setAttribute(name, value);
+    // `data-identity-token` arrives as `identityToken`.
+    const attribute = name.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);
+    if (value !== undefined) element.setAttribute(attribute, value);
   }
   document.body.append(element);
 }

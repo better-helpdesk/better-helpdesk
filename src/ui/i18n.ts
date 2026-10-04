@@ -221,6 +221,7 @@ const en = {
   'admin.teamHint':
     'Everyone here gets new conversations by email. Remove someone who no longer answers; opening the admin again adds them back.',
   'admin.teamRemove': 'Remove',
+  'admin.teamConfirmRemove': 'Remove and unassign?',
   'admin.customerContext': 'Customer',
   'admin.capturedContext': 'Captured context',
   'admin.attachments': 'Attachments',
@@ -503,6 +504,7 @@ const de: Record<MessageKey, string> = {
   'admin.teamHint':
     'Alle hier erhalten neue Konversationen per E-Mail. Entfernen Sie, wer nicht mehr antwortet; wer den Admin wieder öffnet, ist wieder dabei.',
   'admin.teamRemove': 'Entfernen',
+  'admin.teamConfirmRemove': 'Entfernen und Zuweisungen aufheben?',
   'admin.customerContext': 'Kunde',
   'admin.capturedContext': 'Erfasster Kontext',
   'admin.attachments': 'Anhänge',

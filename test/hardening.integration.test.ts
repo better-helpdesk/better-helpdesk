@@ -200,6 +200,41 @@ describe('verification per message', () => {
     ]);
   });
 
+  it('never proves an address a host user signed up with but did not verify', async () => {
+    h.addUser('mallory', {
+      email: 'carol@example.test',
+      emailVerified: false,
+    });
+    h.addUser('agent', { isAgent: true });
+    const created = await h.call('POST', 'widget/conversations', {
+      user: 'mallory',
+      body: {
+        inbox: 'support',
+        type: 'question',
+        subject: 'Urgent: confirm your bank details',
+        body: 'hi',
+      },
+    });
+    const { id, reference } = created.data.conversation;
+    await h.call('POST', `agent/conversations/${id}/messages`, {
+      user: 'agent',
+      body: { body: 'Sure' },
+    });
+    await h.runDueJobs();
+    const reply = h.emails.find(e => e.kind === 'customer-reply');
+    expect(reply && 'subject' in reply ? reply.subject : null).toBeUndefined();
+
+    await h.support.handleInbound(
+      mail({ to: [`support+${reference}@devguard.test`] })
+    );
+    expect(
+      await rows(sql`
+        SELECT 1 FROM helpdesk.identity i JOIN helpdesk.contact c ON c.id = i.contact_id
+        WHERE i.channel = 'email' AND i.verified AND c.id = (
+          SELECT contact_id FROM helpdesk.conversation WHERE id = ${id}::uuid)`)
+    ).toHaveLength(0);
+  });
+
   it('keeps a typed subject out of replies even after the address is proven', async () => {
     h.addUser('agent', { isAgent: true });
     const { conversation } = await lead();
@@ -338,6 +373,26 @@ describe('budgets', () => {
       }
     }
     expect(refused).toBe(1);
+  });
+
+  it('keeps a thread’s signed replies flowing while its domain is over budget', async () => {
+    h.addUser('carol', { email: 'carol@example.test' });
+    const created = await h.call('POST', 'widget/conversations', {
+      user: 'carol',
+      body: { inbox: 'support', type: 'question', body: 'hi' },
+    });
+    await h.support.store.db.execute(
+      sql`INSERT INTO helpdesk.rate_limit (key, window_start, count) VALUES ('inbound:signed:@example.test', date_trunc('hour', now()), 100)`
+    );
+    await h.support.handleInbound(
+      mail({
+        to: [`support+${created.data.conversation.reference}@devguard.test`],
+        text: 'Still here',
+      })
+    );
+    expect(
+      await rows(sql`SELECT 1 FROM helpdesk.message WHERE body = 'Still here'`)
+    ).toHaveLength(1);
   });
 
   it('keeps a triage budget for the host’s signed-in users that others cannot use up', async () => {

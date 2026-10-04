@@ -21,6 +21,7 @@ function Team() {
     'agents'
   );
   const [error, setError] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
   return (
     <div className="sa-card">
       <h3>{t('admin.teamTitle')}</h3>
@@ -37,7 +38,14 @@ function Team() {
             <button
               type="button"
               className="sa-btn sa-ghost"
+              onBlur={() => setConfirming(null)}
               onClick={async () => {
+                // Removing hands their conversations back to the team.
+                if (confirming !== a.id) {
+                  setConfirming(a.id);
+                  return;
+                }
+                setConfirming(null);
                 setError(false);
                 try {
                   await api(`agent/agents/${a.id}`, { method: 'DELETE' });
@@ -46,7 +54,9 @@ function Team() {
                   setError(true);
                 }
               }}>
-              {t('admin.teamRemove')}
+              {confirming === a.id
+                ? t('admin.teamConfirmRemove')
+                : t('admin.teamRemove')}
             </button>
           )}
         </div>
