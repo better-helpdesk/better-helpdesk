@@ -378,9 +378,9 @@ describe('inbound email', () => {
 
     expect(
       await rows(
-        sql`SELECT verified FROM helpdesk.identity WHERE channel = 'email'`
+        sql`SELECT verified FROM helpdesk.identity WHERE channel = 'email' ORDER BY verified`
       )
-    ).toEqual([{ verified: true }]);
+    ).toEqual([{ verified: false }, { verified: true }]);
   });
 
   it('attaches a DMARC-passing sender to their verified contact but never an unverified one', async () => {

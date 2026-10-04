@@ -708,9 +708,16 @@ function NewMessage({
         : {}),
     };
   }, [recent, appVersion, hostContext, locale]);
+  // Errors are page text the person never typed; each is shown and can go,
+  // as `errors:<index>`.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
-  // Errors are page text the person never typed; each is shown and can go.
-  const [droppedErrors, setDroppedErrors] = useState<Set<number>>(new Set());
+  const toggle = (key: string, kept: boolean) =>
+    setExcluded(set => {
+      const next = new Set(set);
+      if (kept) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   const contextKeys = [...CONTEXT_KEYS, 'errors', 'host'].filter(
     key => context[key as keyof typeof context]
   );
@@ -758,7 +765,7 @@ function NewMessage({
         if (!technical && key !== 'url' && key !== 'locale') continue;
         if (key === 'errors') {
           const kept = (context.errors ?? []).filter(
-            (_, i) => !droppedErrors.has(i)
+            (_, i) => !excluded.has(`errors:${i}`)
           );
           if (kept.length) sent.errors = kept;
         } else if (!excluded.has(key)) {
@@ -1021,7 +1028,9 @@ function NewMessage({
                       count: String(
                         contextKeys.filter(key =>
                           key === 'errors'
-                            ? droppedErrors.size < (context.errors ?? []).length
+                            ? (context.errors ?? []).some(
+                                (_, i) => !excluded.has(`errors:${i}`)
+                              )
                             : !excluded.has(key)
                         ).length
                       ),
@@ -1034,18 +1043,13 @@ function NewMessage({
                       const value = context[key as keyof typeof context];
                       if (key === 'errors') {
                         return (context.errors ?? []).map((error, i) => (
-                          // biome-ignore lint/suspicious/noArrayIndexKey: the list is fixed while the form is open, and the index is what `droppedErrors` keeps.
+                          // biome-ignore lint/suspicious/noArrayIndexKey: the list is fixed while the form is open, and the index is what `excluded` keeps.
                           <label key={`error-${i}`} className="check">
                             <input
                               type="checkbox"
-                              checked={!droppedErrors.has(i)}
+                              checked={!excluded.has(`errors:${i}`)}
                               onChange={e =>
-                                setDroppedErrors(set => {
-                                  const next = new Set(set);
-                                  if (e.target.checked) next.delete(i);
-                                  else next.add(i);
-                                  return next;
-                                })
+                                toggle(`errors:${i}`, e.target.checked)
                               }
                             />
                             <span>
@@ -1069,14 +1073,7 @@ function NewMessage({
                           <input
                             type="checkbox"
                             checked={!excluded.has(key)}
-                            onChange={e =>
-                              setExcluded(set => {
-                                const next = new Set(set);
-                                if (e.target.checked) next.delete(key);
-                                else next.add(key);
-                                return next;
-                              })
-                            }
+                            onChange={e => toggle(key, e.target.checked)}
                           />
                           <span>
                             {label}:{' '}

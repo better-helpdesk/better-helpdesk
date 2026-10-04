@@ -28,7 +28,7 @@ export function stripQuoted(text: string): string {
   return result || text.trim();
 }
 
-/** RFC 3834 and the `Precedence` convention; a bounce comes from the mailer itself. */
+/** RFC 3834, the `Precedence` and `X-Autoreply` conventions, and delivery reports. */
 export function isAutomated(
   headers: Map<string, unknown>,
   fromAddress: string
@@ -37,6 +37,9 @@ export function isAutomated(
   const submitted = value('auto-submitted').toLowerCase();
   if (submitted && !submitted.startsWith('no')) return true;
   if (/^(bulk|junk|auto_reply)$/i.test(value('precedence'))) return true;
+  if (headers.has('x-autoreply') || headers.has('x-autorespond')) return true;
+  const type = headers.get('content-type') as { value?: string } | undefined;
+  if (type?.value?.toLowerCase() === 'multipart/report') return true;
   return /^(mailer-daemon|postmaster)@/i.test(fromAddress);
 }
 

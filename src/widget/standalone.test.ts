@@ -14,9 +14,6 @@ describe('standalone loader', () => {
     expect(planted?.shadowRoot).toBeNull();
     const own = widgets[1];
     expect(own?.shadowRoot).not.toBeNull();
-    expect(own?.getAttribute('api')).toBe(
-      new URL('/api/helpdesk', location.href).href
-    );
 
     document.body.innerHTML = '';
     await new Promise(resolve => setTimeout(resolve, 0));

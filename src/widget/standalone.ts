@@ -25,14 +25,6 @@ function mount() {
   for (const [name, value] of Object.entries(script?.dataset ?? {})) {
     if (value !== undefined) element.setAttribute(name, value);
   }
-  // Relative to the script, so without `data-api` it talks to where it came from.
-  element.setAttribute(
-    'api',
-    new URL(
-      script?.dataset.api ?? '/api/helpdesk',
-      script?.src || location.href
-    ).href.replace(/\/$/, '')
-  );
   document.body.append(element);
 }
 

@@ -72,8 +72,7 @@ and load it:
 ```
 
 The script brings only the widget it creates to life; a `<helpdesk-widget>`
-already in the page's markup stays inert. Without `data-api` it talks to
-`/api/helpdesk` on the origin the script was loaded from.
+already in the page's markup stays inert.
 
 The widget requests paths with a trailing slash. On another origin, a host
 that redirects them (Next.js without `trailingSlash: true`) fails the CORS

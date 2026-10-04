@@ -21,19 +21,13 @@ export async function fromDomainSigned(
   { deadlineMs = DEADLINE_MS }: { deadlineMs?: number } = {}
 ): Promise<boolean> {
   if (signatureCount(raw) > MAX_SIGNATURES) return false;
-  const lookup = resolver ?? systemResolver();
   const result = await within(
     authenticate(raw, {
       trustReceived: false,
       disableArc: true,
       disableBimi: true,
       disableDmarc: true,
-      resolver: (name, type) =>
-        within(lookup(name, type), LOOKUP_TIMEOUT_MS, () => {
-          throw Object.assign(new Error('DNS lookup timed out'), {
-            code: 'ETIMEOUT',
-          });
-        }),
+      resolver: resolver ?? systemResolver(),
     }),
     deadlineMs,
     () => null
@@ -97,14 +91,8 @@ async function within<T, F>(
   try {
     return await Promise.race([
       promise,
-      new Promise<F>((resolve, reject) => {
-        timer = setTimeout(() => {
-          try {
-            resolve(fallback());
-          } catch (error) {
-            reject(error);
-          }
-        }, ms);
+      new Promise<F>(resolve => {
+        timer = setTimeout(() => resolve(fallback()), ms);
       }),
     ]);
   } finally {

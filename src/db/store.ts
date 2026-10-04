@@ -439,11 +439,30 @@ export function createStore(db: Db) {
         .orderBy(asc(agents.name));
     },
 
-    async deactivateAgent(where: SQL) {
-      await db
-        .update(agents)
-        .set({ deactivatedAt: sql`now()` })
-        .where(and(where, isNull(agents.deactivatedAt)));
+    /** Deactivates the agent and hands their conversations back to the team. */
+    async deactivateAgent(externalUserId: string) {
+      await db.transaction(async tx => {
+        const removed = await tx
+          .update(agents)
+          .set({ deactivatedAt: sql`now()` })
+          .where(
+            and(
+              eq(agents.externalUserId, externalUserId),
+              isNull(agents.deactivatedAt)
+            )
+          )
+          .returning({ id: agents.id });
+        if (removed.length === 0) return;
+        await tx
+          .update(conversations)
+          .set({ assigneeId: null })
+          .where(
+            inArray(
+              conversations.assigneeId,
+              removed.map(r => r.id)
+            )
+          );
+      });
     },
 
     async getSetting<T>(key: string): Promise<T | null> {
@@ -1043,17 +1062,12 @@ export function createStore(db: Db) {
       return rows.map(r => r.id);
     },
 
-    /** Drops a company, the contacts left with nothing, and the link from the rest. */
-    async deleteCompany(id: string) {
+    /** Drops a company, the given contacts, and the link from the rest. */
+    async deleteCompany(id: string, contactIds: string[]) {
       await db.transaction(async tx => {
-        await tx
-          .delete(contacts)
-          .where(
-            and(
-              eq(contacts.companyId, id),
-              sql`NOT EXISTS (SELECT 1 FROM helpdesk.conversation c WHERE c.contact_id = ${contacts.id})`
-            )
-          );
+        if (contactIds.length > 0) {
+          await tx.delete(contacts).where(inArray(contacts.id, contactIds));
+        }
         await tx
           .update(contacts)
           .set({ companyId: null })
@@ -1086,7 +1100,8 @@ export function createStore(db: Db) {
         .where(
           and(
             eq(messages.contactId, contactId),
-            sql`${messages.verified} IS NOT TRUE`
+            // Written before this was recorded: proven if the contact is.
+            sql`(${messages.verified} IS FALSE OR (${messages.verified} IS NULL AND NOT EXISTS (SELECT 1 FROM helpdesk.identity i WHERE i.contact_id = ${contactId}::uuid AND i.verified)))`
           )
         )
         .limit(1);

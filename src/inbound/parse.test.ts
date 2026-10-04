@@ -111,6 +111,15 @@ describe('automated mail', () => {
     expect((await mail(['Auto-Submitted: auto-replied'])).automated).toBe(true);
     expect((await mail(['Precedence: auto_reply'])).automated).toBe(true);
     expect((await mail(['Precedence: bulk'])).automated).toBe(true);
+    expect((await mail(['X-Autoreply: yes'])).automated).toBe(true);
+    expect(
+      (
+        await mail([
+          'MIME-Version: 1.0',
+          'Content-Type: multipart/report; report-type=delivery-status; boundary="b"',
+        ])
+      ).automated
+    ).toBe(true);
     expect((await mail([], 'MAILER-DAEMON@mx.example.ch')).automated).toBe(
       true
     );
