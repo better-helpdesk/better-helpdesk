@@ -15,7 +15,10 @@ const MAX_ERRORS = 10;
  * host context for new reports. Emits `helpdesk:open` and
  * `helpdesk:message-sent`.
  */
-export function defineHelpdeskWidget(tag = 'helpdesk-widget') {
+export function defineHelpdeskWidget(
+  tag = 'helpdesk-widget',
+  { owns }: { owns?: (element: HTMLElement) => boolean } = {}
+) {
   if (typeof window === 'undefined' || customElements.get(tag)) return;
 
   class HelpdeskWidgetElement extends HTMLElement {
@@ -82,6 +85,8 @@ export function defineHelpdeskWidget(tag = 'helpdesk-widget') {
     }
 
     connectedCallback() {
+      // An element the definer did not create stays inert.
+      if (owns && !owns(this)) return;
       const shadow = this.shadowRoot ?? this.attachShadow({ mode: 'open' });
       shadow.innerHTML = '';
       const style = document.createElement('style');

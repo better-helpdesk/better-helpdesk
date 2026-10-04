@@ -72,6 +72,7 @@ type Detail = {
     authorType: 'contact' | 'agent' | 'system';
     body: string;
     internal: boolean;
+    verified: boolean | null;
     createdAt: string;
     agentName: string | null;
     contactName: string | null;
@@ -292,7 +293,9 @@ export function ConversationView({ id }: { id: string }) {
               const name =
                 m.authorType === 'agent'
                   ? (m.agentName ?? t('thread.support'))
-                  : (m.contactName ?? data.contact?.email ?? '');
+                  : m.authorType === 'system'
+                    ? t('admin.automated')
+                    : (m.contactName ?? data.contact?.email ?? '');
               return (
                 <article
                   key={m.id}
@@ -303,6 +306,9 @@ export function ConversationView({ id }: { id: string }) {
                   <div>
                     <header>
                       <strong>{name}</strong>
+                      {m.authorType === 'contact' &&
+                        m.verified === false &&
+                        ` · ${t('admin.unverified')}`}
                       {m.internal && ` · ${t('admin.note')}`} ·{' '}
                       {relativeTime(m.createdAt, locale)}
                     </header>

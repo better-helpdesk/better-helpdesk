@@ -28,6 +28,18 @@ export function stripQuoted(text: string): string {
   return result || text.trim();
 }
 
+/** RFC 3834 and the `Precedence` convention; a bounce comes from the mailer itself. */
+export function isAutomated(
+  headers: Map<string, unknown>,
+  fromAddress: string
+) {
+  const value = (key: string) => String(headers.get(key) ?? '').trim();
+  const submitted = value('auto-submitted').toLowerCase();
+  if (submitted && !submitted.startsWith('no')) return true;
+  if (/^(bulk|junk|auto_reply)$/i.test(value('precedence'))) return true;
+  return /^(mailer-daemon|postmaster)@/i.test(fromAddress);
+}
+
 export type SenderCheck = (
   raw: Buffer,
   fromAddress: string
@@ -37,7 +49,11 @@ export async function toInbound(
   source: Buffer,
   verify: SenderCheck
 ): Promise<InboundMessage> {
-  const parsed = await simpleParser(source);
+  // The text comes from the plain part when there is one; a huge HTML part
+  // only costs a conversion nobody reads past the 20,000-character cap.
+  const parsed = await simpleParser(source, {
+    maxHtmlLengthToParse: 1024 * 1024,
+  });
   const from = parsed.from?.value[0];
   const address = from?.address ?? '';
   const addresses = (field: typeof parsed.to) =>
@@ -61,8 +77,9 @@ export async function toInbound(
         ? [references]
         : [],
     verified: address ? await verify(source, address) : false,
+    automated: isAutomated(parsed.headers, address),
     attachments: parsed.attachments.map(a => ({
-      filename: a.filename ?? 'attachment',
+      filename: a.filename || 'attachment',
       contentType: a.contentType,
       content: new Uint8Array(a.content),
     })),

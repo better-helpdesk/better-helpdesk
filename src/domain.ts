@@ -6,6 +6,8 @@ export function parseReference(
   prefix: string,
   value: string
 ): number | undefined {
-  const match = new RegExp(`^${prefix}-(\\d+)$`, 'i').exec(value.trim());
-  return match ? Number(match[1]) : undefined;
+  const match = new RegExp(`^${prefix}-(\\d{1,10})$`, 'i').exec(value.trim());
+  const number = Number(match?.[1]);
+  // The column is an int4; anything larger can never match and would throw.
+  return match && number <= 2_147_483_647 ? number : undefined;
 }

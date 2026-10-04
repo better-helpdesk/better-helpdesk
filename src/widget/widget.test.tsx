@@ -111,6 +111,124 @@ describe('Widget', () => {
     ).toBeUndefined();
   });
 
+  it('shows each captured page error and sends only the ones left ticked', async () => {
+    const calls = mockApi({
+      'widget/session': session,
+      'widget/conversations/': {
+        conversation: { id: 'c1', reference: 'DG-1000' },
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['bug']}
+        errors={() => ['TypeError: private token abc', 'ReferenceError: y']}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    message.innerHTML = 'Broken';
+    fireEvent.input(message);
+    fireEvent.click(screen.getByText(/details about this page/));
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /TypeError: private token abc/ })
+    );
+    expect(
+      screen.getByRole('checkbox', { name: /ReferenceError: y/ })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.some(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )
+      ).toBe(true)
+    );
+    const post = calls.find(
+      c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+    );
+    if (!post) throw new Error('no conversation was posted');
+    expect(
+      (post.body as { context: { errors?: string[] } }).context.errors
+    ).toEqual(['ReferenceError: y']);
+  });
+
+  it('shows where a labelled link goes in a colleague’s message, not in one’s own', async () => {
+    Element.prototype.scrollIntoView = () => {};
+    mockApi({
+      'widget/session': {
+        ...session,
+        conversations: [
+          {
+            id: 'c1',
+            reference: 'DG-1',
+            subject: 'Shared thread',
+            type: 'question',
+            status: 'open',
+            inbox: 'support',
+            own: false,
+            unread: false,
+            sharedWithCompany: true,
+            lastMessageAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            preview: null,
+            lastFromSupport: false,
+          },
+        ],
+      },
+      'widget/conversations/c1/': {
+        conversation: {
+          id: 'c1',
+          reference: 'DG-1',
+          subject: 'Shared thread',
+          type: 'question',
+          status: 'open',
+        },
+        messages: [
+          {
+            id: 'm1',
+            author: 'contact',
+            name: 'Bob',
+            own: false,
+            body: '[Audit report](https://evil.example/r)',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'm2',
+            author: 'contact',
+            name: 'Ada',
+            own: true,
+            body: '[My notes](https://docs.example/n)',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        attachments: [],
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByText('Shared thread'));
+    expect(
+      (await screen.findByText('Audit report')).parentElement?.textContent
+    ).toContain('(evil.example)');
+    expect(
+      screen.getByText('My notes').parentElement?.textContent
+    ).not.toContain('docs.example');
+  });
+
   it('cancels a link with Escape without closing the panel or losing the draft', async () => {
     mockApi({ 'widget/session': session });
     render(

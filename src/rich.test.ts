@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseInline, parseRich, plainText } from './rich';
+import { unlabelLinks } from './ui/rich';
 
 describe('parseInline', () => {
   it('reads bold, italic, underline and links, nested', () => {
@@ -79,5 +80,15 @@ describe('adversarial input', () => {
     // CI runners share one host and run far slower than a laptop; a quadratic
     // regression on these sizes takes minutes, so the bound stays loose.
     expect(performance.now() - start).toBeLessThan(15_000);
+  });
+});
+
+describe('unlabelLinks', () => {
+  it('puts every link target next to its label', () => {
+    expect(
+      unlabelLinks(
+        'See [the guide](https://docs.test/a) or [https://x.test](https://x.test).'
+      )
+    ).toBe('See the guide (https://docs.test/a) or https://x.test.');
   });
 });

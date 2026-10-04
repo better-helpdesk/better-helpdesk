@@ -89,3 +89,36 @@ describe('toInbound', () => {
     expect(message.verified).toBe(false);
   });
 });
+
+describe('automated mail', () => {
+  const mail = (headers: string[], from = 'anna@example.ch') =>
+    toInbound(
+      Buffer.from(
+        [
+          `From: <${from}>`,
+          'To: support@devguard.ch',
+          'Subject: Away',
+          ...headers,
+          '',
+          'I am out of office.',
+          '',
+        ].join('\r\n')
+      ),
+      trust(true)
+    );
+
+  it('marks out-of-office replies, bulk mail and bounces', async () => {
+    expect((await mail(['Auto-Submitted: auto-replied'])).automated).toBe(true);
+    expect((await mail(['Precedence: auto_reply'])).automated).toBe(true);
+    expect((await mail(['Precedence: bulk'])).automated).toBe(true);
+    expect((await mail([], 'MAILER-DAEMON@mx.example.ch')).automated).toBe(
+      true
+    );
+  });
+
+  it('leaves mail a person wrote alone', async () => {
+    expect((await mail([])).automated).toBe(false);
+    expect((await mail(['Auto-Submitted: no'])).automated).toBe(false);
+    expect((await mail(['Precedence: list'])).automated).toBe(false);
+  });
+});

@@ -707,6 +707,8 @@ function NewMessage({
     };
   }, [errors, appVersion, hostContext, locale]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  // Errors are page text the person never typed; each is shown and can go.
+  const [droppedErrors, setDroppedErrors] = useState<Set<number>>(new Set());
   const contextKeys = [...CONTEXT_KEYS, 'errors', 'host'].filter(
     key => context[key as keyof typeof context]
   );
@@ -752,7 +754,12 @@ function NewMessage({
       const sent: Record<string, unknown> = technical ? {} : attribution();
       for (const key of contextKeys) {
         if (!technical && key !== 'url' && key !== 'locale') continue;
-        if (!excluded.has(key)) {
+        if (key === 'errors') {
+          const kept = (context.errors ?? []).filter(
+            (_, i) => !droppedErrors.has(i)
+          );
+          if (kept.length) sent.errors = kept;
+        } else if (!excluded.has(key)) {
           sent[key] = context[key as keyof typeof context];
         }
       }
@@ -1009,7 +1016,13 @@ function NewMessage({
                 <details className="box">
                   <summary>
                     {t('form.contextSummary', {
-                      count: String(contextKeys.length - excluded.size),
+                      count: String(
+                        contextKeys.filter(key =>
+                          key === 'errors'
+                            ? droppedErrors.size < (context.errors ?? []).length
+                            : !excluded.has(key)
+                        ).length
+                      ),
                     })}
                     <span className="muted">{t('form.review')}</span>
                   </summary>
@@ -1017,6 +1030,29 @@ function NewMessage({
                     <span className="fine">{t('form.contextHint')}</span>
                     {contextKeys.map(key => {
                       const value = context[key as keyof typeof context];
+                      if (key === 'errors') {
+                        return (context.errors ?? []).map((error, i) => (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: the list is fixed while the form is open, and the index is what `droppedErrors` keeps.
+                          <label key={`error-${i}`} className="check">
+                            <input
+                              type="checkbox"
+                              checked={!droppedErrors.has(i)}
+                              onChange={e =>
+                                setDroppedErrors(set => {
+                                  const next = new Set(set);
+                                  if (e.target.checked) next.delete(i);
+                                  else next.add(i);
+                                  return next;
+                                })
+                              }
+                            />
+                            <span>
+                              {t('context.errors')}:{' '}
+                              <span className="context-value">{error}</span>
+                            </span>
+                          </label>
+                        ));
+                      }
                       const label =
                         key === 'host'
                           ? Object.keys(value as object).join(', ')
@@ -1280,7 +1316,7 @@ function Thread({
                         : m.name}{' '}
                     · {timeAgo(m.createdAt, locale, t)}
                   </span>
-                  <RichText text={m.body} />
+                  <RichText text={m.body} hosts={!m.own} />
                 </div>
               </div>
               {index === 0 && !answered && (

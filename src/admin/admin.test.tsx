@@ -84,6 +84,8 @@ const routes: Record<string, unknown> = {
   'agent/canned/': { replies: [] },
 };
 
+const original = routes['agent/conversations/c1/'];
+
 beforeEach(() => {
   window.history.replaceState(null, '', '/support/conversations/');
   vi.stubGlobal(
@@ -191,6 +193,9 @@ describe('HelpdeskAdmin', () => {
         if (url.includes('agent/settings')) {
           return new Response(JSON.stringify({ confirmation: {} }));
         }
+        if (url.includes('agent/agents')) {
+          return new Response(JSON.stringify({ agents: [] }));
+        }
         return new Response(JSON.stringify(me));
       })
     );
@@ -200,6 +205,85 @@ describe('HelpdeskAdmin', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
 
     expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+  });
+
+  it('removes a former teammate from the team, never the agent themselves', async () => {
+    let team = [
+      { id: 'a1', name: 'Agent', email: 'agent@example.test' },
+      { id: 'a2', name: 'Former', email: 'former@example.test' },
+    ];
+    const removed: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'DELETE') {
+          const id = url.match(/agent\/agents\/([^/]+)/)?.[1] ?? '';
+          removed.push(id);
+          team = team.filter(a => a.id !== id);
+          return new Response('{"ok":true}');
+        }
+        if (url.includes('agent/settings')) {
+          return new Response(JSON.stringify({ confirmation: {} }));
+        }
+        if (url.includes('agent/agents')) {
+          return new Response(JSON.stringify({ agents: team }));
+        }
+        return new Response(JSON.stringify(me));
+      })
+    );
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    expect(await screen.findByText('Former')).toBeTruthy();
+    const removeButtons = screen.getAllByRole('button', { name: 'Remove' });
+    expect(removeButtons).toHaveLength(1);
+    fireEvent.click(removeButtons[0] as HTMLElement);
+
+    await vi.waitFor(() => expect(screen.queryByText('Former')).toBeNull());
+    expect(removed).toEqual(['a2']);
+  });
+
+  it('marks a customer message nobody proved, and names an automatic reply', async () => {
+    routes['agent/conversations/c1/'] = {
+      ...(routes['agent/conversations/c1/'] as object),
+      messages: [
+        {
+          id: 'm1',
+          authorType: 'contact',
+          body: 'Typed into the form',
+          internal: false,
+          verified: false,
+          createdAt: new Date().toISOString(),
+          agentName: null,
+          contactName: 'Ada',
+        },
+        {
+          id: 'm2',
+          authorType: 'system',
+          body: 'I am out of office',
+          internal: true,
+          verified: null,
+          createdAt: new Date().toISOString(),
+          agentName: null,
+          contactName: null,
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    const typed = (await screen.findByText('Typed into the form')).closest(
+      'article'
+    );
+    expect(typed?.querySelector('header')?.textContent).toContain('Unverified');
+    const auto = screen.getByText('I am out of office').closest('article');
+    expect(auto?.querySelector('header')?.textContent).toContain(
+      'Automatic reply'
+    );
   });
 
   it('keeps an unhandled action failure on screen under a host router', async () => {

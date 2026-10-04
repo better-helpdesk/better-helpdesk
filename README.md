@@ -40,6 +40,11 @@ Everything else in `HelpdeskConfig` (storage, email, inbound email, AI, help
 search, jobs) is optional; call `helpdesk.runJobs()` on a schedule or POST
 `{basePath}/jobs` with `jobsSecret`.
 
+When someone stops being an agent in your app, call
+`helpdesk.removeAgent(user.id)`: they stop getting agent emails until they
+next open the agent UI as an agent. Agents can also remove each other under
+Settings.
+
 ## Agent UI
 
 ```tsx
@@ -65,6 +70,10 @@ and load it:
 ```html
 <script src="/helpdesk/widget.js" data-api="https://app.example.com/api/helpdesk" data-inbox="sales" async></script>
 ```
+
+The script brings only the widget it creates to life; a `<helpdesk-widget>`
+already in the page's markup stays inert. Without `data-api` it talks to
+`/api/helpdesk` on the origin the script was loaded from.
 
 The widget requests paths with a trailing slash. On another origin, a host
 that redirects them (Next.js without `trailingSlash: true`) fails the CORS
