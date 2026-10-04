@@ -48,6 +48,9 @@ const MAX_TRIAGES_PER_HOUR = 100;
 const MAX_INBOUND_PER_SENDER_PER_HOUR = 30;
 const MAX_INBOUND_PER_DOMAIN_PER_HOUR = 100;
 const VISITOR_IDLE_DAYS = 30;
+// A host cannot always tell us someone stopped being an agent; one who has not
+// opened the agent UI for this long gets no agent mail until they do again.
+const AGENT_IDLE_DAYS = 30;
 export const MAX_ATTACHMENTS = 20;
 export const ATTACHMENT_TYPES =
   /^(image\/(png|jpeg|gif|webp)|application\/pdf|text\/plain)$/;
@@ -495,11 +498,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
   }
 
   async function agentRecipients(conversation: Conversation) {
-    if (conversation.assigneeId) {
-      const assignee = await store.getActiveAgent(conversation.assigneeId);
-      if (assignee?.email) return [assignee];
-    }
-    return (await store.listAgents()).filter(a => a.email);
+    const team = (await store.mailableAgents(AGENT_IDLE_DAYS)).filter(
+      a => a.email
+    );
+    const assignee = team.find(a => a.id === conversation.assigneeId);
+    return assignee ? [assignee] : team;
   }
 
   async function firstCustomerText(conversation: Conversation) {
