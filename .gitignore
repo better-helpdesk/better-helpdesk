@@ -9,3 +9,6 @@ next-env.d.ts
 # Written by `next dev`, for whichever agent reads them.
 examples/*/AGENTS.md
 examples/*/CLAUDE.md
+
+# Per-person Claude Code settings; the shared ones are settings.json.
+.claude/settings.local.json
