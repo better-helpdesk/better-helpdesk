@@ -1,5 +1,7 @@
 import { defineHelpdeskWidget } from './element';
 
+const OWNED = Symbol.for('better-helpdesk.owned');
+
 /**
  * Script-tag entry: `<script src=".../support/widget.js" data-api="…"
  * data-inbox="sales" data-locale="de" data-types="lead" async>`. Mounts one
@@ -10,7 +12,12 @@ import { defineHelpdeskWidget } from './element';
  * HTML, pointing `api` wherever they like.
  */
 const script = document.currentScript as HTMLScriptElement | null;
-const owned = new WeakSet<Element>();
+// Shared by every run of this script: a page that adds the tag again (a
+// locale switch) gets a new element, but the class the first run registered
+// is the one that checks it.
+const registry = globalThis as { [OWNED]?: WeakSet<Element> };
+registry[OWNED] ??= new WeakSet<Element>();
+const owned = registry[OWNED];
 
 defineHelpdeskWidget('helpdesk-widget', {
   owns: element => owned.has(element),
