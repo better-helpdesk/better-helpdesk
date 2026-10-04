@@ -439,6 +439,23 @@ export function createStore(db: Db) {
         .orderBy(asc(agents.name));
     },
 
+    /** Agents still mailed: not removed, and in the agent UI within `idleDays`. */
+    async mailableAgents(idleDays: number) {
+      return db
+        .select()
+        .from(agents)
+        .where(
+          and(
+            isNull(agents.deactivatedAt),
+            gt(
+              agents.lastSeenAt,
+              sql`now() - make_interval(days => ${idleDays})`
+            )
+          )
+        )
+        .orderBy(asc(agents.name));
+    },
+
     /** Deactivates the agent and hands their conversations back to the team. */
     async deactivateAgent(externalUserId: string) {
       await db.transaction(async tx => {

@@ -307,6 +307,39 @@ describe('removed agents', () => {
     ).toBe(400);
   });
 
+  it('mails no agent who has stayed out of the agent UI for a month, until they return', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+    h.addUser('away', { isAgent: true, email: 'away@devguard.test' });
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    await h.call('GET', 'agent/me', { user: 'away' });
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.agent SET last_seen_at = now() - interval '31 days' WHERE email = 'away@devguard.test'`
+    );
+    const ask = (body: string) =>
+      h.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body },
+      });
+
+    await ask('first');
+    await h.runDueJobs();
+    expect(h.emails.filter(e => e.kind === 'agent-new').map(e => e.to)).toEqual(
+      ['agent@devguard.test']
+    );
+
+    h.emails.length = 0;
+    await h.call('GET', 'agent/me', { user: 'away' });
+    await ask('second');
+    await h.runDueJobs();
+    expect(
+      h.emails
+        .filter(e => e.kind === 'agent-new')
+        .map(e => e.to)
+        .sort()
+    ).toEqual(['agent@devguard.test', 'away@devguard.test']);
+  });
+
   it('lets the host remove an agent by its user id', async () => {
     h.addUser('former', { isAgent: true, email: 'former@devguard.test' });
     await h.call('GET', 'agent/me', { user: 'former' });

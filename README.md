@@ -354,7 +354,9 @@ is spent.
 
 Call `helpdesk.removeAgent(user.id)` when a user stops being an agent in your
 app. They stop receiving agent emails until they next open the agent UI as an
-agent. Agents can also remove each other under Settings.
+agent. Agents can also remove each other under Settings. As a backstop for a
+host that cannot always tell, an agent who has not opened the agent UI for 30
+days gets no agent emails until they do again.
 
 ### Theming
 
