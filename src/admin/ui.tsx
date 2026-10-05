@@ -293,7 +293,6 @@ export function useShortcuts(
       const target = e.composedPath()[0];
       if (
         !run ||
-        e.repeat ||
         e.isComposing ||
         e.metaKey ||
         e.ctrlKey ||

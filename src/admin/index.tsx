@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Locale } from '../config';
 import { type Api, ApiError, createApi, useResource } from '../ui/api';
 import { type Translate, translator } from '../ui/i18n';
-import { isMac } from '../ui/rich-editor';
+import { isMac, SHORTCUT } from '../ui/rich-editor';
 import { CannedReplies } from './canned';
 import {
   AdminProvider,
@@ -209,7 +209,7 @@ function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
       ],
     ],
     [
-      t('admin.subjectCol'),
+      t('admin.keysConversation'),
       [
         [['e'], t('admin.keyResolve')],
         [['a'], t('admin.keyAssign')],
@@ -218,6 +218,10 @@ function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
         [['z'], t('admin.snooze')],
         [[mod, '↵'], t('admin.send')],
         [[mod, '⇧', '↵'], t('admin.sendResolve')],
+        ...Object.entries(SHORTCUT).map(([format, key]): [string[], string] => [
+          [mod, key.toUpperCase()],
+          t(`rich.${format}`),
+        ]),
         [['/'], t('admin.keyCanned')],
       ],
     ],

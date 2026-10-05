@@ -176,6 +176,16 @@ export function ConversationView({ id }: { id: string }) {
   };
 
   const loaded = detail.data?.conversation;
+  const acting = useRef(false);
+  const act = (values: Record<string, unknown>, done: () => string) => {
+    if (acting.current) return;
+    acting.current = true;
+    void patch(values)
+      .then(() => toast.show(done()))
+      .finally(() => {
+        acting.current = false;
+      });
+  };
   const compose = (note: boolean) => {
     setInternal(note);
     composer.current?.focus();
@@ -183,20 +193,14 @@ export function ConversationView({ id }: { id: string }) {
   useShortcuts(
     loaded
       ? {
-          e: () => {
-            if (loaded.status === 'resolved') return;
-            void patch({ status: 'resolved' }).then(() =>
-              toast.show(
-                t('admin.resolvedToast', { reference: loaded.reference })
-              )
-            );
-          },
-          a: () => {
-            if (loaded.assigneeId === me.agent.id) return;
-            void patch({ assigneeId: me.agent.id }).then(() =>
-              toast.show(t('admin.assignedToYou'))
-            );
-          },
+          e: () =>
+            loaded.status !== 'resolved' &&
+            act({ status: 'resolved' }, () =>
+              t('admin.resolvedToast', { reference: loaded.reference })
+            ),
+          a: () =>
+            loaded.assigneeId !== me.agent.id &&
+            act({ assigneeId: me.agent.id }, () => t('admin.assignedToYou')),
           r: () => compose(false),
           n: () => compose(true),
         }

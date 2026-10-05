@@ -1335,6 +1335,7 @@ describe('conversation shortcuts', () => {
     await screen.findByText('The CSV export fails');
 
     fireEvent.keyDown(document.body, { key: 'e' });
+    fireEvent.keyDown(document.body, { key: 'e' });
 
     expect(await screen.findByText('Resolved DG-1000')).toBeTruthy();
     await waitFor(() => expect(select('Status').value).toBe('resolved'));
@@ -1358,7 +1359,7 @@ describe('conversation shortcuts', () => {
     expect(patches).toEqual([{ assigneeId: 'a1' }]);
   });
 
-  it('opens an empty note with n and an empty reply with r', async () => {
+  it('switches to the note with n and back to the reply with r, without typing the letter', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     await screen.findByText('The CSV export fails');
 
@@ -1422,6 +1423,10 @@ describe('conversation shortcuts', () => {
       'z',
       'Ctrl ↵',
       'Ctrl ⇧ ↵',
+      'Ctrl B',
+      'Ctrl I',
+      'Ctrl U',
+      'Ctrl K',
       '/',
       '?',
     ]);

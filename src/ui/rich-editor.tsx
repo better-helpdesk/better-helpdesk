@@ -202,7 +202,7 @@ const ICONS: Record<Format, string> = {
   pre: 'm16 18 6-6-6-6M8 6l-6 6 6 6',
   link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
 };
-const SHORTCUT: Partial<Record<Format, string>> = {
+export const SHORTCUT: Partial<Record<Format, string>> = {
   bold: 'b',
   italic: 'i',
   underline: 'u',
