@@ -30,7 +30,10 @@ const post = (path, body) =>
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-  }).then(r => r.json());
+  }).then(async r => {
+    if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
+    return r.json();
+  });
 
 // rows parsed from your export
 for (const row of companies) {
@@ -40,7 +43,7 @@ for (const row of companies) {
 for (const row of contacts) {
   await post('contacts', {
     name: row.name || row.email,
-    email: row.email,
+    email: row.email || undefined,
     companyId: companies.find(c => c.name === row.company)?.id,
   });
 }
@@ -50,6 +53,8 @@ for (const row of macros) {
 ```
 
 A contact needs a `name`; `email`, `companyId` and `leadStage` are optional.
+The loop stops at the first row the server refuses, with the reason, so fix
+that row and rerun from there.
 A saved reply takes a `title`, a `body` and an optional `locale` (`en` or
 `de`). In a saved reply, `{firstName}` and `{reference}` are filled in when
 an agent inserts it, so rewrite the old tool's placeholders to those two.
@@ -61,8 +66,8 @@ older one and use **Merge another contact into this one**.
 ## From Intercom
 
 1. Export contacts from Intercom as CSV and import them as above.
-2. Copy the macros you still use into a CSV (title, body), replace `{{first_name}}` with `{firstName}`, and import it
-   as saved replies.
+2. Copy the macros you still use into a CSV (title, body), replace
+   `{{first_name}}` with `{firstName}`, and import it as saved replies.
 3. Re-point support@ from Intercom's forwarding address to your relay
    ([recipes](../relays/README.md)).
 4. Replace the Messenger script with [the widget](../README.md#the-widget).
