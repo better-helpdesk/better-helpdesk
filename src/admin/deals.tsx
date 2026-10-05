@@ -50,6 +50,8 @@ export function DealsBoard() {
     }
   };
 
+  const none = deals.data?.deals.length === 0;
+
   return (
     <div className="sa">
       <div className="sa-toolbar">
@@ -63,7 +65,7 @@ export function DealsBoard() {
           {t('admin.newDeal')}
         </button>
       </div>
-      {deals.data?.deals.length === 0 && <Empty text={t('admin.emptyDeals')} />}
+      {none && <Empty text={t('admin.emptyDeals')} />}
       <div
         className="sa-board"
         style={{ '--cols': me.dealStages.length } as React.CSSProperties}>
@@ -100,7 +102,7 @@ export function DealsBoard() {
                   {money(String(total), 'CHF', locale)}
                 </span>
               </div>
-              {inStage.length === 0 && Boolean(deals.data?.deals.length) && (
+              {inStage.length === 0 && !none && (
                 <p className="sa-drop-hint">{t('admin.dropDeal')}</p>
               )}
               {inStage.map(d => (
