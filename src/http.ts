@@ -96,6 +96,7 @@ export function createHandler(support: Helpdesk) {
       c.contactId === customer.contact?.id &&
       (!c.customerSeenAt || c.customerSeenAt < c.lastMessageAt) &&
       c.waitingSince === null,
+    rating: c.rating,
     createdAt: c.createdAt,
   });
 
@@ -301,6 +302,42 @@ export function createHandler(support: Helpdesk) {
         );
       }
       return json({ ok: true });
+    }
+  );
+
+  define(
+    'POST',
+    'widget/conversations/:id/rating',
+    async ({ request, params, body }) => {
+      const customer = await support.resolveCustomer(request, {
+        create: false,
+      });
+      const conversation = await support.requireVisible(customer, params.id);
+      if (conversation.contactId !== customer.contact?.id) {
+        throw new HelpdeskError(403, 'Only the author can rate this');
+      }
+      const data = z
+        .object({
+          rating: z.enum(['good', 'bad']),
+          comment: z.string().trim().max(2000).optional(),
+        })
+        .parse(await body());
+      const patch: Partial<Conversation> = {
+        rating: data.rating,
+        ratingComment: data.comment || null,
+        ratedAt: dbNow(),
+        ...(data.rating === 'bad' && {
+          status: 'open',
+          waitingSince: dbNow(),
+          resolvedAt: null,
+        }),
+      };
+      const updated = await store.rateConversation(conversation.id, patch);
+      if (!updated) {
+        throw new HelpdeskError(409, 'Not open for a rating');
+      }
+      await emitUpdated(config, conversation, updated, patch, null, 'customer');
+      return json({ conversation: customerView(customer, updated) });
     }
   );
 

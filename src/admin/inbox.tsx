@@ -12,6 +12,7 @@ import {
   Empty,
   LoadError,
   paths,
+  RatingChip,
   Select,
   Skeleton,
   Svg,
@@ -36,6 +37,7 @@ export type ConversationRow = {
   tags: string[];
   unread?: boolean;
   snoozedUntil?: string | null;
+  rating?: 'good' | 'bad' | null;
   preview?: string | null;
   contact?: { id: string; name: string | null; email: string | null };
   viewers?: Viewer[];
@@ -202,6 +204,9 @@ export function Inbox() {
           ))}
           <option value="snoozed">
             {t('admin.status')}: {t('admin.snoozed')}
+          </option>
+          <option value="rated-bad">
+            {t('admin.status')}: {t('admin.ratedBad')}
           </option>
         </select>
         <select
@@ -699,6 +704,7 @@ export function ConversationTable({
                         {c.viewers?.length ? (
                           <ViewerStack t={t} viewers={c.viewers} />
                         ) : null}
+                        {c.rating && <RatingChip t={t} rating={c.rating} />}
                       </span>
                       {c.tags.length > 0 && (
                         <span className="sa-tags">

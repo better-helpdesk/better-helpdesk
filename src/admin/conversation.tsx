@@ -15,6 +15,7 @@ import {
   humanizeKey,
   LoadError,
   paths,
+  RatingChip,
   Select,
   Skeleton,
   Svg,
@@ -41,6 +42,8 @@ type Detail = {
     tags: string[];
     snoozedUntil: string | null;
     mergedIntoId: string | null;
+    rating: 'good' | 'bad' | null;
+    ratingComment: string | null;
     context: {
       url?: string;
       title?: string;
@@ -393,7 +396,9 @@ export function ConversationView({ id }: { id: string }) {
           return t('event.status', { name, to: t(`agentStatus.${to}`) });
         }
         return e.data.by === 'customer'
-          ? t('event.resolvedByCustomer')
+          ? to === 'resolved'
+            ? t('event.resolvedByCustomer')
+            : t('event.reopenedByRating')
           : t('event.statusAuto', { to: t(`agentStatus.${to}`) });
       case 'priority':
         return t('event.priority', { name, to: t(`priority.${to}`) });
@@ -447,6 +452,8 @@ export function ConversationView({ id }: { id: string }) {
           name,
           reference: String(e.data.reference),
         });
+      case 'rating':
+        return t(`event.rated.${to}`);
       case 'suggestion.accepted':
         return t('event.suggestionAccepted', { name });
       case 'suggestion.dismissed':
@@ -584,6 +591,9 @@ export function ConversationView({ id }: { id: string }) {
               render={s => t(`agentStatus.${s}`)}
               onChange={v => patch({ status: v })}
             />
+            {c.rating && (
+              <RatingChip t={t} rating={c.rating} comment={c.ratingComment} />
+            )}
             <SnoozeControl
               until={c.snoozedUntil ?? null}
               onSave={async snoozedUntil => {

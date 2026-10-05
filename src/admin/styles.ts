@@ -118,6 +118,8 @@ export const adminCss = `
 .sa-note-input:focus, .sa-note-input:not(:placeholder-shown) { min-height: 96px !important; height: 96px; overflow: auto; resize: vertical; }
 .sa-pill[data-status="pending"] { color: var(--a-muted); }
 .sa-pill[data-status="resolved"] { color: var(--a-muted); background: transparent; }
+.sa-pill.sa-rating { align-self: center; }
+.sa-pill[data-rating="bad"] { color: var(--a-danger); border-color: currentColor; background: transparent; }
 
 .sa .sa-danger { color: var(--a-danger); }
 
