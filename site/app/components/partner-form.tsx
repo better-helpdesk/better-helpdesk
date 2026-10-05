@@ -143,8 +143,8 @@ export function PartnerForm({ api }: { api: string }) {
         <input id="p-trap" name="website" tabIndex={-1} autoComplete="off" />
       </label>
       <label className="chk" htmlFor="p-listed">
-        <input id="p-listed" name="listed" type="checkbox" defaultChecked /> You
-        may list our name and logo as a supporter.
+        <input id="p-listed" name="listed" type="checkbox" /> You may list our
+        company name and logo on this site. We'll confirm with you first.
       </label>
       {state.kind === 'error' && (
         <p className="f-msg err" role="alert">

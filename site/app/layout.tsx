@@ -23,17 +23,20 @@ const martian = Martian_Mono({
 });
 
 const description =
-  'An open-source support inbox, ticketing and CRM you install from npm. It runs in your Next.js app, on your Postgres, behind your login.';
+  'An open-source support inbox, ticketing and lightweight CRM you install from npm. It runs in your Next.js app, on your Postgres, behind your login.';
 
 // SITE_URL is only known at runtime on Divio, so metadata is built per request.
 export async function generateMetadata(): Promise<Metadata> {
   await connection();
   return {
     metadataBase: new URL(siteUrl()),
-    title: { default: 'Better Helpdesk', template: '%s · Better Helpdesk' },
+    title: {
+      default: 'Better Helpdesk: the open-source helpdesk for Next.js',
+      template: '%s · Better Helpdesk',
+    },
     description,
     openGraph: {
-      title: 'Better Helpdesk',
+      title: 'Better Helpdesk: the open-source helpdesk for Next.js',
       description,
       type: 'website',
       siteName: 'Better Helpdesk',

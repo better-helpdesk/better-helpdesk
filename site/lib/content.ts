@@ -203,11 +203,12 @@ type Strings = {
   openInbox: string;
 };
 
-// The widget's own strings from src/ui/i18n.ts, English and Swiss German.
+// The widget's own strings from src/ui/i18n.ts, English and Swiss German;
+// the promise is this site's own, so the demo and the real launcher agree.
 export const WIDGET: Record<'en' | 'de', Strings> = {
   en: {
     title: 'Help & support',
-    promise: 'We reply personally, usually within one business day.',
+    promise: 'We read every message and usually reply within two working days.',
     types: [
       [
         'Question',
@@ -252,7 +253,8 @@ export const WIDGET: Record<'en' | 'de', Strings> = {
   },
   de: {
     title: 'Hilfe & Support',
-    promise: 'Wir antworten persönlich, meist innerhalb eines Werktags.',
+    promise:
+      'Wir lesen jede Nachricht und antworten meist innerhalb von zwei Arbeitstagen.',
     types: [
       [
         'Frage',

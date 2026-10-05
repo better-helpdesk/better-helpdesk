@@ -6,6 +6,8 @@ import { pool, siteUrl } from './site';
 
 export const API = '/helpdesk/api';
 
+const privacyUrl = { en: `${siteUrl()}/privacy/` };
+
 export const helpdesk = buildHelpdesk({
   db: postgresAdapter({ pool }),
   referencePrefix: 'BH',
@@ -17,6 +19,7 @@ export const helpdesk = buildHelpdesk({
     support: {
       name: { en: 'Questions' },
       public: true,
+      privacyUrl,
       title: { en: 'Ask a question' },
       replyPromise: {
         en: 'We read every message and usually reply within two working days.',
@@ -25,12 +28,14 @@ export const helpdesk = buildHelpdesk({
     partners: {
       name: { en: 'Supporter stories' },
       public: true,
+      privacyUrl,
       defaultPriority: 'high',
       receipt: true,
     },
     continuity: {
       name: { en: 'Continuity list' },
       public: true,
+      privacyUrl,
     },
   },
   identify: async request => {

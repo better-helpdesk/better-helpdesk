@@ -62,7 +62,7 @@ export default function Image() {
             letterSpacing: -2,
             lineHeight: 1,
           }}>
-          Your customers, inside your app.
+          The helpdesk that lives inside your Next.js app.
         </div>
         <div style={{ fontSize: 32, color: '#a7b1ab' }}>
           Better Helpdesk · open source · MIT · npm install better-helpdesk

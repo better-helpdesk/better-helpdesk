@@ -6,4 +6,4 @@ allowBuilds:
   esbuild: true
 
 minimumReleaseAgeExclude:
-  - better-helpdesk@0.2.2
+  - better-helpdesk@0.2.2 || 0.3.0
