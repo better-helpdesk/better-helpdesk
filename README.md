@@ -630,6 +630,10 @@ package's own strings by key, for example `admin.inbox`.
 
 ### Switching from another helpdesk
 
+[`docs/switching.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/switching.md) walks through it for Intercom,
+Zendesk, a shared Gmail inbox and Chatwoot, including importing contacts,
+companies and saved replies. In short:
+
 - **Pick a cutover date.** New conversations start here from that date;
   history is not imported. Keep the old tool read-only for 60 to 90 days so
   agents can look up what came before.
