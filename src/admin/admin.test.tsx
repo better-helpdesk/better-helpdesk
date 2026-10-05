@@ -1707,6 +1707,7 @@ describe('conversation shortcuts', () => {
       'a',
       'r',
       'n',
+      's',
       'z',
       'Ctrl ↵',
       'Ctrl ⇧ ↵',
