@@ -31,7 +31,9 @@ database, its deploy pipeline and its design tokens. There is no second
 system to run and nothing to sync.
 
 That is also the line the code must never cross. "Off-limits" in
-`AGENTS.md` spells it out.
+`AGENTS.md` spells it out for contributors, and
+[`ROADMAP.md`](../ROADMAP.md) states it for everyone evaluating the
+package.
 
 ## What exists
 
