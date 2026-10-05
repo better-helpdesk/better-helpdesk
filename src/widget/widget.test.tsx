@@ -10,6 +10,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
+import { widgetCss } from './styles';
 import { Widget } from './widget';
 
 type Call = { url: string; method: string; body: unknown };
@@ -915,5 +916,64 @@ describe('Widget', () => {
         'href'
       )
     ).toBe('https://app.test/support/conversations/');
+  });
+
+  it('fits the panel to the home view but not to the message list', async () => {
+    mockApi({ 'widget/session': { ...session, conversations: [ownThread] } });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    const panel = await screen.findByRole('dialog');
+    expect(panel.hasAttribute('data-fit')).toBe(true);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Messages' }));
+    expect(panel.hasAttribute('data-fit')).toBe(false);
+  });
+
+  it('keeps Tab inside the full-screen sheet on phones', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(max-width: 480px)',
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+    mockApi({ 'widget/session': session });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    const panel = await screen.findByRole('dialog');
+    await screen.findAllByRole('button', { name: /bug/i });
+    const focusable = [
+      ...panel.querySelectorAll<HTMLElement>('button, [href], input'),
+    ].filter(el => !el.hasAttribute('disabled'));
+    const last = focusable.at(-1) as HTMLElement;
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(document.activeElement).toBe(focusable[0]);
+    fireEvent.keyDown(focusable[0] as HTMLElement, {
+      key: 'Tab',
+      shiftKey: true,
+    });
+    expect(document.activeElement).toBe(last);
+  });
+
+  it('uses the focus colour for focus rings only', () => {
+    const rules = widgetCss.match(/[^{};]+\{[^{}]*var\(--s-focus\)[^{}]*\}/g);
+    expect(rules?.length).toBeGreaterThan(0);
+    for (const rule of rules ?? []) {
+      expect(rule.slice(0, rule.indexOf('{'))).toMatch(/:focus/);
+    }
   });
 });
