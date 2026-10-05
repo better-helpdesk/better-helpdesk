@@ -75,6 +75,8 @@ type Session = {
   team: { name: string; initials: string; avatarUrl: string | null }[];
   teamName?: string | null;
   awayUntil?: string | null;
+  /** Set while an inbox with hours is closed or its team away. */
+  nextOpening?: string | null;
   agent?: { waiting: number; url: string } | null;
   confirmation?: string | null;
   inbox: {
@@ -233,6 +235,30 @@ function awayPromise(
     : t('widget.away', values);
 }
 
+function openingPromise(
+  t: Translate,
+  locale: Locale,
+  opens: Date,
+  who: string | undefined
+) {
+  const tag = locale === 'de' ? 'de-CH' : 'en-GB';
+  const soon = opens.getTime() - Date.now() < 6 * 86_400_000;
+  const values = {
+    day: new Intl.DateTimeFormat(tag, {
+      weekday: 'long',
+      ...(soon ? {} : { day: 'numeric', month: 'long' }),
+    }).format(opens),
+    time: new Intl.DateTimeFormat(tag, {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }).format(opens),
+  };
+  return who
+    ? t('widget.closedNamed', { ...values, name: who })
+    : t('widget.closed', values);
+}
+
 export function Widget(props: WidgetProps) {
   const { locale, inbox, onEvent } = props;
   const t = useMemo(() => translator(locale), [locale]);
@@ -308,12 +334,14 @@ export function Widget(props: WidgetProps) {
           (single === 'lead' ? t('type.lead') : t('widget.title')));
   const soleResponder = data?.team.length === 1 ? data.team[0] : undefined;
   const who = soleResponder?.name ?? data?.teamName ?? undefined;
-  const promise = data?.awayUntil
-    ? awayPromise(t, locale, new Date(data.awayUntil), who)
-    : (data?.inbox?.replyPromise?.[locale] ??
-      (who
-        ? t('widget.replyPromiseNamed', { name: who })
-        : t('widget.replyPromise')));
+  const promise = data?.nextOpening
+    ? openingPromise(t, locale, new Date(data.nextOpening), who)
+    : data?.awayUntil
+      ? awayPromise(t, locale, new Date(data.awayUntil), who)
+      : (data?.inbox?.replyPromise?.[locale] ??
+        (who
+          ? t('widget.replyPromiseNamed', { name: who })
+          : t('widget.replyPromise')));
   const mobile = useMediaQuery('(max-width: 480px)');
 
   useEffect(() => {

@@ -24,6 +24,7 @@ import { formatReference, parseReference } from './domain';
 import { emit, emitUpdated } from './events';
 import { verifyIdentityToken } from './identity-token';
 import { plainText } from './rich';
+import { nextOpening, openCutoff } from './ui/hours';
 import { nextWorkday } from './ui/i18n';
 import { unlabelLinks } from './ui/rich';
 
@@ -229,6 +230,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
     const returns = team.map(a => a.awayUntil?.getTime() ?? 0);
     if (team.length === 0 || returns.some(r => r <= now)) return null;
     return new Date(Math.min(...returns));
+  }
+
+  /** When an inbox with hours answers next, if not now: its next opening from the later of now and the team's return. */
+  function reopensAt(inbox: string, awayUntil: Date | null) {
+    const hours = config.inboxes[inbox]?.hours;
+    if (!hours) return null;
+    const now = new Date();
+    const opens = nextOpening(awayUntil ?? now, hours);
+    return opens && opens > now ? opens : null;
   }
 
   /** Stops mail to someone the host no longer counts as an agent; their next agent request undoes it. */
@@ -657,6 +667,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       const responder = agents.length === 1 ? agents[0] : undefined;
       const locale = toLocale(contact.locale);
       const awayUntil = await teamAwayUntil();
+      const opens = reopensAt(conversation.inbox, awayUntil);
       await sendEmail({
         kind: 'customer-receipt',
         to: contact.email,
@@ -668,7 +679,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
           : undefined,
         responderAvatarUrl: responder?.avatarUrl ?? undefined,
         awayUntil: awayUntil?.toISOString(),
-        backOn: awayUntil ? nextWorkday(awayUntil).toISOString() : undefined,
+        backOn: config.inboxes[conversation.inbox]?.hours
+          ? opens?.toISOString()
+          : awayUntil
+            ? nextWorkday(awayUntil).toISOString()
+            : undefined,
         bookingUrl:
           config.inboxes[conversation.inbox]?.bookingLink?.(ref) ??
           config.inboxes[conversation.inbox]?.bookingUrl,
@@ -710,7 +725,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
       if (!settings.reminderAfterHours) continue;
       const due = await store.claimReminders(
         inbox,
-        settings.reminderAfterHours
+        settings.reminderAfterHours,
+        settings.hours &&
+          openCutoff(new Date(), settings.reminderAfterHours, settings.hours)
       );
       for (const conversation of due) {
         const body = await firstCustomerText(conversation);
@@ -1209,6 +1226,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     requireVisible,
     requireAgent,
     teamAwayUntil,
+    reopensAt,
     createConversation,
     addCustomerMessage,
     addAgentMessage,

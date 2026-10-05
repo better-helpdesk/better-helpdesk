@@ -63,7 +63,10 @@ says **conversation**. Each has:
   adapter; the package stores keys and metadata.
 - **Waiting**: `waitingSince` is set while the last word is the customer's.
   Once it is older than the inbox's `reminderAfterHours`, an
-  `agent-reminder` email goes to the agents, once (`remindedAt`).
+  `agent-reminder` email goes to the agents, once (`remindedAt`). An inbox
+  with **hours** (business hours, weekly spans in its time zone) counts only
+  open hours, for the reminder and the inbox's waiting colours, and the
+  widget and receipt say when it opens again while it is closed.
   `customerSeenAt` records what the customer has read, so a `notify-customer`
   job can skip emailing a reply they already saw. `agentSeenAt` is the
   team's side: a waiting conversation is **unread** in the inbox until any

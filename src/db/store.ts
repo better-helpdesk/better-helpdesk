@@ -1188,15 +1188,22 @@ export function createStore(db: Db) {
       }));
     },
 
-    /** Marks due reminders as sent and returns them; concurrent runs never double-send. */
-    async claimReminders(inbox: string, afterHours: number) {
+    /**
+     * Marks due reminders as sent and returns them; concurrent runs never double-send.
+     * With `cutoff`, due means waiting since then or earlier instead of `afterHours` ago.
+     */
+    async claimReminders(inbox: string, afterHours: number, cutoff?: Date) {
       const result = await db.execute<{ id: string }>(sql`
         UPDATE helpdesk.conversation SET reminded_at = now()
         WHERE inbox = ${inbox}
           AND status <> 'resolved'
           AND snoozed_until IS NULL
           AND waiting_since IS NOT NULL
-          AND waiting_since < now() - make_interval(hours => ${afterHours})
+          AND ${
+            cutoff
+              ? sql`waiting_since <= ${cutoff.toISOString()}`
+              : sql`waiting_since < now() - make_interval(hours => ${afterHours})`
+          }
           AND (reminded_at IS NULL OR reminded_at < waiting_since)
         RETURNING id`);
       const ids = result.rows.map(r => r.id);

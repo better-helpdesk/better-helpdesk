@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react';
 
-import type { CustomFieldDef, Locale } from '../config';
+import type { BusinessHours, CustomFieldDef, Locale } from '../config';
 import type { Api } from '../ui/api';
 import type { Translate } from '../ui/i18n';
 
@@ -23,6 +23,8 @@ export type Me = {
   priorities: string[];
   inboxes: string[];
   inboxNames: Record<string, Partial<Record<Locale, string>>>;
+  /** Only the inboxes that have `hours`. */
+  inboxHours: Record<string, BusinessHours>;
   /** Labels of the qualifying answers that end up as contact tags. */
   segments: Record<
     string,

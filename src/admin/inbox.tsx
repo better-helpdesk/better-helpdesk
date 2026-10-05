@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 
 import { useResource } from '../ui/api';
+import { openCutoff } from '../ui/hours';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
@@ -35,7 +36,7 @@ export type ConversationRow = {
   viewers?: Viewer[];
 };
 
-/** The widget promises a reply within a business day; amber warns ahead of it, red is past it. */
+/** Hours waited before amber and red; open hours only, in an inbox with `hours`. */
 const SOON_HOURS = 6;
 const LATE_HOURS = 24;
 
@@ -339,7 +340,22 @@ export function ConversationTable({
   /** j/k move, Enter opens; for the inbox, which owns the page. */
   keyboard?: boolean;
 }) {
-  const { t, href, locale, inboxName } = useAdmin();
+  const { t, href, locale, inboxName, me } = useAdmin();
+  const now = new Date();
+  const cutoffsByInbox = new Map<string, [number, number]>();
+  const cutoffs = (inbox: string) => {
+    let pair = cutoffsByInbox.get(inbox);
+    if (!pair) {
+      const hours = me.inboxHours[inbox];
+      const before = (n: number) =>
+        hours
+          ? openCutoff(now, n, hours).getTime()
+          : now.getTime() - n * 3_600_000;
+      pair = [before(SOON_HOURS), before(LATE_HOURS)];
+      cutoffsByInbox.set(inbox, pair);
+    }
+    return pair;
+  };
   // By id: polling re-sorts the rows and a filter swaps them.
   const [activeId, setActiveId] = useState<string | null>(null);
   // -1 until the first j/k: the cursor shows only once someone uses it.
@@ -384,14 +400,13 @@ export function ConversationTable({
         <tbody>
           {rows.map((c, index) => {
             const waiting = Boolean(c.waitingSince) && c.status !== 'resolved';
-            const hours = waiting
-              ? (Date.now() - new Date(c.waitingSince as string).getTime()) /
-                3_600_000
-              : 0;
-            const tone =
-              hours > LATE_HOURS
+            const since = waiting ? Date.parse(c.waitingSince as string) : 0;
+            const [soon, late] = cutoffs(c.inbox);
+            const tone = !waiting
+              ? undefined
+              : since < late
                 ? 'late'
-                : hours > SOON_HOURS
+                : since < soon
                   ? 'soon'
                   : undefined;
             return (

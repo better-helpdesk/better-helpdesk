@@ -626,6 +626,76 @@ describe('Widget', () => {
     ).toBeTruthy();
   });
 
+  it('says when a closed inbox opens again, in the visitor’s time zone', async () => {
+    const zone = process.env.TZ;
+    process.env.TZ = 'Europe/Zurich';
+    // Saturday 24 October; the clocks go back overnight.
+    vi.useFakeTimers({
+      now: new Date('2026-10-24T12:00:00Z'),
+      toFake: ['Date'],
+    });
+    onTestFinished(() => {
+      process.env.TZ = zone;
+      vi.useRealTimers();
+    });
+    mockApi({
+      'widget/session': {
+        ...session,
+        awayUntil: '2026-10-26T07:00:00.000Z',
+        nextOpening: '2026-10-26T07:00:00.000Z',
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    expect(
+      await screen.findByText(
+        'Angelo is back on Monday at 08:00 CET and replies to your message then.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('dates an opening more than a few days off', async () => {
+    const zone = process.env.TZ;
+    process.env.TZ = 'Europe/Zurich';
+    vi.useFakeTimers({
+      now: new Date('2026-10-24T12:00:00Z'),
+      toFake: ['Date'],
+    });
+    onTestFinished(() => {
+      process.env.TZ = zone;
+      vi.useRealTimers();
+    });
+    mockApi({
+      'widget/session': {
+        ...session,
+        team: [],
+        awayUntil: '2026-11-02T22:59:59.000Z',
+        nextOpening: '2026-11-03T07:00:00.000Z',
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="de"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /support/i }));
+    expect(
+      await screen.findByText(
+        'Wir sind am Dienstag, 3. November um 08:00 MEZ wieder da und antworten Ihnen dann.'
+      )
+    ).toBeTruthy();
+  });
+
   it('lets the author mark a thread resolved and says so when that fails', async () => {
     Element.prototype.scrollIntoView = () => {};
     const summary = ownThread;
