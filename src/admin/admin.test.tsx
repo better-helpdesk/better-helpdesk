@@ -607,6 +607,7 @@ describe('HelpdeskAdmin', () => {
         fireEvent.keyDown(document.body, { key: 'z' });
         resolve(shown);
       });
+      onTestFinished(() => observer.disconnect());
       observer.observe(document.body, { childList: true, subtree: true });
       render(<HelpdeskAdmin basePath="/support" locale="en" />);
     });
