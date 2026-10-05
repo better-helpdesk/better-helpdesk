@@ -124,5 +124,6 @@ Worker that relays each message unmodified.
 When support@ is itself on this domain, route it to the Worker directly.
 Email Routing sends an address to one destination, so there is no second
 copy for the two weeks; set your current destination as `FALLBACK_ADDRESS`
-so a message the app cannot take still reaches it. Otherwise forward support@ to `support@in.example.com` with the Google
-Workspace or Microsoft 365 recipe above.
+so a message the app cannot take still reaches it. Otherwise forward
+support@ to `support@in.example.com` with the Google Workspace or Microsoft
+365 recipe above.
