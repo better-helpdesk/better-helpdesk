@@ -14,7 +14,8 @@
   --helpdesk-accent-fg: #0b0d0c;
   --helpdesk-focus: #9ad9b8;
   --helpdesk-danger: #f0907f;
-  --helpdesk-radius: 6px;
+  --helpdesk-radius: 0;
+  --helpdesk-shadow: none;
   --helpdesk-panel-header-bg: #2a312d;
   --helpdesk-panel-header-fg: #eef3f0;
   --helpdesk-header-bg: #202623;
@@ -2466,7 +2467,11 @@ dd.err {
   margin: 0;
   padding: 0;
   display: grid;
+  align-content: start;
   gap: 10px;
+}
+.foot li {
+  display: flex;
 }
 .foot a:hover {
   color: var(--mint);

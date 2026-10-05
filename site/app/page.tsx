@@ -427,8 +427,7 @@ export default function Home() {
                 </summary>
                 <p>
                   There is no importer yet. Today it fits teams starting fresh
-                  or willing to open a new inbox. Design partners get their
-                  migration done with us by hand.
+                  or willing to open a new inbox.
                 </p>
               </details>
               <details className="rv">

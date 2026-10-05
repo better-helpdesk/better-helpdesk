@@ -487,8 +487,15 @@ the widget's shadow root:
 | Scope     | Properties                                                                                                                                                                            |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Shared    | `--helpdesk-font`, `-bg`, `-fg`, `-muted`, `-border`, `-subtle`, `-accent`, `-accent-hover`, `-accent-fg`, `-focus`, `-danger`, `-radius`                                             |
-| Widget    | `--helpdesk-launcher-bg`, `-launcher-fg`, `-panel-header-bg`, `-panel-header-fg` (both default to the accent), `-panel-border`, `-offset-bottom`                                        |
+| Widget    | `--helpdesk-launcher-bg`, `-launcher-fg`, `-panel-header-bg`, `-panel-header-fg` (both default to the accent), `-panel-border`, `-offset-bottom`, `-shadow`                             |
 | Agent UI  | `--helpdesk-header-bg` (table heads and avatars), `-note`, `-note-border`, `-warning`                                                                                                 |
+
+`--helpdesk-radius` drives every corner: cards and panels take it as given,
+controls and the elements inside them step down from it and dialogs step up,
+so the corners stay concentric at any value. Shadows are tinted from
+`--helpdesk-fg`, and `--helpdesk-shadow: none` turns the widget's off.
+Without `--helpdesk-note` the note colour is mixed from
+`--helpdesk-note-border` and the background.
 
 For a dark theme, set the panel header too: a light accent reads well on
 buttons and links, but not as the header's background.

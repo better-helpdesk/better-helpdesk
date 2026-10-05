@@ -146,11 +146,6 @@ export function PartnerForm({ api }: { api: string }) {
         <input id="p-listed" name="listed" type="checkbox" defaultChecked /> You
         may list our name and logo as a supporter.
       </label>
-      <p className="f-note">
-        Rolling it out for a real team? Say so in your story. Design partners
-        get hands-on help getting to production, and in return we have a
-        30-minute call every two weeks.
-      </p>
       {state.kind === 'error' && (
         <p className="f-msg err" role="alert">
           {state.message}
