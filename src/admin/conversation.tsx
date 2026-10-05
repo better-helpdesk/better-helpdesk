@@ -187,8 +187,11 @@ export function ConversationView({ id }: { id: string }) {
       setBusy(null);
       return;
     }
-    // Sent: the text must not stay behind to be sent twice.
-    setUnsent(d => ({ ...d, [internal ? 'note' : 'reply']: '' }));
+    // Sent: the text must not stay behind to be sent twice. Storage is cleared
+    // directly, as the agent may have left and the state update would be lost.
+    const mode = internal ? 'note' : 'reply';
+    writeUnsent(unsentKey, { ...readUnsent(unsentKey), [mode]: '' });
+    setUnsent(d => ({ ...d, [mode]: '' }));
     try {
       if (resolve) await patch({ status: 'resolved' });
       else await detail.refresh();
