@@ -370,6 +370,7 @@ export function Widget(props: WidgetProps) {
         <div
           ref={panel}
           className="panel"
+          data-fit={view.name === 'home' || view.name === 'form' || undefined}
           role="dialog"
           aria-modal={mobile || undefined}
           aria-label={title}

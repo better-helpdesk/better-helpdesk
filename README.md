@@ -617,7 +617,9 @@ so the corners stay concentric at any value. Shadows are tinted from
 Without `--helpdesk-note` the note colour is mixed from
 `--helpdesk-note-border` and the background.
 
-For a dark theme, set the panel header too: a light accent reads well on
+`--helpdesk-focus` colours the focus ring and nothing else; unread dots, the
+selected tab and the agent note take the accent. For a dark theme, set the
+panel header too: a light accent reads well on
 buttons and links, but not as the header's background.
 
 ### Languages
