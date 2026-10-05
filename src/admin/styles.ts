@@ -242,7 +242,7 @@ export const adminCss = `
 .sa .rt-dialog .rt-toolbar, .sa .rt-dialog .rt-link { padding: 4px 6px; border-top: 1px solid var(--a-border); }
 /* In the composer card the toolbar sits under a hairline, inside the box. */
 .sa .rt-composer .rt-toolbar, .sa .rt-composer .rt-link { padding-top: 6px; border-top: 1px solid var(--a-border); }
-.sa-composer .rt-input { background: var(--a-bg); border: 1px solid var(--a-border); border-radius: 8px; padding: 8px 10px; }
+.sa-composer .rt-input { background: var(--a-bg); border: 1px solid var(--a-border); border-radius: var(--a-r-inner); padding: 8px 10px; }
 .sa .rt-input[data-empty]::before { content: attr(data-placeholder); color: var(--a-muted); pointer-events: none; }
 .sa .rt-input[data-empty] > :first-child:is(br, div:only-child) { display: none; }
 .sa .rt-input ul { margin: 0; padding-left: 20px; list-style: disc; }
