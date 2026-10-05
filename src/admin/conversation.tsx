@@ -239,7 +239,7 @@ export function ConversationView({ id }: { id: string }) {
   const eventText = (e: TimelineEvent) => {
     const name = e.agentId
       ? (e.agentName ?? agentLabel(e.agentId))
-      : t('event.formerAgent');
+      : t('event.system');
     const to = e.data.to;
     const from = e.data.from;
     switch (e.kind) {

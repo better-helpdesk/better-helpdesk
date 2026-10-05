@@ -1397,15 +1397,18 @@ describe('event timeline', () => {
     ]);
   });
 
-  it('records an accepted suggestion with the fields it changed', async () => {
+  it('records an accepted suggestion once, with the fields it changed', async () => {
     const conversation = await open('ada');
     await h.support.store.updateConversation(conversation.id, {
       aiSuggestion: { priority: 'high' },
     });
-    await h.call('POST', `agent/conversations/${conversation.id}/suggestion`, {
-      user: 'agent',
-      body: { action: 'accept' },
-    });
+    for (let i = 0; i < 2; i++) {
+      await h.call(
+        'POST',
+        `agent/conversations/${conversation.id}/suggestion`,
+        { user: 'agent', body: { action: 'accept' } }
+      );
+    }
     expect(await timeline(conversation.id)).toEqual([
       {
         kind: 'priority',

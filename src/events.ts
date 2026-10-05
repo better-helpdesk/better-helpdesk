@@ -41,7 +41,7 @@ const TRACKED = [
   'snoozedUntil',
 ] as const;
 
-/** Reports the `patch` keys whose stored value changed; the patch itself may hold SQL such as `now()`. */
+/** Records and reports the `patch` keys whose stored value changed; the patch itself may hold SQL such as `now()`. */
 export async function emitUpdated(
   config: HelpdeskConfig,
   old: Conversation,

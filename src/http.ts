@@ -744,10 +744,12 @@ export function createHandler(support: Helpdesk) {
       const conversation = await requireConversation(params.id);
       const suggestion = conversation.aiSuggestion;
       if (!suggestion) throw new HelpdeskError(404, 'No suggestion');
-      if (suggestion.acceptedAt) return json({ ok: true });
       const data = z
         .object({ action: z.enum(['accept', 'dismiss']) })
         .parse(await body());
+      if (data.action === 'accept' && suggestion.acceptedAt) {
+        return json({ ok: true });
+      }
       if (data.action === 'dismiss') {
         await store.updateConversation(conversation.id, { aiSuggestion: null });
       } else {
