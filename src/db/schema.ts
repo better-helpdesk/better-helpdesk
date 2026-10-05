@@ -188,6 +188,10 @@ export const conversations = helpdesk.table(
     agentSeenAt: ts('agent_seen_at'),
     lastMessageAt: ts('last_message_at').notNull().defaultNow(),
     resolvedAt: ts('resolved_at'),
+    mergedIntoId: uuid('merged_into_id').references(
+      (): AnyPgColumn => conversations.id,
+      { onDelete: 'set null' }
+    ),
     createdAt: createdAt(),
     search: tsvector('search').generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(subject, ''))`

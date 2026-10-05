@@ -4,20 +4,45 @@ import { useAdmin } from './context';
 
 type Option = { id: string; name: string | null; email?: string | null };
 
-function Picker({
+export type ConversationOption = Option & {
+  reference: string;
+  contactId: string;
+};
+
+type ConversationRow = {
+  id: string;
+  reference: string;
+  subject: string | null;
+  contact: { id: string; name: string | null; email: string | null };
+};
+
+export const conversationOption = (c: ConversationRow): ConversationOption => ({
+  id: c.id,
+  name: [c.reference, c.subject].filter(Boolean).join(' '),
+  email: c.contact.name ?? c.contact.email,
+  reference: c.reference,
+  contactId: c.contact.id,
+});
+
+// Module-level so the search effect's dependencies stay stable.
+const asOption = (row: never) => row;
+
+function Picker<T extends Option>({
   label,
   path,
   field,
   onPick,
+  toOption = asOption as (row: never) => T,
 }: {
   label: string;
   path: string;
-  field: 'contacts' | 'companies';
-  onPick: (option: Option) => void;
+  field: 'contacts' | 'companies' | 'conversations';
+  onPick: (option: T) => void;
+  toOption?: (row: never) => T;
 }) {
   const { api } = useAdmin();
   const [query, setQuery] = useState('');
-  const [options, setOptions] = useState<Option[]>([]);
+  const [options, setOptions] = useState<T[]>([]);
 
   useEffect(() => {
     const q = query.trim();
@@ -26,12 +51,12 @@ function Picker({
       return;
     }
     const timer = setTimeout(() => {
-      api<Record<string, Option[]>>(`${path}?q=${encodeURIComponent(q)}`)
-        .then(r => setOptions((r[field] ?? []).slice(0, 8)))
+      api<Record<string, never[]>>(`${path}?q=${encodeURIComponent(q)}`)
+        .then(r => setOptions((r[field] ?? []).slice(0, 8).map(toOption)))
         .catch(() => setOptions([]));
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, api, path, field]);
+  }, [query, api, path, field, toOption]);
 
   return (
     <div>
@@ -77,3 +102,15 @@ export const CompanyPicker = (props: {
   label: string;
   onPick: (o: Option) => void;
 }) => <Picker {...props} path="agent/companies" field="companies" />;
+
+export const ConversationPicker = (props: {
+  label: string;
+  onPick: (o: ConversationOption) => void;
+}) => (
+  <Picker
+    {...props}
+    path="agent/conversations"
+    field="conversations"
+    toOption={conversationOption}
+  />
+);

@@ -6,6 +6,7 @@ import { relativeTime } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
 import { isMac, RichEditor, type RichEditorHandle } from '../ui/rich-editor';
 import { useAdmin } from './context';
+import { MergeDialog } from './merge';
 import { ContactPicker } from './pickers';
 import { formatSnooze, SnoozeControl } from './snooze';
 import {
@@ -39,6 +40,7 @@ type Detail = {
     companyId: string | null;
     tags: string[];
     snoozedUntil: string | null;
+    mergedIntoId: string | null;
     context: {
       url?: string;
       title?: string;
@@ -235,6 +237,7 @@ export function ConversationView({ id }: { id: string }) {
       : {}
   );
   const [aside, setAside] = useState(readAside);
+  const [merging, setMerging] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const asideToggle = useRef<HTMLButtonElement>(null);
   const asideId = useId();
@@ -434,6 +437,16 @@ export function ConversationView({ id }: { id: string }) {
               : t('event.woken');
       case 'reopened':
         return t('event.reopened');
+      case 'merged.into':
+        return t('event.mergedInto', {
+          name,
+          reference: String(e.data.reference),
+        });
+      case 'merged.from':
+        return t('event.mergedFrom', {
+          name,
+          reference: String(e.data.reference),
+        });
       case 'suggestion.accepted':
         return t('event.suggestionAccepted', { name });
       case 'suggestion.dismissed':
@@ -468,6 +481,12 @@ export function ConversationView({ id }: { id: string }) {
     ...data.messages.map(m => ({ at: m.createdAt, message: m })),
     ...data.events.map(e => ({ at: e.createdAt, event: e })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const mergedInto = c.mergedIntoId && {
+    id: c.mergedIntoId,
+    reference: String(
+      data.events.find(e => e.kind === 'merged.into')?.data.reference ?? ''
+    ),
+  };
 
   return (
     <div className="sa" ref={root}>
@@ -511,7 +530,27 @@ export function ConversationView({ id }: { id: string }) {
             value={c.tags}
             onSave={tags => patch({ tags })}
           />
+          {mergedInto && (
+            <p className="sa-fine" role="status">
+              <a
+                href={href({ conversation: mergedInto.id })}
+                onClick={e => {
+                  e.preventDefault();
+                  navigate({ conversation: mergedInto.id });
+                }}>
+                {t('admin.mergedInto', { reference: mergedInto.reference })}
+              </a>
+            </p>
+          )}
         </div>
+        {!c.mergedIntoId && (
+          <button
+            type="button"
+            className="sa-btn"
+            onClick={() => setMerging(true)}>
+            {t('admin.mergeInto')}
+          </button>
+        )}
         <button
           ref={asideToggle}
           type="button"
@@ -1093,6 +1132,14 @@ export function ConversationView({ id }: { id: string }) {
           </div>
         </aside>
       </div>
+      <MergeDialog
+        open={merging}
+        onClose={() => setMerging(false)}
+        onMerged={detail.refresh}
+        conversationId={id}
+        contactId={data.contact?.id}
+        duplicates={c.aiSuggestion?.duplicates ?? []}
+      />
       {toast.node}
     </div>
   );

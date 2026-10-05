@@ -247,6 +247,16 @@ const en = {
   'event.unsnoozed': '{name} ended the snooze',
   'event.woken': 'Snooze ended',
   'event.reopened': 'A customer reply reopened this',
+  'event.mergedInto': '{name} merged this into {reference}',
+  'event.mergedFrom': '{name} merged {reference} into this',
+  'admin.mergeInto': 'Merge into…',
+  'admin.mergeSearch': 'Search by reference or text',
+  'admin.confirmMergeConversation':
+    'Merge this conversation into {reference}? Its messages move there and this one is resolved. This cannot be undone.',
+  'admin.confirmMergeOtherContact':
+    '{reference} belongs to another customer. The customer of this conversation is added to it and sees all of its messages. Merge into {reference}? This cannot be undone.',
+  'admin.mergeFailed': 'This conversation could not be merged.',
+  'admin.mergedInto': 'Merged into {reference}.',
   'event.resolvedByCustomer': 'The customer marked this resolved',
   'event.suggestionAccepted': '{name} accepted the AI suggestion',
   'event.suggestionDismissed': '{name} dismissed the AI suggestion',
@@ -644,6 +654,17 @@ const de: Record<MessageKey, string> = {
   'event.unsnoozed': '{name} hat dies wieder aufgenommen',
   'event.woken': 'Zurückstellung abgelaufen',
   'event.reopened': 'Eine Kundenantwort hat dies wieder eröffnet',
+  'event.mergedInto': '{name} hat dies in {reference} zusammengeführt',
+  'event.mergedFrom': '{name} hat {reference} hierher zusammengeführt',
+  'admin.mergeInto': 'Zusammenführen in…',
+  'admin.mergeSearch': 'Nach Referenz oder Text suchen',
+  'admin.confirmMergeConversation':
+    'Diese Unterhaltung in {reference} zusammenführen? Ihre Nachrichten werden dorthin verschoben und diese wird als gelöst markiert. Das lässt sich nicht rückgängig machen.',
+  'admin.confirmMergeOtherContact':
+    '{reference} gehört zu einer anderen Kundin oder einem anderen Kunden. Diese Person wird hinzugefügt und sieht die Nachrichten. In {reference} zusammenführen? Das lässt sich nicht rückgängig machen.',
+  'admin.mergeFailed':
+    'Diese Unterhaltung konnte nicht zusammengeführt werden.',
+  'admin.mergedInto': 'In {reference} zusammengeführt.',
   'event.resolvedByCustomer': 'Die Kundschaft hat dies als gelöst markiert',
   'event.suggestionAccepted': '{name} hat den KI-Vorschlag übernommen',
   'event.suggestionDismissed': '{name} hat den KI-Vorschlag verworfen',

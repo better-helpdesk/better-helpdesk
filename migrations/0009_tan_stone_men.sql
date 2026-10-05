@@ -1,0 +1,2 @@
+ALTER TABLE "helpdesk"."conversation" ADD COLUMN "merged_into_id" uuid;--> statement-breakpoint
+ALTER TABLE "helpdesk"."conversation" ADD CONSTRAINT "conversation_merged_into_id_conversation_id_fk" FOREIGN KEY ("merged_into_id") REFERENCES "helpdesk"."conversation"("id") ON DELETE set null ON UPDATE no action;
