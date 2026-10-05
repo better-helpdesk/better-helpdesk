@@ -215,7 +215,7 @@ main,
   width: 16px;
   height: 16px;
 }
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .nav-links,
   .nav-gh span {
     display: none;
@@ -402,7 +402,7 @@ main,
   font-weight: 900;
   line-height: 0.9;
 }
-.hero h1 em {
+:is(h1, h2) em {
   font-style: normal;
   color: var(--mint);
 }
@@ -3729,7 +3729,7 @@ kbd.on {
   margin-top: 6px;
   justify-content: center;
 }
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   .nav-menu-btn {
     display: inline-flex;
   }

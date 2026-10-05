@@ -7,32 +7,39 @@ const LINKS: [string, string][] = [
   ['product', 'Product'],
   ['pieces', 'How it works'],
   ['widget', 'Customers'],
+  ['box', 'Features'],
   ['compare', 'Compare'],
   ['faq', 'FAQ'],
 ];
 
-/** Marks the link of whichever section holds the middle of the viewport. */
+/**
+ * Marks the link of the last section that starts above the middle of the
+ * viewport, so the unlinked sections in between keep the link before them.
+ */
 export function NavLinks({ base = '' }: { base?: string }) {
   const [here, setHere] = useState('');
   useEffect(() => {
     const sections = LINKS.map(([id]) => document.getElementById(id)).filter(
       (el): el is HTMLElement => el !== null
     );
-    // Nothing is marked while the middle of the viewport is outside every
-    // linked section, as over the hero.
-    const visible = new Set<string>();
-    const io = new IntersectionObserver(
-      entries => {
-        for (const e of entries) {
-          if (e.isIntersecting) visible.add(e.target.id);
-          else visible.delete(e.target.id);
-        }
-        setHere(LINKS.find(([id]) => visible.has(id))?.[0] ?? '');
-      },
-      { rootMargin: '-45% 0px -50% 0px' }
-    );
-    for (const el of sections) io.observe(el);
-    return () => io.disconnect();
+    const last = sections.at(-1);
+    const update = () => {
+      const mid = window.innerHeight / 2;
+      // Nothing is marked over the hero or past the last linked section.
+      if (!last || last.getBoundingClientRect().bottom < mid)
+        return setHere('');
+      setHere(
+        sections.filter(el => el.getBoundingClientRect().top <= mid).at(-1)
+          ?.id ?? ''
+      );
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
   }, []);
   return (
     <nav className="nav-links" aria-label="Main">

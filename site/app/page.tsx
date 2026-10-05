@@ -1,29 +1,29 @@
-import helpdeskPackage from 'better-helpdesk/package.json';
+import helpdeskPackage from "better-helpdesk/package.json";
 import {
   PiArrowRightBold,
   PiArrowUpRightBold,
   PiPlusBold,
-} from 'react-icons/pi';
+} from "react-icons/pi";
 
-import { API } from '../lib/helpdesk';
-import { ContinuityForm } from './components/continuity-form';
-import { Install } from './components/copy';
-import { Cost } from './components/cost';
-import { FaqAside } from './components/faq-aside';
-import { ButtonIcon } from './components/icons';
-import { LiveMark } from './components/live-mark';
-import { Face } from './components/mark';
-import { MiniInbox } from './components/mini-inbox';
-import { PartnerForm } from './components/partner-form';
-import { Pieces } from './components/pieces';
-import { Showcase } from './components/showcase';
-import { SiteFooter, SiteHeader } from './components/site-chrome';
-import { Sponsor } from './components/sponsor';
-import { TextLink } from './components/text-link';
-import { Wall } from './components/wall';
-import { WidgetDemo } from './components/widget-demo';
+import { API } from "../lib/helpdesk";
+import { ContinuityForm } from "./components/continuity-form";
+import { Install } from "./components/copy";
+import { Cost } from "./components/cost";
+import { FaqAside } from "./components/faq-aside";
+import { ButtonIcon } from "./components/icons";
+import { LiveMark } from "./components/live-mark";
+import { Face } from "./components/mark";
+import { MiniInbox } from "./components/mini-inbox";
+import { PartnerForm } from "./components/partner-form";
+import { Pieces } from "./components/pieces";
+import { Showcase } from "./components/showcase";
+import { SiteFooter, SiteHeader } from "./components/site-chrome";
+import { Sponsor } from "./components/sponsor";
+import { TextLink } from "./components/text-link";
+import { Wall } from "./components/wall";
+import { WidgetDemo } from "./components/widget-demo";
 
-const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
+const REPO = "https://github.com/better-helpdesk/better-helpdesk";
 
 export default function Home() {
   return (
@@ -80,10 +80,8 @@ export default function Home() {
         </section>
 
         <section className="sec showcase" id="product" aria-labelledby="sc-h">
-          <div className="sh rv">
-            <h2 id="sc-h">
-              One inbox for every conversation your product starts.
-            </h2>
+          <div className="sh split rv">
+            <h2 id="sc-h">One inbox for every conversation.</h2>
             <p className="sub">
               Widget, email and CRM, inside the app your team already signs in
               to.
@@ -104,8 +102,8 @@ export default function Home() {
         </section>
 
         <section className="sec wsec" id="widget" aria-labelledby="w-h">
-          <div className="sh rv">
-            <h2 id="w-h">A widget your customers already understand.</h2>
+          <div className="sh split rv">
+            <h2 id="w-h">A widget you understand.</h2>
             <p className="sub">
               One web component, themed with your CSS variables. The customer
               sees the page, browser and last error it attaches, and can untick
@@ -200,7 +198,7 @@ export default function Home() {
 
         <section className="sec how" id="how" aria-labelledby="h-h">
           <div className="sh split rv">
-            <h2 id="h-h">Four routes, one schema, your Postgres.</h2>
+            <h2 id="h-h">Four routes, one schema.</h2>
             <p className="sub">
               Visitors, your team, your mail relay and your scheduler each get
               one route group under your <code>basePath</code>.
@@ -219,7 +217,7 @@ export default function Home() {
               <code>agent/*</code>
               <h3>Your support team</h3>
               <p>
-                Open only when your <code>identify</code> says{' '}
+                Open only when your <code>identify</code> says{" "}
                 <code>isAgent</code>.
               </p>
             </div>
@@ -240,14 +238,14 @@ export default function Home() {
             Stores no passwords and no sessions. Mutations are refused from any
             origin you haven't allowed. Inbound mail is checked against DKIM and
             marked verified or not. Identity tokens are signed and expire. Four
-            runtime dependencies: <code>drizzle-orm</code>, <code>zod</code>,{' '}
+            runtime dependencies: <code>drizzle-orm</code>, <code>zod</code>,{" "}
             <code>mailparser</code>, <code>mailauth</code>.
           </p>
         </section>
 
         <section className="sec cost" id="cost" aria-labelledby="c-h">
           <div className="sh split rv">
-            <h2 id="c-h">No seats. The next agent costs nothing.</h2>
+            <h2 id="c-h">No seats to count.</h2>
             <p className="sub">
               The engineer who reads one thread a week and the founder who
               checks in on Mondays are agents too.
@@ -271,7 +269,7 @@ export default function Home() {
         </section>
 
         <section className="sec compare" id="compare" aria-labelledby="cm-h">
-          <div className="sh rv">
+          <div className="sh split rv">
             <h2 id="cm-h">A library, not another app.</h2>
             <p className="sub">
               Hosted helpdesks keep your data and charge per seat. Self-hosted
@@ -296,34 +294,34 @@ export default function Home() {
                 {(
                   [
                     [
-                      'Runs',
-                      'inside your Next.js app',
+                      "Runs",
+                      "inside your Next.js app",
                       "on the vendor's servers",
-                      'as a separate app you operate',
+                      "as a separate app you operate",
                     ],
                     [
-                      'Customer data',
-                      'your Postgres',
+                      "Customer data",
+                      "your Postgres",
                       "the vendor's database",
-                      'its own database',
+                      "its own database",
                     ],
                     [
-                      'Sign-in',
-                      'your existing session',
-                      'separate agent accounts',
-                      'separate agent accounts',
+                      "Sign-in",
+                      "your existing session",
+                      "separate agent accounts",
+                      "separate agent accounts",
                     ],
                     [
-                      'Look and feel',
-                      'your CSS custom properties',
-                      'vendor theming',
-                      'vendor theming',
+                      "Look and feel",
+                      "your CSS custom properties",
+                      "vendor theming",
+                      "vendor theming",
                     ],
                     [
-                      'Cost',
-                      'MIT, free',
-                      'per seat, per month',
-                      'free, plus the hosting',
+                      "Cost",
+                      "MIT, free",
+                      "per seat, per month",
+                      "free, plus the hosting",
                     ],
                   ] as const
                 ).map(([aspect, us, hosted, own]) => (
@@ -441,7 +439,7 @@ export default function Home() {
                   </span>
                 </summary>
                 <p>
-                  The handler is a plain function from <code>Request</code> to{' '}
+                  The handler is a plain function from <code>Request</code> to{" "}
                   <code>Response</code>, so any server with that shape can mount
                   it. Next.js is the one the examples and CI cover.
                 </p>
@@ -493,7 +491,9 @@ export default function Home() {
           <span className="mk mk-96 closer-face">
             <LiveMark fg="var(--bg)" bg="var(--mint)" />
           </span>
-          <h2 id="cl-h">Answer your first customer from your own app.</h2>
+          <h2 id="cl-h">
+            Answer your <em>first customer</em> from your own app.
+          </h2>
           <div className="row-cta center">
             <Install />
             <a className="btn btn-p" href="/quickstart/">
