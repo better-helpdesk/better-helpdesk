@@ -1312,8 +1312,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
     for (const r of rows)
       if (r.createdAt.getTime() >= since)
         for (const tag of r.tags) tags.set(tag, (tags.get(tag) ?? 0) + 1);
+    const rated = rows.filter(r => r.ratedAt && r.ratedAt.getTime() >= since);
     return {
       openHours: rows.some(r => config.inboxes[r.inbox]?.hours),
+      ratings: rated.length
+        ? {
+            good: rated.filter(r => r.rating === 'good').length,
+            bad: rated.filter(r => r.rating === 'bad').length,
+          }
+        : null,
       total: summarize(rows),
       inboxes: groupBy(r => r.inbox).map(g => ({
         inbox: g[0]?.inbox as string,

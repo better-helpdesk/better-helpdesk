@@ -101,6 +101,7 @@ describe('overview', () => {
       ])
     );
     expect(res.data.openHours).toBe(false);
+    expect(res.data.ratings).toBeNull();
 
     const quarter = await h.call('GET', 'agent/overview?days=90', {
       user: 'agent',
@@ -130,6 +131,31 @@ describe('overview', () => {
       firstResponse: 1,
       resolution: 2,
     });
+  });
+
+  it('leaves merged-away conversations out and splits the ratings', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    const recent = sql`now() - interval '10 hours'`;
+    await seed('support', recent, '1 hour', '2 hours');
+    await seed('support', recent, '1 hour', '2 hours');
+    await seed('support', recent, '1 hour', '2 hours');
+    const [good, bad, merged] = (
+      await exec(sql`SELECT id FROM helpdesk.conversation ORDER BY number`)
+    ).rows as { id: string }[];
+    await exec(sql`UPDATE helpdesk.conversation SET rating = 'good', rated_at = now()
+      WHERE id = ${good?.id}::uuid`);
+    await exec(sql`UPDATE helpdesk.conversation SET rating = 'bad', rated_at = now()
+      WHERE id = ${bad?.id}::uuid`);
+    await exec(sql`UPDATE helpdesk.conversation SET merged_into_id = ${good?.id}::uuid
+      WHERE id = ${merged?.id}::uuid`);
+
+    const res = await h.call('GET', 'agent/overview?days=7', {
+      user: 'agent',
+    });
+    expect(res.data.total).toMatchObject({ new: 2, resolved: 2 });
+    expect(res.data.ratings).toEqual({ good: 1, bad: 1 });
   });
 
   it('is for agents only', async () => {

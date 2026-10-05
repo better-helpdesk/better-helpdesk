@@ -14,6 +14,7 @@ type Numbers = {
 
 type Overview = {
   openHours: boolean;
+  ratings: { good: number; bad: number } | null;
   total: Numbers;
   inboxes: (Numbers & { inbox: string })[];
   agents: (Numbers & { agentId: string | null; name: string | null })[];
@@ -97,6 +98,12 @@ export function OverviewPage() {
                   ['admin.resolvedCount', String(data.data.total.resolved)],
                   ['admin.firstResponse', hours(data.data.total.firstResponse)],
                   ['admin.resolutionTime', hours(data.data.total.resolution)],
+                  ...(data.data.ratings
+                    ? ([
+                        ['admin.rated.good', String(data.data.ratings.good)],
+                        ['admin.rated.bad', String(data.data.ratings.bad)],
+                      ] as const)
+                    : []),
                 ] as const
               ).map(([key, value]) => (
                 <div key={key} className="sa-card">

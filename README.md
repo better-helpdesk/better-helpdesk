@@ -557,7 +557,7 @@ JOIN LATERAL (
   FROM helpdesk.message m
   WHERE m.conversation_id = c.id AND m.author_type = 'agent' AND NOT m.internal
 ) r ON first_reply IS NOT NULL
-WHERE c.created_at > now() - interval '30 days';
+WHERE c.created_at > now() - interval '30 days' AND c.merged_into_id IS NULL;
 ```
 
 Median time to resolution:
@@ -566,7 +566,8 @@ Median time to resolution:
 SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY resolved_at - created_at)
   AS median_resolution
 FROM helpdesk.conversation
-WHERE status = 'resolved' AND resolved_at > now() - interval '30 days';
+WHERE status = 'resolved' AND resolved_at > now() - interval '30 days'
+  AND merged_into_id IS NULL;
 ```
 
 Volume per inbox and type:
@@ -574,7 +575,7 @@ Volume per inbox and type:
 ```sql
 SELECT inbox, type, count(*) AS conversations
 FROM helpdesk.conversation
-WHERE created_at > now() - interval '30 days'
+WHERE created_at > now() - interval '30 days' AND merged_into_id IS NULL
 GROUP BY inbox, type
 ORDER BY conversations DESC;
 ```
