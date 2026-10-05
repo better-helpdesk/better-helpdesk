@@ -90,28 +90,35 @@ const routes: Record<string, unknown> = {
   'agent/canned/': { replies: [] },
   'agent/tags/': { tags: ['billing', 'vip'] },
   'agent/settings/': { confirmation: {} },
+  'agent/deals/': { deals: [] },
 };
 
 const original = routes['agent/conversations/c1/'];
+
+// A URL with no entry in `routes` fails the test instead of getting an empty body.
+const unrouted: string[] = [];
+const respond = (url: string) => {
+  const key = Object.keys(routes)
+    .sort((a, b) => b.length - a.length)
+    .find(k => url.includes(k));
+  if (key) return new Response(JSON.stringify(routes[key]));
+  unrouted.push(url);
+  return new Response('{}', { status: 404 });
+};
 
 beforeEach(() => {
   sessionStorage.clear();
   window.history.replaceState(null, '', '/support/conversations/');
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: string) => {
-      const url = String(input);
-      const key = Object.keys(routes)
-        .sort((a, b) => b.length - a.length)
-        .find(k => url.includes(k));
-      return new Response(JSON.stringify(key ? routes[key] : {}));
-    })
+    vi.fn(async (input: string) => respond(String(input)))
   );
 });
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  expect(unrouted.splice(0)).toEqual([]);
 });
 
 describe('HelpdeskAdmin', () => {
@@ -236,10 +243,7 @@ describe('HelpdeskAdmin', () => {
         if (init?.method === 'POST') posts.push(url);
         if (init?.method === 'PATCH')
           return new Response('{}', { status: 500 });
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -266,10 +270,7 @@ describe('HelpdeskAdmin', () => {
       vi.fn(async (input: string, init?: RequestInit) => {
         const url = String(input);
         if (init?.method === 'POST') posts.push(JSON.parse(String(init.body)));
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -324,10 +325,7 @@ describe('HelpdeskAdmin', () => {
       vi.fn(async (input: string, init?: RequestInit) => {
         const url = String(input);
         if (init?.method === 'POST') return new Response('{}', { status: 500 });
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -355,10 +353,7 @@ describe('HelpdeskAdmin', () => {
           await new Promise<void>(resolve => {
             release = resolve;
           });
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -369,10 +364,10 @@ describe('HelpdeskAdmin', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     fireEvent.click(screen.getByRole('link', { name: 'Inbox' }));
     await screen.findByRole('link', { name: /DG-1000/ });
-    await act(async () => {
-      release();
-      await new Promise(resolve => setTimeout(resolve, 20));
-    });
+    release();
+    await waitFor(() =>
+      expect(sessionStorage.getItem('helpdesk.draft.a1.c1')).toBeNull()
+    );
 
     fireEvent.click(screen.getByRole('link', { name: /DG-1000/ }));
     expect(
@@ -454,10 +449,7 @@ describe('HelpdeskAdmin', () => {
       vi.fn(async (input: string) => {
         const url = String(input);
         if (url.includes('agent/conversations/?')) lists.push(url);
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
@@ -473,8 +465,13 @@ describe('HelpdeskAdmin', () => {
       target: { value: 'pending' },
     });
     expect(window.location.search).toContain('tag=billing');
-    await act(async () => {});
-    expect(lists.at(-1)).toContain('tag=billing');
+    await waitFor(() => {
+      const query = new URL(lists.at(-1) ?? '', 'http://x.test').searchParams;
+      expect([query.get('status'), query.get('tag')]).toEqual([
+        'pending',
+        'billing',
+      ]);
+    });
     expect(window.location.pathname).toBe('/support/conversations/');
   });
 
@@ -486,10 +483,7 @@ describe('HelpdeskAdmin', () => {
         const url = String(input);
         if (init?.method === 'PATCH')
           patches.push(JSON.parse(String(init.body)));
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -504,8 +498,9 @@ describe('HelpdeskAdmin', () => {
     });
     fireEvent.blur(input);
 
-    await act(async () => {});
-    expect(patches).toEqual([{ tags: ['billing', 'refunds'] }]);
+    await waitFor(() =>
+      expect(patches).toEqual([{ tags: ['billing', 'refunds'] }])
+    );
   });
 
   it('shows the saved tags and an error when saving them fails', async () => {
@@ -517,10 +512,7 @@ describe('HelpdeskAdmin', () => {
             status: 400,
           });
         const url = String(input);
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -563,10 +555,7 @@ describe('HelpdeskAdmin', () => {
             })
           );
         }
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -578,18 +567,20 @@ describe('HelpdeskAdmin', () => {
 
     fireEvent.change(select, { target: { value: 'tomorrow' } });
 
-    await act(async () => {});
-    expect(patches).toEqual([{ snoozedUntil: tomorrow.toISOString() }]);
-    expect((select as HTMLSelectElement).selectedOptions[0]?.textContent).toBe(
-      `Snoozed until ${formatSnooze(tomorrow, 'en')}`
+    await waitFor(() =>
+      expect(
+        (select as HTMLSelectElement).selectedOptions[0]?.textContent
+      ).toBe(`Snoozed until ${formatSnooze(tomorrow, 'en')}`)
     );
+    expect(patches).toEqual([{ snoozedUntil: tomorrow.toISOString() }]);
 
     fireEvent.change(select, { target: { value: 'off' } });
-    await act(async () => {});
-    expect(patches.at(-1)).toEqual({ snoozedUntil: null });
-    expect((select as HTMLSelectElement).selectedOptions[0]?.textContent).toBe(
-      'Snooze'
+    await waitFor(() =>
+      expect(
+        (select as HTMLSelectElement).selectedOptions[0]?.textContent
+      ).toBe('Snooze')
     );
+    expect(patches.at(-1)).toEqual({ snoozedUntil: null });
   });
 
   it('snoozes until a picked time, opened with the z key', async () => {
@@ -600,17 +591,25 @@ describe('HelpdeskAdmin', () => {
         const url = String(input);
         if (init?.method === 'PATCH')
           patches.push(JSON.parse(String(init.body)));
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
-    render(<HelpdeskAdmin basePath="/support" locale="en" />);
-    const select = await screen.findByRole('combobox', { name: 'Snooze' });
-
-    fireEvent.keyDown(document.body, { key: 'z' });
+    // z is pressed in the first moment the select is in the page, before
+    // React runs the passive effects of the commit that added it.
+    const select = await new Promise<HTMLElement>(resolve => {
+      const observer = new MutationObserver(() => {
+        const shown = document.querySelector<HTMLElement>(
+          'select[aria-label="Snooze"]'
+        );
+        if (!shown) return;
+        observer.disconnect();
+        fireEvent.keyDown(document.body, { key: 'z' });
+        resolve(shown);
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    });
     expect(document.activeElement).toBe(select);
 
     fireEvent.change(select, { target: { value: 'pick' } });
@@ -625,9 +624,10 @@ describe('HelpdeskAdmin', () => {
     fireEvent.change(input, { target: { value } });
     fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
 
-    await act(async () => {});
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Snooze until')).toBeNull()
+    );
     expect(patches).toEqual([{ snoozedUntil: until.toISOString() }]);
-    expect(screen.queryByLabelText('Snooze until')).toBeNull();
   });
 
   it('says so when the server refuses a snooze and keeps the conversation awake', async () => {
@@ -642,10 +642,7 @@ describe('HelpdeskAdmin', () => {
           });
         }
         const url = String(input);
-        const key = Object.keys(routes)
-          .sort((a, b) => b.length - a.length)
-          .find(k => url.includes(k));
-        return new Response(JSON.stringify(key ? routes[key] : {}));
+        return respond(url);
       })
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
@@ -677,7 +674,7 @@ describe('HelpdeskAdmin', () => {
     const nav = await screen.findByRole('navigation', { name: 'Sections' });
     const current = within(nav).getByRole('button', { current: 'page' });
     expect(current.textContent).toBe('Settings');
-    expect(scrollIntoView).toHaveBeenCalled();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Deals' }));
     expect(
