@@ -66,6 +66,9 @@ says **conversation**. Each has:
   `agent-reminder` email goes to the agents, once (`remindedAt`).
   `customerSeenAt` records what the customer has read, so a `notify-customer`
   job can skip emailing a reply they already saw.
+- **Snoozed**: a `pending` conversation with a `snoozedUntil`. It gets no
+  reminder and leaves the waiting count until `runJobs` wakes it back to
+  `open` at that time, or a customer message wakes it sooner.
 - **Context**: what the widget captured when the report was made (URL,
   viewport, locale, recent errors, referrer, UTM), plus whatever the host
   adds through `resolveContext`.
@@ -96,9 +99,10 @@ is on the deal; they are different ladders.
 
 A **job** is queued work in the `job` table, run by a handler keyed on its
 `kind`. `helpdesk.runJobs()` on the host's schedule, or
-`POST {basePath}/jobs` with `jobsSecret`, first sends due reminders, then
-applies **retention** (resolved conversations are deleted `retentionDays`
-after resolution), then works through due jobs within a time budget.
+`POST {basePath}/jobs` with `jobsSecret`, first wakes due snoozes, then
+sends due reminders, then applies **retention** (resolved conversations are
+deleted `retentionDays` after resolution), then works through due jobs within
+a time budget.
 
 ## Widget and admin
 

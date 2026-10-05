@@ -175,6 +175,7 @@ export const conversations = helpdesk.table(
     tags: text('tags').array().notNull().default(sql`'{}'`),
     waitingSince: ts('waiting_since'),
     remindedAt: ts('reminded_at'),
+    snoozedUntil: ts('snoozed_until'),
     customerSeenAt: ts('customer_seen_at'),
     lastMessageAt: ts('last_message_at').notNull().defaultNow(),
     resolvedAt: ts('resolved_at'),
@@ -191,6 +192,9 @@ export const conversations = helpdesk.table(
     index('conversation_waiting_idx').on(t.waitingSince),
     index('conversation_search_idx').using('gin', t.search),
     index('conversation_tags_idx').using('gin', t.tags),
+    index('conversation_snoozed_idx')
+      .on(t.snoozedUntil)
+      .where(sql`${t.snoozedUntil} IS NOT NULL`),
   ]
 );
 

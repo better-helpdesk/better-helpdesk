@@ -1103,3 +1103,155 @@ describe('tags', () => {
     expect(res.data.tags).toEqual(['billing', 'onboarding', 'vip']);
   });
 });
+
+describe('snooze', () => {
+  const later = () => new Date(Date.now() + 86_400_000).toISOString();
+  const state = async () =>
+    (
+      await rows<{ status: string; snoozed_until: Date | null }>(
+        sql`SELECT status, snoozed_until FROM helpdesk.conversation`
+      )
+    )[0];
+  const snooze = async (id: string, snoozedUntil: string | null) =>
+    h.call('PATCH', `agent/conversations/${id}`, {
+      user: 'agent',
+      body: { snoozedUntil },
+    });
+
+  beforeEach(() => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+  });
+
+  it('parks a conversation as pending until the time, lists it as snoozed and wakes it in runJobs', async () => {
+    const conversation = await open('ada');
+    const until = later();
+    expect((await snooze(conversation.id, until)).status).toBe(200);
+    expect(
+      await rows(
+        sql`SELECT status FROM helpdesk.conversation WHERE snoozed_until = ${until}::timestamptz`
+      )
+    ).toEqual([{ status: 'pending' }]);
+    const list = await h.call('GET', 'agent/conversations?status=snoozed', {
+      user: 'agent',
+    });
+    expect(list.data.conversations.map((c: { id: string }) => c.id)).toEqual([
+      conversation.id,
+    ]);
+    expect(
+      (
+        await h.call('GET', 'agent/conversations?status=open', {
+          user: 'agent',
+        })
+      ).data.conversations
+    ).toEqual([]);
+
+    await h.support.runJobs();
+    expect((await state())?.status).toBe('pending');
+
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.conversation SET snoozed_until = now() - interval '1 minute'`
+    );
+    const report = await h.support.runJobs();
+    expect(report.woken).toBe(1);
+    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+  });
+
+  it('never reopens a resolved conversation with a stale snooze', async () => {
+    const conversation = await open('ada');
+    await snooze(conversation.id, later());
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'resolved' },
+    });
+    expect(await state()).toEqual({ status: 'resolved', snoozed_until: null });
+
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.conversation SET snoozed_until = now() - interval '1 minute'`
+    );
+    await h.support.runJobs();
+    expect(await state()).toEqual({ status: 'resolved', snoozed_until: null });
+  });
+
+  it('wakes on a customer reply', async () => {
+    const conversation = await open('ada');
+    await snooze(conversation.id, later());
+    await h.call('POST', `widget/conversations/${conversation.id}/messages`, {
+      user: 'ada',
+      body: { body: 'upgrade done early' },
+    });
+    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+  });
+
+  it('holds back the waiting reminder while snoozed', async () => {
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    const conversation = await open('ada');
+    await snooze(conversation.id, later());
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
+    );
+    await h.runDueJobs();
+    expect(h.emails.filter(e => e.kind === 'agent-reminder')).toEqual([]);
+
+    await snooze(conversation.id, null);
+    await h.runDueJobs();
+    expect(h.emails.filter(e => e.kind === 'agent-reminder')).toHaveLength(1);
+  });
+
+  it('clears the snooze when an agent unsnoozes or reopens, and refuses a time without an offset', async () => {
+    const conversation = await open('ada');
+    await snooze(conversation.id, later());
+    expect((await snooze(conversation.id, null)).status).toBe(200);
+    expect(await state()).toEqual({ status: 'pending', snoozed_until: null });
+
+    await snooze(conversation.id, later());
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'open' },
+    });
+    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+
+    expect((await snooze(conversation.id, '2026-10-06T09:00')).status).toBe(
+      400
+    );
+    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+  });
+
+  it('refuses a time in the past and a snooze that contradicts the status', async () => {
+    const conversation = await open('ada');
+    const past = new Date(Date.now() - 60_000).toISOString();
+    expect((await snooze(conversation.id, past)).status).toBe(400);
+    const res = await h.call(
+      'PATCH',
+      `agent/conversations/${conversation.id}`,
+      {
+        user: 'agent',
+        body: { status: 'resolved', snoozedUntil: later() },
+      }
+    );
+    expect(res.status).toBe(400);
+    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+  });
+
+  it('snoozes a resolved conversation back into the pending queue', async () => {
+    const conversation = await open('ada');
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'resolved' },
+    });
+    await snooze(conversation.id, later());
+    const [row] = await rows<{ status: string; resolved_at: Date | null }>(
+      sql`SELECT status, resolved_at FROM helpdesk.conversation`
+    );
+    expect(row).toEqual({ status: 'pending', resolved_at: null });
+  });
+
+  it('leaves a snoozed conversation out of the waiting count', async () => {
+    const conversation = await open('ada');
+    const waiting = async () =>
+      (await h.call('GET', 'agent/unread', { user: 'agent' })).data.waiting;
+    expect(await waiting()).toBe(1);
+    await snooze(conversation.id, later());
+    expect(await waiting()).toBe(0);
+  });
+});

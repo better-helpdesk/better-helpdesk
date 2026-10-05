@@ -70,6 +70,7 @@ export const adminCss = `
 .sa-toolbar .sa-grow { flex: 1; min-width: 200px; }
 .sa-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .sa-fields .sa-select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+.sa-snooze-pick { display: flex; gap: 6px; align-items: center; grid-column: 1 / -1; }
 .sa-input, .sa-select, .sa-textarea {
   height: 36px; padding: 0 12px; border: 1px solid var(--a-border); border-radius: 8px;
   background: var(--a-bg); width: 100%; font-size: 14px;

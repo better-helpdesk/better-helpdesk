@@ -21,7 +21,7 @@ import {
   schema,
 } from './db/store';
 import { formatReference, parseReference } from './domain';
-import { emit } from './events';
+import { emit, emitUpdated } from './events';
 import { verifyIdentityToken } from './identity-token';
 import { plainText } from './rich';
 import { nextWorkday } from './ui/i18n';
@@ -659,6 +659,20 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return `${config.adminUrl.replace(/\/$/, '')}/conversations/${conversation.id}/`;
   }
 
+  async function wakeSnoozed() {
+    const woken = await store.wakeSnoozed();
+    for (const { row, before } of woken) {
+      await emitUpdated(
+        config,
+        { ...row, ...before },
+        row,
+        { status: row.status, snoozedUntil: null },
+        null
+      );
+    }
+    return woken.length;
+  }
+
   async function sendReminders() {
     let sent = 0;
     for (const [inbox, settings] of Object.entries(config.inboxes)) {
@@ -1096,6 +1110,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   async function runJobs({ budgetMs = 20_000 }: { budgetMs?: number } = {}) {
     const started = Date.now();
     const report = {
+      woken: 0,
       reminders: 0,
       retention: 0,
       jobs: 0,
@@ -1112,6 +1127,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         return 0;
       }
     };
+    report.woken = await step('wake', wakeSnoozed);
     report.reminders = await step('reminders', sendReminders);
     report.retention = await step('retention', applyRetention);
     while (Date.now() - started < budgetMs) {
