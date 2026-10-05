@@ -855,6 +855,31 @@ export function createHandler(support: Helpdesk) {
     }
   );
 
+  agentRoute(
+    'POST',
+    'conversations/:id/merge',
+    async ({ params, body, agent }) => {
+      const source = await requireConversation(params.id);
+      const { targetId } = z.object({ targetId: uuid }).parse(await body());
+      if (targetId === source.id) {
+        throw new HelpdeskError(400, 'A conversation cannot merge into itself');
+      }
+      const target = await store.getConversation(targetId);
+      if (!target) throw new HelpdeskError(400, 'Unknown conversation');
+      const merged = await store.mergeConversation(
+        source.id,
+        target.id,
+        agent.id,
+        {
+          source: support.reference(source),
+          target: support.reference(target),
+        }
+      );
+      if (!merged) throw new HelpdeskError(409, 'Already merged');
+      return json({ ok: true });
+    }
+  );
+
   agentRoute('POST', 'conversations/:id/draft', async ({ params }) => {
     const conversation = await requireConversation(params.id);
     return json({ text: await support.draftReply(conversation) });

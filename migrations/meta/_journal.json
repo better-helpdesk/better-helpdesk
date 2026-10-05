@@ -64,6 +64,13 @@
       "when": 1791189814706,
       "tag": "0008_fuzzy_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791213519093,
+      "tag": "0009_tan_stone_men",
+      "breakpoints": true
     }
   ]
 }

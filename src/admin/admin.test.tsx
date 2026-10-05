@@ -1774,4 +1774,107 @@ describe('details sidebar', () => {
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(aside().hidden).toBe(true);
   });
+
+  it('merges into an AI duplicate after a warning that the customers differ', async () => {
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      conversation: {
+        ...conversation,
+        mergedIntoId: null,
+        aiSuggestion: {
+          duplicates: [
+            { conversationId: 'c2', reference: 'DG-1001', reason: 'Same' },
+          ],
+        },
+      },
+    };
+    routes['agent/conversations/?q=DG-1001'] = {
+      conversations: [
+        {
+          ...conversation,
+          id: 'c2',
+          reference: 'DG-1001',
+          subject: 'CSV export',
+          contact: { id: 'p2', name: 'Bob', email: 'bob@example.test' },
+        },
+      ],
+    };
+    routes['agent/conversations/c1/merge/'] = { ok: true };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+      delete routes['agent/conversations/?q=DG-1001'];
+      delete routes['agent/conversations/c1/merge/'];
+    });
+    const posts: { url: string; body: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST') {
+          posts.push({ url, body: JSON.parse(String(init.body)) });
+        }
+        return respond(url);
+      })
+    );
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirm);
+    const { showModal, close } = HTMLDialogElement.prototype;
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+    onTestFinished(() => {
+      Object.assign(HTMLDialogElement.prototype, { showModal, close });
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge into…' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'DG-1001 CSV export' })
+    );
+
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining('DG-1001 belongs to another customer')
+    );
+    expect(posts[0]?.url).toContain('agent/conversations/c1/merge');
+    expect(posts[0]?.body).toEqual({ targetId: 'c2' });
+  });
+
+  it('links a merged conversation to its target and offers no second merge', async () => {
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      conversation: {
+        ...conversation,
+        status: 'resolved',
+        mergedIntoId: 'c2',
+      },
+      events: [
+        {
+          id: 'e1',
+          kind: 'merged.into',
+          data: { conversationId: 'c2', reference: 'DG-1001' },
+          agentId: 'a1',
+          agentName: 'Grace',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    const banner = await screen.findByRole('link', {
+      name: 'Merged into DG-1001.',
+    });
+    expect(banner.getAttribute('href')).toBe('/support/conversations/c2/');
+    expect(screen.getByText('Grace merged this into DG-1001')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Merge into…' })).toBeNull();
+  });
 });

@@ -578,6 +578,87 @@ export function createStore(db: Db) {
       return row ?? null;
     },
 
+    /**
+     * Moves the source's messages and attachments onto the target and resolves
+     * the source as merged. False when either side was merged first.
+     */
+    async mergeConversation(
+      sourceId: string,
+      targetId: string,
+      agentId: string,
+      references: { source: string; target: string }
+    ) {
+      return db.transaction(async tx => {
+        const rows = await tx
+          .select()
+          .from(conversations)
+          .where(inArray(conversations.id, [sourceId, targetId]))
+          .orderBy(asc(conversations.id))
+          .for('update');
+        const source = rows.find(r => r.id === sourceId);
+        const target = rows.find(r => r.id === targetId);
+        if (!source || !target || source.mergedIntoId || target.mergedIntoId) {
+          return false;
+        }
+        await tx
+          .update(messages)
+          .set({ conversationId: targetId })
+          .where(eq(messages.conversationId, sourceId));
+        await tx
+          .update(attachments)
+          .set({ conversationId: targetId })
+          .where(eq(attachments.conversationId, sourceId));
+        if (source.contactId !== target.contactId) {
+          await tx
+            .insert(participants)
+            .values({ conversationId: targetId, contactId: source.contactId })
+            .onConflictDoNothing();
+        }
+        await tx
+          .update(conversations)
+          .set({
+            mergedIntoId: targetId,
+            status: 'resolved',
+            resolvedAt: source.resolvedAt ?? sql`now()`,
+            waitingSince: null,
+            snoozedUntil: null,
+          })
+          .where(eq(conversations.id, sourceId));
+        // An unanswered customer message moves with the source, so the target
+        // takes over its wait, reopening if it was resolved.
+        const waiting =
+          source.waitingSince &&
+          (!target.waitingSince || source.waitingSince < target.waitingSince)
+            ? source.waitingSince
+            : target.waitingSince;
+        const reopen =
+          source.status !== 'resolved' && target.status === 'resolved';
+        await tx
+          .update(conversations)
+          .set({
+            lastMessageAt: sql`greatest(${conversations.lastMessageAt}, ${source.lastMessageAt})`,
+            waitingSince: waiting,
+            ...(reopen ? { status: source.status, resolvedAt: null } : {}),
+          })
+          .where(eq(conversations.id, targetId));
+        await tx.insert(conversationEvents).values([
+          {
+            conversationId: sourceId,
+            agentId,
+            kind: 'merged.into',
+            data: { conversationId: targetId, reference: references.target },
+          },
+          {
+            conversationId: targetId,
+            agentId,
+            kind: 'merged.from',
+            data: { conversationId: sourceId, reference: references.source },
+          },
+        ]);
+        return true;
+      });
+    },
+
     async isParticipant(conversationId: string, contactId: string) {
       const [row] = await db
         .select()

@@ -829,6 +829,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
         const number = tag && parseReference(config.referencePrefix, tag);
         if (number) {
           conversation = await store.getConversationByNumber(number);
+          if (conversation?.mergedIntoId) {
+            conversation = await store.getConversation(
+              conversation.mergedIntoId
+            );
+          }
           if (conversation) break;
         }
       }
