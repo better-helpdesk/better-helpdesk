@@ -594,7 +594,16 @@ export function ConversationTable({
             move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1))
           ),
           k: shown(() => move(active === -1 ? 0 : Math.max(active - 1, 0))),
-          Enter: shown(() => row && open(row.id)),
+          // Enter on a control in the open thread is that control's.
+          Enter: shown(e => {
+            const target = e.composedPath()[0];
+            if (
+              target instanceof Element &&
+              target.closest('button, a, summary')
+            )
+              return;
+            if (row) open(row.id);
+          }),
           x: shown(e => row && toggle(row.id, e.shiftKey)),
         }
       : {}

@@ -231,3 +231,15 @@ it('colours the wait by open hours in an inbox with hours, by the clock in one w
   );
   expect(tones).toEqual([null, 'late']);
 });
+
+it('leaves Enter on a button in the open thread to that button', () => {
+  const onOpen = vi.fn();
+  render(table([row('a'), row('b')], onOpen, { conversation: 'a' }));
+  const button = document.createElement('button');
+  document.body.append(button);
+  onTestFinished(() => button.remove());
+
+  fireEvent.keyDown(document.body, { key: 'j' });
+  fireEvent.keyDown(button, { key: 'Enter' });
+  expect(onOpen).not.toHaveBeenCalled();
+});
