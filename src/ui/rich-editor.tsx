@@ -16,11 +16,11 @@ type Format = 'bold' | 'italic' | 'underline' | 'ul' | 'ol' | 'pre' | 'link';
 const URL_ONLY = /^(https?:\/\/|mailto:)\S+$/i;
 
 // ponytail: an indentation sniff for plain-text pastes (a terminal, a console),
-// so traces, JSON and YAML arrive as code; unindented log lines stay text until
-// the toolbar toggles them.
+// so traces, JSON and YAML arrive as code; unindented log lines, and a reply
+// with one indented line, stay text until the toolbar toggles them.
 export const looksLikeCode = (text: string) =>
   text.trim().split('\n').length >= 3 &&
-  /^(\t| {2,})(?![-*•]\s|\d+[.)]\s)\S/m.test(text);
+  (text.match(/^(\t| {2,})(?![-*•]\s|\d+[.)]\s)\S/gm)?.length ?? 0) >= 2;
 
 const inCode = (node: Node | null | undefined) =>
   !!(node instanceof Element ? node : node?.parentElement)?.closest('pre');
@@ -53,8 +53,10 @@ export function richToHtml(text: string) {
   const html = blocks
     .map(block =>
       // The HTML parser drops a newline right after <pre>, so lead with one.
+      // A trailing newline is dropped on the way back, so an ending blank
+      // line gets a spare one.
       block.type === 'pre'
-        ? `<pre>\n${escapeHtml(block.text)}</pre>`
+        ? `<pre>\n${escapeHtml(block.text)}${block.text.endsWith('\n') ? '\n' : ''}</pre>`
         : block.type === 'p'
           ? block.lines
               .map(line => `<div>${inlineHtml(line) || '<br>'}</div>`)
@@ -84,14 +86,15 @@ function codeText(node: Node): string {
 
 /** The editor's markup, or pasted HTML, reduced to the message format. */
 export function htmlToRich(html: string) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = new DOMParser().parseFromString(
+    html.replace(/\uE000/g, ''),
+    'text/html'
+  );
   // Kept out of the whitespace clean-up below until the end.
   const code: string[] = [];
   const walk = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return (node.textContent ?? '')
-        .replace(/[ \t\r\n]+/g, ' ')
-        .replace(/\uE000/g, '');
+      return (node.textContent ?? '').replace(/[ \t\r\n]+/g, ' ');
     }
     if (!(node instanceof HTMLElement)) return '';
     const tag = node.tagName;
@@ -100,8 +103,14 @@ export function htmlToRich(html: string) {
     // A div with exactly white-space: pre is how code editors copy; pre-wrap
     // is everywhere in word processor HTML, so it does not count.
     if (tag === 'PRE' || (tag === 'DIV' && node.style.whiteSpace === 'pre')) {
-      const text = [...node.childNodes].map(codeText).join('');
-      code.push(text.replace(/^\n/, '').replace(/\n$/, ''));
+      let text = [...node.childNodes].map(codeText).join('');
+      // A line-wise first child adds a leading newline; a text or <br> last
+      // child ends with the conventional one. Neither is a blank line.
+      const line = (child: ChildNode | null) =>
+        child instanceof HTMLElement && /^(DIV|P|LI)$/.test(child.tagName);
+      if (line(node.firstChild)) text = text.replace(/^\n/, '');
+      if (!line(node.lastChild)) text = text.replace(/\n$/, '');
+      code.push(text);
       return `\n\n\uE000${code.length - 1}\uE000\n\n`;
     }
     if (tag === 'UL' || tag === 'OL') {
@@ -116,7 +125,9 @@ export function htmlToRich(html: string) {
     let text = [...node.childNodes].map(walk).join('');
     if (tag === 'A') {
       const href = safeHref(node.getAttribute('href') ?? '');
-      return href && text.trim() ? `[${text.trim()}](${href})` : text;
+      return href && text.trim() && !text.includes('\uE000')
+        ? `[${text.trim()}](${href})`
+        : text;
     }
     const style = node.style;
     const bold =
@@ -133,7 +144,7 @@ export function htmlToRich(html: string) {
         .split('\n')
         .map(line => {
           const core = line.trim();
-          if (!core) return line;
+          if (!core || core.includes('\uE000')) return line;
           const at = line.indexOf(core);
           let marked = core;
           if (underline) marked = `++${marked}++`;
@@ -148,7 +159,10 @@ export function htmlToRich(html: string) {
     if (/^(DIV|LI|TR)$/.test(tag)) return `\n${text.replace(/\n$/, '')}`;
     return text;
   };
+  // A list item joins a code block onto its own line of text, and a fence
+  // only opens and closes on a line of its own.
   return walk(doc.body)
+    .replace(/\s*(\uE000\d+\uE000)\s*/g, '\n\n$1\n\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()

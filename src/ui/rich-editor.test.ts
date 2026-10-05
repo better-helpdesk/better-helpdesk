@@ -64,6 +64,35 @@ describe('code blocks in the editor', () => {
     expect(htmlToRich(richToHtml(text))).toBe(text);
   });
 
+  it.each([
+    [
+      '<ol><li>Run:<pre>npm i\nnpm t</pre></li></ol><p>after</p>',
+      '1. Run:\n\n```\nnpm i\nnpm t\n```\n\nafter',
+    ],
+    [
+      '<b>Run:<pre>npm i\nnpm t</pre></b><p>after</p>',
+      '**Run:**\n\n```\nnpm i\nnpm t\n```\n\nafter',
+    ],
+    [
+      '<a href="https://x.test">Run:<pre>npm i</pre></a><p>after</p>',
+      'Run:\n\n```\nnpm i\n```\n\nafter',
+    ],
+  ])('closes a code block pasted inside other markup: %j', (html, rich) => {
+    expect(htmlToRich(html)).toBe(rich);
+  });
+
+  it('does not let a crafted link address splice in a code block', () => {
+    const rich = htmlToRich(
+      '<a href="https://x.test/\uE0000\uE000">site</a><pre>code</pre>'
+    );
+    expect(rich).toBe('[site](https://x.test/0)\n\n```\ncode\n```');
+  });
+
+  it('keeps blank lines at the start and end of a code block', () => {
+    const text = '```\n\n  x\n\n```';
+    expect(htmlToRich(richToHtml(text))).toBe(text);
+  });
+
   it('escapes the code it shows', () => {
     expect(richToHtml('```\n<script>alert(1)</script>\n```')).toBe(
       '<pre>\n&lt;script&gt;alert(1)&lt;/script&gt;</pre><div><br></div>'
@@ -75,7 +104,9 @@ describe('looksLikeCode', () => {
   it.each([
     'Error: x\n    at a (a.js:1:1)\n    at b (b.js:2:2)',
     'Traceback:\n  File "a.py", line 1\n    boom()',
-    '{\n\t"a": 1\n}',
+    '{\n\t"a": 1,\n\t"b": 2\n}',
+    'Exception in thread "main" java.lang.NullPointerException\n\tat a.B.c(B.java:1)\n\tat a.B.main(B.java:2)',
+    'server:\n  port: 80\n  host: x.test',
   ])('takes indented lines for code: %j', text => {
     expect(looksLikeCode(text)).toBe(true);
   });
@@ -85,6 +116,8 @@ describe('looksLikeCode', () => {
     'Steps:\n  - open\n  - export',
     'Steps:\n  1. open\n  2. export',
     'only\n    two lines',
+    'Hi,\n  quoted reply\nthanks',
+    '> On Monday Ann wrote:\n>   the export fails\nthanks',
   ])('leaves prose and lists as text: %j', text => {
     expect(looksLikeCode(text)).toBe(false);
   });
