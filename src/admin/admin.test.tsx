@@ -84,6 +84,7 @@ const routes: Record<string, unknown> = {
   'agent/agents/': { agents: [] },
   'agent/canned/': { replies: [] },
   'agent/tags/': { tags: ['billing', 'vip'] },
+  'agent/settings/': { confirmation: {} },
 };
 
 const original = routes['agent/conversations/c1/'];
