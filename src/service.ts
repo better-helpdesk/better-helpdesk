@@ -419,8 +419,24 @@ export function createHelpdesk(input: HelpdeskConfig) {
       // A host user's words are theirs only if the host proved their address.
       verified: Boolean(customer.identity?.user.emailVerified),
     });
-    await messageCreated(message);
+    await afterCustomerMessage(conversation, message);
     return message;
+  }
+
+  // `conversation` must be the row read before the append, which reopens it.
+  // ponytail: two replies racing past one resolve notify twice; lock the row in appendMessage if that matters.
+  async function afterCustomerMessage(
+    conversation: Conversation,
+    message: Message
+  ) {
+    if (conversation.status === 'resolved') {
+      await store.enqueueJob('notify-agents', {
+        conversationId: conversation.id,
+        messageId: message.id,
+        reopened: true,
+      });
+    }
+    await messageCreated(message);
   }
 
   async function messageCreated(message: Message) {
@@ -537,10 +553,14 @@ export function createHelpdesk(input: HelpdeskConfig) {
         String(payload.conversationId)
       );
       if (!conversation) return;
-      const body = await firstCustomerText(conversation);
+      const reopened = payload.reopened === true;
+      const body = reopened
+        ? ((await store.getMessage(String(payload.messageId)))?.body ?? '')
+        : await firstCustomerText(conversation);
       for (const agent of await agentRecipients(conversation)) {
         await sendEmail({
           kind: 'agent-new',
+          ...(reopened && { reopened }),
           to: agent.email as string,
           locale: 'en',
           reference: reference(conversation),
@@ -757,7 +777,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
           emailMessageId: mail.messageId,
         });
         await storeInboundAttachments(conversation.id, message.id, mail);
-        await messageCreated(message);
+        await afterCustomerMessage(conversation, message);
         return;
       }
     }

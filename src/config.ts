@@ -96,6 +96,7 @@ export type HelpdeskEmail =
       subject: string;
       body: string;
       url: string;
+      reopened?: boolean;
     };
 
 export type StorageAdapter = {

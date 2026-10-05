@@ -295,7 +295,11 @@ email: {
         return mailer.send({ to: message.to, subject: `We got your message (${message.reference})`, text: receiptText(message) });
       case 'agent-new':
       case 'agent-reminder':
-        return mailer.send({ to: message.to, subject: message.subject, text: `${message.body}\n\n${message.url}` });
+        return mailer.send({
+          to: message.to,
+          subject: message.reopened ? `Reopened: ${message.subject}` : message.subject,
+          text: `${message.body}\n\n${message.url}`,
+        });
     }
   },
 },
@@ -303,7 +307,9 @@ email: {
 
 `mailer` and `receiptText` stand for whatever you send mail with. A receipt
 carries the responder's name, their away date when the team is out, and the
-inbox's booking link, so your template can show them.
+inbox's booking link, so your template can show them. An `agent-new` with
+`reopened: true` means a customer wrote on a resolved conversation; its body
+is what they wrote then.
 
 **Inbound** mail arrives through a webhook. Any relay that can forward a raw
 message to a URL will do; [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays)

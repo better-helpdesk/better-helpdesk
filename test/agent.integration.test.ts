@@ -383,6 +383,37 @@ describe('inbound email', () => {
     ).toEqual([{ verified: false }, { verified: true }]);
   });
 
+  it('emails agents when a reply by email reopens a resolved conversation', async () => {
+    h.addUser('carol', { email: 'carol@example.test' });
+    h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    const conversation = await open('carol');
+    await h.runDueJobs();
+    h.emails.length = 0;
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'resolved' },
+    });
+
+    await h.support.handleInbound(
+      mail({
+        messageId: '<reopen@mail.test>',
+        to: [`support+${conversation.reference}@devguard.test`],
+        text: 'It is back',
+      })
+    );
+    await h.runDueJobs();
+
+    expect(h.emails).toEqual([
+      expect.objectContaining({
+        kind: 'agent-new',
+        to: 'agent@devguard.test',
+        body: 'It is back',
+        reopened: true,
+      }),
+    ]);
+  });
+
   it('attaches a DMARC-passing sender to their verified contact but never an unverified one', async () => {
     h.addUser('carol', { email: 'carol@example.test' });
     await open('carol');
@@ -917,6 +948,38 @@ describe('reopening', () => {
     expect(await waiting()).toBe(0);
     await h.call('PATCH', path, { user: 'agent', body: { status: 'open' } });
     expect(await waiting()).toBe(1);
+  });
+
+  it('emails agents once when a customer reopens a resolved conversation', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    const conversation = await open('ada');
+    await h.runDueJobs();
+    h.emails.length = 0;
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'resolved' },
+    });
+    const write = (body: string) =>
+      h.call('POST', `widget/conversations/${conversation.id}/messages`, {
+        user: 'ada',
+        body: { body },
+      });
+
+    await write('still broken');
+    await write('and now it crashes');
+    await h.runDueJobs();
+
+    expect(h.emails).toEqual([
+      expect.objectContaining({
+        kind: 'agent-new',
+        to: 'agent@devguard.test',
+        reference: conversation.reference,
+        body: 'still broken',
+        reopened: true,
+      }),
+    ]);
   });
 });
 
