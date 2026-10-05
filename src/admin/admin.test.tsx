@@ -374,3 +374,73 @@ describe('HelpdeskAdmin', () => {
     expect(screen.getByRole('alert').textContent).toBe('Something went wrong.');
   });
 });
+
+describe('empty states', () => {
+  const empty = (path: string) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        String(input).includes('agent/me/')
+          ? new Response(JSON.stringify(me))
+          : new Response(
+              JSON.stringify({
+                conversations: [],
+                contacts: [],
+                companies: [],
+                replies: [],
+                deals: [],
+              })
+            )
+      )
+    );
+    window.history.replaceState(null, '', path);
+    return render(<HelpdeskAdmin basePath="/support" locale="en" />);
+  };
+
+  it('says how the first conversation arrives on an empty inbox', async () => {
+    empty('/support/conversations/');
+    expect(await screen.findByText('No conversations yet.')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'The first message from the widget or by email shows up here.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+
+  it('names a filter that hides every conversation and clears it', async () => {
+    empty('/support/conversations/?status=resolved&q=export');
+    expect(
+      await screen.findByText('Nothing matches these filters.')
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    expect(window.location.pathname + window.location.search).toBe(
+      '/support/conversations/'
+    );
+    expect(await screen.findByText('No conversations yet.')).toBeTruthy();
+    expect(
+      (screen.getByRole('searchbox', { name: 'Search' }) as HTMLInputElement)
+        .value
+    ).toBe('');
+  });
+
+  it.each([
+    ['/support/contacts/', 'No contacts yet.'],
+    ['/support/contacts/?q=nobody', 'Nothing matches these filters.'],
+    ['/support/companies/', 'No companies yet.'],
+    ['/support/companies/?q=nobody', 'Nothing matches these filters.'],
+    ['/support/canned/', 'No canned replies yet.'],
+  ])('tells %s what fills it', async (path, title) => {
+    empty(path);
+    expect(await screen.findByText(title)).toBeTruthy();
+  });
+
+  it('shows one empty state over an empty deals board, not one per column', async () => {
+    empty('/support/deals/');
+    expect(await screen.findByText('No deals yet.')).toBeTruthy();
+    expect(screen.getAllByRole('region')).toHaveLength(me.dealStages.length);
+    expect(screen.queryByText('Drag a deal here')).toBeNull();
+  });
+});

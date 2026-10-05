@@ -114,13 +114,13 @@ export const adminCss = `
 .sa .sa-seg button[aria-pressed="true"] { background: var(--a-accent); color: var(--a-accent-fg); }
 
 .sa-card { border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); padding: 14px 16px; display: grid; gap: 10px; }
-.sa-card > h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.sa-card > h3 { margin: 0; font-size: 11px; font-weight: 600; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .sa-table-wrap { border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); overflow: hidden; }
 .sa-card .sa-table-wrap { border: 0; border-radius: 0; }
 .sa-card .sa-table th { background: transparent; }
 .sa-table { width: 100%; border-collapse: collapse; }
-.sa-table th { text-align: left; font-weight: 600; background: var(--a-head); padding: 10px 16px; font-size: 13px; white-space: nowrap; }
+.sa-table th { text-align: left; font-weight: 600; background: var(--a-subtle); color: var(--a-muted); padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
 .sa-table td { padding: 12px 16px; border-top: 1px solid var(--a-border); vertical-align: top; }
 .sa-table tbody tr { cursor: pointer; }
 .sa-table tbody tr:hover td { background: var(--a-subtle); }
@@ -137,7 +137,11 @@ export const adminCss = `
 .sa-type[data-type="feature"] { color: var(--a-warn); background: color-mix(in srgb, var(--a-warn) 12%, var(--a-bg)); }
 .sa-type[data-type="lead"] { color: var(--a-accent); background: color-mix(in srgb, var(--a-accent) 8%, var(--a-bg)); }
 .sa-cell-title .sa-preview { color: var(--a-muted); font-weight: 400; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60ch; }
-.sa-empty { padding: 32px; text-align: center; color: var(--a-muted); }
+.sa-empty { display: grid; justify-items: center; gap: 4px; padding: 48px 24px; text-align: center; }
+.sa-empty strong { font-weight: 600; color: var(--a-fg); }
+.sa-empty p { margin: 0; max-width: 46ch; color: var(--a-muted); text-wrap: balance; }
+.sa-empty .sa-btn { margin-top: 12px; }
+@media (max-width: 720px) { .sa-empty { padding: 32px 16px; } }
 
 .sa-muted { color: var(--a-muted); font-size: 13px; }
 .sa-fine { color: var(--a-muted); font-size: 12px; }
