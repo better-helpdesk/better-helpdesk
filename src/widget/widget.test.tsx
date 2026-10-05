@@ -656,7 +656,7 @@ describe('Widget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
     expect(
       await screen.findByText(
-        'Angelo is back on Monday at 08:00 and replies to your message then.'
+        'Angelo is back on Monday at 08:00 CET and replies to your message then.'
       )
     ).toBeTruthy();
   });
@@ -691,7 +691,7 @@ describe('Widget', () => {
     fireEvent.click(screen.getByRole('button', { name: /support/i }));
     expect(
       await screen.findByText(
-        'Wir sind am Dienstag, 3. November um 08:00 wieder da und antworten Ihnen dann.'
+        'Wir sind am Dienstag, 3. November um 08:00 MEZ wieder da und antworten Ihnen dann.'
       )
     ).toBeTruthy();
   });

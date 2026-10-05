@@ -251,6 +251,7 @@ function openingPromise(
     time: new Intl.DateTimeFormat(tag, {
       hour: '2-digit',
       minute: '2-digit',
+      timeZoneName: 'short',
     }).format(opens),
   };
   return who
