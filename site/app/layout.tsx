@@ -3,7 +3,8 @@ import type { Metadata, Viewport } from 'next';
 import { Doto, Martian_Mono, Rethink_Sans } from 'next/font/google';
 import { connection } from 'next/server';
 
-import { API, siteUrl } from '../lib/helpdesk';
+import { API } from '../lib/helpdesk';
+import { siteUrl } from '../lib/site';
 import { LauncherSkin } from './components/launcher-skin';
 import './site.css';
 

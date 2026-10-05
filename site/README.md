@@ -26,22 +26,26 @@ From the repository root:
 pnpm install
 cp site/.env.example site/.env.local
 pnpm --filter better-helpdesk-site db:migrate
+pnpm --filter better-helpdesk-site agent you@example.com "Your Name"
 pnpm --filter better-helpdesk-site dev
 ```
 
-`http://localhost:3000`. The inbox is at `/helpdesk/`; the browser asks for
-`SITE_AGENT_USER` and `SITE_AGENT_PASSWORD`.
+Set `BETTER_AUTH_SECRET` in `.env.local` first (`openssl rand -base64 32`).
+The `agent` script asks for a password and creates the account, or sets a new
+password if the account exists. `http://localhost:3000`; the inbox is at
+`/helpdesk/` and signs you in at `/login/`.
 
 ## How it is wired
 
-- `lib/helpdesk.ts` builds the helpdesk with two public inboxes: `support` for
-  the widget and `partners` for the form. The handler is mounted at
-  `/helpdesk/api/` so that the agent UI and its API share one path, and the
-  browser sends the agent's Basic credentials to both.
-- `proxy.ts` asks for those credentials on `/helpdesk/` and on
-  `/helpdesk/api/agent/*`. The widget, inbound and jobs routes stay open and
-  are guarded by the handler itself. `identify` checks the same header again,
-  so the proxy is the prompt, not the lock.
+- `lib/helpdesk.ts` builds the helpdesk with three public inboxes: `support`
+  for the widget, `partners` for the story form and `continuity` for the
+  standby list. The handler is mounted at `/helpdesk/api/`.
+- `lib/auth.ts` is Better Auth with email and password, its tables (`user`,
+  `session`, `account`, `verification`) in the `public` schema next to
+  `helpdesk`. Sign-up is off: `scripts/agent.mjs` makes accounts, so every
+  account is an agent. `identify` reads the Better Auth session, and the
+  inbox page redirects to `/login/` without one; the handler checks the
+  session again on every agent call.
 - `instrumentation.ts` runs `helpdesk.runJobs()` every minute inside the
   server. The package queues its email (receipts, agent alerts, replies to
   customers), so without it nothing goes out.
@@ -55,15 +59,17 @@ expects it there. In the Control Panel:
 
 1. Add a Postgres database service. Divio provides it as `DATABASE_URL`.
 2. Under Settings, add the release command
-   `node scripts/migrate.mjs`. It applies the package's migrations before each
-   deployment goes live.
+   `node scripts/migrate.mjs`. It applies the package's migrations and the
+   auth tables before each deployment goes live.
 3. Under Env Variables, per environment: `SITE_URL` (the origin visitors open,
-   for example `https://better-helpdesk.com`), `SITE_AGENT_USER`,
-   `SITE_AGENT_PASSWORD` (sensitive), and optionally `SITE_AGENT_NAME`,
-   `SITE_AGENT_EMAIL`, `SMTP_URL` (sensitive) and `MAIL_FROM`. Set
-   `DATABASE_SSL=true` if the database requires TLS.
+   for example `https://better-helpdesk.com`), `BETTER_AUTH_SECRET`
+   (sensitive, `openssl rand -base64 32`), and optionally `SMTP_URL`
+   (sensitive) and `MAIL_FROM`. Set `DATABASE_SSL=true` if the database
+   requires TLS.
 4. Deploy. Test and Live build from `main` unless the environment says
    otherwise.
+5. Create your account once from a shell in the running container:
+   `node scripts/agent.mjs you@example.com "Your Name"`.
 
 `SITE_URL` must match the domain exactly: the handler refuses every mutation
 from any other origin, so a mismatch turns each widget message into a 403.

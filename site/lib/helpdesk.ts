@@ -1,24 +1,13 @@
 import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
-import pg from 'pg';
 
-import { isAgentRequest } from './agent';
+import { auth } from './auth';
 import { sendMail } from './mail';
+import { pool, siteUrl } from './site';
 
 export const API = '/helpdesk/api';
-export const siteUrl = () =>
-  (process.env.SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-
-// next dev re-evaluates this module on every edit; a fresh pool each time
-// exhausts the server's connections within a few minutes.
-const cache = globalThis as typeof globalThis & { sitePool?: pg.Pool };
-cache.sitePool ??= new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
-});
 
 export const helpdesk = buildHelpdesk({
-  db: postgresAdapter({ pool: cache.sitePool }),
+  db: postgresAdapter({ pool }),
   referencePrefix: 'BH',
   basePath: API,
   // The same-origin check reads this, so it must be the origin visitors open.
@@ -45,15 +34,11 @@ export const helpdesk = buildHelpdesk({
     },
   },
   identify: async request => {
-    if (!isAgentRequest(request.headers)) return null;
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) return null;
+    const { id, name, email, emailVerified } = session.user;
     return {
-      user: {
-        id: 'site-agent',
-        name:
-          process.env.SITE_AGENT_NAME ?? process.env.SITE_AGENT_USER ?? null,
-        email: process.env.SITE_AGENT_EMAIL ?? null,
-        emailVerified: true,
-      },
+      user: { id, name, email, emailVerified },
       orgs: [],
       isAgent: true,
     };

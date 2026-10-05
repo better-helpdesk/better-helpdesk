@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-import { siteUrl } from '../lib/helpdesk';
+import { siteUrl } from '../lib/site';
 
 export const dynamic = 'force-dynamic';
 
