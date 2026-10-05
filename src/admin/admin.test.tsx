@@ -171,7 +171,9 @@ describe('HelpdeskAdmin', () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
 
     expect(await screen.findByText('Grace and Linus are viewing')).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toBe(
+    const warning = () => document.querySelector('.sa-viewing-warning');
+    expect(warning()?.getAttribute('role')).toBe('status');
+    expect(warning()?.textContent).toBe(
       'Someone else on the team has this conversation open. Check they are not replying already.'
     );
 
@@ -180,7 +182,7 @@ describe('HelpdeskAdmin', () => {
     await waitFor(() =>
       expect(screen.queryByText('Grace and Linus are viewing')).toBeNull()
     );
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(warning()?.textContent).toBe('');
   });
 
   it('never renders a non-http context URL as a link', async () => {
@@ -1359,6 +1361,58 @@ describe('conversation shortcuts', () => {
     expect(patches).toEqual([{ assigneeId: 'a1' }]);
   });
 
+  it('sends both a and e pressed one after the other', async () => {
+    routes['agent/agents/'] = {
+      agents: [{ id: 'a1', name: 'Agent', email: null }],
+    };
+    onTestFinished(() => {
+      routes['agent/agents/'] = { agents: [] };
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByText('The CSV export fails');
+
+    fireEvent.keyDown(document.body, { key: 'a' });
+    fireEvent.keyDown(document.body, { key: 'e' });
+
+    await waitFor(() => expect(select('Status').value).toBe('resolved'));
+    await waitFor(() => expect(select('Assignee').value).toBe('a1'));
+    expect(patches).toEqual([{ assigneeId: 'a1' }, { status: 'resolved' }]);
+  });
+
+  it('announces the toast in a status region that is there before it', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByText('The CSV export fails');
+    const region = document.querySelector('.sa-toast');
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.textContent).toBe('');
+
+    fireEvent.keyDown(document.body, { key: 'e' });
+
+    await waitFor(() => expect(region?.textContent).toBe('Resolved DG-1000'));
+    expect(document.querySelector('.sa-toast')).toBe(region);
+  });
+
+  it('says so when resolving with e fails', async () => {
+    const fetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) =>
+        init?.method === 'PATCH'
+          ? new Response(JSON.stringify({ error: 'boom' }), { status: 500 })
+          : fetch(input, init)
+      )
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByText('The CSV export fails');
+
+    fireEvent.keyDown(document.body, { key: 'e' });
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Something went wrong.'
+    );
+    expect(select('Status').value).toBe('open');
+  });
+
   it('switches to the note with n and back to the reply with r, without typing the letter', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     await screen.findByText('The CSV export fails');
@@ -1433,6 +1487,7 @@ describe('conversation shortcuts', () => {
 
     const closeButton = within(sheet).getByRole('button', { name: 'Close' });
     fireEvent.keyDown(closeButton, { key: 'e' });
+    fireEvent.keyDown(document.body, { key: 'e' });
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(patches).toEqual([]);
 

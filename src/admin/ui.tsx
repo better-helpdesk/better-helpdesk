@@ -274,8 +274,8 @@ export function Dialog({
 /**
  * Single-key shortcuts on the window, keyed by `KeyboardEvent.key` with letters
  * in lower case.
- * Keys typed into a field, held with Cmd/Ctrl/Alt, or pressed in a dialog are
- * left alone.
+ * Keys typed into a field, held with Cmd/Ctrl/Alt, or pressed in or behind an
+ * open dialog are left alone.
  */
 export function useShortcuts(
   map: Record<string, ((e: KeyboardEvent) => void) | undefined>
@@ -301,6 +301,9 @@ export function useShortcuts(
         target.closest(
           'input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog, [role="dialog"]'
         ) ||
+        (target.getRootNode() as Document | ShadowRoot).querySelector(
+          'dialog[open]'
+        ) ||
         (key === 'Enter' && target.closest('button, a, [role="tab"]'))
       ) {
         return;
@@ -322,11 +325,12 @@ export function useToast() {
   }, [text]);
   return {
     show: setText,
-    node: text ? (
+    // Mounted while empty: a live region that appears already filled may go unannounced.
+    node: (
       <div className="sa-toast" role="status">
         {text}
       </div>
-    ) : null,
+    ),
   };
 }
 

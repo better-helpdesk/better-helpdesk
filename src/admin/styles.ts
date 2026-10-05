@@ -283,6 +283,7 @@ export const adminCss = `
 .sa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .sa-error { color: var(--a-danger); }
 .sa-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--a-accent); color: var(--a-accent-fg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 50; }
+.sa-toast:empty { padding: 0; }
 .sa-timeline { display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }
 .sa-timeline li { border-left: 2px solid var(--a-border); padding-left: 12px; }
 .sa-kbd { font-size: 12px; color: var(--a-muted); white-space: nowrap; }

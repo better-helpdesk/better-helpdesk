@@ -166,7 +166,9 @@ export function ConversationView({ id }: { id: string }) {
     setUnsent(d => ({ ...d, internal: next }));
   const [slashIndex, setSlashIndex] = useState(0);
   const [busy, setBusy] = useState<'send' | 'draft' | null>(null);
-  const [error, setError] = useState<'send' | 'resolve' | null>(null);
+  const [error, setError] = useState<'send' | 'resolve' | 'action' | null>(
+    null
+  );
   const composer = useRef<RichEditorHandle>(null);
   const toast = useToast();
 
@@ -176,15 +178,18 @@ export function ConversationView({ id }: { id: string }) {
   };
 
   const loaded = detail.data?.conversation;
-  const acting = useRef(false);
+  const acting = useRef(new Set<string>());
   const act = (values: Record<string, unknown>, done: () => string) => {
-    if (acting.current) return;
-    acting.current = true;
+    const field = Object.keys(values).join();
+    if (acting.current.has(field)) return;
+    acting.current.add(field);
     void patch(values)
-      .then(() => toast.show(done()))
-      .finally(() => {
-        acting.current = false;
-      });
+      .then(() => {
+        setError(e => (e === 'action' ? null : e));
+        toast.show(done());
+      })
+      .catch(() => setError('action'))
+      .finally(() => acting.current.delete(field));
   };
   const compose = (note: boolean) => {
     setInternal(note);
@@ -681,7 +686,7 @@ export function ConversationView({ id }: { id: string }) {
               </div>
             )}
             {error && (
-              <p className="sa-error">
+              <p className="sa-error" role="alert">
                 {t(
                   error === 'resolve' ? 'admin.sentNotResolved' : 'admin.error'
                 )}
