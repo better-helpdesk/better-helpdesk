@@ -88,6 +88,18 @@ describe('code blocks in the editor', () => {
     expect(rich).toBe('[site](https://x.test/0)\n\n```\ncode\n```');
   });
 
+  it('does not let an encoded placeholder splice in a code block', () => {
+    expect(
+      htmlToRich(
+        '<a href="https://x.test/&#xE000;0&#xE000;">site</a><pre>code</pre>'
+      )
+    ).toBe('[site](https://x.test/0)\n\n```\ncode\n```');
+    expect(htmlToRich('<p>a &#xE000;0&#xE000; b</p><pre>s</pre>')).toBe(
+      'a 0 b\n\n```\ns\n```'
+    );
+    expect(htmlToRich('<p>&#57344;5&#57344;</p>')).toBe('5');
+  });
+
   it('keeps blank lines at the start and end of a code block', () => {
     const text = '```\n\n  x\n\n```';
     expect(htmlToRich(richToHtml(text))).toBe(text);

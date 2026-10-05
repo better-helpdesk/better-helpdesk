@@ -86,15 +86,14 @@ function codeText(node: Node): string {
 
 /** The editor's markup, or pasted HTML, reduced to the message format. */
 export function htmlToRich(html: string) {
-  const doc = new DOMParser().parseFromString(
-    html.replace(/\uE000/g, ''),
-    'text/html'
-  );
+  const doc = new DOMParser().parseFromString(html, 'text/html');
   // Kept out of the whitespace clean-up below until the end.
   const code: string[] = [];
   const walk = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return (node.textContent ?? '').replace(/[ \t\r\n]+/g, ' ');
+      return (node.textContent ?? '')
+        .replace(/[ \t\r\n]+/g, ' ')
+        .replace(/\uE000/g, '');
     }
     if (!(node instanceof HTMLElement)) return '';
     const tag = node.tagName;
@@ -124,7 +123,9 @@ export function htmlToRich(html: string) {
     }
     let text = [...node.childNodes].map(walk).join('');
     if (tag === 'A') {
-      const href = safeHref(node.getAttribute('href') ?? '');
+      const href = safeHref(
+        (node.getAttribute('href') ?? '').replace(/\uE000/g, '')
+      );
       return href && text.trim() && !text.includes('\uE000')
         ? `[${text.trim()}](${href})`
         : text;
