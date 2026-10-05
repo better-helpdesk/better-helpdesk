@@ -85,8 +85,9 @@ code already does. Concretely:
   CI installs with `--filter better-helpdesk`. CI builds the demo against
   the packed tarball on the current and the previous Next.js major.
 - `site/`: the marketing website, a Next.js app on Divio Cloud that runs
-  the published package for its own widget and inbox. The root `Dockerfile`
-  builds it and nothing else; its README covers the Divio setup.
+  the published package for its own widget and inbox. `site/Dockerfile`
+  builds it and nothing else, from the repository root; its README covers
+  the Divio setup.
 - `scripts/build.mjs`: the esbuild and `tsc` build that `pnpm pack` runs.
   The published entry points are `package.json`'s `publishConfig.exports`.
 

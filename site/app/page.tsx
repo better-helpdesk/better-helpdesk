@@ -28,8 +28,8 @@ const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 export default function Home() {
   return (
     <>
-      <a className="skip" href="#product">
-        Skip to the product
+      <a className="skip" href="#top">
+        Skip to content
       </a>
       <SiteHeader home />
 
@@ -42,7 +42,7 @@ export default function Home() {
             </h1>
             <div className="hero-cta">
               <a className="btn btn-p" href="/quickstart/">
-                Read the quickstart
+                Quickstart
                 <ButtonIcon />
               </a>
               <Install />
@@ -107,9 +107,9 @@ export default function Home() {
           <div className="sh rv">
             <h2 id="w-h">A widget your customers already understand.</h2>
             <p className="sub">
-              One web component, themed with your CSS variables. It shows the
-              customer the page, browser and last error it will attach, and they
-              can untick any of it. The real one is in the corner of this page.
+              One web component, themed with your CSS variables. The customer
+              sees the page, browser and last error it attaches, and can untick
+              any of it.
             </p>
           </div>
           <WidgetDemo />
@@ -119,8 +119,8 @@ export default function Home() {
           <div className="sh split rv">
             <h2 id="b-h">Everything a small support team needs.</h2>
             <p className="sub">
-              Sized for one to ten people answering customers. Every colleague
-              can be an agent at no extra cost.
+              Sized for any team answering customers. Every colleague can be an
+              agent at no extra cost.
             </p>
           </div>
           <div className="bento">
@@ -250,8 +250,7 @@ export default function Home() {
             <h2 id="c-h">No seats. The next agent costs nothing.</h2>
             <p className="sub">
               The engineer who reads one thread a week and the founder who
-              checks in on Mondays are agents too. Move the slider for a year at
-              list price.
+              checks in on Mondays are agents too.
             </p>
           </div>
           <Cost />
@@ -272,7 +271,7 @@ export default function Home() {
         </section>
 
         <section className="sec compare" id="compare" aria-labelledby="cm-h">
-          <div className="sh split rv">
+          <div className="sh rv">
             <h2 id="cm-h">A library, not another app.</h2>
             <p className="sub">
               Hosted helpdesks keep your data and charge per seat. Self-hosted

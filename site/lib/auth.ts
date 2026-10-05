@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { nextCookies } from 'better-auth/next-js';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { headers } from 'next/headers';
 
 import { pool, siteUrl } from './site';
@@ -13,8 +14,15 @@ export const auth = betterAuth({
   baseURL: siteUrl(),
   emailAndPassword: { enabled: true, disableSignUp: true },
   plugins: [nextCookies()],
-  // next.config.mjs sets trailingSlash, so every path arrives with one.
-  advanced: { skipTrailingSlashes: true },
+  advanced: {
+    // next.config.mjs sets trailingSlash, so every path arrives with one.
+    skipTrailingSlashes: true,
+    // next build loads this module with no database to check against.
+    database: {
+      validateSchema:
+        process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD ? false : undefined,
+    },
+  },
 });
 
 export const currentSession = async () =>

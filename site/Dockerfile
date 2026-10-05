@@ -1,5 +1,5 @@
-# The marketing site in site/, for Divio Cloud, which builds from a Dockerfile
-# at the repository root. The package itself ships no image: it runs inside
+# The marketing site in site/, for Divio Cloud, built with the repository root
+# as the context (the workspace lockfile lives there). The package itself ships no image: it runs inside
 # its host's app, and this site is one such host.
 FROM node:24-alpine AS build
 ENV CI=1 NEXT_TELEMETRY_DISABLED=1
@@ -26,6 +26,10 @@ FROM node:24-alpine
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 COPY --from=build /out ./
+# A link that points nowhere only shows up as a 500 on the first query.
+RUN find .next/node_modules -type l 2>/dev/null | while read -r link; do \
+      [ -e "$link" ] || { echo "dangling link: $link" >&2; exit 1; }; \
+    done
 # Divio routes traffic to port 80.
 EXPOSE 80
 CMD ["node_modules/.bin/next", "start", "--port", "80", "--hostname", "0.0.0.0"]
