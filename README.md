@@ -222,6 +222,10 @@ Two things to get right here:
   handler refuses mutations from any other origin, so a mismatch turns every
   reply into a 403.
 
+Worked `identify` functions for [Better Auth](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/identify-better-auth.ts)
+and [Auth.js](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/identify-nextauth.ts) are in `examples/adapters/`, next to
+one for every other adapter below.
+
 ### 5. Render the agent UI
 
 ```tsx
@@ -353,7 +357,8 @@ email: {
 },
 ```
 
-`mailer` and `receiptText` stand for whatever you send mail with. A receipt
+`mailer` and `receiptText` stand for whatever you send mail with;
+[`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts) is the same adapter on Resend. A receipt
 carries the responder's name, their away date when the team is out, and the
 inbox's booking link, so your template can show them. An `agent-new` with
 `reopened: true` means a customer wrote on a resolved conversation; its body
@@ -391,7 +396,9 @@ curl -X POST -H "Authorization: Bearer $HELPDESK_JOBS_SECRET" https://app.exampl
 
 A run wakes due snoozes, then sends due reminder emails, deletes resolved conversations that are
 older than `retentionDays`, then works through queued jobs until the budget
-is spent.
+is spent. [`jobs-vercel-cron.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/jobs-vercel-cron.ts) runs it from a
+Vercel cron route, and [`jobs-interval.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/jobs-interval.ts) from a timer
+in a long-running server.
 
 ### Events
 
@@ -529,6 +536,49 @@ For reads, `helpdesk.store` holds the queries the agent UI runs, such as
   accepts, edits or dismisses.
 - `help.search(query, locale)` returns `{ title, url, excerpt }` results that
   the widget suggests to customers.
+
+Worked adapters: [S3 with presigned POST and GET](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/storage-s3.ts),
+[the Anthropic SDK](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/ai-anthropic.ts) and
+[a static JSON index of your docs](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/help-search.ts).
+
+### Reporting from your own database
+
+Everything lives in the `helpdesk` schema of your Postgres, so reports are
+SQL. Median first response, counting only replies the customer saw:
+
+```sql
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY first_reply - c.created_at)
+  AS median_first_response
+FROM helpdesk.conversation c
+JOIN LATERAL (
+  SELECT min(m.created_at) AS first_reply
+  FROM helpdesk.message m
+  WHERE m.conversation_id = c.id AND m.author_type = 'agent' AND NOT m.internal
+) r ON first_reply IS NOT NULL
+WHERE c.created_at > now() - interval '30 days';
+```
+
+Median time to resolution:
+
+```sql
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY resolved_at - created_at)
+  AS median_resolution
+FROM helpdesk.conversation
+WHERE status = 'resolved' AND resolved_at > now() - interval '30 days';
+```
+
+Volume per inbox and type:
+
+```sql
+SELECT inbox, type, count(*) AS conversations
+FROM helpdesk.conversation
+WHERE created_at > now() - interval '30 days'
+GROUP BY inbox, type
+ORDER BY conversations DESC;
+```
+
+For dashboards, point Metabase or a PostHog data warehouse source at the same
+database with a read-only role limited to the `helpdesk` schema.
 
 ### When someone leaves the team
 
