@@ -624,10 +624,21 @@ export function createStore(db: Db) {
             snoozedUntil: null,
           })
           .where(eq(conversations.id, sourceId));
+        // An unanswered customer message moves with the source, so the target
+        // takes over its wait, reopening if it was resolved.
+        const waiting =
+          source.waitingSince &&
+          (!target.waitingSince || source.waitingSince < target.waitingSince)
+            ? source.waitingSince
+            : target.waitingSince;
+        const reopen =
+          source.status !== 'resolved' && target.status === 'resolved';
         await tx
           .update(conversations)
           .set({
             lastMessageAt: sql`greatest(${conversations.lastMessageAt}, ${source.lastMessageAt})`,
+            waitingSince: waiting,
+            ...(reopen ? { status: source.status, resolvedAt: null } : {}),
           })
           .where(eq(conversations.id, targetId));
         await tx.insert(conversationEvents).values([

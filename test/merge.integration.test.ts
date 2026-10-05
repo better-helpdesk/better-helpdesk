@@ -113,6 +113,27 @@ describe('merging conversations', () => {
     ).toEqual([{ conversation_id: target.id }]);
   });
 
+  it('keeps an unanswered customer message in the queue when the target was resolved', async () => {
+    const source = await open('carol', 'Still broken');
+    const target = await open('carol', 'Export');
+    await h.call('PATCH', `agent/conversations/${target.id}`, {
+      user: 'agent',
+      body: { status: 'resolved' },
+    });
+
+    expect((await merge(source.id, target.id)).status).toBe(200);
+
+    const [row] = await rows<{
+      status: string;
+      resolved_at: string | null;
+      waiting: boolean;
+    }>(
+      sql`SELECT status, resolved_at, waiting_since IS NOT NULL AS waiting
+          FROM helpdesk.conversation WHERE id = ${target.id}::uuid`
+    );
+    expect(row).toEqual({ status: 'open', resolved_at: null, waiting: true });
+  });
+
   it('refuses a merge into itself, into an unknown conversation, and from or into a merged one', async () => {
     const a = await open('carol', 'A');
     const b = await open('carol', 'B');
