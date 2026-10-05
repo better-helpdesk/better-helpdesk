@@ -535,6 +535,8 @@ it contains. Releases are published to npm with provenance through trusted
 publishing. The architecture is settled, though: embedded in the host, Next.js
 first, Postgres only, the host owns identity. A standalone server, a hosted
 mode or its own login are not planned.
+[`ROADMAP.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md)
+lists what Better Helpdesk will not do and what comes next.
 
 ## Contributing
 
