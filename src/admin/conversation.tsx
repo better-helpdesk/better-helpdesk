@@ -118,20 +118,28 @@ function readUnsent(key: string): Unsent {
   }
 }
 
+function writeUnsent(key: string, unsent: Unsent) {
+  try {
+    if (unsent.reply.trim() || unsent.note.trim())
+      sessionStorage.setItem(key, JSON.stringify(unsent));
+    else sessionStorage.removeItem(key);
+  } catch {}
+}
+
+const ASIDE_KEY = 'helpdesk.aside';
+
 function readAside(): boolean | null {
   try {
-    const stored = localStorage.getItem('helpdesk.aside');
+    const stored = localStorage.getItem(ASIDE_KEY);
     return stored === 'open' ? true : stored === 'closed' ? false : null;
   } catch {
     return null;
   }
 }
 
-function writeUnsent(key: string, unsent: Unsent) {
+function writeAside(open: boolean) {
   try {
-    if (unsent.reply.trim() || unsent.note.trim())
-      sessionStorage.setItem(key, JSON.stringify(unsent));
-    else sessionStorage.removeItem(key);
+    localStorage.setItem(ASIDE_KEY, open ? 'open' : 'closed');
   } catch {}
 }
 
@@ -232,9 +240,7 @@ export function ConversationView({ id }: { id: string }) {
   const toggleAside = () => {
     const open = !aside;
     setAside(open);
-    try {
-      localStorage.setItem('helpdesk.aside', open ? 'open' : 'closed');
-    } catch {}
+    writeAside(open);
     if (!open) asideToggle.current?.focus();
   };
 

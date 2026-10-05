@@ -1499,8 +1499,8 @@ describe('conversation shortcuts', () => {
 
 describe('details sidebar', () => {
   beforeEach(() => {
-    // Node 25 and later shadow jsdom's localStorage with one that is
-    // undefined unless Node runs with --localstorage-file.
+    // Newer Node versions shadow jsdom's localStorage with their own, which
+    // is undefined unless Node runs with --localstorage-file.
     vi.stubGlobal('localStorage', sessionStorage);
     window.history.replaceState(null, '', '/support/conversations/c1/');
   });
@@ -1511,9 +1511,6 @@ describe('details sidebar', () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(
       width
     );
-    onTestFinished(() => {
-      vi.restoreAllMocks();
-    });
   };
 
   it('starts hidden in a narrow container, opens, and stays open after a reload', async () => {
