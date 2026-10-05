@@ -142,6 +142,16 @@ export type HelpdeskEmail =
       body: string;
       url: string;
       reopened?: boolean;
+    }
+  | {
+      kind: 'agent-mention';
+      to: string;
+      locale: Locale;
+      reference: string;
+      subject: string;
+      body: string;
+      url: string;
+      authorName: string;
     };
 
 export type StorageAdapter = {

@@ -818,13 +818,15 @@ export function createHandler(support: Helpdesk) {
         .object({
           body: z.string().trim().min(1).max(20_000),
           internal: z.boolean().default(false),
+          notify: z.array(uuid).max(20).default([]),
         })
         .parse(await body());
       const message = await support.addAgentMessage(
         agent.id,
         conversation,
         data.body,
-        data.internal
+        data.internal,
+        data.notify
       );
       return json({ id: message.id }, 201);
     }
