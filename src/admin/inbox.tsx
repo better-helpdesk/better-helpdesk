@@ -17,7 +17,7 @@ export type ConversationRow = {
   waitingSince: string | null;
   lastMessageAt: string;
   assigneeId: string | null;
-  tags?: string[];
+  tags: string[];
   preview?: string | null;
   contact?: { id: string; name: string | null; email: string | null };
 };
@@ -414,7 +414,7 @@ export function ConversationTable({
                       <span className="sa-fine">
                         {t(`agentType.${c.type}`)} · {inboxName(c.inbox)}
                       </span>
-                      {c.tags && c.tags.length > 0 && (
+                      {c.tags.length > 0 && (
                         <span className="sa-tags">
                           {c.tags.map(name =>
                             onTag ? (
@@ -422,6 +422,7 @@ export function ConversationTable({
                                 key={name}
                                 type="button"
                                 className="sa-pill sa-tag"
+                                aria-label={`${t('admin.tagFilter')}: ${name}`}
                                 onClick={e => {
                                   e.stopPropagation();
                                   onTag(name);

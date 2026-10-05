@@ -56,6 +56,8 @@ says **conversation**. Each has:
 - A **subject**, what the customer called it and the only name they ever
   see, and a **title**, the team's name from triage or a rename, which
   agents see first.
+- **Tags**, free text the team adds, lower-cased and unique per
+  conversation; the inbox filters by one.
 - **Messages** by a `contact`, an `agent` or the `system`. An **internal**
   message is a note only agents see. **Attachments** go to the storage
   adapter; the package stores keys and metadata.

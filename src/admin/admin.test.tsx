@@ -176,7 +176,9 @@ describe('HelpdeskAdmin', () => {
       })
     );
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'billing' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Filter by tag: billing' })
+    );
     expect(window.location.search).toContain('tag=billing');
     expect(
       (screen.getByRole('combobox', { name: 'Tag' }) as HTMLInputElement).value
@@ -212,11 +214,13 @@ describe('HelpdeskAdmin', () => {
     })) as HTMLInputElement;
     expect(input.value).toBe('billing');
 
-    fireEvent.change(input, { target: { value: 'billing, Refunds,' } });
+    fireEvent.change(input, {
+      target: { value: 'billing, Refunds, BILLING,' },
+    });
     fireEvent.blur(input);
 
     await act(async () => {});
-    expect(patches).toEqual([{ tags: ['billing', 'Refunds'] }]);
+    expect(patches).toEqual([{ tags: ['billing', 'refunds'] }]);
   });
 
   it('marks the section it is in and scrolls that tab into the rail', async () => {

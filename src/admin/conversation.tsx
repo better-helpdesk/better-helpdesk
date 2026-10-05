@@ -829,11 +829,18 @@ function TagsEditor({
   const head = draft.slice(0, draft.lastIndexOf(',') + 1);
   const have = new Set(draft.split(',').map(s => s.trim().toLowerCase()));
   const commit = async () => {
-    const next = draft
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-    if (next.join() !== value.join()) await onSave(next);
+    const next = [
+      ...new Set(
+        draft
+          .split(',')
+          .map(s => s.trim().toLowerCase())
+          .filter(Boolean)
+      ),
+    ];
+    setDraft(next.join(', '));
+    if (next.join() === value.join()) return;
+    await onSave(next);
+    await top.refresh();
   };
   return (
     <>

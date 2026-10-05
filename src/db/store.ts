@@ -713,10 +713,10 @@ export function createStore(db: Db) {
         .limit(limit);
     },
 
-    // ponytail: counts over every conversation; window it on last_message_at if it slows the inbox.
+    // Counts over every conversation; window it on last_message_at if that slows the inbox.
     async topTags() {
       const result = await db.execute<{ tag: string }>(
-        sql`SELECT tag FROM ${conversations}, unnest(${conversations.tags}) AS tag WHERE ${conversations.tags} <> '{}' GROUP BY tag ORDER BY count(*) DESC, tag LIMIT 15`
+        sql`SELECT tag FROM ${conversations}, unnest(${conversations.tags}) AS tag GROUP BY tag ORDER BY count(*) DESC, tag LIMIT 15`
       );
       return result.rows.map(r => r.tag);
     },

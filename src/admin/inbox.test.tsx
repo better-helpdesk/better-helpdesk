@@ -19,6 +19,7 @@ const row = (id: string): ConversationRow => ({
   waitingSince: null,
   lastMessageAt: new Date().toISOString(),
   assigneeId: null,
+  tags: [],
 });
 
 const context = {
