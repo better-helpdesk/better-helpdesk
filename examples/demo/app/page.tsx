@@ -1,6 +1,7 @@
 import { HelpdeskWidget } from 'better-helpdesk/widget';
 
 import { currentRole } from '../lib/role';
+import { BrokenButton } from './broken-button';
 import { Bar, Foot, RoleSwitcher } from './chrome';
 
 export default async function Page() {
@@ -50,6 +51,11 @@ export default async function Page() {
                   reply shows up in the widget without a refresh.
                 </li>
                 <li>
+                  Press <BrokenButton />, then report a bug from the launcher.
+                  The form offers the error it just caught, and the inbox shows
+                  it beside the URL, viewport and app version.
+                </li>
+                <li>
                   Flip the dark switch. Both UIs follow, because they read the
                   same CSS custom properties this page sets.
                 </li>
@@ -69,7 +75,7 @@ export default async function Page() {
         </section>
       </main>
       <Foot />
-      <HelpdeskWidget inbox="support" locale="en" />
+      <HelpdeskWidget inbox="support" locale="en" appVersion="harbor@4.12.0" />
     </>
   );
 }

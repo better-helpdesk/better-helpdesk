@@ -27,7 +27,7 @@ if (!connectionString) {
 // exhausts the server's connections within a few minutes.
 const cache = globalThis as typeof globalThis & { demoPool?: pg.Pool };
 cache.demoPool ??= new pg.Pool({ connectionString });
-const pool = cache.demoPool;
+export const pool = cache.demoPool;
 
 /** Stable ids, so switching back and forth returns you to the same person. */
 const IDENTITIES = {
@@ -67,12 +67,14 @@ export const helpdesk = buildHelpdesk({
       title: { en: 'Harbor support' },
       replyPromise: { en: 'We answer within a few hours on weekdays.' },
       receipt: true,
+      privacyUrl: { en: '/privacy/' },
     },
     sales: {
       name: { en: 'Sales' },
       public: true,
       defaultPriority: 'high',
       title: { en: 'Talk to sales' },
+      privacyUrl: { en: '/privacy/' },
       qualify: {
         label: {
           en: 'How many shipments do you move a month?',
@@ -95,6 +97,16 @@ export const helpdesk = buildHelpdesk({
       },
     },
   },
+  // Where a real host would ask its billing system; the company card shows it.
+  resolveContext: async (externalOrgId): Promise<Record<string, string>> =>
+    externalOrgId === 'demo-org'
+      ? {
+          Plan: 'Growth, billed yearly',
+          'Shipments this month': '3,412 of 5,000',
+          Seats: '14 of 20',
+          'Customer since': 'March 2024',
+        }
+      : {},
   identify: async request => {
     const cookie = new RegExp(`(?:^|;\\s*)${ROLE_COOKIE}=([^;]*)`).exec(
       request.headers.get('cookie') ?? ''
