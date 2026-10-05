@@ -435,6 +435,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
         messageId: message.id,
         reopened: true,
       });
+      await store.recordEvents([
+        { conversationId: conversation.id, kind: 'reopened' },
+      ]);
     }
     await messageCreated(message);
   }
@@ -527,6 +530,21 @@ export function createHelpdesk(input: HelpdeskConfig) {
     await config.email.send(message);
   }
 
+  async function recordEmails(
+    conversation: Conversation,
+    kind: HelpdeskEmail['kind'],
+    to: string[]
+  ) {
+    if (!config.email || to.length === 0) return;
+    await store.recordEvents([
+      {
+        conversationId: conversation.id,
+        kind: 'email.sent',
+        data: { kind, to },
+      },
+    ]);
+  }
+
   async function agentRecipients(conversation: Conversation) {
     const team = (await store.mailableAgents(AGENT_IDLE_DAYS)).filter(
       a => a.email
@@ -557,7 +575,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
       const body = reopened
         ? ((await store.getMessage(String(payload.messageId)))?.body ?? '')
         : await firstCustomerText(conversation);
-      for (const agent of await agentRecipients(conversation)) {
+      const recipients = await agentRecipients(conversation);
+      for (const agent of recipients) {
         await sendEmail({
           kind: 'agent-new',
           ...(reopened && { reopened }),
@@ -572,6 +591,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
           url: agentUrl(conversation),
         });
       }
+      await recordEmails(
+        conversation,
+        'agent-new',
+        recipients.map(a => a.email as string)
+      );
     },
 
     async 'notify-customer'(payload) {
@@ -613,6 +637,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         replyTo: config.replyToAddress?.(ref),
         inReplyTo: inbound?.emailMessageId ?? undefined,
       });
+      await recordEmails(conversation, 'customer-reply', [contact.email]);
     },
 
     async 'send-receipt'(payload) {
@@ -644,6 +669,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
           config.inboxes[conversation.inbox]?.bookingUrl,
         replyTo: config.replyToAddress?.(ref),
       });
+      await recordEmails(conversation, 'customer-receipt', [contact.email]);
     },
 
     async 'ai-triage'(payload) {
@@ -683,7 +709,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
       );
       for (const conversation of due) {
         const body = await firstCustomerText(conversation);
-        for (const agent of await agentRecipients(conversation)) {
+        const recipients = await agentRecipients(conversation);
+        for (const agent of recipients) {
           await sendEmail({
             kind: 'agent-reminder',
             to: agent.email as string,
@@ -698,6 +725,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
           });
           sent++;
         }
+        await recordEmails(
+          conversation,
+          'agent-reminder',
+          recipients.map(a => a.email as string)
+        );
       }
     }
     return sent;
@@ -779,8 +811,17 @@ export function createHelpdesk(input: HelpdeskConfig) {
           { channel: 'email', externalId: from },
           mail.from.name
         );
-        if (contact.id !== author.id) {
-          await store.addParticipant(conversation.id, contact.id);
+        if (
+          contact.id !== author.id &&
+          (await store.addParticipant(conversation.id, contact.id))
+        ) {
+          await store.recordEvents([
+            {
+              conversationId: conversation.id,
+              kind: 'participant.added',
+              data: { contactId: contact.id },
+            },
+          ]);
         }
         const message = await store.appendMessage({
           conversationId: conversation.id,

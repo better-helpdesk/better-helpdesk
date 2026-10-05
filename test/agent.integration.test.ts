@@ -1255,3 +1255,184 @@ describe('snooze', () => {
     expect(await waiting()).toBe(0);
   });
 });
+
+describe('event timeline', () => {
+  type Event = {
+    kind: string;
+    data: Record<string, unknown>;
+    agentName: string | null;
+  };
+  const timeline = async (id: string) =>
+    (
+      await h.call('GET', `agent/conversations/${id}`, { user: 'agent' })
+    ).data.events.map(({ kind, data, agentName }: Event) => ({
+      kind,
+      data,
+      agentName,
+    }));
+  const patch = (id: string, body: Record<string, unknown>) =>
+    h.call('PATCH', `agent/conversations/${id}`, { user: 'agent', body });
+
+  beforeEach(() => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+  });
+
+  it('records a status change and an assignment as one row per changed key, by the agent', async () => {
+    const conversation = await open('ada');
+    const me = await h.call('GET', 'agent/me', { user: 'agent' });
+    const agentId = me.data.agent.id;
+    await patch(conversation.id, { status: 'pending', assigneeId: agentId });
+    await patch(conversation.id, { status: 'pending' });
+
+    expect(await timeline(conversation.id)).toEqual([
+      {
+        kind: 'assigneeId',
+        data: { from: null, to: agentId },
+        agentName: 'agent',
+      },
+      {
+        kind: 'status',
+        data: { from: 'open', to: 'pending' },
+        agentName: 'agent',
+      },
+    ]);
+    expect(
+      await rows(
+        sql`SELECT kind FROM helpdesk.conversation_event WHERE agent_id = ${agentId}::uuid ORDER BY created_at, kind`
+      )
+    ).toEqual([{ kind: 'assigneeId' }, { kind: 'status' }]);
+  });
+
+  it('records tags and a snooze that runJobs ends without an agent', async () => {
+    const conversation = await open('ada');
+    await patch(conversation.id, { tags: ['billing'] });
+    const until = new Date(Date.now() + 86_400_000).toISOString();
+    await patch(conversation.id, { snoozedUntil: until });
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.conversation SET snoozed_until = now() - interval '1 minute'`
+    );
+    const [due] = await rows<{ due: string }>(
+      sql`SELECT to_json(snoozed_until) #>> '{}' AS due FROM helpdesk.conversation`
+    );
+    await h.support.runJobs();
+
+    const events = (await timeline(conversation.id)).filter(
+      (e: Event) => e.kind !== 'email.sent'
+    );
+    expect(events).toEqual([
+      {
+        kind: 'tags',
+        data: { from: [], to: ['billing'] },
+        agentName: 'agent',
+      },
+      {
+        kind: 'snoozedUntil',
+        data: { from: null, to: until },
+        agentName: 'agent',
+      },
+      {
+        kind: 'status',
+        data: { from: 'open', to: 'pending' },
+        agentName: 'agent',
+      },
+      {
+        kind: 'snoozedUntil',
+        data: { from: new Date(due?.due ?? '').toISOString(), to: null },
+        agentName: null,
+      },
+      {
+        kind: 'status',
+        data: { from: 'pending', to: 'open' },
+        agentName: null,
+      },
+    ]);
+  });
+
+  it('records a reopen by the customer, the suggestion, a new participant once and the emails sent', async () => {
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    const conversation = await open('ada');
+    await h.runDueJobs();
+    await patch(conversation.id, { status: 'resolved' });
+    await h.call('POST', `widget/conversations/${conversation.id}/messages`, {
+      user: 'ada',
+      body: { body: 'still broken' },
+    });
+    await h.support.store.updateConversation(conversation.id, {
+      aiSuggestion: { type: 'bug' },
+    });
+    await h.call('POST', `agent/conversations/${conversation.id}/suggestion`, {
+      user: 'agent',
+      body: { action: 'dismiss' },
+    });
+    const bob = await h.support.store.createContact(
+      { name: 'Bob', email: 'bob@example.test' },
+      { channel: 'email', externalId: 'bob@example.test', verified: true }
+    );
+    for (let i = 0; i < 2; i++) {
+      await h.call(
+        'POST',
+        `agent/conversations/${conversation.id}/participants`,
+        { user: 'agent', body: { contactId: bob.id } }
+      );
+    }
+
+    expect(
+      (await timeline(conversation.id)).filter(
+        (e: Event) => e.kind !== 'status'
+      )
+    ).toEqual([
+      {
+        kind: 'email.sent',
+        data: { kind: 'agent-new', to: ['agent@devguard.test'] },
+        agentName: null,
+      },
+      { kind: 'reopened', data: {}, agentName: null },
+      { kind: 'suggestion.dismissed', data: {}, agentName: 'agent' },
+      {
+        kind: 'participant.added',
+        data: { contactId: bob.id },
+        agentName: 'agent',
+      },
+    ]);
+  });
+
+  it('records an accepted suggestion with the fields it changed', async () => {
+    const conversation = await open('ada');
+    await h.support.store.updateConversation(conversation.id, {
+      aiSuggestion: { priority: 'high' },
+    });
+    await h.call('POST', `agent/conversations/${conversation.id}/suggestion`, {
+      user: 'agent',
+      body: { action: 'accept' },
+    });
+    expect(await timeline(conversation.id)).toEqual([
+      {
+        kind: 'priority',
+        data: { from: 'normal', to: 'high' },
+        agentName: 'agent',
+      },
+      { kind: 'suggestion.accepted', data: {}, agentName: 'agent' },
+    ]);
+  });
+
+  it('is deleted with its conversation by retention', async () => {
+    const retained = createHarness({ retentionDays: 30 });
+    try {
+      const conversation = await open('ada');
+      await patch(conversation.id, { status: 'resolved' });
+      expect(
+        await rows(sql`SELECT 1 FROM helpdesk.conversation_event`)
+      ).toHaveLength(1);
+      await retained.support.store.db.execute(
+        sql`UPDATE helpdesk.conversation SET resolved_at = now() - interval '31 days'`
+      );
+      await retained.support.runJobs();
+      expect(
+        await rows(sql`SELECT 1 FROM helpdesk.conversation_event`)
+      ).toHaveLength(0);
+    } finally {
+      await retained.close();
+    }
+  });
+});

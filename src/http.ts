@@ -559,17 +559,23 @@ export function createHandler(support: Helpdesk) {
 
   agentRoute('GET', 'conversations/:id', async ({ params }) => {
     const conversation = await requireConversation(params.id);
-    const [contact, company, participants, messages, files, identities] =
-      await Promise.all([
-        store.getContact(conversation.contactId),
-        conversation.companyId
-          ? store.getCompany(conversation.companyId)
-          : null,
-        store.listParticipants(conversation.id),
-        store.listMessages(conversation.id, { includeInternal: true }),
-        store.listAttachments(conversation.id),
-        store.listIdentities(conversation.contactId),
-      ]);
+    const [
+      contact,
+      company,
+      participants,
+      messages,
+      files,
+      identities,
+      events,
+    ] = await Promise.all([
+      store.getContact(conversation.contactId),
+      conversation.companyId ? store.getCompany(conversation.companyId) : null,
+      store.listParticipants(conversation.id),
+      store.listMessages(conversation.id, { includeInternal: true }),
+      store.listAttachments(conversation.id),
+      store.listIdentities(conversation.contactId),
+      store.listEvents(conversation.id),
+    ]);
     const domain = contact?.email?.split('@')[1];
     // A contact already filed under a company is offered that one; only an
     // unfiled one falls back to its email domain.
@@ -597,6 +603,7 @@ export function createHandler(support: Helpdesk) {
         contactName: m.contactName,
       })),
       attachments: files,
+      events,
     });
   });
 
@@ -698,13 +705,22 @@ export function createHandler(support: Helpdesk) {
   agentRoute(
     'POST',
     'conversations/:id/participants',
-    async ({ params, body }) => {
+    async ({ params, body, agent }) => {
       const conversation = await requireConversation(params.id);
       const data = z.object({ contactId: uuid }).parse(await body());
       if (!(await store.getContact(data.contactId))) {
         throw new HelpdeskError(400, 'Unknown contact');
       }
-      await store.addParticipant(conversation.id, data.contactId);
+      if (await store.addParticipant(conversation.id, data.contactId)) {
+        await store.recordEvents([
+          {
+            conversationId: conversation.id,
+            agentId: agent.id,
+            kind: 'participant.added',
+            data: { contactId: data.contactId },
+          },
+        ]);
+      }
       return json({ ok: true });
     }
   );
@@ -728,6 +744,7 @@ export function createHandler(support: Helpdesk) {
       const conversation = await requireConversation(params.id);
       const suggestion = conversation.aiSuggestion;
       if (!suggestion) throw new HelpdeskError(404, 'No suggestion');
+      if (suggestion.acceptedAt) return json({ ok: true });
       const data = z
         .object({ action: z.enum(['accept', 'dismiss']) })
         .parse(await body());
@@ -744,6 +761,16 @@ export function createHandler(support: Helpdesk) {
         const updated = await store.updateConversation(conversation.id, patch);
         await emitUpdated(config, conversation, updated, patch, agent.id);
       }
+      await store.recordEvents([
+        {
+          conversationId: conversation.id,
+          agentId: agent.id,
+          kind:
+            data.action === 'accept'
+              ? 'suggestion.accepted'
+              : 'suggestion.dismissed',
+        },
+      ]);
       return json({ ok: true });
     }
   );

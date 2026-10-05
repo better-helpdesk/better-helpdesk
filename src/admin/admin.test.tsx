@@ -81,6 +81,7 @@ const routes: Record<string, unknown> = {
       },
     ],
     attachments: [],
+    events: [],
   },
   'agent/agents/': { agents: [] },
   'agent/canned/': { replies: [] },
@@ -509,6 +510,102 @@ describe('HelpdeskAdmin', () => {
       'Automatic reply'
     );
     expect(auto?.textContent).toContain('(evil.test)');
+  });
+
+  it('interleaves the conversation events with the messages as one line each', async () => {
+    const at = (minute: number) =>
+      new Date(Date.UTC(2026, 8, 1, 9, minute)).toISOString();
+    const event = (
+      minute: number,
+      kind: string,
+      data: Record<string, unknown> = {},
+      agent: string | null = 'a2'
+    ) => ({
+      id: `e${minute}`,
+      kind,
+      data,
+      agentId: agent,
+      agentName: agent === 'a2' ? 'Grace' : null,
+      createdAt: at(minute),
+    });
+    const until = at(50);
+    routes['agent/agents/'] = {
+      agents: [{ id: 'a2', name: 'Grace', email: 'grace@devguard.test' }],
+    };
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      participants: [{ id: 'p2', name: 'Bob', email: 'bob@example.test' }],
+      messages: [
+        {
+          id: 'm1',
+          authorType: 'contact',
+          body: 'The CSV export fails',
+          internal: false,
+          verified: true,
+          createdAt: at(0),
+          agentName: null,
+          contactName: 'Ada',
+        },
+        {
+          id: 'm2',
+          authorType: 'agent',
+          body: 'Looking into it',
+          internal: false,
+          verified: null,
+          createdAt: at(5),
+          agentName: 'Grace',
+          contactName: null,
+        },
+      ],
+      events: [
+        event(
+          1,
+          'email.sent',
+          { kind: 'agent-new', to: ['grace@devguard.test'] },
+          null
+        ),
+        event(2, 'assigneeId', { from: null, to: 'a2' }),
+        event(2, 'status', { from: 'open', to: 'pending' }),
+        event(6, 'tags', { from: ['billing'], to: ['vip'] }),
+        event(7, 'snoozedUntil', { from: null, to: until }),
+        event(8, 'status', { from: 'pending', to: 'open' }, null),
+        event(9, 'reopened', {}, null),
+        event(10, 'participant.added', { contactId: 'p2' }),
+        event(11, 'priority', { from: 'normal', to: 'urgent' }, 'gone'),
+        event(12, 'mystery'),
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+      routes['agent/agents/'] = { agents: [] };
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    const { container } = render(
+      <HelpdeskAdmin basePath="/support" locale="en" />
+    );
+    await screen.findByText('Looking into it');
+    await act(async () => {});
+
+    const thread = [
+      ...container.querySelectorAll('.sa-thread > article, .sa-thread > p'),
+    ].map(el =>
+      el.tagName === 'P'
+        ? (el.firstChild?.textContent ?? '')
+        : (el.querySelector('.sa-msg-body')?.textContent ?? '')
+    );
+    expect(thread).toEqual([
+      'The CSV export fails',
+      'New-conversation email sent to grace@devguard.test',
+      'Grace assigned this to Grace',
+      'Grace set the status to Waiting on customer',
+      'Looking into it',
+      'Grace added tags: vip · Grace removed tags: billing',
+      `Grace snoozed this until ${formatSnooze(until, 'en')}`,
+      'Status changed to Open',
+      'A customer reply reopened this',
+      'Grace added Bob',
+      'A former agent set the priority to Urgent',
+    ]);
   });
 
   it.each([

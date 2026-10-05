@@ -30,6 +30,7 @@ const {
   cannedReplies,
   companies,
   contacts,
+  conversationEvents,
   conversations,
   deals,
   identities,
@@ -581,11 +582,38 @@ export function createStore(db: Db) {
       return Boolean(row);
     },
 
+    /** True when the contact was not a participant before. */
     async addParticipant(conversationId: string, contactId: string) {
-      await db
+      const added = await db
         .insert(participants)
         .values({ conversationId, contactId })
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning({ contactId: participants.contactId });
+      return added.length > 0;
+    },
+
+    async recordEvents(values: (typeof conversationEvents.$inferInsert)[]) {
+      if (values.length === 0) return;
+      await db.insert(conversationEvents).values(values);
+    },
+
+    async listEvents(conversationId: string) {
+      return db
+        .select({
+          id: conversationEvents.id,
+          kind: conversationEvents.kind,
+          data: conversationEvents.data,
+          agentId: conversationEvents.agentId,
+          agentName: agents.name,
+          createdAt: conversationEvents.createdAt,
+        })
+        .from(conversationEvents)
+        .leftJoin(agents, eq(agents.id, conversationEvents.agentId))
+        .where(eq(conversationEvents.conversationId, conversationId))
+        .orderBy(
+          asc(conversationEvents.createdAt),
+          asc(conversationEvents.kind)
+        );
     },
 
     async listParticipants(conversationId: string) {

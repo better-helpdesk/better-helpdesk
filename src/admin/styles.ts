@@ -172,6 +172,7 @@ export const adminCss = `
 .sa-details pre { white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; font-size: 12px; max-height: 160px; overflow: auto; background: var(--a-subtle); padding: 8px; border-radius: 6px; }
 
 .sa-thread { display: grid; gap: 14px; }
+.sa-event { margin: 0; text-align: center; color: var(--a-muted); font-size: 12px; text-wrap: balance; }
 .sa .rich { display: grid; gap: 6px; }
 .sa .rich p, .sa .rich ul, .sa .rich ol { margin: 0; }
 .sa .rich ul { padding-left: 20px; list-style: disc; }

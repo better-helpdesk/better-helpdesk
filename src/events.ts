@@ -30,6 +30,17 @@ export async function emit(config: HelpdeskConfig, event: HelpdeskEvent) {
   }
 }
 
+const TRACKED = [
+  'status',
+  'priority',
+  'assigneeId',
+  'type',
+  'inbox',
+  'title',
+  'tags',
+  'snoozedUntil',
+] as const;
+
 /** Reports the `patch` keys whose stored value changed; the patch itself may hold SQL such as `now()`. */
 export async function emitUpdated(
   config: HelpdeskConfig,
@@ -46,6 +57,14 @@ export async function emitUpdated(
       .map(key => [key, old[key]])
   );
   if (Object.keys(before).length === 0) return;
+  await config.db.recordEvents(
+    TRACKED.filter(key => Object.hasOwn(before, key)).map(key => ({
+      conversationId: updated.id,
+      agentId,
+      kind: key,
+      data: { from: before[key] ?? null, to: updated[key] ?? null },
+    }))
+  );
   await emit(config, {
     kind: 'conversation.updated',
     conversation: updated,
