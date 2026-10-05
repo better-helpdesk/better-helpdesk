@@ -15,18 +15,20 @@ export function CodeBlock({ text, t }: { text: string; t: Translate }) {
   }, [status]);
 
   const copy = async () => {
-    // Emptied first, so a second copy is announced again.
     setStatus(null);
+    let next: 'copied' | 'select' = 'copied';
     try {
       await navigator.clipboard.writeText(text);
-      setStatus('copied');
     } catch {
       // No clipboard on an insecure page, or permission refused: select the
       // code so a keyboard copy takes exactly it.
       const node = pre.current;
       if (node) selectionIn(node)?.selectAllChildren(node);
-      setStatus('select');
+      next = 'select';
     }
+    // A tick after emptying it, so a second copy is announced again even when
+    // the clipboard failed without waiting.
+    setTimeout(() => setStatus(next));
   };
 
   return (

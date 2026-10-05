@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,10 +22,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const clickCopy = () =>
-  act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
-  });
+const clickCopy = async () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+  await waitFor(() =>
+    expect(screen.getByRole('status').textContent).not.toBe('')
+  );
+};
 
 describe('CodeBlock', () => {
   it('shows hostile code as inert text inside a message', () => {
@@ -72,6 +75,20 @@ describe('CodeBlock', () => {
     render(<CodeBlock text="ls -la" t={t} />);
     await clickCopy();
     expect(document.getSelection()?.toString()).toBe('ls -la');
+    expect(screen.getByRole('status').textContent).toBe('Press Ctrl+C to copy');
+  });
+
+  it('announces a second copy without a clipboard again', async () => {
+    vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
+    render(<CodeBlock text="ls -la" t={t} />);
+    await clickCopy();
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    });
+    expect(screen.getByRole('status').textContent).toBe('');
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).not.toBe('')
+    );
     expect(screen.getByRole('status').textContent).toBe('Press Ctrl+C to copy');
   });
 });
