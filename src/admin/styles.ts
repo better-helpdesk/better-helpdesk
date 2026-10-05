@@ -305,6 +305,14 @@ export const adminCss = `
 .sa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .sa-error { color: var(--a-danger); }
 .sa-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--a-danger) 30%, var(--a-border)); border-radius: var(--a-radius); background: color-mix(in srgb, var(--a-danger) 6%, var(--a-bg)); color: var(--a-danger); }
+.sa-stats { margin: 0; }
+.sa-page-head .sa-grow { flex: 1; }
+.sa-stats dd { margin: 0; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sa-report { min-width: 560px; }
+.sa-card .sa-table-wrap:has(.sa-report) { overflow-x: auto; }
+.sa-report tbody tr { cursor: default; }
+.sa-report tbody tr:hover td { background: none; }
+.sa-report :is(th, td) + :is(th, td) { text-align: right; font-variant-numeric: tabular-nums; }
 .sa-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--a-accent); color: var(--a-accent-fg); padding: 8px 14px; border-radius: var(--a-r-control); font-size: 13px; z-index: 50; }
 .sa-toast:empty { padding: 0; }
 .sa-notice .sa-btn { color: var(--a-fg); }

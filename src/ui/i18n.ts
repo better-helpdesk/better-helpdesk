@@ -343,6 +343,20 @@ const en = {
   'admin.verified': 'Verified',
   'admin.unverified': 'Unverified',
   'admin.automated': 'Automatic reply',
+  'admin.overview': 'Overview',
+  'admin.period': 'Period',
+  'admin.lastDays': 'Last {count} days',
+  'admin.newCount': 'New',
+  'admin.resolvedCount': 'Resolved',
+  'admin.firstResponse': 'Median first response',
+  'admin.resolutionTime': 'Median resolution',
+  'admin.byInbox': 'By inbox',
+  'admin.byAgent': 'By assignee',
+  'admin.topTags': 'Top tags',
+  'admin.overviewOpenHours':
+    'Inboxes with business hours count open hours only.',
+  'admin.emptyOverview':
+    'No conversations were opened or resolved in this period.',
   'admin.teamTitle': 'Team',
   'admin.teamHint':
     'Everyone here gets new conversations by email. Remove someone who no longer answers; opening the admin again adds them back.',
@@ -768,6 +782,20 @@ const de: Record<MessageKey, string> = {
   'admin.verified': 'Verifiziert',
   'admin.unverified': 'Nicht verifiziert',
   'admin.automated': 'Automatische Antwort',
+  'admin.overview': 'Übersicht',
+  'admin.period': 'Zeitraum',
+  'admin.lastDays': 'Letzte {count} Tage',
+  'admin.newCount': 'Neu',
+  'admin.resolvedCount': 'Gelöst',
+  'admin.firstResponse': 'Median erste Antwort',
+  'admin.resolutionTime': 'Median Lösungszeit',
+  'admin.byInbox': 'Nach Posteingang',
+  'admin.byAgent': 'Nach Zuständigkeit',
+  'admin.topTags': 'Häufigste Tags',
+  'admin.overviewOpenHours':
+    'Posteingänge mit Geschäftszeiten zählen nur die Öffnungszeiten.',
+  'admin.emptyOverview':
+    'In diesem Zeitraum wurden keine Unterhaltungen eröffnet oder gelöst.',
   'admin.teamTitle': 'Team',
   'admin.teamHint':
     'Alle hier erhalten neue Konversationen per E-Mail. Entfernen Sie, wer nicht mehr antwortet; wer den Admin wieder öffnet, ist wieder dabei.',
@@ -886,10 +914,13 @@ export function nextWorkday(date: Date) {
 }
 
 export function duration(since: string | Date, locale: Locale) {
-  const minutes = Math.max(
-    0,
-    Math.round((Date.now() - new Date(since).getTime()) / 60_000)
+  return formatMinutes(
+    Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / 60_000)),
+    locale
   );
+}
+
+export function formatMinutes(minutes: number, locale: Locale) {
   const [value, unit] =
     minutes < 60
       ? [minutes, 'minute']

@@ -24,7 +24,7 @@ import { formatReference, parseReference } from './domain';
 import { emit, emitUpdated } from './events';
 import { verifyIdentityToken } from './identity-token';
 import { plainText } from './rich';
-import { nextOpening, openCutoff } from './ui/hours';
+import { nextOpening, openCutoff, openHoursBetween } from './ui/hours';
 import { nextWorkday } from './ui/i18n';
 import { unlabelLinks } from './ui/rich';
 
@@ -1273,6 +1273,71 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return report;
   }
 
+  /** Volume and median reply and resolution times; open hours only for inboxes with business hours. */
+  async function overview(sinceDays: number) {
+    // ponytail: every conversation in the window comes into memory so open hours can apply per inbox; move the plain-clock medians into SQL if a window reaches tens of thousands.
+    const rows = await store.overview(sinceDays);
+    const since = Date.now() - sinceDays * 86_400_000;
+    const span = (inbox: string, from: Date, to: Date) => {
+      const hours = config.inboxes[inbox]?.hours;
+      return hours
+        ? openHoursBetween(from, to, hours)
+        : (to.getTime() - from.getTime()) / 3_600_000;
+    };
+    const summarize = (group: typeof rows) => {
+      const opened = group.filter(r => r.createdAt.getTime() >= since);
+      const resolved = group.filter(
+        r => r.resolvedAt && r.resolvedAt.getTime() >= since
+      );
+      return {
+        new: opened.length,
+        resolved: resolved.length,
+        firstResponse: median(
+          opened.flatMap(r =>
+            r.firstReplyAt ? [span(r.inbox, r.createdAt, r.firstReplyAt)] : []
+          )
+        ),
+        resolution: median(
+          resolved.map(r => span(r.inbox, r.createdAt, r.resolvedAt as Date))
+        ),
+      };
+    };
+    const groupBy = (key: (r: (typeof rows)[number]) => string) => {
+      const groups = new Map<string, typeof rows>();
+      for (const r of rows)
+        groups.set(key(r), [...(groups.get(key(r)) ?? []), r]);
+      return [...groups.values()];
+    };
+    const tags = new Map<string, number>();
+    for (const r of rows)
+      if (r.createdAt.getTime() >= since)
+        for (const tag of r.tags) tags.set(tag, (tags.get(tag) ?? 0) + 1);
+    const rated = rows.filter(r => r.ratedAt && r.ratedAt.getTime() >= since);
+    return {
+      openHours: rows.some(r => config.inboxes[r.inbox]?.hours),
+      ratings: rated.length
+        ? {
+            good: rated.filter(r => r.rating === 'good').length,
+            bad: rated.filter(r => r.rating === 'bad').length,
+          }
+        : null,
+      total: summarize(rows),
+      inboxes: groupBy(r => r.inbox).map(g => ({
+        inbox: g[0]?.inbox as string,
+        ...summarize(g),
+      })),
+      agents: groupBy(r => r.assigneeId ?? '').map(g => ({
+        agentId: g[0]?.assigneeId ?? null,
+        name: g[0]?.agentName ?? null,
+        ...summarize(g),
+      })),
+      tags: [...tags]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 10)
+        .map(([tag, count]) => ({ tag, count })),
+    };
+  }
+
   return {
     config,
     store,
@@ -1301,7 +1366,18 @@ export function createHelpdesk(input: HelpdeskConfig) {
     companyContext,
     linkVerified,
     toLocale,
+    overview,
   };
+}
+
+/** The median as Postgres' `percentile_cont(0.5)` has it: the middle two averaged. */
+function median(values: number[]) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2
+    ? (sorted[mid] as number)
+    : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
 }
 
 export type Helpdesk = ReturnType<typeof createHelpdesk>;

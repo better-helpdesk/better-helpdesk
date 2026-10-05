@@ -539,6 +539,14 @@ export function createHandler(support: Helpdesk) {
     return json({ ok: true });
   });
 
+  agentRoute('GET', 'overview', async ({ url }) => {
+    const days = z
+      .enum(['7', '30', '90'])
+      .catch('30')
+      .parse(url.searchParams.get('days'));
+    return json(await support.overview(Number(days)));
+  });
+
   agentRoute('PATCH', 'me', async ({ agent, body }) => {
     const data = z
       .object({ awayUntil: z.iso.datetime({ offset: true }).nullable() })

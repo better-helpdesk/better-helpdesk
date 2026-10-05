@@ -886,6 +886,41 @@ export function createStore(db: Db) {
       return result.rows.map(r => r.tag);
     },
 
+    /** Conversations opened, resolved or rated in the last `sinceDays`, with their first public agent reply; merged-away ones are left out. */
+    async overview(sinceDays: number) {
+      const since = sql`now() - make_interval(days => ${sinceDays})`;
+      const result = await db.execute<{
+        inbox: string;
+        assignee_id: string | null;
+        agent_name: string | null;
+        agent_email: string | null;
+        tags: string[];
+        rating: 'good' | 'bad' | null;
+        rated_at: string | null;
+        created_at: string;
+        first_reply_at: string | null;
+        resolved_at: string | null;
+      }>(sql`
+        SELECT c.inbox, c.assignee_id, a.name AS agent_name, a.email AS agent_email, c.tags,
+          c.rating, c.rated_at, c.created_at, c.resolved_at,
+          (SELECT min(m.created_at) FROM ${messages} m
+            WHERE m.conversation_id = c.id AND m.author_type = 'agent' AND NOT m.internal) AS first_reply_at
+        FROM ${conversations} c LEFT JOIN ${agents} a ON a.id = c.assignee_id
+        WHERE c.merged_into_id IS NULL
+          AND (c.created_at >= ${since} OR c.resolved_at >= ${since} OR c.rated_at >= ${since})`);
+      return result.rows.map(r => ({
+        inbox: r.inbox,
+        assigneeId: r.assignee_id,
+        agentName: r.agent_name ?? r.agent_email,
+        tags: r.tags,
+        rating: r.rating,
+        ratedAt: r.rated_at ? new Date(r.rated_at) : null,
+        createdAt: new Date(r.created_at),
+        firstReplyAt: r.first_reply_at ? new Date(r.first_reply_at) : null,
+        resolvedAt: r.resolved_at ? new Date(r.resolved_at) : null,
+      }));
+    },
+
     // Copies `last_message_at`, not `now()`: `now()` is the transaction start, so a
     // customer message committing concurrently could predate it and never read as unread.
     async markAgentSeen(id: string) {
