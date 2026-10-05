@@ -223,6 +223,76 @@ describe('jobs and email', () => {
     expect(h.emails.filter(e => e.kind === 'customer-reply')).toEqual([]);
   });
 
+  it('emails each agent mentioned in a note, once, and not the author', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+    h.addUser('bea', { isAgent: true, email: 'bea@devguard.test' });
+    h.addUser('cy', { isAgent: true, email: 'cy@devguard.test' });
+    const ids: Record<string, string> = {};
+    for (const user of ['agent', 'bea', 'cy']) {
+      ids[user] = (await h.call('GET', 'agent/me', { user })).data.agent.id;
+    }
+    const conversation = await open('ada');
+    const res = await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/messages`,
+      {
+        user: 'agent',
+        body: {
+          body: '@bea @cy can you look at this?',
+          internal: true,
+          notify: [ids.bea, ids.cy, ids.bea, ids.agent],
+        },
+      }
+    );
+    expect(res.status).toBe(201);
+    await h.runDueJobs();
+    const mentions = h.emails.filter(e => e.kind === 'agent-mention');
+    expect(mentions.map(e => e.to).sort()).toEqual([
+      'bea@devguard.test',
+      'cy@devguard.test',
+    ]);
+    expect(mentions[0]).toEqual(
+      expect.objectContaining({
+        reference: conversation.reference,
+        subject: 'How do I export?',
+        body: '@bea @cy can you look at this?',
+        authorName: 'agent',
+        url: expect.stringContaining(conversation.id),
+      })
+    );
+    const detail = await h.call(
+      'GET',
+      `agent/conversations/${conversation.id}`,
+      {
+        user: 'agent',
+      }
+    );
+    expect(
+      detail.data.events.find((e: { kind: string }) => e.kind === 'mentioned')
+        ?.data
+    ).toEqual({ agentIds: [ids.bea, ids.cy] });
+  });
+
+  it('refuses more than 20 mentions', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await open('ada');
+    const res = await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/messages`,
+      {
+        user: 'agent',
+        body: {
+          body: 'Everyone',
+          internal: true,
+          notify: Array.from({ length: 21 }, () => randomUUID()),
+        },
+      }
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('reminds agents once about a customer left waiting', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });

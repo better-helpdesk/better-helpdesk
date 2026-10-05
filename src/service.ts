@@ -507,7 +507,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
     agentId: string,
     conversation: Conversation,
     body: string,
-    internal: boolean
+    internal: boolean,
+    notify: string[] = []
   ) {
     const message = await store.appendMessage({
       conversationId: conversation.id,
@@ -522,6 +523,24 @@ export function createHelpdesk(input: HelpdeskConfig) {
         { messageId: message.id },
         { runAt: new Date(Date.now() + 2 * 60_000) }
       );
+    }
+    const team = notify.length > 0 ? await store.listAgents() : [];
+    const agentIds = team
+      .filter(a => a.id !== agentId && notify.includes(a.id))
+      .map(a => a.id);
+    if (agentIds.length > 0) {
+      await store.recordEvents([
+        {
+          conversationId: conversation.id,
+          agentId,
+          kind: 'mentioned',
+          data: { agentIds },
+        },
+      ]);
+      await store.enqueueJob('notify-mentioned', {
+        messageId: message.id,
+        agentIds,
+      });
     }
     await messageCreated(message);
     return message;
@@ -611,6 +630,37 @@ export function createHelpdesk(input: HelpdeskConfig) {
       await recordEmails(
         conversation,
         reopened ? 'agent-reopened' : 'agent-new',
+        recipients.map(a => a.email as string)
+      );
+    },
+
+    async 'notify-mentioned'(payload) {
+      const message = await store.getMessage(String(payload.messageId));
+      const conversation =
+        message && (await store.getConversation(message.conversationId));
+      if (!message || !conversation) return;
+      const ids = payload.agentIds as string[];
+      const team = await store.listAgents();
+      const recipients = team.filter(a => a.email && ids.includes(a.id));
+      const author = team.find(a => a.id === message.agentId);
+      for (const agent of recipients) {
+        await sendEmail({
+          kind: 'agent-mention',
+          to: agent.email as string,
+          locale: 'en',
+          reference: reference(conversation),
+          subject:
+            conversation.title ??
+            conversation.subject ??
+            truncate(plainText(message.body.slice(0, 2000)), 80),
+          body: truncate(message.body, 1000),
+          url: agentUrl(conversation),
+          authorName: author?.name ?? author?.email ?? '',
+        });
+      }
+      await recordEmails(
+        conversation,
+        'agent-mention',
         recipients.map(a => a.email as string)
       );
     },

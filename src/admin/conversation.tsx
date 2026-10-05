@@ -182,6 +182,9 @@ export function ConversationView({ id }: { id: string }) {
   const setInternal = (next: boolean) =>
     setUnsent(d => ({ ...d, internal: next }));
   const [slashIndex, setSlashIndex] = useState(0);
+  const [mentioned, setMentioned] = useState<{ id: string; label: string }[]>(
+    []
+  );
   const [busy, setBusy] = useState<'send' | 'draft' | null>(null);
   const [error, setError] = useState<'send' | 'resolve' | 'action' | null>(
     null
@@ -254,8 +257,11 @@ export function ConversationView({ id }: { id: string }) {
     setBusy('send');
     setError(null);
     try {
+      const notify = internal
+        ? mentioned.filter(m => body.includes(`@${m.label}`)).map(m => m.id)
+        : [];
       await api(`agent/conversations/${id}/messages`, {
-        body: { body, internal },
+        body: { body, internal, ...(notify.length > 0 && { notify }) },
       });
     } catch {
       setError('send');
@@ -267,6 +273,7 @@ export function ConversationView({ id }: { id: string }) {
     const mode = internal ? 'note' : 'reply';
     writeUnsent(unsentKey, { ...readUnsent(unsentKey), [mode]: '' });
     setUnsent(d => ({ ...d, [mode]: '' }));
+    if (internal) setMentioned([]);
     try {
       if (resolve) await patch({ status: 'resolved' });
       else await detail.refresh();
@@ -294,6 +301,25 @@ export function ConversationView({ id }: { id: string }) {
         )
         .slice(0, 6)
     : [];
+  const at = internal ? /(?:^|\s)@([^\s@]*)$/.exec(body) : null;
+  const query = at?.[1]?.toLowerCase() ?? '';
+  // The editor trims the space after an inserted name; a finished mention stays closed.
+  const finished = mentioned.some(m => m.label.toLowerCase() === query);
+  const atMatches =
+    at && !finished
+      ? (agents.data?.agents ?? [])
+          .filter(a => a.id !== me.agent.id)
+          .map(a => ({ id: a.id, label: a.name ?? a.email ?? '' }))
+          .filter(a => a.label.toLowerCase().includes(query))
+          .slice(0, 6)
+      : [];
+  const mention = (agent: { id: string; label: string }) => {
+    setBody(current => current.replace(/@[^\s@]*$/, `@${agent.label} `));
+    setMentioned(list =>
+      list.some(m => m.id === agent.id) ? list : [...list, agent]
+    );
+  };
+  const picks = slashMatches.length > 0 ? slashMatches : atMatches;
   const insert = (text: string) => {
     setBody(current =>
       /^\/\S*$/.test(current) || !current ? text : `${current}\n\n${text}`
@@ -421,6 +447,11 @@ export function ConversationView({ id }: { id: string }) {
           ? t('event.participantAuto', { contact })
           : t('event.participantAutoUnknown');
       }
+      case 'mentioned':
+        return t('event.mentioned', {
+          name,
+          to: ((e.data.agentIds ?? []) as string[]).map(agentLabel).join(', '),
+        });
       case 'email.sent':
         return t(`event.email.${e.data.kind}`, {
           to: ((to ?? []) as string[]).join(', '),
@@ -680,21 +711,24 @@ export function ConversationView({ id }: { id: string }) {
                 setSlashIndex(0);
               }}
               onKeyDown={e => {
-                if (slashMatches.length > 0) {
+                if (picks.length > 0) {
                   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                     e.preventDefault();
                     const step = e.key === 'ArrowDown' ? 1 : -1;
                     setSlashIndex(
-                      i =>
-                        (i + step + slashMatches.length) % slashMatches.length
+                      i => (i + step + picks.length) % picks.length
                     );
                     return;
                   }
-                  const picked = slashMatches[slashIndex];
-                  if (e.key === 'Enter' && picked) {
-                    e.preventDefault();
-                    insert(fill(picked.body));
-                    return;
+                  if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+                    const canned = slashMatches[slashIndex];
+                    const agent = atMatches[slashIndex];
+                    if (canned) insert(fill(canned.body));
+                    else if (agent) mention(agent);
+                    if (canned || agent) {
+                      e.preventDefault();
+                      return;
+                    }
                   }
                 }
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -723,6 +757,26 @@ export function ConversationView({ id }: { id: string }) {
                       <span className="sa-pill">{r.locale.toUpperCase()}</span>
                     )}
                     <span className="sa-fine">{plainText(r.body)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {slashMatches.length === 0 && atMatches.length > 0 && (
+              <div
+                className="sa-slash"
+                role="listbox"
+                aria-label={t('admin.mentionAgent')}>
+                {atMatches.map((a, index) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    role="option"
+                    aria-selected={index === slashIndex}
+                    onMouseDown={e => {
+                      e.preventDefault();
+                      mention(a);
+                    }}>
+                    <strong>{a.label}</strong>
                   </button>
                 ))}
               </div>

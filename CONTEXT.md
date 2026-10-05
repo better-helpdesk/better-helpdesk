@@ -88,10 +88,11 @@ is on the deal; they are different ladders.
 
 ## Email
 
-- **Outbound** goes through the host's `email.send` adapter as one of four
+- **Outbound** goes through the host's `email.send` adapter as one of five
   `HelpdeskEmail` kinds: `customer-reply`, `customer-receipt` (the
-  acknowledgement a visitor gets when the inbox has `receipt`), `agent-new`
-  and `agent-reminder`.
+  acknowledgement a visitor gets when the inbox has `receipt`), `agent-new`,
+  `agent-reminder` and `agent-mention` (to a teammate picked with `@` in an
+  internal note).
 - **Inbound** arrives when a **relay** (any forwarder; `relays/` has a
   Cloudflare Email Worker) POSTs the raw message to `{basePath}/inbound/`
   with `inboundWebhookSecret`. `src/inbound/` parses it and checks DKIM;
