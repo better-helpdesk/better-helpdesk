@@ -143,8 +143,8 @@ export function PartnerForm({ api }: { api: string }) {
         <input id="p-trap" name="website" tabIndex={-1} autoComplete="off" />
       </label>
       <label className="chk" htmlFor="p-listed">
-        <input id="p-listed" name="listed" type="checkbox" /> You may list our
-        name and logo as a supporter.
+        <input id="p-listed" name="listed" type="checkbox" defaultChecked /> You
+        may list our name and logo as a supporter.
       </label>
       <p className="f-note">
         Rolling it out for a real team? Say so in your story. Design partners

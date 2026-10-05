@@ -346,11 +346,11 @@ export default function Home() {
 
         <section className="sec status" id="status" aria-labelledby="st-h">
           <div className="st-l">
-            <h2 id="st-h">Pre-1.0, and honest about it.</h2>
+            <h2 id="st-h">Young code, grown-up CI.</h2>
             <p className="sub">
-              v0.2.2, first published on 28 September 2026. Releases ship when
-              they are ready, and feedback from design partners sets the
-              roadmap.
+              v0.2.2, first published on 28 September 2026. Nothing merges until
+              it passes every check below, and the design partners about to run
+              it in production decide what ships next.
             </p>
             <ul className="checks" aria-label="Every pull request passes">
               <li>
@@ -368,7 +368,13 @@ export default function Home() {
             </a>
             <Sponsor />
           </div>
-          <PartnerForm api={API} />
+          <div className="st-r">
+            <PartnerForm api={API} />
+            <p className="f-note">
+              This form runs on Better Helpdesk: your story goes straight into
+              our inbox.
+            </p>
+          </div>
         </section>
 
         <section className="cont" aria-labelledby="ct-h">
@@ -384,20 +390,17 @@ export default function Home() {
               back to your Postgres. Join the private list to hear about it
               first and help decide what it becomes.
             </p>
-            <p className="f-note">
-              Not built yet. The open-source package will never depend on it. No
-              newsletter, only news about this.
-            </p>
           </div>
           <ContinuityForm api={API} />
+          <p className="f-note cont-note">
+            Not built yet. The open-source package will never depend on it. No
+            newsletter, only news about this.
+          </p>
         </section>
 
         <section className="sec faq" id="faq" aria-labelledby="fq-h">
-          <div className="sh split rv">
+          <div className="sh rv">
             <h2 id="fq-h">Before you depend on it.</h2>
-            <p className="sub">
-              The questions a CTO and a head of support ask first.
-            </p>
           </div>
           <div className="faq-grid">
             <div className="qa">

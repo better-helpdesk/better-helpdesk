@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { PiArrowUpRightBold } from 'react-icons/pi';
 
-import { Install } from '../components/copy';
 import { highlight } from '../components/highlight';
 import { ButtonIcon } from '../components/icons';
 import { SiteFooter, SiteHeader } from '../components/site-chrome';
@@ -109,9 +108,6 @@ export default function Quickstart() {
             Seven steps in an existing Next.js app. You need Node 20, PostgreSQL
             14, React 19 and Next.js 15 or newer.
           </p>
-          <div className="hero-cta">
-            <Install />
-          </div>
         </section>
         <ol className="qs-steps">
           {STEPS.map((step, i) => (

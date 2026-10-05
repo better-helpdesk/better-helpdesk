@@ -45,9 +45,6 @@ export function SiteFooter() {
       </div>
       <ul>
         <li>
-          <a href="/quickstart/">Quickstart</a>
-        </li>
-        <li>
           <a className="f-ico" href={REPO}>
             <SiGithub aria-hidden="true" />
             GitHub
@@ -60,6 +57,9 @@ export function SiteFooter() {
             <SiNpm aria-hidden="true" />
             npm
           </a>
+        </li>
+        <li>
+          <a href="/quickstart/">Quickstart</a>
         </li>
         <li>
           <a href={`${REPO}/releases`}>Changelog</a>

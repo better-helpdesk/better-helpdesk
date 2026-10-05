@@ -295,6 +295,7 @@ main,
 .inst b {
   color: var(--mint);
   font-weight: 400;
+  line-height: 1.6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2127,6 +2128,11 @@ dd.err {
   gap: clamp(32px, 5vw, 64px);
   align-items: start;
 }
+.st-r {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
 .st-l {
   display: grid;
   gap: 18px;
@@ -2219,9 +2225,40 @@ dd.err {
   font-weight: 400;
   color: var(--fg-2);
 }
-.chk input {
-  margin-top: 3px;
-  accent-color: var(--mint);
+.chk input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  margin: 1px 0 0;
+  border-radius: 10px;
+  background: var(--s4);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+.chk input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--fg-2);
+  transition: transform 0.15s var(--ease);
+}
+.chk input[type="checkbox"]:checked {
+  background: var(--mint);
+}
+.chk input[type="checkbox"]:checked::before {
+  background: var(--bg);
+  transform: translateX(16px);
+}
+.chk input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
 }
 .f-msg {
   font-size: 13.5px;
@@ -2230,6 +2267,9 @@ dd.err {
 .f-note {
   font-size: 12.5px;
   color: var(--fg-3);
+}
+.st-r > .f-note {
+  padding-inline: 4px;
 }
 .trap {
   position: absolute;
@@ -2532,7 +2572,9 @@ dd.err {
 /* Hero wall: fixed tiles so every identicon cell is whole pixels. */
 .wall {
   grid-template-columns: repeat(7, 72px);
-  justify-content: end;
+}
+.wall-w {
+  justify-self: end;
 }
 @media (max-width: 1240px) {
   .wall {
@@ -2542,7 +2584,9 @@ dd.err {
 @media (max-width: 900px) {
   .wall {
     grid-template-columns: repeat(5, 60px);
-    justify-content: start;
+  }
+  .wall-w {
+    justify-self: start;
   }
 }
 
@@ -3098,6 +3142,10 @@ kbd.on {
   position: relative;
   min-height: 560px;
   padding-bottom: 104px;
+  grid-template-rows: auto 1fr;
+}
+.wcol .wpanel {
+  align-self: end;
 }
 .wcol .launch {
   position: absolute;
@@ -3206,34 +3254,56 @@ kbd.on {
   margin-top: 4px;
 }
 .cont {
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 340px);
+  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-areas: "face copy" "face form" "face note";
+  gap: 24px 32px;
   align-items: start;
-  gap: 32px;
-  padding: 32px;
+  padding: clamp(24px, 4vw, 48px);
+  max-width: 940px;
+  margin-inline: auto;
+}
+.cont-face {
+  grid-area: face;
+  width: 72px;
+  height: 72px;
 }
 .cont-copy {
+  grid-area: copy;
   display: grid;
   gap: 12px;
+  max-width: 64ch;
 }
 .cont-copy h2 {
   font: 800 clamp(1.6rem, 1.1rem + 1.6vw, 2.4rem) / 1 var(--f-dot);
   text-transform: uppercase;
 }
+.cont-form,
+.cont-ok {
+  grid-area: form;
+}
+.cont-note {
+  grid-area: note;
+  margin-top: -8px;
+}
 .cont-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  align-content: start;
+  max-width: 560px;
 }
 .cont-form input[type="email"] {
+  height: 52px;
   width: 100%;
   border: 0;
+  border-radius: 4px;
+  padding: 0 18px;
   background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--fg);
-  font: 400 15px / 1.4 var(--f-b);
-  padding: 12px 14px;
-  border-radius: 4px;
+  font: 400 16px / 1 var(--f-b);
+}
+.cont-form input[type="email"]::placeholder {
+  color: var(--fg-3);
 }
 .cont-form input[type="email"]:focus {
   outline: none;
@@ -3242,6 +3312,19 @@ kbd.on {
 .cont-form input[aria-invalid="true"] {
   box-shadow: inset 0 0 0 2px var(--late);
 }
+.cont-form .btn {
+  height: 52px;
+  font-size: 15px;
+  padding-left: 22px;
+}
+.cont-form .btn .bi {
+  width: 40px;
+  height: 40px;
+}
+.cont-form .btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
 .cont-form .chk,
 .cont-form .f-msg {
   grid-column: 1 / -1;
@@ -3249,23 +3332,30 @@ kbd.on {
 .cont-form .chk {
   display: flex;
   gap: 10px;
+  margin-top: 8px;
   font-size: 14px;
   color: var(--fg-2);
-}
-.cont-form .chk input {
-  accent-color: var(--mint);
 }
 .cont-ok {
   color: var(--mint);
   font-size: 15px;
-  align-self: center;
 }
 @media (max-width: 900px) {
   .cont {
     grid-template-columns: 1fr;
+    grid-template-areas: "face" "copy" "form" "note";
+    gap: 16px;
+  }
+  .cont-face {
+    width: 56px;
+    height: 56px;
   }
   .cont-form {
     grid-template-columns: 1fr;
+    max-width: none;
+  }
+  .cont-form .btn {
+    justify-content: space-between;
   }
 }
 
