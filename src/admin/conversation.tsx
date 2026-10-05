@@ -96,6 +96,30 @@ type TimelineEvent = {
 export const FREE_MAIL =
   /^(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|gmx|web|bluewin|proton|protonmail)\./i;
 
+type Unsent = { internal: boolean; reply: string; note: string };
+
+// Storage can be blocked (private windows, site data off) or full; the composer works without it.
+function readUnsent(key: string): Unsent {
+  try {
+    const d = JSON.parse(sessionStorage.getItem(key) ?? '{}');
+    return {
+      internal: d.internal === true,
+      reply: typeof d.reply === 'string' ? d.reply : '',
+      note: typeof d.note === 'string' ? d.note : '',
+    };
+  } catch {
+    return { internal: false, reply: '', note: '' };
+  }
+}
+
+function writeUnsent(key: string, unsent: Unsent) {
+  try {
+    if (unsent.reply.trim() || unsent.note.trim())
+      sessionStorage.setItem(key, JSON.stringify(unsent));
+    else sessionStorage.removeItem(key);
+  } catch {}
+}
+
 export function ConversationView({ id }: { id: string }) {
   const { api, apiBase, t, me, href, navigate, locale, inboxName } = useAdmin();
   const detail = useResource(
@@ -122,9 +146,19 @@ export function ConversationView({ id }: { id: string }) {
       }>('agent/canned'),
     'canned'
   );
-  const [body, setBody] = useState('');
+  const unsentKey = `helpdesk.draft.${me.agent.id}.${id}`;
+  const [unsent, setUnsent] = useState(() => readUnsent(unsentKey));
+  useEffect(() => writeUnsent(unsentKey, unsent), [unsentKey, unsent]);
+  const internal = unsent.internal;
+  const body = internal ? unsent.note : unsent.reply;
+  const setBody = (update: (current: string) => string) =>
+    setUnsent(d => {
+      const mode = d.internal ? 'note' : 'reply';
+      return { ...d, [mode]: update(d[mode]) };
+    });
+  const setInternal = (next: boolean) =>
+    setUnsent(d => ({ ...d, internal: next }));
   const [slashIndex, setSlashIndex] = useState(0);
-  const [internal, setInternal] = useState(false);
   const [busy, setBusy] = useState<'send' | 'draft' | null>(null);
   const [error, setError] = useState<'send' | 'resolve' | null>(null);
   const composer = useRef<RichEditorHandle>(null);
@@ -153,8 +187,11 @@ export function ConversationView({ id }: { id: string }) {
       setBusy(null);
       return;
     }
-    // Sent: the text must not stay behind to be sent twice.
-    setBody('');
+    // Sent: the text must not stay behind to be sent twice. Storage is cleared
+    // directly, as the agent may have left and the state update would be lost.
+    const mode = internal ? 'note' : 'reply';
+    writeUnsent(unsentKey, { ...readUnsent(unsentKey), [mode]: '' });
+    setUnsent(d => ({ ...d, [mode]: '' }));
     try {
       if (resolve) await patch({ status: 'resolved' });
       else await detail.refresh();
@@ -539,7 +576,7 @@ export function ConversationView({ id }: { id: string }) {
               }
               value={body}
               onChange={next => {
-                setBody(next);
+                setBody(() => next);
                 setSlashIndex(0);
               }}
               onKeyDown={e => {
@@ -628,8 +665,8 @@ export function ConversationView({ id }: { id: string }) {
                         `agent/conversations/${id}/draft`,
                         { body: {} }
                       );
-                      insert(draft.text);
                       setInternal(false);
+                      insert(draft.text);
                     } catch {
                       setError('send');
                     } finally {

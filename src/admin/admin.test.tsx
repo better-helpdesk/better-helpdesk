@@ -93,6 +93,7 @@ const routes: Record<string, unknown> = {
 const original = routes['agent/conversations/c1/'];
 
 beforeEach(() => {
+  sessionStorage.clear();
   window.history.replaceState(null, '', '/support/conversations/');
   vi.stubGlobal(
     'fetch',
@@ -186,6 +187,194 @@ describe('HelpdeskAdmin', () => {
     ).toBeTruthy();
     expect(composer.textContent).toBe('');
     expect(posts.filter(u => u.includes('/messages'))).toHaveLength(1);
+  });
+
+  it('keeps the unsent reply and note across navigation and a reload, and clears only what was sent', async () => {
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST') posts.push(JSON.parse(String(init.body)));
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const type = (box: HTMLElement, text: string) => {
+      box.innerHTML = text;
+      fireEvent.input(box);
+    };
+    type(await screen.findByRole('textbox', { name: 'Reply' }), 'Half a reply');
+    fireEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+    type(
+      screen.getByRole('textbox', { name: 'Internal note' }),
+      'Ask billing first'
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'Inbox' }));
+    fireEvent.click(await screen.findByRole('link', { name: /DG-1000/ }));
+    expect(
+      (await screen.findByRole('textbox', { name: 'Internal note' }))
+        .textContent
+    ).toBe('Ask billing first');
+
+    cleanup();
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect(
+      (await screen.findByRole('textbox', { name: 'Internal note' }))
+        .textContent
+    ).toBe('Ask billing first');
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    const reply = screen.getByRole('textbox', { name: 'Reply' });
+    expect(reply.textContent).toBe('Half a reply');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Sent')).toBeTruthy();
+    expect(reply.textContent).toBe('');
+    expect(posts).toEqual([{ body: 'Half a reply', internal: false }]);
+
+    cleanup();
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect(
+      (await screen.findByRole('textbox', { name: 'Reply' })).textContent
+    ).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+    expect(
+      screen.getByRole('textbox', { name: 'Internal note' }).textContent
+    ).toBe('Ask billing first');
+  });
+
+  it('keeps a draft when sending it fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST') return new Response('{}', { status: 500 });
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const composer = await screen.findByRole('textbox', { name: 'Reply' });
+    composer.innerHTML = 'Half a reply';
+    fireEvent.input(composer);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+
+    cleanup();
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect(
+      (await screen.findByRole('textbox', { name: 'Reply' })).textContent
+    ).toBe('Half a reply');
+  });
+
+  it('never brings back a reply that finished sending after the agent left the conversation', async () => {
+    let release = () => {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST')
+          await new Promise<void>(resolve => {
+            release = resolve;
+          });
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const composer = await screen.findByRole('textbox', { name: 'Reply' });
+    composer.innerHTML = 'Already sent';
+    fireEvent.input(composer);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Inbox' }));
+    await screen.findByRole('link', { name: /DG-1000/ });
+    await act(async () => {
+      release();
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+
+    fireEvent.click(screen.getByRole('link', { name: /DG-1000/ }));
+    expect(
+      (await screen.findByRole('textbox', { name: 'Reply' })).textContent
+    ).toBe('');
+  });
+
+  it('puts an AI draft in the reply and leaves the note alone', async () => {
+    routes['agent/me/'] = { ...me, ai: true };
+    routes['agent/conversations/c1/draft'] = { text: 'Try the new export' };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+      delete routes['agent/conversations/c1/draft'];
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('textbox', { name: 'Reply' });
+    fireEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+    const note = screen.getByRole('textbox', { name: 'Internal note' });
+    note.innerHTML = 'Ask billing first';
+    fireEvent.input(note);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft with AI' }));
+
+    expect(
+      (await screen.findByRole('textbox', { name: 'Reply' })).textContent
+    ).toBe('Try the new export');
+    fireEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+    expect(
+      screen.getByRole('textbox', { name: 'Internal note' }).textContent
+    ).toBe('Ask billing first');
+  });
+
+  it('never shows a draft to another agent signed in to the same browser', async () => {
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const composer = await screen.findByRole('textbox', { name: 'Reply' });
+    composer.innerHTML = 'Half a reply';
+    fireEvent.input(composer);
+    cleanup();
+
+    routes['agent/me/'] = { ...me, agent: { id: 'a2', name: 'Other' } };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect(
+      (await screen.findByRole('textbox', { name: 'Reply' })).textContent
+    ).toBe('');
+  });
+
+  it('still sends when the browser blocks storage', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    onTestFinished(() => {
+      vi.restoreAllMocks();
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const composer = await screen.findByRole('textbox', { name: 'Reply' });
+    composer.innerHTML = 'Fixed in the next release';
+    fireEvent.input(composer);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Sent')).toBeTruthy();
+    expect(composer.textContent).toBe('');
   });
 
   it('filters the inbox by a tag on a row and keeps it across other filters', async () => {
