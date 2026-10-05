@@ -35,10 +35,11 @@ function wallClock(time: number, timeZone: string) {
   );
 }
 
-/** The instant a wall-clock time (as if UTC) shows in the zone; a time skipped by DST lands after the gap. */
+/** The instant a wall-clock time (as if UTC) shows in the zone; a time skipped by DST moves forward by the gap, a repeated one takes its later occurrence. */
 function instant(wall: number, timeZone: string) {
-  const guess = wall - (wallClock(wall, timeZone) - wall);
-  return wall - (wallClock(guess, timeZone) - guess);
+  const offset = (t: number) => wallClock(t, timeZone) - t;
+  const late = wall - offset(wall + DAY);
+  return wallClock(late, timeZone) === wall ? late : wall - offset(wall - DAY);
 }
 
 const minutes = (hhmm: string) =>
@@ -82,6 +83,7 @@ export function openHoursBetween(from: Date, to: Date, hours: BusinessHours) {
 }
 
 /** The latest moment from which `openHours` of open time have passed by `now`. */
+// ponytail: walks the schedule back, so its cost grows with openHours over the open share of the week; it runs once per inbox per job tick and once per inbox per inbox render.
 export function openCutoff(now: Date, openHours: number, hours: BusinessHours) {
   const end = now.getTime();
   // A schedule has an open span every week, so widening the window always ends.

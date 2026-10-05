@@ -41,12 +41,18 @@ const endTime = z.union([time, z.literal('24:00')]);
 const businessHours = z.object({
   timeZone: z.string().refine(zone => {
     try {
-      new Intl.DateTimeFormat('en', { timeZone: zone });
-      return true;
+      // supportedValuesOf lists canonical names only, so an alias such as US/Eastern is checked by what it resolves to.
+      const { timeZone } = new Intl.DateTimeFormat('en', {
+        timeZone: zone,
+      }).resolvedOptions();
+      return (
+        timeZone === 'UTC' ||
+        Intl.supportedValuesOf('timeZone').includes(timeZone)
+      );
     } catch {
       return false;
     }
-  }, 'Unknown time zone'),
+  }, 'Unknown IANA time zone'),
   weekly: z
     .strictObject(
       Object.fromEntries(

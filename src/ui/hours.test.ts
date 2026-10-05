@@ -148,6 +148,37 @@ describe('nextOpening', () => {
       at('2026-03-30T06:00:00Z')
     );
   });
+
+  it('opens after a skipped midnight west of UTC', () => {
+    // Santiago skips 00:00 to 01:00 on Sunday 6 September.
+    const santiago: BusinessHours = {
+      timeZone: 'America/Santiago',
+      weekly: { sun: [['00:00', '08:00']] },
+    };
+    expect(nextOpening(at('2026-09-05T16:00:00Z'), santiago)).toEqual(
+      at('2026-09-06T04:00:00Z')
+    );
+  });
+
+  it('moves a skipped 02:30 in New York to 03:30', () => {
+    const newYork: BusinessHours = {
+      timeZone: 'America/New_York',
+      weekly: { sun: [['02:30', '08:00']] },
+    };
+    expect(nextOpening(at('2026-03-07T17:00:00Z'), newYork)).toEqual(
+      at('2026-03-08T07:30:00Z')
+    );
+  });
+
+  it('opens at the later of a repeated 02:30', () => {
+    const zurich: BusinessHours = {
+      timeZone: 'Europe/Zurich',
+      weekly: { sun: [['02:30', '08:00']] },
+    };
+    expect(nextOpening(at('2026-10-24T12:00:00Z'), zurich)).toEqual(
+      at('2026-10-25T01:30:00Z')
+    );
+  });
 });
 
 describe('hours in the config', () => {
@@ -159,12 +190,18 @@ describe('hours in the config', () => {
     inboxes: { support: { hours: hours as BusinessHours } },
   });
 
-  it('accepts a valid schedule', () => {
-    expect(() => resolveConfig(config(office))).not.toThrow();
-  });
+  it.each(['Europe/Zurich', 'Asia/Kolkata', 'UTC'])(
+    'accepts a schedule in %s',
+    timeZone => {
+      expect(() =>
+        resolveConfig(config({ ...office, timeZone }))
+      ).not.toThrow();
+    }
+  );
 
   it.each([
     ['an unknown time zone', { ...office, timeZone: 'Europe/Nowhere' }],
+    ['an offset time zone', { ...office, timeZone: '+01:00' }],
     [
       'a malformed time',
       { timeZone: 'UTC', weekly: { mon: [['8:00', '17:00']] } },
