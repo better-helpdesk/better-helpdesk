@@ -43,7 +43,7 @@ button { cursor: pointer; }
 .launcher[aria-expanded="true"] svg { transform: rotate(90deg); }
 .agent-note { display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 13px; color: var(--s-fg); background: color-mix(in srgb, var(--s-focus) 8%, var(--s-bg)); border-bottom: 1px solid var(--s-border); text-decoration: none; }
 .agent-note:hover .agent-note-link { text-decoration: underline; }
-.agent-note-text { flex: 1; min-width: 0; }
+.agent-note-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agent-note-link { flex: none; font-weight: 600; color: var(--s-accent); }
 .agent-dot { position: relative; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--s-focus); }
 .agent-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--s-focus); animation: agent-ping 4s cubic-bezier(0, 0, 0.2, 1) infinite; }
@@ -111,7 +111,7 @@ button { cursor: pointer; }
   width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none;
   --s-avatar-bg: color-mix(in srgb, var(--s-fg) 12%, var(--s-subtle));
   font-size: 11px; font-weight: 700; background: var(--s-avatar-bg); color: var(--s-accent);
-  border: 2px solid var(--s-avatar-bg);
+  border: 2px solid var(--s-head-bg);
 }
 .avatars .avatar + .avatar { margin-left: -8px; }
 

@@ -14,9 +14,8 @@ const en = {
     '{name} is back on {day} at {time} and replies to your message then.',
   'widget.closed':
     'We are back on {day} at {time} and reply to your message then.',
-  'widget.agentWaitingOne': '1 conversation is waiting in the support inbox',
-  'widget.agentWaiting':
-    '{count} conversations are waiting in the support inbox',
+  'widget.agentWaitingOne': '1 conversation waiting',
+  'widget.agentWaiting': '{count} conversations waiting',
   'widget.agentOpenInbox': 'Open inbox',
   'rich.toolbar': 'Formatting',
   'rich.bold': 'Bold',
@@ -402,8 +401,8 @@ const de: Record<MessageKey, string> = {
     '{name} ist am {day} um {time} wieder da und antwortet Ihnen dann.',
   'widget.closed':
     'Wir sind am {day} um {time} wieder da und antworten Ihnen dann.',
-  'widget.agentWaitingOne': '1 Unterhaltung wartet im Support-Posteingang',
-  'widget.agentWaiting': '{count} Unterhaltungen warten im Support-Posteingang',
+  'widget.agentWaitingOne': '1 Unterhaltung wartet',
+  'widget.agentWaiting': '{count} Unterhaltungen warten',
   'widget.agentOpenInbox': 'Posteingang öffnen',
   'rich.toolbar': 'Formatierung',
   'rich.bold': 'Fett',

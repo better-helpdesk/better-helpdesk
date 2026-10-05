@@ -466,6 +466,19 @@ export function Widget(props: WidgetProps) {
                 }
               />
             )}
+          {!data && session.error && (
+            <div className="body" role="alert">
+              <p className="error">{t('form.error')}</p>
+              <div className="row">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={refreshSession}>
+                  {t('thread.retry')}
+                </button>
+              </div>
+            </div>
+          )}
           {data && view.name === 'home' && !single && (
             <div className="body" role="tabpanel">
               <div className="types">

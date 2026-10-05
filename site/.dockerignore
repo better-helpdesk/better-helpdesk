@@ -1,0 +1,19 @@
+# Only the site is built into the image; see Dockerfile.
+**/node_modules
+**/.next
+**/.env*
+!site/.env.example
+.git
+.github
+.claude
+bin
+coverage
+dist
+docs
+examples
+migrations
+relays
+scripts
+src
+test
+*.tgz

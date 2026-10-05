@@ -389,6 +389,40 @@ describe('Widget', () => {
     );
   });
 
+  it('says so when the session fails to load, and recovers on retry', async () => {
+    let up = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        up
+          ? new Response(JSON.stringify(session))
+          : new Response(JSON.stringify({ error: 'Internal error' }), {
+              status: 500,
+            })
+      )
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Something went wrong. Please try again.'
+    );
+
+    up = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      await screen.findByRole('button', { name: /Report a bug/ })
+    ).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('cancels a link with Escape without closing the panel or losing the draft', async () => {
     mockApi({ 'widget/session': session });
     render(
@@ -840,7 +874,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: /3 conversations are waiting/ })
+      await screen.findByRole('button', { name: /3 conversations waiting/ })
     );
     expect(
       (await screen.findByRole('link', { name: /Open inbox/ })).getAttribute(

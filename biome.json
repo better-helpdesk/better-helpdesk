@@ -92,7 +92,7 @@
   },
   "overrides": [
     {
-      "includes": ["examples/**"],
+      "includes": ["examples/**", "site/**"],
       "linter": {
         "rules": {
           "style": {
