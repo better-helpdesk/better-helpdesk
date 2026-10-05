@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Locale } from '../config';
 import { type Api, ApiError, createApi, useResource } from '../ui/api';
-import { translator } from '../ui/i18n';
+import { type Translate, translator } from '../ui/i18n';
+import { isMac } from '../ui/rich-editor';
 import { CannedReplies } from './canned';
 import {
   AdminProvider,
@@ -19,6 +20,7 @@ import { DealsBoard } from './deals';
 import { Inbox } from './inbox';
 import { Settings } from './settings';
 import { adminCss } from './styles';
+import { Dialog, useShortcuts } from './ui';
 
 /** The agent UI's sections, for a host that renders its own tabs. */
 export { HELPDESK_CHANGED };
@@ -75,6 +77,8 @@ export function HelpdeskAdmin({
     onNavigate,
   });
   const me = useResource(() => api<Me>('agent/me'), 'me');
+  const [sheet, setSheet] = useState(false);
+  useShortcuts(me.data ? { '?': () => setSheet(true) } : {});
 
   // An action whose failure no handler caught would otherwise fail silently.
   const [unhandled, setUnhandled] = useState(false);
@@ -180,8 +184,73 @@ export function HelpdeskAdmin({
             {view === 'canned' && <CannedReplies />}
             {view === 'settings' && <Settings />}
           </div>
+          <Dialog
+            open={sheet}
+            title={t('admin.shortcuts')}
+            onClose={() => setSheet(false)}>
+            <ShortcutSheet t={t} onClose={() => setSheet(false)} />
+          </Dialog>
         </AdminProvider>
       )}
     </>
+  );
+}
+
+function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
+  const mod = isMac() ? '⌘' : 'Ctrl';
+  const groups: [string, [string[], string][]][] = [
+    [
+      t('admin.inbox'),
+      [
+        [['j', 'k'], t('admin.keyMove')],
+        [['↵'], t('admin.keyOpen')],
+        [['x'], t('admin.keySelect')],
+        [['⇧', 'x'], t('admin.keyRange')],
+      ],
+    ],
+    [
+      t('admin.subjectCol'),
+      [
+        [['e'], t('admin.keyResolve')],
+        [['a'], t('admin.keyAssign')],
+        [['r'], t('admin.keyReply')],
+        [['n'], t('admin.keyNote')],
+        [['z'], t('admin.snooze')],
+        [[mod, '↵'], t('admin.send')],
+        [[mod, '⇧', '↵'], t('admin.sendResolve')],
+        [['/'], t('admin.keyCanned')],
+      ],
+    ],
+    [t('admin.everywhere'), [[['?'], t('admin.keyHelp')]]],
+  ];
+  return (
+    <div className="sa-dialog-body">
+      <h2>{t('admin.shortcuts')}</h2>
+      {groups.map(([heading, keys]) => (
+        <section key={heading}>
+          <h3>{heading}</h3>
+          <dl className="sa-keys">
+            {keys.map(([combo, label]) => (
+              <div key={label}>
+                <dt className="sa-kbd">
+                  {combo.map((key, i) => (
+                    <span key={key}>
+                      {i > 0 && ' '}
+                      <kbd>{key}</kbd>
+                    </span>
+                  ))}
+                </dt>
+                <dd>{label}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      ))}
+      <div className="sa-dialog-foot">
+        <button type="button" className="sa-btn" onClick={onClose}>
+          {t('admin.close')}
+        </button>
+      </div>
+    </div>
   );
 }

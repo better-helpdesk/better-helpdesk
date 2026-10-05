@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 
 import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
@@ -20,6 +14,7 @@ import {
   Select,
   Skeleton,
   Svg,
+  useShortcuts,
   useToast,
   type Viewer,
   ViewerStack,
@@ -221,7 +216,8 @@ export function Inbox() {
         {rows.length > 1 && (
           <span className="sa-kbd sa-hint">
             <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
-            {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')}
+            {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')} · <kbd>?</kbd>{' '}
+            {t('admin.allShortcuts')}
           </span>
         )}
       </div>
@@ -561,31 +557,19 @@ export function ConversationTable({
     r => r.priority === 'high' || r.priority === 'urgent'
   );
 
-  // Bound before paint, so the keys reach rows as soon as they show.
-  useLayoutEffect(() => {
-    if (!keyboard) return;
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey ||
-        /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName) ||
-        target.closest('[role="tab"], [role="dialog"]')
-      ) {
-        return;
-      }
-      const row = rows[active];
-      const move = (to: number) => setActiveId(rows[to]?.id ?? null);
-      if (e.key === 'j')
-        move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1));
-      else if (e.key === 'k') move(active === -1 ? 0 : Math.max(active - 1, 0));
-      else if (e.key === 'Enter' && row) onOpen(row.id);
-      else if (e.key.toLowerCase() === 'x' && row) toggle(row.id, e.shiftKey);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [keyboard, rows, active, onOpen, toggle]);
+  const row = rows[active];
+  const move = (to: number) => setActiveId(rows[to]?.id ?? null);
+  useShortcuts(
+    keyboard
+      ? {
+          j: () =>
+            move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1)),
+          k: () => move(active === -1 ? 0 : Math.max(active - 1, 0)),
+          Enter: () => row && onOpen(row.id),
+          x: e => row && toggle(row.id, e.shiftKey),
+        }
+      : {}
+  );
 
   return (
     <div className="sa-table-wrap">

@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { Locale } from '../config';
 import { useAdmin } from './context';
+import { useShortcuts } from './ui';
 
 type Preset = 'laterToday' | 'tomorrow' | 'nextWeek';
 
@@ -55,32 +56,14 @@ export function SnoozeControl({
   const [failed, setFailed] = useState(false);
   const presets = snoozePresets(new Date());
 
-  // Bound before paint, so z works as soon as the select shows.
-  useLayoutEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        e.key !== 'z' ||
-        e.repeat ||
-        e.isComposing ||
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey ||
-        /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) ||
-        target.isContentEditable ||
-        target.closest('[role="dialog"]')
-      ) {
-        return;
-      }
-      e.preventDefault();
+  useShortcuts({
+    z: () => {
       select.current?.focus();
       try {
         select.current?.showPicker?.();
       } catch {}
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    },
+  });
 
   const save = async (value: string | null) => {
     setFailed(false);
@@ -97,6 +80,7 @@ export function SnoozeControl({
       <select
         ref={select}
         className="sa-select"
+        aria-keyshortcuts="Z"
         aria-label={
           until
             ? t('admin.snoozedUntil', { date: formatSnooze(until, locale) })
