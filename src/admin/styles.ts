@@ -274,11 +274,16 @@ export const adminCss = `
 .sa-menu-pop { position: absolute; right: 0; top: 40px; z-index: 5; display: grid; min-width: 260px; padding: 6px; border: 1px solid var(--a-border); border-radius: 10px; background: var(--a-bg); box-shadow: 0 8px 24px rgb(12 32 52 / 0.12); }
 .sa-menu-pop .sa-btn { justify-content: flex-start; }
 .sa-dialog h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.sa-dialog h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--a-muted); }
+.sa-keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+.sa-keys > div { display: contents; }
+.sa-keys dd { margin: 0; font-size: 13px; }
 .sa-field { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
 .sa-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }
 .sa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .sa-error { color: var(--a-danger); }
 .sa-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--a-accent); color: var(--a-accent-fg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 50; }
+.sa-toast:empty { padding: 0; }
 .sa-timeline { display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }
 .sa-timeline li { border-left: 2px solid var(--a-border); padding-left: 12px; }
 .sa-kbd { font-size: 12px; color: var(--a-muted); white-space: nowrap; }

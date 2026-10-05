@@ -1,4 +1,10 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import type { Translate } from '../ui/i18n';
 
@@ -265,6 +271,51 @@ export function Dialog({
   );
 }
 
+/**
+ * Single-key shortcuts on the window, keyed by `KeyboardEvent.key` with letters
+ * in lower case.
+ * Keys typed into a field, held with Cmd/Ctrl/Alt, or pressed in or behind an
+ * open dialog are left alone.
+ */
+export function useShortcuts(
+  map: Record<string, ((e: KeyboardEvent) => void) | undefined>
+) {
+  const latest = useRef(map);
+  useLayoutEffect(() => {
+    latest.current = map;
+  });
+  // Bound before paint, so a key pressed as the page shows is not lost.
+  useLayoutEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const run = latest.current[key];
+      // The event is retargeted to the host element when the admin sits in a shadow root.
+      const target = e.composedPath()[0];
+      if (
+        !run ||
+        e.isComposing ||
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey ||
+        !(target instanceof Element) ||
+        target.closest(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog, [role="dialog"]'
+        ) ||
+        (target.getRootNode() as Document | ShadowRoot).querySelector(
+          'dialog[open]'
+        ) ||
+        (key === 'Enter' && target.closest('button, a, [role="tab"]'))
+      ) {
+        return;
+      }
+      e.preventDefault();
+      run(e);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+
 export function useToast() {
   const [text, setText] = useState<string | null>(null);
   useEffect(() => {
@@ -274,11 +325,12 @@ export function useToast() {
   }, [text]);
   return {
     show: setText,
-    node: text ? (
+    // Mounted while empty: a live region that appears already filled may go unannounced.
+    node: (
       <div className="sa-toast" role="status">
         {text}
       </div>
-    ) : null,
+    ),
   };
 }
 

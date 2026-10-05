@@ -77,6 +77,32 @@ it('keeps the highlighted conversation when the rows re-sort', () => {
   expect(onOpen).toHaveBeenCalledWith('b');
 });
 
+it('leaves j to the text when typed in an editable field, and takes it from inside a shadow root', () => {
+  const { container } = render(table([row('a'), row('b')], vi.fn()));
+  const active = () => container.querySelectorAll('tr[data-active="true"]');
+  const editor = document.createElement('div');
+  editor.setAttribute('contenteditable', 'true');
+  editor.append(document.createElement('b'));
+  document.body.append(editor);
+  onTestFinished(() => editor.remove());
+
+  fireEvent.keyDown(editor.firstChild as Element, { key: 'j' });
+  expect(active()).toHaveLength(0);
+
+  const host = document.createElement('div');
+  const button = document.createElement('button');
+  host.attachShadow({ mode: 'open' }).append(button);
+  const field = document.createElement('input');
+  host.shadowRoot?.append(field);
+  document.body.append(host);
+  onTestFinished(() => host.remove());
+
+  fireEvent.keyDown(field, { key: 'j', composed: true });
+  expect(active()).toHaveLength(0);
+  fireEvent.keyDown(button, { key: 'j', composed: true });
+  expect(active()).toHaveLength(1);
+});
+
 it('shows until when a snoozed conversation wakes in place of how long it waited', () => {
   vi.useFakeTimers({ now: new Date(2026, 9, 5, 12), toFake: ['Date'] });
   onTestFinished(() => {

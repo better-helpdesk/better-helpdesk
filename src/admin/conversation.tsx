@@ -4,7 +4,7 @@ import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
 import { relativeTime } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
-import { RichEditor, type RichEditorHandle } from '../ui/rich-editor';
+import { isMac, RichEditor, type RichEditorHandle } from '../ui/rich-editor';
 import { useAdmin } from './context';
 import { ContactPicker } from './pickers';
 import { formatSnooze, SnoozeControl } from './snooze';
@@ -16,6 +16,7 @@ import {
   Select,
   Skeleton,
   Svg,
+  useShortcuts,
   useToast,
   type Viewer,
   viewingLine,
@@ -165,19 +166,56 @@ export function ConversationView({ id }: { id: string }) {
     setUnsent(d => ({ ...d, internal: next }));
   const [slashIndex, setSlashIndex] = useState(0);
   const [busy, setBusy] = useState<'send' | 'draft' | null>(null);
-  const [error, setError] = useState<'send' | 'resolve' | null>(null);
+  const [error, setError] = useState<'send' | 'resolve' | 'action' | null>(
+    null
+  );
   const composer = useRef<RichEditorHandle>(null);
   const toast = useToast();
-
-  const data = detail.data;
-  if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
-  if (!data) return <Skeleton kind="thread" label={t('admin.loading')} />;
-  const c = data.conversation;
 
   const patch = async (values: Record<string, unknown>) => {
     await api(`agent/conversations/${id}`, { method: 'PATCH', body: values });
     await detail.refresh();
   };
+
+  const loaded = detail.data?.conversation;
+  const acting = useRef(new Set<string>());
+  const act = (values: Record<string, unknown>, done: () => string) => {
+    const field = Object.keys(values).join();
+    if (acting.current.has(field)) return;
+    acting.current.add(field);
+    void patch(values)
+      .then(() => {
+        setError(e => (e === 'action' ? null : e));
+        toast.show(done());
+      })
+      .catch(() => setError('action'))
+      .finally(() => acting.current.delete(field));
+  };
+  const compose = (note: boolean) => {
+    setInternal(note);
+    composer.current?.focus();
+  };
+  useShortcuts(
+    loaded
+      ? {
+          e: () =>
+            loaded.status !== 'resolved' &&
+            act({ status: 'resolved' }, () =>
+              t('admin.resolvedToast', { reference: loaded.reference })
+            ),
+          a: () =>
+            loaded.assigneeId !== me.agent.id &&
+            act({ assigneeId: me.agent.id }, () => t('admin.assignedToYou')),
+          r: () => compose(false),
+          n: () => compose(true),
+        }
+      : {}
+  );
+
+  const data = detail.data;
+  if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
+  if (!data) return <Skeleton kind="thread" label={t('admin.loading')} />;
+  const c = data.conversation;
 
   const send = async (resolve: boolean) => {
     if (!body.trim() || busy) return;
@@ -648,7 +686,7 @@ export function ConversationView({ id }: { id: string }) {
               </div>
             )}
             {error && (
-              <p className="sa-error">
+              <p className="sa-error" role="alert">
                 {t(
                   error === 'resolve' ? 'admin.sentNotResolved' : 'admin.error'
                 )}
@@ -659,12 +697,14 @@ export function ConversationView({ id }: { id: string }) {
                 <button
                   type="button"
                   aria-pressed={!internal}
+                  aria-keyshortcuts="R"
                   onClick={() => setInternal(false)}>
                   {t('admin.reply')}
                 </button>
                 <button
                   type="button"
                   aria-pressed={internal}
+                  aria-keyshortcuts="N"
                   onClick={() => setInternal(true)}>
                   {t('admin.note')}
                 </button>
@@ -698,14 +738,16 @@ export function ConversationView({ id }: { id: string }) {
                 </button>
               )}
               <span className="sa-grow sa-kbd">
-                <kbd>⌘↵</kbd> {t('admin.send')}
+                <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
               </span>
               {!internal && c.status !== 'resolved' && (
                 <button
                   type="button"
                   className="sa-btn"
-                  title="⌘⇧↵"
-                  aria-keyshortcuts="Meta+Shift+Enter"
+                  title={isMac() ? '⌘ ⇧ ↵' : 'Ctrl ⇧ ↵'}
+                  aria-keyshortcuts={
+                    isMac() ? 'Meta+Shift+Enter' : 'Control+Shift+Enter'
+                  }
                   disabled={busy !== null || !body.trim()}
                   onClick={() => void send(true)}>
                   {t('admin.sendResolve')}
