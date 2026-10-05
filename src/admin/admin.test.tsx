@@ -254,6 +254,123 @@ describe('HelpdeskAdmin', () => {
     expect(input.value).toBe('billing');
   });
 
+  it('snoozes a conversation until tomorrow morning and says until when', async () => {
+    const patches: Record<string, unknown>[] = [];
+    let snoozedUntil: string | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'PATCH') {
+          const body = JSON.parse(String(init.body));
+          patches.push(body);
+          snoozedUntil = body.snoozedUntil;
+        }
+        if (url.includes('agent/conversations/c1/')) {
+          const detail = original as { conversation: object };
+          return new Response(
+            JSON.stringify({
+              ...detail,
+              conversation: {
+                ...detail.conversation,
+                status: snoozedUntil ? 'pending' : 'open',
+                snoozedUntil,
+              },
+            })
+          );
+        }
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const select = await screen.findByRole('combobox', { name: 'Snooze' });
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+
+    fireEvent.change(select, { target: { value: 'tomorrow' } });
+
+    await act(async () => {});
+    expect(patches).toEqual([{ snoozedUntil: tomorrow.toISOString() }]);
+    expect(
+      (select as HTMLSelectElement).selectedOptions[0]?.textContent
+    ).toMatch(/^Snoozed until \w{3} \d{1,2} \w{3}, 09:00$/);
+
+    fireEvent.change(select, { target: { value: 'off' } });
+    await act(async () => {});
+    expect(patches.at(-1)).toEqual({ snoozedUntil: null });
+    expect((select as HTMLSelectElement).selectedOptions[0]?.textContent).toBe(
+      'Snooze'
+    );
+  });
+
+  it('snoozes until a picked time, opened with the z key', async () => {
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'PATCH')
+          patches.push(JSON.parse(String(init.body)));
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const select = await screen.findByRole('combobox', { name: 'Snooze' });
+
+    fireEvent.keyDown(document.body, { key: 'z' });
+    expect(document.activeElement).toBe(select);
+
+    fireEvent.change(select, { target: { value: 'pick' } });
+    const input = screen.getByLabelText('Snooze until') as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: '2030-03-04T10:15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
+
+    await act(async () => {});
+    expect(patches).toEqual([
+      { snoozedUntil: new Date(2030, 2, 4, 10, 15).toISOString() },
+    ]);
+    expect(screen.queryByLabelText('Snooze until')).toBeNull();
+  });
+
+  it('says so when the server refuses a snooze and keeps the conversation awake', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PATCH')
+          return new Response(JSON.stringify({ error: 'invalid' }), {
+            status: 400,
+          });
+        const url = String(input);
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const select = await screen.findByRole('combobox', { name: 'Snooze' });
+
+    fireEvent.change(select, { target: { value: 'nextWeek' } });
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Snoozing failed. Nothing changed.'
+    );
+    expect((select as HTMLSelectElement).selectedOptions[0]?.textContent).toBe(
+      'Snooze'
+    );
+  });
+
   it('marks the section it is in and scrolls that tab into the rail', async () => {
     // jsdom has no layout, so the method the rail calls does not exist there.
     const scrollIntoView = vi.fn();

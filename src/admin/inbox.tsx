@@ -4,6 +4,7 @@ import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
+import { formatSnooze } from './snooze';
 import { Avatar, Dialog, Empty, paths, Skeleton, Svg } from './ui';
 
 export type ConversationRow = {
@@ -18,6 +19,7 @@ export type ConversationRow = {
   lastMessageAt: string;
   assigneeId: string | null;
   tags: string[];
+  snoozedUntil?: string | null;
   preview?: string | null;
   contact?: { id: string; name: string | null; email: string | null };
 };
@@ -164,6 +166,9 @@ export function Inbox() {
               {t('admin.status')}: {t(`agentStatus.${s}`)}
             </option>
           ))}
+          <option value="snoozed">
+            {t('admin.status')}: {t('admin.snoozed')}
+          </option>
         </select>
         <select
           className="sa-select"
@@ -378,7 +383,13 @@ export function ConversationTable({
                 data-active={keyboard && index === active}
                 onClick={() => onOpen(c.id)}>
                 <td className="num">
-                  {waiting ? (
+                  {c.snoozedUntil ? (
+                    <span className="sa-pill">
+                      {t('admin.snoozeUntil', {
+                        date: formatSnooze(c.snoozedUntil, locale),
+                      })}
+                    </span>
+                  ) : waiting ? (
                     <span className="sa-pill" data-tone={tone}>
                       {duration(c.waitingSince as string, locale)}
                     </span>

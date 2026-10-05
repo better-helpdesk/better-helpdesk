@@ -629,7 +629,14 @@ export function createStore(db: Db) {
       const q = filter.query?.trim();
       const conditions: (SQL | undefined)[] = [
         filter.inbox ? eq(conversations.inbox, filter.inbox) : undefined,
-        filter.status ? eq(conversations.status, filter.status) : undefined,
+        filter.status === 'snoozed'
+          ? and(
+              eq(conversations.status, 'pending'),
+              isNotNull(conversations.snoozedUntil)
+            )
+          : filter.status
+            ? eq(conversations.status, filter.status)
+            : undefined,
         filter.assigneeId === null
           ? isNull(conversations.assigneeId)
           : filter.assigneeId
@@ -728,7 +735,8 @@ export function createStore(db: Db) {
         .where(
           and(
             isNotNull(conversations.waitingSince),
-            ne(conversations.status, 'resolved')
+            ne(conversations.status, 'resolved'),
+            isNull(conversations.snoozedUntil)
           )
         );
       return row?.count ?? 0;
@@ -779,6 +787,7 @@ export function createStore(db: Db) {
           patch.waitingSince =
             sql`coalesce(${conversations.waitingSince}, now())` as unknown as Date;
           patch.status = 'open';
+          patch.snoozedUntil = null;
           patch.resolvedAt =
             sql`CASE WHEN ${conversations.status} = 'resolved' THEN NULL ELSE ${conversations.resolvedAt} END` as unknown as Date;
         } else if (values.authorType === 'agent' && !values.internal) {
@@ -1033,12 +1042,48 @@ export function createStore(db: Db) {
       return Number(result.rows[0]?.count ?? 0);
     },
 
+    /**
+     * Reopens due snoozes and returns them with their values before; a stale
+     * time on any other status is only cleared. Concurrent runs never wake a row twice.
+     */
+    async wakeSnoozed() {
+      const result = await db.execute<{
+        id: string;
+        was_until: string;
+      }>(sql`
+        WITH due AS (
+          SELECT id, status, snoozed_until FROM helpdesk.conversation
+          WHERE snoozed_until <= now()
+          FOR UPDATE SKIP LOCKED
+        ), cleared AS (
+          UPDATE helpdesk.conversation c
+          SET snoozed_until = NULL,
+            status = CASE WHEN due.status = 'pending' THEN 'open' ELSE c.status END
+          FROM due WHERE c.id = due.id
+          RETURNING c.id, due.status AS was_status, due.snoozed_until AS was_until
+        )
+        SELECT id, was_until FROM cleared WHERE was_status = 'pending'`);
+      if (result.rows.length === 0) return [];
+      const until = new Map(
+        result.rows.map(r => [r.id, new Date(r.was_until)])
+      );
+      const rows = await db
+        .select()
+        .from(conversations)
+        .where(inArray(conversations.id, [...until.keys()]));
+      return rows.map(row => ({
+        row,
+        before: { status: 'pending', snoozedUntil: until.get(row.id) ?? null },
+      }));
+    },
+
     /** Marks due reminders as sent and returns them; concurrent runs never double-send. */
     async claimReminders(inbox: string, afterHours: number) {
       const result = await db.execute<{ id: string }>(sql`
         UPDATE helpdesk.conversation SET reminded_at = now()
         WHERE inbox = ${inbox}
           AND status <> 'resolved'
+          AND snoozed_until IS NULL
           AND waiting_since IS NOT NULL
           AND waiting_since < now() - make_interval(hours => ${afterHours})
           AND (reminded_at IS NULL OR reminded_at < waiting_since)

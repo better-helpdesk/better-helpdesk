@@ -192,6 +192,32 @@ describe('onEvent', () => {
     ]);
   });
 
+  it('reports a snooze that runJobs wakes, with no agent', async () => {
+    const { id } = await open();
+    h.addUser('agent', { isAgent: true });
+    const until = new Date(Date.now() + 3_600_000);
+    await h.call('PATCH', `agent/conversations/${id}`, {
+      user: 'agent',
+      body: { snoozedUntil: until.toISOString() },
+    });
+    await h.support.store.updateConversation(id, {
+      snoozedUntil: new Date(Date.now() - 60_000),
+    });
+    await h.support.runJobs();
+    expect(events.slice(2)).toEqual([
+      {
+        kind: 'conversation.updated',
+        conversation: expect.objectContaining({
+          id,
+          status: 'open',
+          snoozedUntil: null,
+        }),
+        before: { status: 'pending', snoozedUntil: expect.any(Date) },
+        agentId: null,
+      },
+    ]);
+  });
+
   it('logs a failing hook and still answers 201', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     fail = true;

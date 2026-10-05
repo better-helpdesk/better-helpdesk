@@ -622,8 +622,20 @@ export function createHandler(support: Helpdesk) {
           .max(50)
           .transform(list => [...new Set(list)])
           .optional(),
+        snoozedUntil: z.iso
+          .datetime({ offset: true })
+          .transform(v => new Date(v))
+          .refine(d => d.getTime() > Date.now(), 'Must be in the future')
+          .nullable()
+          .optional(),
       })
       .parse(await body());
+    if (data.snoozedUntil) {
+      if (data.status && data.status !== 'pending') {
+        throw new HelpdeskError(400, 'A snoozed conversation is pending');
+      }
+      data.status = 'pending';
+    }
     if (data.assigneeId && !(await store.getActiveAgent(data.assigneeId))) {
       throw new HelpdeskError(400, 'Unknown agent');
     }
@@ -635,6 +647,8 @@ export function createHandler(support: Helpdesk) {
       ...rest,
       ...(subject !== undefined ? { title: subject } : {}),
     };
+    // An open or resolved thread never keeps a snooze that would hide it from reminders.
+    if (data.status && data.status !== 'pending') patch.snoozedUntil = null;
     // Sharing was granted to one organization; it does not follow a move.
     if (
       data.companyId !== undefined &&

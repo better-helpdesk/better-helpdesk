@@ -6,6 +6,7 @@ import { plainText, RichText } from '../ui/rich';
 import { RichEditor, type RichEditorHandle } from '../ui/rich-editor';
 import { useAdmin } from './context';
 import { ContactPicker } from './pickers';
+import { SnoozeControl } from './snooze';
 import {
   Avatar,
   browserLabel,
@@ -30,6 +31,7 @@ type Detail = {
     assigneeId: string | null;
     companyId: string | null;
     tags: string[];
+    snoozedUntil: string | null;
     context: {
       url?: string;
       title?: string;
@@ -270,6 +272,10 @@ export function ConversationView({ id }: { id: string }) {
               options={me.statuses}
               render={s => t(`agentStatus.${s}`)}
               onChange={v => patch({ status: v })}
+            />
+            <SnoozeControl
+              until={c.snoozedUntil ?? null}
+              onSave={snoozedUntil => patch({ snoozedUntil })}
             />
             <Select
               label={t('admin.priority')}

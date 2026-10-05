@@ -1,0 +1,2 @@
+ALTER TABLE "helpdesk"."conversation" ADD COLUMN "snoozed_until" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "conversation_snoozed_idx" ON "helpdesk"."conversation" USING btree ("snoozed_until") WHERE "helpdesk"."conversation"."snoozed_until" IS NOT NULL;

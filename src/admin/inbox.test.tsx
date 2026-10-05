@@ -63,3 +63,22 @@ it('keeps the highlighted conversation when the rows re-sort', () => {
 
   expect(onOpen).toHaveBeenCalledWith('b');
 });
+
+it('shows until when a snoozed conversation wakes in place of how long it waited', () => {
+  const until = new Date(2026, 9, 12, 9);
+  const { container } = render(
+    table(
+      [
+        {
+          ...row('a'),
+          status: 'pending',
+          waitingSince: new Date(Date.now() - 3 * 3600_000).toISOString(),
+          snoozedUntil: until.toISOString(),
+        },
+      ],
+      vi.fn()
+    )
+  );
+  const cell = container.querySelector('td');
+  expect(cell?.textContent).toBe('until Mon 12 Oct, 09:00');
+});
