@@ -577,12 +577,17 @@ export function createHandler(support: Helpdesk) {
       }),
       store.countOpen(agent.id),
     ]);
-    const last = await store.lastMessages(rows.map(r => r.conversation.id));
+    const ids = rows.map(r => r.conversation.id);
+    const [last, viewers] = await Promise.all([
+      store.lastMessages(ids),
+      store.viewers(ids, agent.id),
+    ]);
     return json({
       counts,
       conversations: rows.map(r => ({
         ...agentView(r.conversation),
         preview: previewOf(last.get(r.conversation.id)?.body, 160),
+        viewers: viewers.get(r.conversation.id) ?? [],
         contact: {
           id: r.contact.id,
           name: r.contact.name,
@@ -592,7 +597,7 @@ export function createHandler(support: Helpdesk) {
     });
   });
 
-  agentRoute('GET', 'conversations/:id', async ({ params }) => {
+  agentRoute('GET', 'conversations/:id', async ({ params, agent }) => {
     const conversation = await requireConversation(params.id);
     const [
       contact,
@@ -602,6 +607,7 @@ export function createHandler(support: Helpdesk) {
       files,
       identities,
       events,
+      viewers,
     ] = await Promise.all([
       store.getContact(conversation.contactId),
       conversation.companyId ? store.getCompany(conversation.companyId) : null,
@@ -610,8 +616,10 @@ export function createHandler(support: Helpdesk) {
       store.listAttachments(conversation.id),
       store.listIdentities(conversation.contactId),
       store.listEvents(conversation.id),
+      store.viewers([conversation.id], agent.id),
       // Written on the GET so opening a thread fires no HELPDESK_CHANGED refetch.
       store.markAgentSeen(conversation.id),
+      store.markViewing(agent.id, conversation.id),
     ]);
     const domain = contact?.email?.split('@')[1];
     // A contact already filed under a company is offered that one; only an
@@ -633,6 +641,7 @@ export function createHandler(support: Helpdesk) {
         ? await support.companyContext(conversation.companyId)
         : {},
       participants: participants.map(p => p.contact),
+      viewers: viewers.get(conversation.id) ?? [],
       messages: messages.map(m => ({
         ...m.message,
         search: undefined,

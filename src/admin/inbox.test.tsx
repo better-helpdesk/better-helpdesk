@@ -103,3 +103,25 @@ it('marks only unread conversations as unread, waiting or not', () => {
   expect(links).toEqual(['Unread DG-a a', 'DG-b b']);
   expect(container.querySelectorAll('tr[data-unread]')).toHaveLength(1);
 });
+
+it('stacks the agents viewing a conversation on its row', () => {
+  const { getByRole } = render(
+    table(
+      [
+        {
+          ...row('a'),
+          viewers: [
+            { id: 'a2', name: 'Grace Hopper' },
+            { id: 'a3', name: 'Linus' },
+            { id: 'a4', name: 'Ken' },
+          ],
+        },
+      ],
+      vi.fn()
+    )
+  );
+  const stack = getByRole('img', {
+    name: 'Grace Hopper and 2 others are viewing',
+  });
+  expect(stack.textContent).toBe('GHLK');
+});

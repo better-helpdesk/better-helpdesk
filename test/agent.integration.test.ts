@@ -1588,3 +1588,57 @@ describe('inbox counts and unread', () => {
     expect(await unread()).toBe(false);
   });
 });
+
+describe('agent presence', () => {
+  it('shows agents who have a conversation open to each other, until they go quiet', async () => {
+    h.addUser('ada');
+    h.addUser('grace', { isAgent: true });
+    h.addUser('linus', { isAgent: true });
+    const conversation = await open('ada');
+    const detail = async (user: string) =>
+      (
+        await h.call('GET', `agent/conversations/${conversation.id}`, { user })
+      ).data.viewers.map((v: { name: string }) => v.name);
+    const listed = async (user: string) =>
+      (await h.call('GET', 'agent/conversations', { user })).data.conversations
+        .find((c: { id: string }) => c.id === conversation.id)
+        .viewers.map((v: { name: string }) => v.name);
+
+    expect(await detail('grace')).toEqual([]);
+    expect(await detail('linus')).toEqual(['grace']);
+    expect(await detail('grace')).toEqual(['linus']);
+    expect(await listed('grace')).toEqual(['linus']);
+    expect(await listed('linus')).toEqual(['grace']);
+
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.agent SET viewing_at = now() - interval '20 seconds' WHERE external_user_id = 'user-linus'`
+    );
+    expect(await detail('grace')).toEqual([]);
+    expect(await listed('grace')).toEqual([]);
+
+    const widget = await h.call(
+      'GET',
+      `widget/conversations/${conversation.id}`,
+      { user: 'ada' }
+    );
+    expect(JSON.stringify(widget.data)).not.toContain('grace');
+  });
+
+  it('keeps an agent on the conversation they opened when other requests touch them', async () => {
+    h.addUser('ada');
+    h.addUser('grace', { isAgent: true });
+    h.addUser('linus', { isAgent: true });
+    const conversation = await open('ada');
+    await h.call('GET', `agent/conversations/${conversation.id}`, {
+      user: 'linus',
+    });
+    await h.call('GET', 'agent/me', { user: 'linus' });
+
+    const res = await h.call('GET', `agent/conversations/${conversation.id}`, {
+      user: 'grace',
+    });
+    expect(res.data.viewers.map((v: { name: string }) => v.name)).toEqual([
+      'linus',
+    ]);
+  });
+});

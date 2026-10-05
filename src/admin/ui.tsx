@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import type { Translate } from '../ui/i18n';
+
 export const paths = {
   sparkle:
     'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 3v4M21 5h-4',
@@ -199,6 +201,39 @@ export function Avatar({
   return (
     <span className="sa-avatar" data-agent={agent} aria-hidden="true">
       {initials(name)}
+    </span>
+  );
+}
+
+export type Viewer = { id: string; name: string | null };
+
+export function viewingLine(t: Translate, viewers: Viewer[]) {
+  const name = (i: number) => viewers[i]?.name ?? '?';
+  if (viewers.length === 1) return t('admin.viewing.one', { name: name(0) });
+  if (viewers.length === 2)
+    return t('admin.viewing.two', { name: name(0), other: name(1) });
+  return t('admin.viewing.many', {
+    name: name(0),
+    count: String(viewers.length - 1),
+  });
+}
+
+export function ViewerStack({
+  t,
+  viewers,
+}: {
+  t: Translate;
+  viewers: Viewer[];
+}) {
+  return (
+    <span
+      className="sa-viewers"
+      role="img"
+      aria-label={viewingLine(t, viewers)}
+      title={viewingLine(t, viewers)}>
+      {viewers.map(v => (
+        <Avatar key={v.id} name={v.name} agent />
+      ))}
     </span>
   );
 }
