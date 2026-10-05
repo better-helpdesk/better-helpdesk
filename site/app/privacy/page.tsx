@@ -30,15 +30,15 @@ const SECTIONS: { title: string; text: string[] }[] = [
     ],
   },
   {
-    title: 'Cookies and tracking',
+    title: 'Analytics and cookies',
     text: [
-      'There are no analytics, no advertising and no tracking cookies. After you write, the widget keeps a token in your browser’s local storage so you can find your conversation again, and it remembers the first page of your visit until you close the tab. Our team’s sign-in uses a session cookie that visitors never receive.',
+      'We count visits and clicks with PostHog, hosted in the EU, in its cookieless mode: it stores nothing in your browser, drops your IP address, and tells visitors apart only by a hash that changes every day. We do not record sessions, show ads or follow you to other sites. After you write, the widget keeps a token in your browser’s local storage so you can find your conversation again, and it remembers the first page of your visit until you close the tab. Our team’s sign-in uses a session cookie that visitors never receive, and nothing from the team’s pages goes to PostHog.',
     ],
   },
   {
     title: 'Where it is kept',
     text: [
-      'In this site’s own Postgres database, hosted with Divio. Replies go out by email through our mail provider. Beyond those two, nobody receives your data.',
+      'In this site’s own Postgres database, hosted with Divio. Replies go out by email through our mail provider, and visit counts go to PostHog in the EU. Beyond those three, nobody receives your data.',
     ],
   },
   {
