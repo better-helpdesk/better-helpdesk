@@ -49,6 +49,8 @@ export type AdminContext = {
   navigate: (route: Route) => void;
   href: (route: Route) => string;
   inboxName: (key: string) => string;
+  /** False when the host renders its own section tabs instead of the rail. */
+  nav: boolean;
 };
 
 export type Route = Record<string, string>;
