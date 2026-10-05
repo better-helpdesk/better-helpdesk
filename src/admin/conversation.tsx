@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
@@ -126,6 +126,23 @@ function writeUnsent(key: string, unsent: Unsent) {
   } catch {}
 }
 
+const ASIDE_KEY = 'helpdesk.aside';
+
+function readAside(): boolean | null {
+  try {
+    const stored = localStorage.getItem(ASIDE_KEY);
+    return stored === 'open' ? true : stored === 'closed' ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeAside(open: boolean) {
+  try {
+    localStorage.setItem(ASIDE_KEY, open ? 'open' : 'closed');
+  } catch {}
+}
+
 export function ConversationView({ id }: { id: string }) {
   const { api, apiBase, t, me, href, navigate, locale, inboxName } = useAdmin();
   const detail = useResource(
@@ -211,6 +228,21 @@ export function ConversationView({ id }: { id: string }) {
         }
       : {}
   );
+  const [aside, setAside] = useState(readAside);
+  const root = useRef<HTMLDivElement>(null);
+  const asideToggle = useRef<HTMLButtonElement>(null);
+  const asideId = useId();
+  const shown = !!detail.data;
+  useLayoutEffect(() => {
+    if (shown && aside === null && root.current)
+      setAside(root.current.clientWidth >= 1100);
+  }, [shown, aside]);
+  const toggleAside = () => {
+    const open = !aside;
+    setAside(open);
+    writeAside(open);
+    if (!open) asideToggle.current?.focus();
+  };
 
   const data = detail.data;
   if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
@@ -404,7 +436,7 @@ export function ConversationView({ id }: { id: string }) {
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
   return (
-    <div className="sa">
+    <div className="sa" ref={root}>
       <div className="sa-page-head">
         <a
           className="sa-btn sa-back"
@@ -446,6 +478,16 @@ export function ConversationView({ id }: { id: string }) {
             onSave={tags => patch({ tags })}
           />
         </div>
+        <button
+          ref={asideToggle}
+          type="button"
+          className="sa-btn sa-aside-toggle"
+          aria-expanded={!!aside}
+          aria-controls={asideId}
+          onClick={toggleAside}>
+          <Svg d={paths.panel} />
+          {t(aside ? 'admin.hideDetails' : 'admin.showDetails')}
+        </button>
       </div>
       <div className="sa-split">
         <div className="sa">
@@ -763,7 +805,7 @@ export function ConversationView({ id }: { id: string }) {
           </form>
         </div>
 
-        <aside className="sa">
+        <aside className="sa" id={asideId} hidden={!aside}>
           <div className="sa-card">
             <h3>{t('admin.contact')}</h3>
             {data.contact && (

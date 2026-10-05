@@ -178,6 +178,8 @@ const en = {
   'admin.source': 'Source',
   'admin.sourceLine': 'Source: {source}',
   'admin.customerSees': 'Customer sees: {subject}',
+  'admin.showDetails': 'Details',
+  'admin.hideDetails': 'Hide details',
   'admin.confirmMerge':
     'Merge {name} into this contact? Their conversations and history move here.',
   'admin.language': 'Language',
@@ -562,6 +564,8 @@ const de: Record<MessageKey, string> = {
   'admin.source': 'Quelle',
   'admin.sourceLine': 'Quelle: {source}',
   'admin.customerSees': 'Die Kundschaft sieht: {subject}',
+  'admin.showDetails': 'Details',
+  'admin.hideDetails': 'Details ausblenden',
   'admin.confirmMerge':
     '{name} in diesen Kontakt zusammenführen? Unterhaltungen und Verlauf werden hierher verschoben.',
   'admin.language': 'Sprache',

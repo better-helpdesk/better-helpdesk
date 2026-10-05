@@ -225,6 +225,7 @@ describe('HelpdeskAdmin', () => {
       <HelpdeskAdmin basePath="/support" locale="en" />
     );
     await screen.findByText('It broke:');
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     fireEvent.click(screen.getByText('1 recent error'));
 
     expect(
@@ -1493,5 +1494,84 @@ describe('conversation shortcuts', () => {
 
     fireEvent.click(closeButton);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('details sidebar', () => {
+  beforeEach(() => {
+    // Newer Node versions shadow jsdom's localStorage with their own, which
+    // is undefined unless Node runs with --localstorage-file.
+    vi.stubGlobal('localStorage', sessionStorage);
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+  });
+  const toggle = () =>
+    screen.findByRole('button', { name: /^(Details|Hide details)$/ });
+  const aside = () => screen.getByRole('complementary', { hidden: true });
+  const widen = (width: number) => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(
+      width
+    );
+  };
+
+  it('starts hidden in a narrow container, opens, and stays open after a reload', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const button = await toggle();
+    expect(button.textContent).toBe('Details');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.getAttribute('aria-controls')).toBe(aside().id);
+    expect(aside().hidden).toBe(true);
+
+    fireEvent.click(button);
+    expect(button.textContent).toBe('Hide details');
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(aside().hidden).toBe(false);
+
+    cleanup();
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect((await toggle()).getAttribute('aria-expanded')).toBe('true');
+    expect(aside().hidden).toBe(false);
+  });
+
+  it('starts open in a wide container and stays hidden once hidden', async () => {
+    widen(1440);
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const button = await toggle();
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(aside().hidden).toBe(false);
+
+    fireEvent.click(button);
+    cleanup();
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect((await toggle()).getAttribute('aria-expanded')).toBe('false');
+    expect(aside().hidden).toBe(true);
+  });
+
+  it('moves focus to the toggle when it hides the sidebar with focus inside', async () => {
+    widen(1440);
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const button = await toggle();
+    const [inside] = within(aside()).getAllByRole('button');
+    inside?.focus();
+    expect(document.activeElement).toBe(inside);
+
+    fireEvent.click(button);
+    expect(aside().hidden).toBe(true);
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('falls back to the default and still toggles when storage is blocked', async () => {
+    widen(1440);
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('blocked', 'SecurityError');
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const button = await toggle();
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(aside().hidden).toBe(true);
   });
 });
