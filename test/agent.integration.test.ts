@@ -1624,6 +1624,30 @@ describe('agent presence', () => {
     expect(JSON.stringify(widget.data)).not.toContain('grace');
   });
 
+  it('names a nameless viewer by email and leaves out a removed one', async () => {
+    h.addUser('ada');
+    h.addUser('grace', { isAgent: true });
+    h.addUser('linus', { isAgent: true });
+    h.addUser('margaret', { isAgent: true });
+    const conversation = await open('ada');
+    for (const user of ['linus', 'margaret']) {
+      await h.call('GET', `agent/conversations/${conversation.id}`, { user });
+    }
+    const { rows } = await h.support.store.db.execute<{ email: string }>(
+      sql`UPDATE helpdesk.agent SET name = NULL WHERE external_user_id = 'user-linus' RETURNING email`
+    );
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.agent SET deactivated_at = now() WHERE external_user_id = 'user-margaret'`
+    );
+
+    const res = await h.call('GET', `agent/conversations/${conversation.id}`, {
+      user: 'grace',
+    });
+    expect(res.data.viewers.map((v: { name: string }) => v.name)).toEqual([
+      rows[0]?.email,
+    ]);
+  });
+
   it('keeps an agent on the conversation they opened when other requests touch them', async () => {
     h.addUser('ada');
     h.addUser('grace', { isAgent: true });

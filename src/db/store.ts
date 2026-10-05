@@ -747,16 +747,12 @@ export function createStore(db: Db) {
 
     /** Other agents with each conversation open, keyed by conversation id. */
     async viewers(conversationIds: string[], exceptAgentId: string) {
-      const byConversation = new Map<
-        string,
-        { id: string; name: string | null; avatarUrl: string | null }[]
-      >();
+      const byConversation = new Map<string, { id: string; name: string }[]>();
       if (conversationIds.length === 0) return byConversation;
       const rows = await db
         .select({
           id: agents.id,
-          name: agents.name,
-          avatarUrl: agents.avatarUrl,
+          name: sql<string>`coalesce(${agents.name}, ${agents.email})`,
           viewingId: agents.viewingId,
         })
         .from(agents)
@@ -765,10 +761,11 @@ export function createStore(db: Db) {
             inArray(agents.viewingId, conversationIds),
             // Sized against the conversation view's 5-second poll; change the two together.
             gt(agents.viewingAt, sql`now() - interval '15 seconds'`),
-            ne(agents.id, exceptAgentId)
+            ne(agents.id, exceptAgentId),
+            isNull(agents.deactivatedAt)
           )
         )
-        .orderBy(asc(agents.name));
+        .orderBy(sql`coalesce(${agents.name}, ${agents.email})`);
       for (const { viewingId, ...agent } of rows) {
         if (!viewingId) continue;
         byConversation.set(viewingId, [
