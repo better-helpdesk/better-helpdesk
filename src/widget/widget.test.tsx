@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -814,6 +815,39 @@ describe('Widget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     const card = (await screen.findByText('Export broken')).closest('button');
     expect(card?.textContent).toContain('Resolved');
+  });
+
+  it('offers to try again when the widget fails to load, and loads it on retry', async () => {
+    let down = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        down
+          ? new Response('{}', { status: 500 })
+          : new Response(
+              JSON.stringify(
+                String(input).includes('widget/session') ? session : {}
+              )
+            )
+      )
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('This could not be loaded.');
+    down = false;
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(
+      await screen.findByRole('button', { name: /Report a bug/ })
+    ).toBeTruthy();
+    expect(screen.queryByText('This could not be loaded.')).toBeNull();
   });
 
   it('offers no resolve button on a teammate’s shared thread', async () => {

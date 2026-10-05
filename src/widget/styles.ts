@@ -215,6 +215,9 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
   background: var(--s-accent); color: var(--s-accent-fg); font-weight: 600;
 }
 .primary:hover { background: var(--s-accent-hover); }
+.primary, .secondary, .send { transition: transform 80ms ease-out; }
+.primary:active:not(:disabled), .secondary:active, .send:active:not(:disabled) { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .primary, .secondary, .send { transition: none; } }
 .primary:disabled { background: var(--s-subtle); color: var(--s-muted); cursor: default; }
 .secondary {
   height: 36px; padding: 0 12px; border: 1px solid var(--s-border); border-radius: var(--s-r-inner);
@@ -272,6 +275,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .notice strong { font-weight: 600; }
 .notice .book { margin-top: 4px; }
 .notice a { color: var(--s-accent); font-weight: 600; }
+.notice-danger .secondary { color: var(--s-fg); }
+.notice-danger { background: color-mix(in srgb, var(--s-danger) 8%, var(--s-bg)); color: var(--s-danger); justify-items: start; gap: 8px; }
 .msgs { display: flex; flex-direction: column; gap: 12px; }
 .msg-row { display: flex; gap: 8px; align-items: flex-end; }
 .msg-row.mine { justify-content: flex-end; }
@@ -282,7 +287,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .msg-row .avatar { width: 26px; height: 26px; font-size: 10px; border: 0; background: var(--s-accent); color: var(--s-accent-fg); }
 .files a { display: block; color: var(--s-accent); font-size: 13px; padding: 2px 0; }
 
-.composer { border-top: 1px solid var(--s-border); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end; }
+.composer { border-top: 1px solid var(--s-border); background: var(--s-subtle); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end; }
 .rt-reply { flex: 1; min-width: 0; }
 .rt-reply .rt-input { min-height: 42px; max-height: 160px; }
 .send { width: 42px; height: 42px; border-radius: var(--s-r-round); border: 0; background: var(--s-accent); color: var(--s-accent-fg); display: grid; place-items: center; flex: none; }

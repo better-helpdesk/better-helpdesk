@@ -8,7 +8,16 @@ import { FREE_MAIL } from './conversation';
 import { DealDialog } from './deals';
 import { type ConversationRow, ConversationTable } from './inbox';
 import { CompanyPicker, ContactPicker } from './pickers';
-import { Avatar, Dialog, Empty, money, paths, Skeleton, Svg } from './ui';
+import {
+  Avatar,
+  Dialog,
+  Empty,
+  LoadError,
+  money,
+  paths,
+  Skeleton,
+  Svg,
+} from './ui';
 
 type Contact = {
   id: string;
@@ -193,7 +202,7 @@ export function ContactList() {
           </select>
         }
       />
-      {list.error && <p className="sa-error">{t('admin.error')}</p>}
+      {list.error && <LoadError t={t} onRetry={list.refresh} />}
       {!list.data && !list.error && (
         <Skeleton kind="table" columns={6} label={t('admin.loading')} />
       )}
@@ -311,7 +320,7 @@ export function ContactView({ id }: { id: string }) {
     id
   );
   const data = detail.data;
-  if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
+  if (detail.error) return <LoadError t={t} onRetry={detail.refresh} />;
   if (!data)
     return <Skeleton kind="cards" summary label={t('admin.loading')} />;
   const c = data.contact;
@@ -610,7 +619,7 @@ export function CompanyList() {
         newLabel={t('admin.newCompany')}
         onNew={() => setCreating(true)}
       />
-      {list.error && <p className="sa-error">{t('admin.error')}</p>}
+      {list.error && <LoadError t={t} onRetry={list.refresh} />}
       {!list.data && !list.error && (
         <Skeleton kind="table" columns={4} label={t('admin.loading')} />
       )}
@@ -690,7 +699,7 @@ export function CompanyView({ id }: { id: string }) {
     id
   );
   const data = detail.data;
-  if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
+  if (detail.error) return <LoadError t={t} onRetry={detail.refresh} />;
   if (!data) return <Skeleton kind="cards" label={t('admin.loading')} />;
   const c = data.company;
 

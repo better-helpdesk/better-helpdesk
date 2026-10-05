@@ -464,17 +464,7 @@ export function Widget(props: WidgetProps) {
               />
             )}
           {!data && session.error && (
-            <div className="body" role="alert">
-              <p className="error">{t('form.error')}</p>
-              <div className="row">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={refreshSession}>
-                  {t('thread.retry')}
-                </button>
-              </div>
-            </div>
+            <LoadFailed t={t} onRetry={refreshSession} />
           )}
           {data && view.name === 'home' && !single && (
             <div className="body" role="tabpanel">
@@ -1311,7 +1301,13 @@ function Thread({
   };
 
   const data = thread.data;
-  if (!data) return <div className="body" />;
+  if (!data) {
+    return thread.error ? (
+      <LoadFailed t={t} onRetry={() => void thread.refresh()} />
+    ) : (
+      <div className="body" />
+    );
+  }
   const answered = data.messages.some(m => m.author === 'agent');
   const typed = t(`thread.thanks.${data.conversation.type}`);
   // An unknown type falls back to its own key's last part.
@@ -1480,5 +1476,18 @@ function Thread({
         </p>
       )}
     </>
+  );
+}
+
+function LoadFailed({ t, onRetry }: { t: Translate; onRetry: () => void }) {
+  return (
+    <div className="body">
+      <div className="notice notice-danger" role="alert">
+        <span>{t('load.failed')}</span>
+        <button type="button" className="secondary" onClick={onRetry}>
+          {t('thread.retry')}
+        </button>
+      </div>
+    </div>
   );
 }

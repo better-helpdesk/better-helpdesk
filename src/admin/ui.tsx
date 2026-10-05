@@ -189,6 +189,23 @@ export function Empty({ text, action }: { text: string; action?: ReactNode }) {
   );
 }
 
+export function LoadError({
+  t,
+  onRetry,
+}: {
+  t: Translate;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="sa-notice" role="alert">
+      <span>{t('load.failed')}</span>
+      <button type="button" className="sa-btn" onClick={onRetry}>
+        {t('admin.retry')}
+      </button>
+    </div>
+  );
+}
+
 export function initials(value: string | null | undefined) {
   const words = (value ?? '?').replace(/@.*/, '').split(/[\s._-]+/);
   return words

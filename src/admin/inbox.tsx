@@ -10,6 +10,7 @@ import {
   Avatar,
   Dialog,
   Empty,
+  LoadError,
   paths,
   Select,
   Skeleton,
@@ -226,7 +227,7 @@ export function Inbox() {
           ? t('admin.selected', { count: String(visibleSelected.length) })
           : ''}
       </p>
-      {list.error && <p className="sa-error">{t('admin.error')}</p>}
+      {list.error && <LoadError t={t} onRetry={list.refresh} />}
       {!list.data && !list.error && (
         <Skeleton kind="table" label={t('admin.loading')} />
       )}
