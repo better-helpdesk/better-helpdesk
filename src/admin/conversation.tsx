@@ -151,7 +151,8 @@ function writeAside(open: boolean) {
 }
 
 export function ConversationView({ id }: { id: string }) {
-  const { api, apiBase, t, me, href, navigate, locale, inboxName } = useAdmin();
+  const { api, apiBase, t, me, href, navigate, route, locale, inboxName } =
+    useAdmin();
   const detail = useResource(
     () => api<Detail>(`agent/conversations/${id}`),
     id,
@@ -247,7 +248,7 @@ export function ConversationView({ id }: { id: string }) {
   const shown = !!detail.data;
   useLayoutEffect(() => {
     if (shown && aside === null && root.current)
-      setAside(root.current.clientWidth >= 1100);
+      setAside(root.current.clientWidth >= 900);
   }, [shown, aside]);
   const toggleAside = () => {
     const open = !aside;
@@ -500,10 +501,10 @@ export function ConversationView({ id }: { id: string }) {
       <div className="sa-page-head">
         <a
           className="sa-btn sa-back"
-          href={href({})}
+          href={href({ ...route, conversation: '' })}
           onClick={e => {
             e.preventDefault();
-            navigate({});
+            navigate({ ...route, conversation: '' });
           }}>
           <Svg d={paths.back} />
           {t('admin.inbox')}
@@ -1196,7 +1197,10 @@ function TitleEditor({
       onKeyDown={e => {
         // Saving happens once, on blur.
         if (e.key === 'Enter') e.currentTarget.blur();
-        if (e.key === 'Escape') setDraft(null);
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setDraft(null);
+        }
       }}
     />
   );
@@ -1250,7 +1254,10 @@ function TagsEditor({
         onBlur={() => void commit()}
         onKeyDown={e => {
           if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') setDraft(value.join(', '));
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(value.join(', '));
+          }
         }}
       />
       <datalist id={listId}>
@@ -1348,6 +1355,7 @@ function CannedMenu({
               }}
               onKeyDown={e => {
                 if (e.key === 'Escape') {
+                  e.preventDefault();
                   close();
                   trigger.current?.focus();
                 } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

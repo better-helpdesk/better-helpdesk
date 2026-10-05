@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
@@ -272,9 +272,10 @@ export function Inbox() {
       {list.data && rows.length > 0 && (
         <ConversationTable
           rows={rows}
-          hideStatus={filters.status !== 'any'}
+          hideStatus={filters.status !== 'any' || Boolean(route.conversation)}
+          hideContact={Boolean(route.conversation)}
           onTag={name => set('tag', name)}
-          onOpen={id => navigate({ conversation: id })}
+          onOpen={id => navigate({ ...route, conversation: id })}
           selected={visibleSelected}
           onSelect={setSelected}
           keyboard
@@ -527,7 +528,7 @@ export function ConversationTable({
   /** j/k move, Enter opens; for the inbox, which owns the page. */
   keyboard?: boolean;
 }) {
-  const { t, href, locale, inboxName, me } = useAdmin();
+  const { t, href, locale, inboxName, me, route } = useAdmin();
   const now = new Date();
   const cutoffsByInbox = new Map<string, [number, number]>();
   const cutoffs = (inbox: string) => {
@@ -545,8 +546,9 @@ export function ConversationTable({
   };
   // By id: polling re-sorts the rows and a filter swaps them.
   const [activeId, setActiveId] = useState<string | null>(null);
-  // -1 until the first j/k: the cursor shows only once someone uses it.
-  const active = rows.findIndex(r => r.id === activeId);
+  // -1 until the first j/k or an open thread: the cursor shows only once someone uses it.
+  const active = rows.findIndex(r => r.id === (activeId ?? route.conversation));
+  const wrap = useRef<HTMLDivElement>(null);
   const [anchorId, setAnchorId] = useState<string | null>(null);
   const toggle = useCallback(
     (id: string, range: boolean) => {
@@ -577,20 +579,38 @@ export function ConversationTable({
 
   const row = rows[active];
   const move = (to: number) => setActiveId(rows[to]?.id ?? null);
+  const open = (id: string) => {
+    setActiveId(id);
+    onOpen(id);
+  };
+  // A narrow container hides the list behind an open thread, and its keys go with it.
+  const shown = (run: (e: KeyboardEvent) => void) => (e: KeyboardEvent) => {
+    if (wrap.current?.checkVisibility?.() !== false) run(e);
+  };
   useShortcuts(
     keyboard
       ? {
-          j: () =>
-            move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1)),
-          k: () => move(active === -1 ? 0 : Math.max(active - 1, 0)),
-          Enter: () => row && onOpen(row.id),
-          x: e => row && toggle(row.id, e.shiftKey),
+          j: shown(() =>
+            move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1))
+          ),
+          k: shown(() => move(active === -1 ? 0 : Math.max(active - 1, 0))),
+          // Enter on a control in the open thread is that control's.
+          Enter: shown(e => {
+            const target = e.composedPath()[0];
+            if (
+              target instanceof Element &&
+              target.closest('button, a, summary')
+            )
+              return;
+            if (row) open(row.id);
+          }),
+          x: shown(e => row && toggle(row.id, e.shiftKey)),
         }
       : {}
   );
 
   return (
-    <div className="sa-table-wrap">
+    <div className="sa-table-wrap" ref={wrap}>
       <table className="sa-table">
         <thead>
           <tr>
@@ -634,8 +654,9 @@ export function ConversationTable({
                 data-unread={c.unread || undefined}
                 data-active={keyboard && index === active}
                 data-selected={selected?.includes(c.id) || undefined}
+                aria-current={c.id === route.conversation || undefined}
                 onClick={e => {
-                  if (!(e.target as Element).closest('.sa-check')) onOpen(c.id);
+                  if (!(e.target as Element).closest('.sa-check')) open(c.id);
                 }}>
                 {selected && (
                   <td className="sa-check">
@@ -683,7 +704,7 @@ export function ConversationTable({
                         onClick={e => {
                           e.preventDefault();
                           e.stopPropagation();
-                          onOpen(c.id);
+                          open(c.id);
                         }}>
                         {c.unread && (
                           <span className="sa-dot">
