@@ -134,6 +134,30 @@ describe('merging conversations', () => {
     expect(row).toEqual({ status: 'open', resolved_at: null, waiting: true });
   });
 
+  it('asks for no rating on a merged conversation', async () => {
+    const source = await open('carol', 'Twice');
+    const target = await open('carol', 'Once');
+    expect((await merge(source.id, target.id)).status).toBe(200);
+
+    const view = await h.call('GET', `widget/conversations/${source.id}`, {
+      user: 'carol',
+    });
+    expect(view.data.conversation).toMatchObject({
+      status: 'resolved',
+      merged: true,
+    });
+    const rated = await h.call(
+      'POST',
+      `widget/conversations/${source.id}/rating`,
+      { user: 'carol', body: { rating: 'bad' } }
+    );
+    expect(rated.status).toBe(409);
+    const [row] = await rows<{ status: string; rating: string | null }>(
+      sql`SELECT status, rating FROM helpdesk.conversation WHERE id = ${source.id}::uuid`
+    );
+    expect(row).toEqual({ status: 'resolved', rating: null });
+  });
+
   it('refuses a merge into itself, into an unknown conversation, and from or into a merged one', async () => {
     const a = await open('carol', 'A');
     const b = await open('carol', 'B');

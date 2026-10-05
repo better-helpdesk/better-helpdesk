@@ -63,6 +63,7 @@ type Summary = {
   lastMessageAt: string;
   preview: string | null;
   rating?: 'good' | 'bad' | null;
+  merged?: boolean;
 };
 
 type Session = {
@@ -1498,7 +1499,8 @@ function Thread({
             {t('rating.thanks')}
           </p>
         ) : (
-          data.conversation.status === 'resolved' && (
+          data.conversation.status === 'resolved' &&
+          !data.conversation.merged && (
             <RatingPrompt
               t={t}
               onRate={async body => {

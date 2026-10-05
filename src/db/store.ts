@@ -948,7 +948,7 @@ export function createStore(db: Db) {
       return row ?? null;
     },
 
-    /** Rates a resolved conversation once; null when it is not resolved or already rated. */
+    /** Rates a resolved conversation once; null when it is not resolved, merged away or already rated. */
     async rateConversation(
       id: string,
       patch: Partial<typeof conversations.$inferInsert>
@@ -960,6 +960,7 @@ export function createStore(db: Db) {
           and(
             eq(conversations.id, id),
             eq(conversations.status, 'resolved'),
+            isNull(conversations.mergedIntoId),
             isNull(conversations.rating)
           )
         )

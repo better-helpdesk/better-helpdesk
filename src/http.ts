@@ -97,6 +97,7 @@ export function createHandler(support: Helpdesk) {
       (!c.customerSeenAt || c.customerSeenAt < c.lastMessageAt) &&
       c.waitingSince === null,
     rating: c.rating,
+    merged: c.mergedIntoId !== null,
     createdAt: c.createdAt,
   });
 
