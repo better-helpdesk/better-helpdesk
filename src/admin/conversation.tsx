@@ -824,6 +824,7 @@ function TagsEditor({
   const { api, t } = useAdmin();
   const listId = useId();
   const [draft, setDraft] = useState(value.join(', '));
+  const [failed, setFailed] = useState(false);
   const top = useResource(() => api<{ tags: string[] }>('agent/tags'), 'tags');
   // A datalist completes the whole value, so each option carries what is already typed.
   const head = draft.slice(0, draft.lastIndexOf(',') + 1);
@@ -838,8 +839,15 @@ function TagsEditor({
       ),
     ];
     setDraft(next.join(', '));
+    setFailed(false);
     if (next.join() === value.join()) return;
-    await onSave(next);
+    try {
+      await onSave(next);
+    } catch {
+      setDraft(value.join(', '));
+      setFailed(true);
+      return;
+    }
     await top.refresh();
   };
   return (
@@ -864,6 +872,11 @@ function TagsEditor({
             <option key={tag} value={`${head}${head ? ' ' : ''}${tag}`} />
           ))}
       </datalist>
+      {failed && (
+        <span className="sa-error" role="alert">
+          {t('admin.error')}
+        </span>
+      )}
     </>
   );
 }

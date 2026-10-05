@@ -223,6 +223,36 @@ describe('HelpdeskAdmin', () => {
     expect(patches).toEqual([{ tags: ['billing', 'refunds'] }]);
   });
 
+  it('shows the saved tags and an error when saving them fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PATCH')
+          return new Response(JSON.stringify({ error: 'invalid' }), {
+            status: 400,
+          });
+        const url = String(input);
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const input = (await screen.findByRole('combobox', {
+      name: 'Tags',
+    })) as HTMLInputElement;
+
+    fireEvent.change(input, {
+      target: { value: `billing, ${'x'.repeat(51)}` },
+    });
+    fireEvent.blur(input);
+
+    expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+    expect(input.value).toBe('billing');
+  });
+
   it('marks the section it is in and scrolls that tab into the rail', async () => {
     // jsdom has no layout, so the method the rail calls does not exist there.
     const scrollIntoView = vi.fn();
