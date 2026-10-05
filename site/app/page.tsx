@@ -40,11 +40,6 @@ export default function Home() {
             <h1 id="hero-h">
               Your helpdesk, <em>inside</em> your app.
             </h1>
-            <p className="sub">
-              An open-source support inbox, ticketing and lightweight CRM you
-              install from npm. It runs in your Next.js app, on your Postgres,
-              behind your login.
-            </p>
             <div className="hero-cta">
               <a className="btn btn-p" href="/quickstart/">
                 Read the quickstart
@@ -53,7 +48,14 @@ export default function Home() {
               <Install />
             </div>
           </div>
-          <Wall />
+          <div className="hero-r">
+            <p className="sub">
+              An open-source support inbox, ticketing and lightweight CRM you
+              install from npm. It runs in your Next.js app, on your Postgres,
+              behind your login.
+            </p>
+            <Wall />
+          </div>
         </section>
 
         <section className="facts" aria-label="At a glance">

@@ -410,6 +410,30 @@ main,
   font-size: 19px;
   max-width: 42ch;
 }
+.hero-r {
+  display: grid;
+  gap: 24px;
+  justify-self: end;
+  width: min-content;
+}
+.hero-r .sub {
+  max-width: none;
+}
+@media (max-width: 900px) {
+  .hero-l,
+  .hero-r {
+    display: contents;
+  }
+  .hero .sub {
+    order: 1;
+  }
+  .hero-cta {
+    order: 2;
+  }
+  .wall-w {
+    order: 3;
+  }
+}
 .hero-cta {
   display: flex;
   flex-wrap: wrap;
