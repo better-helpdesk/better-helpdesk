@@ -123,3 +123,11 @@ jobs:
             -H 'Origin: http://localhost:3000' \
             -d '{"inbox":"support","type":"question","body":"Does this install still work?","email":"ci@example.test"}' \
             http://localhost:3000/api/helpdesk/widget/conversations/
+          curl -fsS -o /dev/null -X PUT \
+            -H 'content-type: application/json' \
+            -H 'Origin: http://localhost:3000' \
+            -H 'Cookie: demo-role=agent' \
+            -d '{"confirmation":{"en":"Saved by CI"}}' \
+            http://localhost:3000/api/helpdesk/agent/settings/
+          curl -fsS -H 'Cookie: demo-role=agent' \
+            http://localhost:3000/api/helpdesk/agent/settings/ | grep -q 'Saved by CI'
