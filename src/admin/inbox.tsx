@@ -387,7 +387,6 @@ export function ConversationTable({
             return (
               <tr
                 key={c.id}
-                className={waiting ? 'sa-waiting' : undefined}
                 data-unread={c.unread || undefined}
                 data-active={keyboard && index === active}
                 onClick={() => onOpen(c.id)}>
