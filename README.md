@@ -450,6 +450,74 @@ Writes through `helpdesk.store` raise no events, so a handler cannot set off
 itself. A customer reply that reopens a resolved conversation raises only
 `message.created`; its `conversation.status` is `open` again.
 
+### Calling it from your own code
+
+The object `buildHelpdesk()` returns is the API. Your server code calls it
+in process, so there is no API token to issue, no webhook to register and no
+REST client to install.
+
+To open a conversation when a payment fails, sign an identity token for the
+customer (this needs `identityTokenSecret`, as in
+[Signed-in users on another origin](#signed-in-users-on-another-origin)) and
+hand `createConversation` a request that carries it. The request carries no
+session, so `identify` returns null for it and the token decides who the
+customer is:
+
+```ts
+// app/api/billing/webhook/route.ts
+import { signIdentityToken } from 'better-helpdesk';
+import { helpdesk } from '@/lib/helpdesk';
+
+export async function POST(request: Request) {
+  const event = await verifyBillingWebhook(request); // however your provider does it
+  if (event.type !== 'invoice.payment_failed') return new Response(null, { status: 204 });
+  const { user, invoice } = event;
+
+  const token = signIdentityToken(
+    { sub: user.id, email: user.email, email_verified: true, name: user.name },
+    process.env.HELPDESK_IDENTITY_SECRET!,
+    { expiresInSeconds: 60 }
+  );
+  const { conversation } = await helpdesk.createConversation(
+    new Request(request.url, { headers: { 'x-helpdesk-identity': token } }),
+    {
+      inbox: 'billing',
+      type: 'question',
+      subject: `Payment failed for invoice ${invoice.number}`,
+      body: `The card on file was declined for invoice ${invoice.number}.`,
+    }
+  );
+  return Response.json({ reference: conversation && helpdesk.reference(conversation) });
+}
+```
+
+The conversation lands on the customer's contact, creating it if they never
+wrote in, and goes through the same path as one from the widget: agents are
+notified, AI triage runs when `ai` is set and `onEvent` hears
+`conversation.created`. The body is stored as the customer's first message. Give `billing` an entry in
+`inboxes` without `receipt`, or the customer is mailed a receipt for a
+message they did not send.
+
+To put a "plan upgraded" event on a contact's timeline from your billing
+code:
+
+```ts
+await helpdesk.track({
+  externalUserId: user.id,
+  event: 'plan.upgraded',
+  props: { from: 'starter', to: 'team' },
+});
+```
+
+`track` returns `false` and records nothing when that user has no contact
+yet. Pass `externalOrgId` instead to put the event on the company's
+timeline.
+
+For reads, `helpdesk.store` holds the queries the agent UI runs, such as
+`listInbox`, `listContacts` and `listActivities`; writes through it skip
+`onEvent`. Both recipes are type-checked in
+[`examples/demo/lib/recipes.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/demo/lib/recipes.ts).
+
 ### Storage, AI and help search
 
 - `storage` presigns uploads and downloads and stores attachments, so an
