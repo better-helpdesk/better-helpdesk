@@ -874,7 +874,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: /3 conversations are waiting/ })
+      await screen.findByRole('button', { name: /3 conversations waiting/ })
     );
     expect(
       (await screen.findByRole('link', { name: /Open inbox/ })).getAttribute(
