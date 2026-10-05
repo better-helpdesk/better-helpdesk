@@ -226,5 +226,90 @@ describe('bulk conversation changes', () => {
       bulk({ ids: [b, a], priority: 'normal' }),
     ]);
     expect(results.map(r => r.status)).toEqual([200, 200, 200, 200]);
+
+    // The batches lock both rows, so they apply one after another: both rows
+    // end on the same priority and saw the same changes.
+    const after = await state([a, b]);
+    const final = after[0]?.priority;
+    expect(['high', 'low', 'urgent', 'normal']).toContain(final);
+    expect(after[1]?.priority).toBe(final);
+    const changes = async (id: string) =>
+      (await timeline(id))
+        .map(e => {
+          expect(e.kind).toBe('priority');
+          return e.data as { from: string; to: string };
+        })
+        .map(d => `${d.from}>${d.to}`)
+        .sort();
+    const changesA = await changes(a);
+    expect(changesA).toEqual(await changes(b));
+    // Chained from 'normal', every priority is entered as often as it is
+    // left, except that the chain leaves 'normal' and ends on `final`.
+    const balance = new Map<string, number>();
+    for (const change of changesA) {
+      const [from = '', to = ''] = change.split('>');
+      balance.set(from, (balance.get(from) ?? 0) - 1);
+      balance.set(to, (balance.get(to) ?? 0) + 1);
+    }
+    for (const p of ['high', 'low', 'urgent', 'normal']) {
+      expect(balance.get(p) ?? 0).toBe(
+        (p === final ? 1 : 0) - (p === 'normal' ? 1 : 0)
+      );
+    }
   });
+
+  it('reopens resolved conversations from concurrent batches like a single change does', async () => {
+    const pairs = [];
+    for (let i = 0; i < 8; i++) {
+      pairs.push({
+        bulk: await open('resolved'),
+        single: await open('resolved'),
+      });
+    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<'timeout'>(resolve => {
+      timer = setTimeout(() => resolve('timeout'), 8_000);
+    });
+    const results = await Promise.race([
+      Promise.all(pairs.map(p => bulk({ ids: [p.bulk], status: 'open' }))),
+      timeout,
+    ]);
+    clearTimeout(timer);
+    expect(results).not.toBe('timeout');
+    expect(results !== 'timeout' && results.map(r => r.status)).toEqual(
+      pairs.map(() => 200)
+    );
+    for (const { single } of pairs) {
+      await h.call('PATCH', `agent/conversations/${single}`, {
+        user: 'agent',
+        body: { status: 'open' },
+      });
+    }
+
+    const waiting = await rows<{
+      id: string;
+      status: string;
+      waiting_since: Date | null;
+      last_at: Date;
+      last_author: string;
+    }>(
+      sql`SELECT c.id, c.status, c.waiting_since,
+            date_trunc('milliseconds', m.created_at) AS last_at, m.author_type AS last_author
+          FROM helpdesk.conversation c
+          JOIN LATERAL (SELECT created_at, author_type FROM helpdesk.message
+            WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) m ON true
+          WHERE c.id IN ${pairs.map(p => p.bulk)}`
+    );
+    expect(waiting).toHaveLength(pairs.length);
+    // waitingSince passes through a JS Date, which keeps milliseconds.
+    for (const row of waiting) {
+      expect(row.status).toBe('open');
+      expect(row.last_author).toBe('contact');
+      expect(row.waiting_since).toEqual(row.last_at);
+    }
+    for (const { bulk: b, single } of pairs) {
+      expect(await timeline(b)).toEqual(await timeline(single));
+    }
+  }, 15_000);
 });

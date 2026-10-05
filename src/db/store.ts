@@ -868,13 +868,13 @@ export function createStore(db: Db) {
     /**
      * Updates each conversation with the patch `plan` makes from it, locked and
      * in one transaction: all of them, or none when an id is missing or `plan` throws.
+     * `plan` is synchronous so it cannot wait on the pool while holding a connection.
      */
     async updateConversations(
       ids: string[],
-      plan: (conversation: Conversation) => Promise<{
-        patch: Partial<typeof conversations.$inferInsert>;
-        unlessResolved: boolean;
-      }>
+      plan: (
+        conversation: Conversation
+      ) => Partial<typeof conversations.$inferInsert>
     ) {
       return db.transaction(async tx => {
         // Locked in id order, so overlapping batches cannot deadlock each other.
@@ -888,18 +888,11 @@ export function createStore(db: Db) {
         if (missing.length > 0) return { missing, changes: [] };
         const changes = [];
         for (const before of rows) {
-          const { patch, unlessResolved } = await plan(before);
+          const patch = plan(before);
           const [updated] = await tx
             .update(conversations)
             .set(patch)
-            .where(
-              and(
-                eq(conversations.id, before.id),
-                unlessResolved
-                  ? ne(conversations.status, 'resolved')
-                  : undefined
-              )
-            )
+            .where(eq(conversations.id, before.id))
             .returning();
           changes.push({ before, patch, updated: updated ?? null });
         }

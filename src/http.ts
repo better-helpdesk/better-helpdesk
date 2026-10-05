@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
-import type { Agent, Conversation } from './db/store';
+import type { Agent, Conversation, Message } from './db/store';
 import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
@@ -704,10 +704,15 @@ export function createHandler(support: Helpdesk) {
     return data;
   };
 
-  /** The row update an agent's change makes to `conversation` as it stands, with whether it resolves it. */
-  async function conversationPatch(
+  /**
+   * The row update an agent's change makes to `conversation` as it stands, with
+   * whether it resolves it. `last` is its newest public message, needed when
+   * a resolved conversation is reopened.
+   */
+  function conversationPatch(
     conversation: Conversation,
-    data: ConversationBody
+    data: ConversationBody,
+    last: Message | undefined
   ) {
     const { subject, ...rest } = data;
     const patch: Partial<Conversation> = {
@@ -731,11 +736,11 @@ export function createHandler(support: Helpdesk) {
     } else if (data.status && data.status !== 'resolved') {
       patch.resolvedAt = null;
       // Reopened while the customer had the last word: they are waiting again.
-      if (conversation.status === 'resolved') {
-        const last = (await store.lastMessages([conversation.id])).get(
-          conversation.id
-        );
-        if (last?.authorType === 'contact') patch.waitingSince = last.createdAt;
+      if (
+        conversation.status === 'resolved' &&
+        last?.authorType === 'contact'
+      ) {
+        patch.waitingSince = last.createdAt;
       }
     }
     return { patch, resolving };
@@ -746,7 +751,11 @@ export function createHandler(support: Helpdesk) {
     const data = await checkConversationBody(
       conversationBody.parse(await body())
     );
-    const { patch, resolving } = await conversationPatch(conversation, data);
+    const last =
+      conversation.status === 'resolved'
+        ? (await store.lastMessages([conversation.id])).get(conversation.id)
+        : undefined;
+    const { patch, resolving } = conversationPatch(conversation, data, last);
     // A concurrent resolve that lands first keeps its resolvedAt and its timeline row.
     const updated = await store.updateConversation(conversation.id, patch, {
       unlessResolved: resolving,
@@ -770,9 +779,15 @@ export function createHandler(support: Helpdesk) {
   agentRoute('POST', 'conversations/bulk', async ({ body, agent }) => {
     const { ids, addTag, ...fields } = bulkBody.parse(await body());
     const data = await checkConversationBody(fields);
+    // Read before the transaction: inside it a second pool connection could
+    // wait on connections held by batches that wait on it.
+    const lastMessages =
+      data.status && data.status !== 'resolved'
+        ? await store.lastMessages(ids)
+        : new Map<string, Message>();
     const { missing, changes } = await store.updateConversations(
       ids,
-      async conversation => {
+      conversation => {
         const tags =
           addTag && !conversation.tags.includes(addTag)
             ? [...conversation.tags, addTag]
@@ -780,11 +795,11 @@ export function createHandler(support: Helpdesk) {
         if (tags && tags.length > MAX_TAGS) {
           throw new HelpdeskError(400, 'Too many tags', [conversation.id]);
         }
-        const { patch, resolving } = await conversationPatch(
+        return conversationPatch(
           conversation,
-          tags ? { ...data, tags } : data
-        );
-        return { patch, unlessResolved: resolving };
+          tags ? { ...data, tags } : data,
+          lastMessages.get(conversation.id)
+        ).patch;
       }
     );
     if (missing.length > 0) throw new HelpdeskError(404, 'Not found', missing);
