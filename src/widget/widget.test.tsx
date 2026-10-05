@@ -45,6 +45,22 @@ const session = {
   conversations: [],
 };
 
+const ownThread = {
+  id: 'c1',
+  reference: 'DG-1',
+  subject: 'Export broken',
+  type: 'bug',
+  status: 'open',
+  inbox: 'support',
+  own: true,
+  unread: false,
+  sharedWithCompany: false,
+  lastMessageAt: '2026-01-01T00:00:00.000Z',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  preview: null,
+  lastFromSupport: true,
+};
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -468,21 +484,7 @@ describe('Widget', () => {
 
   it('lets the author mark a thread resolved and says so when that fails', async () => {
     Element.prototype.scrollIntoView = () => {};
-    const summary = {
-      id: 'c1',
-      reference: 'DG-1',
-      subject: 'Export broken',
-      type: 'bug',
-      status: 'open',
-      inbox: 'support',
-      own: true,
-      unread: false,
-      sharedWithCompany: false,
-      lastMessageAt: '2026-01-01T00:00:00.000Z',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      preview: null,
-      lastFromSupport: true,
-    };
+    const summary = ownThread;
     let status = 'open';
     let failPatch = true;
     const patches: unknown[] = [];
@@ -558,19 +560,10 @@ describe('Widget', () => {
   it('offers no resolve button on a teammate’s shared thread', async () => {
     Element.prototype.scrollIntoView = () => {};
     const summary = {
-      id: 'c1',
-      reference: 'DG-1',
+      ...ownThread,
       subject: 'Shared thread',
-      type: 'question',
-      status: 'open',
-      inbox: 'support',
       own: false,
-      unread: false,
       sharedWithCompany: true,
-      lastMessageAt: '2026-01-01T00:00:00.000Z',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      preview: null,
-      lastFromSupport: true,
     };
     mockApi({
       'widget/session': { ...session, conversations: [summary] },

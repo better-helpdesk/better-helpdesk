@@ -251,15 +251,17 @@ export function createHandler(support: Helpdesk) {
           sharedWithCompany: z.boolean().optional(),
           status: z.literal('resolved').optional(),
         })
+        .refine(d => d.sharedWithCompany !== undefined || d.status, {
+          message: 'Nothing to change',
+        })
         .parse(await body());
-      const share = data.sharedWithCompany;
-      if (share !== undefined) {
-        if (share && !conversation.companyId) {
+      if (data.sharedWithCompany !== undefined) {
+        if (data.sharedWithCompany && !conversation.companyId) {
           throw new HelpdeskError(400, 'Conversation has no organization');
         }
         // An agent may have linked the thread to a company its author never proved membership of.
         if (
-          share &&
+          data.sharedWithCompany &&
           !customer.companies.some(c => c.id === conversation.companyId)
         ) {
           throw new HelpdeskError(403, 'Not a member of that organization');
@@ -270,7 +272,7 @@ export function createHandler(support: Helpdesk) {
           !(await store.setSharing(
             conversation.id,
             conversation.companyId,
-            share
+            data.sharedWithCompany
           ))
         ) {
           throw new HelpdeskError(409, 'Conversation moved');
@@ -285,7 +287,14 @@ export function createHandler(support: Helpdesk) {
           snoozedUntil: null,
         };
         const updated = await store.updateConversation(conversation.id, patch);
-        await emitUpdated(config, conversation, updated, patch, null);
+        await emitUpdated(
+          config,
+          conversation,
+          updated,
+          patch,
+          null,
+          'customer'
+        );
       }
       return json({ ok: true });
     }

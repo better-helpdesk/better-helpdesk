@@ -596,7 +596,18 @@ describe('HelpdeskAdmin', () => {
         event(10, 'participant.added', { contactId: 'p2' }),
         event(11, 'priority', { from: 'normal', to: 'urgent' }, 'gone'),
         event(12, 'mystery'),
-        event(13, 'status', { from: 'open', to: 'resolved' }, null),
+        event(
+          13,
+          'snoozedUntil',
+          { from: until, to: null, by: 'customer' },
+          null
+        ),
+        event(
+          13,
+          'status',
+          { from: 'pending', to: 'resolved', by: 'customer' },
+          null
+        ),
       ],
     };
     onTestFinished(() => {

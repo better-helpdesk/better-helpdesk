@@ -248,8 +248,7 @@ export function ConversationView({ id }: { id: string }) {
         if (e.agentId) {
           return t('event.status', { name, to: t(`agentStatus.${to}`) });
         }
-        // Agentless resolves come from the customer's widget; give any other source its own event.
-        return to === 'resolved'
+        return e.data.by === 'customer'
           ? t('event.resolvedByCustomer')
           : t('event.statusAuto', { to: t(`agentStatus.${to}`) });
       case 'priority':
@@ -288,7 +287,10 @@ export function ConversationView({ id }: { id: string }) {
             })
           : e.agentId
             ? t('event.unsnoozed', { name })
-            : t('event.woken');
+            : // A customer's resolve ends the snooze; its status line says so.
+              e.data.by === 'customer'
+              ? ''
+              : t('event.woken');
       case 'reopened':
         return t('event.reopened');
       case 'suggestion.accepted':
