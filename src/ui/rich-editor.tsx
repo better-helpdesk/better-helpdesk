@@ -15,8 +15,9 @@ type Format = 'bold' | 'italic' | 'underline' | 'ul' | 'ol' | 'pre' | 'link';
 
 const URL_ONLY = /^(https?:\/\/|mailto:)\S+$/i;
 
-// ponytail: an indentation sniff, so traces (JS, Java, Python), JSON and YAML
-// paste as code; unindented log lines stay text until the toolbar toggles them.
+// ponytail: an indentation sniff for plain-text pastes (a terminal, a console),
+// so traces, JSON and YAML arrive as code; unindented log lines stay text until
+// the toolbar toggles them.
 export const looksLikeCode = (text: string) =>
   text.trim().split('\n').length >= 3 &&
   /^(\t| {2,})(?![-*•]\s|\d+[.)]\s)\S/m.test(text);
@@ -359,12 +360,12 @@ export function RichEditor({
               'insertHTML',
               false,
               richToHtml(
-                looksLikeCode(text)
-                  ? fence(
-                      text.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, '')
-                    )
-                  : html
-                    ? htmlToRich(html)
+                html
+                  ? htmlToRich(html)
+                  : looksLikeCode(text)
+                    ? fence(
+                        text.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, '')
+                      )
                     : text
               )
             );

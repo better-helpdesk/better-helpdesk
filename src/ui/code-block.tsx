@@ -15,6 +15,8 @@ export function CodeBlock({ text, t }: { text: string; t: Translate }) {
   }, [status]);
 
   const copy = async () => {
+    // Emptied first, so a second copy is announced again.
+    setStatus(null);
     try {
       await navigator.clipboard.writeText(text);
       setStatus('copied');

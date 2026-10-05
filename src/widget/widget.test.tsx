@@ -178,6 +178,57 @@ describe('Widget', () => {
     );
   });
 
+  it('keeps the formatting of a rich paste whose text is indented', async () => {
+    const calls = mockApi({
+      'widget/session': session,
+      'widget/conversations/': {
+        conversation: { id: 'c1', reference: 'DG-1000' },
+      },
+    });
+    // jsdom has no editing commands; this one only appends, as at the end.
+    document.execCommand = (command: string, _?: boolean, html?: string) => {
+      if (command !== 'insertHTML' || !html) return false;
+      screen
+        .getByRole('textbox', { name: 'What happened?' })
+        .insertAdjacentHTML('beforeend', html);
+      return true;
+    };
+    onTestFinished(() => {
+      Reflect.deleteProperty(document, 'execCommand');
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['question', 'bug']}
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Report a bug/ })
+    );
+    const message = screen.getByRole('textbox', { name: 'What happened?' });
+    const trace = 'Plan:\n    ◦ export\n    ◦ import';
+    const html = '<p><b>Plan:</b></p><ul><li>export</li><li>import</li></ul>';
+    fireEvent.paste(message, {
+      clipboardData: {
+        items: [],
+        getData: (type: string) => (type === 'text/plain' ? trace : html),
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({ body: '**Plan:**\n\n- export\n- import' })
+    );
+  });
+
   it('shows each captured page error and sends only the ones left ticked', async () => {
     const calls = mockApi({
       'widget/session': session,
