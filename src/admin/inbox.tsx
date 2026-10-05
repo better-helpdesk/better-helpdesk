@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
@@ -17,6 +17,7 @@ export type ConversationRow = {
   waitingSince: string | null;
   lastMessageAt: string;
   assigneeId: string | null;
+  tags: string[];
   preview?: string | null;
   contact?: { id: string; name: string | null; email: string | null };
 };
@@ -28,11 +29,14 @@ const LATE_HOURS = 24;
 export function Inbox() {
   const { api, t, me, route, navigate, inboxName } = useAdmin();
   const [query, setQuery] = useState(route.q ?? '');
+  const [tag, setTag] = useState(route.tag ?? '');
+  const tagListId = useId();
   const filters = {
     inbox: route.inbox ?? '',
     status: route.status ?? 'open',
     assignee: route.assignee ?? '',
     q: route.q ?? '',
+    tag: route.tag ?? '',
     sort: route.sort ?? '',
     priority: route.priority ?? '',
   };
@@ -49,8 +53,13 @@ export function Inbox() {
     params,
     10_000
   );
+  const topTags = useResource(
+    () => api<{ tags: string[] }>('agent/tags'),
+    'tags'
+  );
   const set = (key: string, value: string) =>
     navigate({ ...filters, [key]: value });
+  useEffect(() => setTag(route.tag ?? ''), [route.tag]);
   useEffect(() => {
     const refresh = () => void list.refresh();
     window.addEventListener(HELPDESK_CHANGED, refresh);
@@ -62,8 +71,9 @@ export function Inbox() {
   );
   const rows = priority === 'high' ? urgent : all;
   const filtered =
-    Boolean(filters.assignee || filters.inbox || filters.q || priority) ||
-    filters.status !== 'open';
+    Boolean(
+      filters.assignee || filters.inbox || filters.q || filters.tag || priority
+    ) || filters.status !== 'open';
 
   return (
     <div className="sa">
@@ -108,6 +118,26 @@ export function Inbox() {
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
+        </form>
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            set('tag', tag.trim().toLowerCase());
+          }}>
+          <input
+            type="search"
+            className="sa-input sa-tag-filter"
+            aria-label={t('admin.tag')}
+            placeholder={t('admin.tagFilter')}
+            list={tagListId}
+            value={tag}
+            onChange={e => setTag(e.target.value)}
+          />
+          <datalist id={tagListId}>
+            {(topTags.data?.tags ?? []).map(name => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
         </form>
         <select
           className="sa-select"
@@ -170,6 +200,7 @@ export function Inbox() {
                   className="sa-btn"
                   onClick={() => {
                     setQuery('');
+                    setTag('');
                     navigate({});
                   }}>
                   {t('admin.clearFilters')}
@@ -183,6 +214,7 @@ export function Inbox() {
         <ConversationTable
           rows={rows}
           hideStatus={filters.status !== 'any'}
+          onTag={name => set('tag', name)}
           onOpen={id => navigate({ conversation: id })}
           keyboard
         />
@@ -271,8 +303,11 @@ export function ConversationTable({
   keyboard = false,
   hideContact = false,
   hideStatus = false,
+  onTag,
 }: {
   rows: ConversationRow[];
+  /** Narrows the list to a tag; without it, row tags are plain labels. */
+  onTag?: (tag: string) => void;
   /** When the list is filtered to one status, the column would repeat it. */
   hideStatus?: boolean;
   onOpen: (id: string) => void;
@@ -379,6 +414,29 @@ export function ConversationTable({
                       <span className="sa-fine">
                         {t(`agentType.${c.type}`)} · {inboxName(c.inbox)}
                       </span>
+                      {c.tags.length > 0 && (
+                        <span className="sa-tags">
+                          {c.tags.map(name =>
+                            onTag ? (
+                              <button
+                                key={name}
+                                type="button"
+                                className="sa-pill sa-tag"
+                                aria-label={`${t('admin.tagFilter')}: ${name}`}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  onTag(name);
+                                }}>
+                                {name}
+                              </button>
+                            ) : (
+                              <span key={name} className="sa-pill sa-tag">
+                                {name}
+                              </span>
+                            )
+                          )}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </td>

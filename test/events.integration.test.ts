@@ -131,6 +131,20 @@ describe('onEvent', () => {
     });
   });
 
+  it('reports the tags an agent changed', async () => {
+    const { id } = await open();
+    h.addUser('agent', { isAgent: true });
+    await h.call('PATCH', `agent/conversations/${id}`, {
+      user: 'agent',
+      body: { tags: ['Billing'] },
+    });
+    expect(events[1]).toMatchObject({
+      kind: 'conversation.updated',
+      conversation: { tags: ['billing'] },
+      before: { tags: [] },
+    });
+  });
+
   it('stays quiet when an agent changes nothing', async () => {
     const { id } = await open();
     h.addUser('agent', { isAgent: true });

@@ -425,6 +425,9 @@ export function createHandler(support: Helpdesk) {
       run({ ...ctx, agent: await support.requireAgent(ctx.request) })
     );
 
+  const tag = z.string().trim().min(1).max(50);
+  const tags = z.array(tag).max(50).optional();
+
   const requireConversation = async (id: string) => {
     if (!uuid.safeParse(id).success) throw new HelpdeskError(404, 'Not found');
     const conversation = await store.getConversation(id);
@@ -509,6 +512,8 @@ export function createHandler(support: Helpdesk) {
     json({ waiting: await store.countWaiting() })
   );
 
+  agentRoute('GET', 'tags', async () => json({ tags: await store.topTags() }));
+
   agentRoute('GET', 'agents', async () =>
     json({ agents: await store.listAgents() })
   );
@@ -534,6 +539,7 @@ export function createHandler(support: Helpdesk) {
             : id('assignee'),
       contactId: id('contactId'),
       companyId: id('companyId'),
+      tag: p.get('tag')?.trim().toLowerCase() || undefined,
       query: p.get('q') || undefined,
       sort: p.get('sort') === 'priority' ? 'priority' : 'waiting',
     });
@@ -611,6 +617,11 @@ export function createHandler(support: Helpdesk) {
         subject: z.string().trim().max(200).nullable().optional(),
         assigneeId: uuid.nullable().optional(),
         companyId: uuid.nullable().optional(),
+        tags: z
+          .array(tag.toLowerCase())
+          .max(50)
+          .transform(list => [...new Set(list)])
+          .optional(),
       })
       .parse(await body());
     if (data.assigneeId && !(await store.getActiveAgent(data.assigneeId))) {
@@ -792,7 +803,6 @@ export function createHandler(support: Helpdesk) {
     .refine(s => config.leadStages.includes(s))
     .nullable()
     .optional();
-  const tags = z.array(z.string().trim().min(1).max(50)).max(50).optional();
 
   agentRoute('GET', 'contacts', async ({ url }) => {
     const p = url.searchParams;

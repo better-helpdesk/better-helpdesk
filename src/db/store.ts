@@ -1,5 +1,6 @@
 import {
   and,
+  arrayContains,
   asc,
   desc,
   eq,
@@ -61,6 +62,7 @@ export type InboxFilter = {
   assigneeId?: string | null;
   contactId?: string;
   companyId?: string;
+  tag?: string;
   query?: string;
   /** Longest waiting first by default; `priority` puts urgent and high on top. */
   sort?: 'waiting' | 'priority';
@@ -639,6 +641,9 @@ export function createStore(db: Db) {
         filter.companyId
           ? eq(conversations.companyId, filter.companyId)
           : undefined,
+        filter.tag
+          ? arrayContains(conversations.tags, [filter.tag])
+          : undefined,
       ];
       if (q) {
         const number = Number(q.replace(/^\D+-/, ''));
@@ -706,6 +711,14 @@ export function createStore(db: Db) {
         )
         .orderBy(desc(agents.lastSeenAt))
         .limit(limit);
+    },
+
+    // Counts over every conversation; window it on last_message_at if that slows the inbox.
+    async topTags() {
+      const result = await db.execute<{ tag: string }>(
+        sql`SELECT tag FROM ${conversations}, unnest(${conversations.tags}) AS tag GROUP BY tag ORDER BY count(*) DESC, tag LIMIT 15`
+      );
+      return result.rows.map(r => r.tag);
     },
 
     async countWaiting() {

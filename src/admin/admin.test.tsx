@@ -47,6 +47,7 @@ const conversation = {
   lastMessageAt: new Date().toISOString(),
   assigneeId: null,
   companyId: null,
+  tags: ['billing'],
   contact: { id: 'p1', name: 'Ada', email: 'ada@example.test' },
   context: { url: 'javascript:alert(1)', title: 'Controls' },
   aiSuggestion: null,
@@ -82,6 +83,8 @@ const routes: Record<string, unknown> = {
   },
   'agent/agents/': { agents: [] },
   'agent/canned/': { replies: [] },
+  'agent/tags/': { tags: ['billing', 'vip'] },
+  'agent/settings/': { confirmation: {} },
 };
 
 const original = routes['agent/conversations/c1/'];
@@ -158,6 +161,97 @@ describe('HelpdeskAdmin', () => {
     ).toBeTruthy();
     expect(composer.textContent).toBe('');
     expect(posts.filter(u => u.includes('/messages'))).toHaveLength(1);
+  });
+
+  it('filters the inbox by a tag on a row and keeps it across other filters', async () => {
+    const lists: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.includes('agent/conversations/?')) lists.push(url);
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Filter by tag: billing' })
+    );
+    expect(window.location.search).toContain('tag=billing');
+    expect(
+      (screen.getByRole('combobox', { name: 'Tag' }) as HTMLInputElement).value
+    ).toBe('billing');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Status' }), {
+      target: { value: 'pending' },
+    });
+    expect(window.location.search).toContain('tag=billing');
+    await act(async () => {});
+    expect(lists.at(-1)).toContain('tag=billing');
+    expect(window.location.pathname).toBe('/support/conversations/');
+  });
+
+  it('saves the tags typed under the title as a list', async () => {
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'PATCH')
+          patches.push(JSON.parse(String(init.body)));
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const input = (await screen.findByRole('combobox', {
+      name: 'Tags',
+    })) as HTMLInputElement;
+    expect(input.value).toBe('billing');
+
+    fireEvent.change(input, {
+      target: { value: 'billing, Refunds, BILLING,' },
+    });
+    fireEvent.blur(input);
+
+    await act(async () => {});
+    expect(patches).toEqual([{ tags: ['billing', 'refunds'] }]);
+  });
+
+  it('shows the saved tags and an error when saving them fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PATCH')
+          return new Response(JSON.stringify({ error: 'invalid' }), {
+            status: 400,
+          });
+        const url = String(input);
+        const key = Object.keys(routes)
+          .sort((a, b) => b.length - a.length)
+          .find(k => url.includes(k));
+        return new Response(JSON.stringify(key ? routes[key] : {}));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const input = (await screen.findByRole('combobox', {
+      name: 'Tags',
+    })) as HTMLInputElement;
+
+    fireEvent.change(input, {
+      target: { value: `billing, ${'x'.repeat(51)}` },
+    });
+    fireEvent.blur(input);
+
+    expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+    expect(input.value).toBe('billing');
   });
 
   it('marks the section it is in and scrolls that tab into the rail', async () => {

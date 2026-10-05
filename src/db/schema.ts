@@ -172,6 +172,7 @@ export const conversations = helpdesk.table(
       .notNull()
       .default({}),
     aiSuggestion: jsonb('ai_suggestion').$type<AiSuggestion>(),
+    tags: text('tags').array().notNull().default(sql`'{}'`),
     waitingSince: ts('waiting_since'),
     remindedAt: ts('reminded_at'),
     customerSeenAt: ts('customer_seen_at'),
@@ -189,6 +190,7 @@ export const conversations = helpdesk.table(
     index('conversation_company_idx').on(t.companyId),
     index('conversation_waiting_idx').on(t.waitingSince),
     index('conversation_search_idx').using('gin', t.search),
+    index('conversation_tags_idx').using('gin', t.tags),
   ]
 );
 
