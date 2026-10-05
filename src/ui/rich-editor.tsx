@@ -2,8 +2,8 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
   type Ref,
-  useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -244,7 +244,8 @@ export function RichEditor({
 
   // Content set from outside (a canned reply, a draft, a reset) replaces what
   // is shown; the editor's own edits come back round unchanged and are skipped.
-  useEffect(() => {
+  // Before paint, or the box shows its old text under its new label for a frame.
+  useLayoutEffect(() => {
     const node = el.current;
     if (!node || value === emitted.current) return;
     node.innerHTML = richToHtml(value);

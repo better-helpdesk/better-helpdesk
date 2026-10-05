@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import type { Locale } from '../config';
 import { useAdmin } from './context';
@@ -55,7 +55,8 @@ export function SnoozeControl({
   const [failed, setFailed] = useState(false);
   const presets = snoozePresets(new Date());
 
-  useEffect(() => {
+  // Bound before paint, so z works as soon as the select shows.
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (

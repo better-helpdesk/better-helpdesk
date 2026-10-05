@@ -1,7 +1,15 @@
 // @vitest-environment jsdom
+import { createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 
-import { htmlToRich, looksLikeCode, richToHtml } from './rich-editor';
+import { translator } from './i18n';
+import {
+  htmlToRich,
+  looksLikeCode,
+  RichEditor,
+  richToHtml,
+} from './rich-editor';
 
 describe('htmlToRich', () => {
   it('keeps bold, italic, underline, lists and links, and nothing else', () => {
@@ -166,5 +174,45 @@ describe('RichText', () => {
     expect(
       renderToStaticMarkup(createElement(RichText, { text }))
     ).not.toContain('(evil.example)');
+  });
+});
+
+describe('RichEditor', () => {
+  it('shows a value set from outside in the same commit as its label', async () => {
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    // Read after the commit's DOM writes, before React runs its passive effects.
+    const firstPaint = () =>
+      new Promise<string>(resolve => {
+        const observer = new MutationObserver(() => {
+          observer.disconnect();
+          const box = container.querySelector('[role="textbox"]');
+          resolve(`${box?.getAttribute('aria-label')}: ${box?.textContent}`);
+        });
+        observer.observe(container, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+      });
+    const show = (label: string, value: string) =>
+      root.render(
+        createElement(RichEditor, {
+          value,
+          label,
+          onChange: () => {},
+          t: translator('en'),
+          className: '',
+        })
+      );
+
+    let painted = firstPaint();
+    show('Internal note', 'Ask billing first');
+    expect(await painted).toBe('Internal note: Ask billing first');
+
+    painted = firstPaint();
+    show('Reply', 'Try the new export');
+    expect(await painted).toBe('Reply: Try the new export');
+    root.unmount();
   });
 });
