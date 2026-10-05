@@ -82,7 +82,7 @@ As of 5 October 2026. Better Helpdesk's column describes `main` on that
 date; the others come from their public pages, read on 2 October 2026 and
 collected in [`docs/research/2026-10`](https://github.com/better-helpdesk/better-helpdesk/tree/main/docs/research/2026-10). Pricing is per
 agent or seat per month, billed yearly, in US dollars. *By design* means a
-deliberate scope decision; see [Status](#status).
+deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md).
 
 |                         | Better Helpdesk                                   | Chatwoot                                       | Libredesk                          | Intercom                                     | Zendesk                                       |
 | ----------------------- | ------------------------------------------------- | ---------------------------------------------- | ---------------------------------- | -------------------------------------------- | --------------------------------------------- |
@@ -109,7 +109,7 @@ deliberate scope decision; see [Status](#status).
 | Events out              | `onEvent` in your code                            | webhooks [^c16]                                | webhooks [^l14]                    | webhooks [^i15]                              | webhooks [^z14]                               |
 | API                     | in-process functions, by design                   | REST [^c17]                                    | REST with API keys [^l10]          | REST [^i1]                                   | REST [^z1]                                    |
 | Roles                   | `isAgent`, by design                              | custom roles, paid tier [^c18]                 | custom roles [^l3]                 | custom roles [^i16]                          | custom roles on Enterprise [^z15]             |
-| Languages               | English and Swiss German                          | many, community-translated [^c1]               | 13 [^l15]                          | many [^i1]                                   | many [^z1]                                    |
+| Languages               | English and German                                | many, community-translated [^c1]               | 13 [^l15]                          | many [^i1]                                   | many [^z1]                                    |
 | Theming                 | CSS custom properties                             | widget settings [^c19]                         | widget settings [^l16]             | brand colour, logo, launcher [^i17]          | widget presets and options [^z16]             |
 
 Intercom hosts in the EU only on Advanced or Expert annual contracts
