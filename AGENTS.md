@@ -84,6 +84,9 @@ code already does. Concretely:
   package, so a root `pnpm install` also downloads its Next.js, which is why
   CI installs with `--filter better-helpdesk`. CI builds the demo against
   the packed tarball on the current and the previous Next.js major.
+- `site/`: the marketing website, a Next.js app on Divio Cloud that runs
+  the published package for its own widget and inbox. The root `Dockerfile`
+  builds it and nothing else; its README covers the Divio setup.
 - `scripts/build.mjs`: the esbuild and `tsc` build that `pnpm pack` runs.
   The published entry points are `package.json`'s `publishConfig.exports`.
 
