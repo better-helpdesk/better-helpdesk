@@ -76,6 +76,115 @@ database, its deploy and its design tokens.
 - **TypeScript, ESM, four runtime dependencies**: `drizzle-orm`, `zod`,
   `mailparser` and `mailauth`. Peer dependencies are `pg` and React 19.
 
+## Compared with
+
+As of 5 October 2026. Better Helpdesk's column describes `main` on that
+date; the others come from their public pages, read on 2 October 2026 and
+collected in [`docs/research/2026-10`](https://github.com/better-helpdesk/better-helpdesk/tree/main/docs/research/2026-10). Pricing is per
+agent or seat per month, billed yearly, in US dollars. *By design* means a
+deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md).
+
+|                         | Better Helpdesk                                   | Chatwoot                                       | Libredesk                          | Intercom                                     | Zendesk                                       |
+| ----------------------- | ------------------------------------------------- | ---------------------------------------------- | ---------------------------------- | -------------------------------------------- | --------------------------------------------- |
+| Runs as                 | a library in your Next.js app                     | a Rails app you host, or Chatwoot Cloud [^c1]  | a Go binary you host [^l1]         | hosted [^i1]                                 | hosted [^z1]                                  |
+| Database                | your Postgres, `helpdesk` schema                  | its own Postgres and Redis [^c2]               | its own Postgres and Redis [^l2]   | the vendor's [^i1]                           | the vendor's [^z1]                            |
+| Identity                | your session or a signed token                    | own logins; SAML on Enterprise [^c3]           | own logins, OIDC [^l3]             | own logins; SSO on Expert [^i2]              | own logins [^z1]                              |
+| Licence                 | MIT                                               | MIT core, proprietary Enterprise [^c4]         | AGPL-3.0 [^l4]                     | proprietary [^i1]                             | proprietary [^z1]                              |
+| Pricing                 | free                                              | free to $99, Cloud and self-hosted [^c3]       | free [^l5]                         | $29 / $85 / $132 [^i2]                       | $19 / $55 / $115 [^z2]                        |
+| Install                 | npm, one route, one component, one migrate        | Docker, Helm or a VM script [^c5]              | binary, Docker Compose [^l6]       | a script tag or mobile SDK [^i3]             | a script tag [^z4]                            |
+| Upgrade                 | `pnpm up` plus migrate in your release            | new image, then a database task [^c5]          | `--upgrade`, after a backup [^l7]  | the vendor's [^i1]                            | the vendor's [^z1]                             |
+| Channels                | widget, email through a relay                     | web, email, social, SMS, voice [^c6]           | web, email, WhatsApp [^l8]         | chat, email, phone, SMS, social [^i4]        | web, email, social, voice, SMS [^z3]          |
+| Real-time delivery      | polling, 5 s in an open conversation              | WebSocket [^c7]                                | WebSocket [^l9]                    | yes, typing and seen [^i5]                   | yes, typing and read [^z4]                    |
+| Captured context        | URL, viewport, locale, errors, UTM, your own data | language, country, referrer [^c8]              | last visited pages [^l10]          | pages visited, as a trigger [^i6]            | device and pages viewed [^z5]                 |
+| Customer sees past conversations | yes, from your session                   | not documented [^c1]                          | planned [^l8]                      | yes [^i7]                                    | yes [^z6]                                     |
+| Tags                    | yes                                               | yes [^c9]                                      | yes [^l10]                         | yes [^i8]                                    | yes [^z7]                                     |
+| Snooze                  | yes                                               | yes [^c10]                                     | yes [^l10]                         | yes [^i9]                                    | on-hold status [^z8]                          |
+| Collision indicator     | yes                                               | yes [^c11]                                     | no [^l10]                          | yes [^i10]                                   | yes [^z9]                                     |
+| SLA                     | business hours and a reminder per inbox, by design | paid tier [^c3]                               | yes [^l10]                         | Expert [^i11]                                | yes [^z10]                                    |
+| Automation              | `onEvent` in your code                            | yes [^c12]                                     | yes [^l11]                         | Advanced and up [^i2]                        | yes [^z11]                                    |
+| Reporting               | SQL over your database                            | yes [^c13]                                     | an overview page [^l10]            | yes [^i12]                                   | yes [^z12]                                    |
+| CSAT                    | no                                                | yes [^c14]                                     | yes [^l10]                         | yes [^i13]                                   | yes [^z13]                                    |
+| Help centre             | search over your own docs, by design              | Startups and up [^c3]                          | yes [^l12]                         | yes [^i2]                                    | yes [^z2]                                     |
+| AI                      | suggestions and drafts for the agent, by design   | Captain, paid tier [^c15]                      | your OpenAI-compatible key [^l13]  | Fin, $0.99 per outcome [^i14]                | Copilot, +$50 [^z2]                           |
+| Events out              | `onEvent` in your code                            | webhooks [^c16]                                | webhooks [^l14]                    | webhooks [^i15]                              | webhooks [^z14]                               |
+| API                     | in-process functions, by design                   | REST [^c17]                                    | REST with API keys [^l10]          | REST [^i1]                                   | REST [^z1]                                    |
+| Roles                   | `isAgent`, by design                              | custom roles, paid tier [^c18]                 | custom roles [^l3]                 | custom roles [^i16]                          | custom roles on Enterprise [^z15]             |
+| Languages               | English and German                                | many, community-translated [^c1]               | 13 [^l15]                          | many [^i1]                                   | many [^z1]                                    |
+| Theming                 | CSS custom properties                             | widget settings [^c19]                         | widget settings [^l16]             | brand colour, logo, launcher [^i17]          | widget presets and options [^z16]             |
+
+Intercom hosts in the EU only on Advanced or Expert annual contracts
+[^i18].
+
+[^c1]: [github.com/chatwoot/chatwoot](https://github.com/chatwoot/chatwoot) and the [Chatwoot report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/chatwoot.md).
+[^c2]: [Chatwoot requirements](https://developers.chatwoot.com/self-hosted/deployment/requirements).
+[^c3]: [Chatwoot pricing](https://www.chatwoot.com/pricing) and [self-hosted plans](https://www.chatwoot.com/pricing/self-hosted-plans).
+[^c4]: [Chatwoot Enterprise Edition](https://www.chatwoot.com/hc/user-guide/articles/1677776492-enterprise-edition).
+[^c5]: [Chatwoot Docker deployment](https://developers.chatwoot.com/self-hosted/deployment/docker).
+[^c6]: [Chatwoot report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/chatwoot.md), "Other channels".
+[^c7]: [Chatwoot WebSocket connection](https://www.chatwoot.com/hc/user-guide/articles/1677691027-how-to-setup-a-web_socket-connection).
+[^c8]: [Chatwoot conversation filters](https://www.chatwoot.com/hc/user-guide/articles/1677688192-how-to-use-conversation-filters).
+[^c9]: [Chatwoot labels](https://www.chatwoot.com/hc/user-guide/articles/1677496066-how-to-add-labels).
+[^c10]: [Chatwoot report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/chatwoot.md), "Snooze".
+[^c11]: [Chatwoot agent collision](https://www.chatwoot.com/hc/user-guide/articles/1732243644-preventing-agent-collision).
+[^c12]: [Chatwoot automation](https://www.chatwoot.com/hc/user-guide/articles/1677689800-how-to-use-automation).
+[^c13]: [Chatwoot reports](https://www.chatwoot.com/hc/user-guide/articles/1677693459-how-to-read-overview-reports-realtime).
+[^c14]: [Chatwoot CSAT](https://www.chatwoot.com/hc/user-guide/articles/1677503828-how-to-enable-csat-surveys).
+[^c15]: [Captain on self-hosted installations](https://www.chatwoot.com/hc/user-guide/articles/1755284287-how-to-enable-captain-on-self_hosted-installations) and [Captain credits](https://www.chatwoot.com/hc/user-guide/articles/1765223602-how-ai-credits-work-in-captain).
+[^c16]: [Chatwoot webhooks](https://www.chatwoot.com/hc/user-guide/articles/1677693021-how-to-use-webhooks).
+[^c17]: [Chatwoot API](https://developers.chatwoot.com/api-reference/introduction).
+[^c18]: [Chatwoot roles and permissions](https://www.chatwoot.com/hc/user-guide/articles/1741923706-manage-team-access-control-with-flexible-role_based-permissions).
+[^c19]: [Chatwoot live chat settings](https://www.chatwoot.com/hc/user-guide/articles/1677580558-website-live-chat-settings-explained).
+[^l1]: [github.com/abhinavxd/libredesk](https://github.com/abhinavxd/libredesk).
+[^l2]: `config.sample.toml` in [the Libredesk repository](https://github.com/abhinavxd/libredesk).
+[^l3]: [Libredesk roles](https://docs.libredesk.io/roles/overview.md).
+[^l4]: `LICENSE` in [the Libredesk repository](https://github.com/abhinavxd/libredesk).
+[^l5]: [libredesk.io](https://libredesk.io/).
+[^l6]: [Libredesk installation](https://docs.libredesk.io/getting-started/installation.md).
+[^l7]: [Libredesk releases](https://github.com/abhinavxd/libredesk/releases).
+[^l8]: `README.md` and `ROADMAP.md` in [the Libredesk repository](https://github.com/abhinavxd/libredesk).
+[^l9]: [Libredesk widget API](https://docs.libredesk.io/api-reference/widget-api.md).
+[^l10]: [Libredesk report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/libredesk.md), section 2, from the Libredesk schema and docs.
+[^l11]: [Libredesk automation models](https://github.com/abhinavxd/libredesk/blob/main/internal/automation/models/models.go).
+[^l12]: [Libredesk help center](https://docs.libredesk.io/configuration/help-center.md).
+[^l13]: [Libredesk AI](https://docs.libredesk.io/configuration/ai.md).
+[^l14]: [Libredesk webhooks](https://docs.libredesk.io/configuration/webhooks.md).
+[^l15]: [Libredesk `i18n`](https://github.com/abhinavxd/libredesk/tree/main/i18n).
+[^l16]: [Libredesk live chat](https://docs.libredesk.io/configuration/livechat.md).
+[^i1]: [Intercom report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/intercom.md), sections 1 and 2.
+[^i2]: [Intercom pricing](https://www.intercom.com/pricing).
+[^i3]: [Installing Intercom](https://developers.intercom.com/installing-intercom/web/methods).
+[^i4]: [Intercom report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/intercom.md), "Channels".
+[^i5]: [Intercom real-time messaging](https://www.intercom.com/help/en/articles/258-real-time-messaging-explained).
+[^i6]: [Intercom workflow triggers](https://www.intercom.com/help/en/articles/7434613-how-to-trigger-a-workflow).
+[^i7]: [Intercom customer portal](https://www.intercom.com/help/en/articles/8450754-customer-portal-explained).
+[^i8]: [Intercom inbox search and filter](https://www.intercom.com/help/en/articles/6516006-inbox-search-and-filter).
+[^i9]: [Intercom snooze](https://www.intercom.com/help/en/articles/6564538-snooze-a-conversation).
+[^i10]: [Intercom changes](https://www.intercom.com/changes/en).
+[^i11]: [Intercom SLAs](https://www.intercom.com/help/en/articles/6546152-set-slas-for-conversations-and-tickets).
+[^i12]: [Intercom reports](https://www.intercom.com/help/en/articles/200-intercom-reports-explained).
+[^i13]: [Intercom conversation ratings](https://www.intercom.com/help/en/articles/9634546-ask-customers-for-a-conversation-rating).
+[^i14]: [Fin pricing](https://fin.ai/pricing).
+[^i15]: [Intercom webhooks](https://developers.intercom.com/docs/references/webhooks/webhook-models).
+[^i16]: [Intercom teammate permissions](https://www.intercom.com/help/en/articles/176-teammate-permissions-how-to-control-workspace-access).
+[^i17]: [Customize the Messenger](https://www.intercom.com/help/en/articles/6612589-set-up-and-customize-the-messenger).
+[^i18]: [Intercom regional data hosting](https://www.intercom.com/help/en/articles/6124430-regional-data-hosting).
+[^z1]: [Zendesk report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/zendesk.md), sections 1 and 2.
+[^z2]: [Zendesk pricing](https://www.zendesk.com/pricing/).
+[^z3]: [Zendesk report](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/research/2026-10/zendesk.md), "Channels".
+[^z4]: [Zendesk Web Widget capabilities](https://developer.zendesk.com/documentation/zendesk-web-widget-sdks/capabilities/).
+[^z5]: [Customer context in a ticket](https://support.zendesk.com/hc/en-us/articles/4408829170458-Viewing-customer-context-in-a-ticket).
+[^z6]: [Zendesk customer portal](https://support.zendesk.com/hc/en-us/articles/4408846805530-Submitting-and-tracking-requests-in-the-help-center-Customer-Portal).
+[^z7]: [Zendesk ticket tags](https://support.zendesk.com/hc/en-us/articles/4408835059482-Working-with-ticket-tags).
+[^z8]: [Zendesk ticket statuses](https://support.zendesk.com/hc/en-us/articles/8263915942938-About-the-ticket-lifecycle-and-ticket-statuses).
+[^z9]: [Zendesk agent collision](https://support.zendesk.com/hc/en-us/articles/9186264597146-Avoiding-agent-collision).
+[^z10]: [Zendesk SLA policies](https://support.zendesk.com/hc/en-us/articles/5600997516058-About-SLA-policies-and-how-they-work).
+[^z11]: [Zendesk triggers](https://support.zendesk.com/hc/en-us/articles/4408893545882-Ticket-trigger-conditions-and-actions-reference).
+[^z12]: [Zendesk Support dashboard](https://support.zendesk.com/hc/en-us/articles/4408835985434-Overview-of-the-Zendesk-Support-dashboard).
+[^z13]: [Zendesk CSAT](https://support.zendesk.com/hc/en-us/articles/4408886173338-About-the-CSAT-Customer-Satisfaction-user-experience-for-email-and-messaging).
+[^z14]: [Zendesk webhooks](https://developer.zendesk.com/documentation/webhooks/creating-and-monitoring-webhooks/).
+[^z15]: [Zendesk user roles](https://support.zendesk.com/hc/en-us/articles/4408883763866-Understanding-standard-user-roles-for-Zendesk-Support).
+[^z16]: [Zendesk Web Widget API](https://developer.zendesk.com/api-reference/widget-messaging/web/core/).
+
 ## How it works
 
 One route handler serves four groups of routes under `basePath`. Your
