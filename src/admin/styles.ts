@@ -161,6 +161,7 @@ export const adminCss = `
 .sa-viewers .sa-avatar + .sa-avatar { margin-inline-start: -6px; }
 .sa-viewing { display: flex; align-items: center; gap: 6px; }
 .sa-viewing .sa-viewers { margin: 0; }
+.sa-viewing-warning:empty { position: absolute; }
 .sa-viewing-warning { margin: 0; font-size: 13px; color: var(--a-warn); }
 
 .sa-page-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }

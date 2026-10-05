@@ -763,7 +763,7 @@ export function createStore(db: Db) {
         .where(
           and(
             inArray(agents.viewingId, conversationIds),
-            // Above the agent UI's poll interval, so an open tab never drops out between polls.
+            // Sized against the conversation view's 5-second poll; change the two together.
             gt(agents.viewingAt, sql`now() - interval '15 seconds'`),
             ne(agents.id, exceptAgentId)
           )

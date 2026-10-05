@@ -572,11 +572,6 @@ export function ConversationView({ id }: { id: string }) {
             </div>
           )}
 
-          {data.viewers.length > 0 && (
-            <p className="sa-viewing-warning" role="status">
-              {t('admin.viewingWarning')}
-            </p>
-          )}
           <form
             className="sa-composer"
             data-internal={internal}
@@ -584,6 +579,10 @@ export function ConversationView({ id }: { id: string }) {
               e.preventDefault();
               void send(false);
             }}>
+            {/* Mounted while empty, so screen readers announce the warning when it appears. */}
+            <p className="sa-viewing-warning" role="status">
+              {data.viewers.length > 0 && t('admin.viewingWarning')}
+            </p>
             <RichEditor
               ref={composer}
               className="rt-composer"

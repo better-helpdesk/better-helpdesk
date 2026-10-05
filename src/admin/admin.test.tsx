@@ -172,7 +172,7 @@ describe('HelpdeskAdmin', () => {
     await waitFor(() =>
       expect(screen.queryByText('Grace and Linus are viewing')).toBeNull()
     );
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('never renders a non-http context URL as a link', async () => {

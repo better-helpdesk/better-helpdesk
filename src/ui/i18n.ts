@@ -627,11 +627,12 @@ const de: Record<MessageKey, string> = {
   'admin.company': 'Firma',
   'admin.suggestedCompany': 'Vorgeschlagene Firma',
   'admin.assignCompany': 'Zuordnen',
-  'admin.viewing.one': '{name} hat dies geöffnet',
-  'admin.viewing.two': '{name} und {other} haben dies geöffnet',
-  'admin.viewing.many': '{name} und {count} weitere haben dies geöffnet',
+  'admin.viewing.one': '{name} hat diese Unterhaltung offen',
+  'admin.viewing.two': '{name} und {other} haben diese Unterhaltung offen',
+  'admin.viewing.many':
+    '{name} und {count} weitere haben diese Unterhaltung offen',
   'admin.viewingWarning':
-    'Jemand anderes aus dem Team hat diese Konversation geöffnet. Prüfen Sie, ob bereits geantwortet wird.',
+    'Jemand anderes aus dem Team hat diese Unterhaltung offen. Prüfen Sie, ob dort nicht bereits geantwortet wird.',
   'admin.verified': 'Verifiziert',
   'admin.unverified': 'Nicht verifiziert',
   'admin.automated': 'Automatische Antwort',

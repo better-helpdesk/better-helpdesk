@@ -225,12 +225,9 @@ export function ViewerStack({
   t: Translate;
   viewers: Viewer[];
 }) {
+  const line = viewingLine(t, viewers);
   return (
-    <span
-      className="sa-viewers"
-      role="img"
-      aria-label={viewingLine(t, viewers)}
-      title={viewingLine(t, viewers)}>
+    <span className="sa-viewers" role="img" aria-label={line} title={line}>
       {viewers.map(v => (
         <Avatar key={v.id} name={v.name} agent />
       ))}
