@@ -494,7 +494,10 @@ describe('Widget', () => {
         const url = String(input);
         if (url.includes('widget/session')) {
           return new Response(
-            JSON.stringify({ ...session, conversations: [summary] })
+            JSON.stringify({
+              ...session,
+              conversations: [{ ...summary, status }],
+            })
           );
         }
         if (url.endsWith('widget/conversations/c1/')) {
@@ -555,6 +558,14 @@ describe('Widget', () => {
     );
     expect(screen.queryByRole('alert')).toBe(null);
     expect(patches).toEqual([{ status: 'resolved' }, { status: 'resolved' }]);
+    expect(screen.getByRole('status').textContent).toBe('Resolved');
+    expect(document.activeElement).toBe(
+      screen.getByRole('textbox', { name: 'Write a reply…' })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    const card = (await screen.findByText('Export broken')).closest('button');
+    expect(card?.textContent).toContain('Resolved');
   });
 
   it('offers no resolve button on a teammate’s shared thread', async () => {
