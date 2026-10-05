@@ -1,3 +1,7 @@
+<p align="center">
+  <img alt="Better Helpdesk" src="https://raw.githubusercontent.com/better-helpdesk/better-helpdesk/main/.github/assets/logo.gif" width="96" height="96">
+</p>
+
 <h1 align="center">Better Helpdesk</h1>
 
 <p align="center">
