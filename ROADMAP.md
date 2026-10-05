@@ -63,7 +63,7 @@ The design partners' feedback sets the order, so items move between waves.
 
 - A list and thread side by side on wide screens
 - Merge a duplicate conversation into another
-- @mention a teammate in an internal note
+- @mention a teammate in an internal note (shipped)
 - A rating after resolution, shown in the agent UI
 - An overview of volume, first-response and resolution times
 - Open the next conversation after sending
