@@ -808,14 +808,21 @@ export function createStore(db: Db) {
       return row?.count ?? 0;
     },
 
+    /** With `unlessResolved`, a thread already resolved is left alone and the result is null. */
     async updateConversation(
       id: string,
-      patch: Partial<typeof conversations.$inferInsert>
+      patch: Partial<typeof conversations.$inferInsert>,
+      { unlessResolved = false } = {}
     ) {
       const [row] = await db
         .update(conversations)
         .set(patch)
-        .where(eq(conversations.id, id))
+        .where(
+          and(
+            eq(conversations.id, id),
+            unlessResolved ? ne(conversations.status, 'resolved') : undefined
+          )
+        )
         .returning();
       return row ?? null;
     },

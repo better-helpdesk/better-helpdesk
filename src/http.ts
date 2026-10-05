@@ -286,7 +286,9 @@ export function createHandler(support: Helpdesk) {
           waitingSince: null,
           snoozedUntil: null,
         };
-        const updated = await store.updateConversation(conversation.id, patch);
+        const updated = await store.updateConversation(conversation.id, patch, {
+          unlessResolved: true,
+        });
         await emitUpdated(
           config,
           conversation,
@@ -698,7 +700,9 @@ export function createHandler(support: Helpdesk) {
     ) {
       patch.sharedWithCompany = false;
     }
-    if (data.status === 'resolved' && conversation.status !== 'resolved') {
+    const resolving =
+      data.status === 'resolved' && conversation.status !== 'resolved';
+    if (resolving) {
       patch.resolvedAt = dbNow();
       patch.waitingSince = null;
     } else if (data.status && data.status !== 'resolved') {
@@ -711,9 +715,13 @@ export function createHandler(support: Helpdesk) {
         if (last?.authorType === 'contact') patch.waitingSince = last.createdAt;
       }
     }
-    const updated = await store.updateConversation(conversation.id, patch);
+    // A concurrent resolve that lands first keeps its resolvedAt and its timeline row.
+    const updated = await store.updateConversation(conversation.id, patch, {
+      unlessResolved: resolving,
+    });
     await emitUpdated(config, conversation, updated, patch, agent.id);
-    return json({ conversation: updated && agentView(updated) });
+    const current = updated ?? (await store.getConversation(conversation.id));
+    return json({ conversation: current && agentView(current) });
   });
 
   agentRoute(
