@@ -1,5 +1,6 @@
 'use client';
 
+import posthog from 'posthog-js';
 import { type FormEvent, useState } from 'react';
 
 import { isEmail, sendToInbox } from '../../lib/submit';
@@ -53,6 +54,7 @@ export function PartnerForm({ api }: { api: string }) {
         // The handler's spam trap: people never see this field.
         website: value('website'),
       });
+      posthog.capture('story_submitted', { listed });
       setState({ kind: 'sent' });
     } catch (error) {
       setState({

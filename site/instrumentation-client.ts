@@ -13,4 +13,14 @@ if (process.env.NODE_ENV === 'production') {
     before_send: event =>
       /^\/(helpdesk|login)(\/|$)/.test(location.pathname) ? null : event,
   });
+  // The widget renders in a shadow root, so its own events are the signal.
+  document.addEventListener('helpdesk:open', () =>
+    posthog.capture('widget_opened')
+  );
+  document.addEventListener('helpdesk:message-sent', event => {
+    const { inbox, type } = (
+      event as CustomEvent<{ inbox: string; type: string }>
+    ).detail;
+    posthog.capture('widget_message_sent', { inbox, type });
+  });
 }
