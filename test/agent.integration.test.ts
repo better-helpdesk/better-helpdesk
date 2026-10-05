@@ -1520,3 +1520,71 @@ describe('event timeline', () => {
     }
   });
 });
+
+describe('inbox counts and unread', () => {
+  beforeEach(() => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    h.addUser('grace', { isAgent: true });
+  });
+
+  const list = async (query = '') =>
+    (await h.call('GET', `agent/conversations${query}`, { user: 'agent' }))
+      .data;
+
+  it('counts open conversations for all, mine and unassigned whatever the filter', async () => {
+    const me = (await h.call('GET', 'agent/me', { user: 'agent' })).data.agent
+      .id;
+    const grace = (await h.call('GET', 'agent/me', { user: 'grace' })).data
+      .agent.id;
+    const [mine, theirs, , , resolved] = [
+      await open('ada'),
+      await open('ada'),
+      await open('ada'),
+      await open('ada'),
+      await open('ada'),
+    ];
+    const patch = (id: string, body: Record<string, unknown>) =>
+      h.call('PATCH', `agent/conversations/${id}`, { user: 'agent', body });
+    await patch(mine.id, { assigneeId: me });
+    await patch(theirs.id, { assigneeId: grace });
+    await patch(resolved.id, { status: 'resolved', assigneeId: me });
+
+    const expected = { all: 4, mine: 1, unassigned: 2 };
+    expect((await list()).counts).toEqual(expected);
+    const filtered = await list('?assignee=me&status=resolved');
+    expect(filtered.conversations).toHaveLength(1);
+    expect(filtered.counts).toEqual(expected);
+  });
+
+  it('marks a waiting conversation unread until an agent opens it, and again on the next customer reply', async () => {
+    const conversation = await open('ada');
+    const unread = async () =>
+      (await list()).conversations.find(
+        (c: { id: string }) => c.id === conversation.id
+      ).unread;
+
+    expect(await unread()).toBe(true);
+    await h.call('GET', `agent/conversations/${conversation.id}`, {
+      user: 'grace',
+    });
+    expect(await unread()).toBe(false);
+
+    await h.call('POST', `widget/conversations/${conversation.id}/messages`, {
+      user: 'ada',
+      body: { body: 'any news?' },
+    });
+    expect(await unread()).toBe(true);
+
+    await h.call('GET', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+    });
+    expect(await unread()).toBe(false);
+
+    await h.call('POST', `agent/conversations/${conversation.id}/messages`, {
+      user: 'agent',
+      body: { body: 'on it' },
+    });
+    expect(await unread()).toBe(false);
+  });
+});

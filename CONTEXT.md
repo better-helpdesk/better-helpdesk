@@ -65,7 +65,9 @@ says **conversation**. Each has:
   Once it is older than the inbox's `reminderAfterHours`, an
   `agent-reminder` email goes to the agents, once (`remindedAt`).
   `customerSeenAt` records what the customer has read, so a `notify-customer`
-  job can skip emailing a reply they already saw.
+  job can skip emailing a reply they already saw. `agentSeenAt` is the
+  team's side: a waiting conversation is **unread** in the inbox until any
+  agent opens it after the customer's last message.
 - **Snoozed**: a `pending` conversation with a `snoozedUntil`. It gets no
   reminder and leaves the waiting count until `runJobs` wakes it back to
   `open` at that time, or a customer message wakes it sooner.

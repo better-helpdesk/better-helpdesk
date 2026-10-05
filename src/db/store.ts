@@ -765,6 +765,35 @@ export function createStore(db: Db) {
       return result.rows.map(r => r.tag);
     },
 
+    // Copies `last_message_at`, not `now()`: `now()` is the transaction start, so a
+    // customer message committing concurrently could predate it and never read as unread.
+    async markAgentSeen(id: string) {
+      await db
+        .update(conversations)
+        .set({ agentSeenAt: sql`${conversations.lastMessageAt}` })
+        .where(
+          and(
+            eq(conversations.id, id),
+            or(
+              isNull(conversations.agentSeenAt),
+              lt(conversations.agentSeenAt, conversations.lastMessageAt)
+            )
+          )
+        );
+    },
+
+    async countOpen(agentId: string) {
+      const [row] = await db
+        .select({
+          all: sql<number>`count(*)::int`,
+          mine: sql<number>`(count(*) FILTER (WHERE ${conversations.assigneeId} = ${agentId}))::int`,
+          unassigned: sql<number>`(count(*) FILTER (WHERE ${conversations.assigneeId} IS NULL))::int`,
+        })
+        .from(conversations)
+        .where(eq(conversations.status, 'open'));
+      return row ?? { all: 0, mine: 0, unassigned: 0 };
+    },
+
     async countWaiting() {
       const [row] = await db
         .select({ count: sql<number>`count(*)::int` })

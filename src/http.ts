@@ -450,6 +450,9 @@ export function createHandler(support: Helpdesk) {
     customerSubject: c.subject,
     search: undefined,
     reference: support.reference(c),
+    unread:
+      c.waitingSince !== null &&
+      (!c.agentSeenAt || c.agentSeenAt < c.lastMessageAt),
   });
 
   agentRoute('GET', 'settings', async () =>
@@ -528,23 +531,27 @@ export function createHandler(support: Helpdesk) {
     const p = url.searchParams;
     const id = (key: string) => uuid.optional().parse(p.get(key) || undefined);
     const assignee = p.get('assignee');
-    const rows = await store.listInbox({
-      inbox: p.get('inbox') || undefined,
-      status: p.get('status') || undefined,
-      assigneeId:
-        assignee === 'me'
-          ? agent.id
-          : assignee === 'none'
-            ? null
-            : id('assignee'),
-      contactId: id('contactId'),
-      companyId: id('companyId'),
-      tag: p.get('tag')?.trim().toLowerCase() || undefined,
-      query: p.get('q') || undefined,
-      sort: p.get('sort') === 'priority' ? 'priority' : 'waiting',
-    });
+    const [rows, counts] = await Promise.all([
+      store.listInbox({
+        inbox: p.get('inbox') || undefined,
+        status: p.get('status') || undefined,
+        assigneeId:
+          assignee === 'me'
+            ? agent.id
+            : assignee === 'none'
+              ? null
+              : id('assignee'),
+        contactId: id('contactId'),
+        companyId: id('companyId'),
+        tag: p.get('tag')?.trim().toLowerCase() || undefined,
+        query: p.get('q') || undefined,
+        sort: p.get('sort') === 'priority' ? 'priority' : 'waiting',
+      }),
+      store.countOpen(agent.id),
+    ]);
     const last = await store.lastMessages(rows.map(r => r.conversation.id));
     return json({
+      counts,
       conversations: rows.map(r => ({
         ...agentView(r.conversation),
         preview: previewOf(last.get(r.conversation.id)?.body, 160),
@@ -575,6 +582,8 @@ export function createHandler(support: Helpdesk) {
       store.listAttachments(conversation.id),
       store.listIdentities(conversation.contactId),
       store.listEvents(conversation.id),
+      // Written on the GET so opening a thread fires no HELPDESK_CHANGED refetch.
+      store.markAgentSeen(conversation.id),
     ]);
     const domain = contact?.email?.split('@')[1];
     // A contact already filed under a company is offered that one; only an
