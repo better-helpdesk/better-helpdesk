@@ -20,7 +20,7 @@ import { DealsBoard } from './deals';
 import { Inbox } from './inbox';
 import { Settings } from './settings';
 import { adminCss } from './styles';
-import { Dialog, useShortcuts } from './ui';
+import { Dialog, LoadError, useShortcuts } from './ui';
 
 /** The agent UI's sections, for a host that renders its own tabs. */
 export { HELPDESK_CHANGED };
@@ -127,10 +127,14 @@ export function HelpdeskAdmin({
       <style href="support-admin" precedence="default">
         {adminCss}
       </style>
-      {(me.error || unhandled) && (
-        <p className="sa-error" role="alert">
-          {t('admin.error')}
-        </p>
+      {me.error ? (
+        <LoadError t={t} onRetry={me.refresh} />
+      ) : (
+        unhandled && (
+          <p className="sa-error" role="alert">
+            {t('admin.error')}
+          </p>
+        )
       )}
       {me.data && (
         <AdminProvider

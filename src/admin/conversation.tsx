@@ -12,6 +12,7 @@ import {
   Avatar,
   browserLabel,
   humanizeKey,
+  LoadError,
   paths,
   Select,
   Skeleton,
@@ -248,7 +249,7 @@ export function ConversationView({ id }: { id: string }) {
   };
 
   const data = detail.data;
-  if (detail.error) return <p className="sa-error">{t('admin.error')}</p>;
+  if (detail.error) return <LoadError t={t} onRetry={detail.refresh} />;
   if (!data) return <Skeleton kind="thread" label={t('admin.loading')} />;
   const c = data.conversation;
 
@@ -853,7 +854,7 @@ export function ConversationView({ id }: { id: string }) {
                 type="submit"
                 className="sa-btn sa-primary"
                 disabled={busy !== null || !body.trim()}>
-                {t('admin.send')}
+                {busy === 'send' ? t('admin.sending') : t('admin.send')}
               </button>
             </div>
           </form>

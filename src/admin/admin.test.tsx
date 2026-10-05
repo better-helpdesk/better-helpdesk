@@ -401,6 +401,51 @@ describe('HelpdeskAdmin', () => {
     ).toBe('Half a reply');
   });
 
+  it('labels the send button while the reply is on its way', async () => {
+    let finish = () => {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method !== 'POST') return respond(String(input));
+        await new Promise<void>(resolve => {
+          finish = resolve;
+        });
+        return new Response('{}');
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const composer = await screen.findByRole('textbox', { name: 'Reply' });
+    composer.innerHTML = 'On its way';
+    fireEvent.input(composer);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    const sending = await screen.findByRole('button', { name: 'Sending…' });
+    expect((sending as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => finish());
+    expect(await screen.findByRole('button', { name: 'Send' })).toBeTruthy();
+  });
+
+  it('offers to try again when a conversation fails to load, and loads it on retry', async () => {
+    let down = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (down && url.includes('agent/conversations/c1/'))
+          return new Response('{}', { status: 500 });
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('This could not be loaded.');
+    down = false;
+    fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('textbox', { name: 'Reply' })).toBeTruthy();
+    expect(screen.queryByText('This could not be loaded.')).toBeNull();
+  });
+
   it('never brings back a reply that finished sending after the agent left the conversation', async () => {
     let release = () => {};
     vi.stubGlobal(
@@ -1002,7 +1047,7 @@ describe('HelpdeskAdmin', () => {
     '/support/contacts/p1/',
     '/support/companies/o1/',
   ])(
-    'replaces the skeleton of %s with an error when loading fails',
+    'replaces the skeleton of %s with a retry notice when loading fails',
     async path => {
       vi.stubGlobal(
         'fetch',
@@ -1017,7 +1062,8 @@ describe('HelpdeskAdmin', () => {
         <HelpdeskAdmin basePath="/support" locale="en" />
       );
 
-      expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+      expect(await screen.findByText('This could not be loaded.')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
       expect(container.querySelector('[aria-busy="true"]')).toBeNull();
     }
   );
