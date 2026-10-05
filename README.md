@@ -340,7 +340,7 @@ await helpdesk.runJobs({ budgetMs: 20_000 });
 curl -X POST -H "Authorization: Bearer $HELPDESK_JOBS_SECRET" https://app.example.com/api/helpdesk/jobs/
 ```
 
-A run sends due reminder emails, deletes resolved conversations that are
+A run wakes due snoozes, then sends due reminder emails, deletes resolved conversations that are
 older than `retentionDays`, then works through queued jobs until the budget
 is spent.
 

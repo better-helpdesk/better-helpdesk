@@ -19,6 +19,7 @@ import {
 
 import { ApiError } from '../ui/api';
 import { HelpdeskAdmin } from './index';
+import { formatSnooze } from './snooze';
 
 const me = {
   agent: { id: 'a1', name: 'Agent' },
@@ -296,9 +297,9 @@ describe('HelpdeskAdmin', () => {
 
     await act(async () => {});
     expect(patches).toEqual([{ snoozedUntil: tomorrow.toISOString() }]);
-    expect(
-      (select as HTMLSelectElement).selectedOptions[0]?.textContent
-    ).toMatch(/^Snoozed until \w{3} \d{1,2} \w{3}, 09:00$/);
+    expect((select as HTMLSelectElement).selectedOptions[0]?.textContent).toBe(
+      `Snoozed until ${formatSnooze(tomorrow, 'en')}`
+    );
 
     fireEvent.change(select, { target: { value: 'off' } });
     await act(async () => {});
@@ -332,24 +333,31 @@ describe('HelpdeskAdmin', () => {
     fireEvent.change(select, { target: { value: 'pick' } });
     const input = screen.getByLabelText('Snooze until') as HTMLInputElement;
     expect(document.activeElement).toBe(input);
-    fireEvent.change(input, { target: { value: '2030-03-04T10:15' } });
+    const until = new Date();
+    until.setDate(until.getDate() + 3);
+    until.setHours(10, 15, 0, 0);
+    const value = new Date(until.getTime() - until.getTimezoneOffset() * 60_000)
+      .toISOString()
+      .slice(0, 16);
+    fireEvent.change(input, { target: { value } });
     fireEvent.click(screen.getByRole('button', { name: 'Snooze' }));
 
     await act(async () => {});
-    expect(patches).toEqual([
-      { snoozedUntil: new Date(2030, 2, 4, 10, 15).toISOString() },
-    ]);
+    expect(patches).toEqual([{ snoozedUntil: until.toISOString() }]);
     expect(screen.queryByLabelText('Snooze until')).toBeNull();
   });
 
   it('says so when the server refuses a snooze and keeps the conversation awake', async () => {
+    const patches: unknown[] = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string, init?: RequestInit) => {
-        if (init?.method === 'PATCH')
+        if (init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)));
           return new Response(JSON.stringify({ error: 'invalid' }), {
             status: 400,
           });
+        }
         const url = String(input);
         const key = Object.keys(routes)
           .sort((a, b) => b.length - a.length)
@@ -361,11 +369,12 @@ describe('HelpdeskAdmin', () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     const select = await screen.findByRole('combobox', { name: 'Snooze' });
 
-    fireEvent.change(select, { target: { value: 'nextWeek' } });
+    fireEvent.change(select, { target: { value: 'tomorrow' } });
 
     expect((await screen.findByRole('alert')).textContent).toBe(
       'Snoozing failed. Nothing changed.'
     );
+    expect(patches).toHaveLength(1);
     expect((select as HTMLSelectElement).selectedOptions[0]?.textContent).toBe(
       'Snooze'
     );

@@ -280,8 +280,7 @@ export function ConversationView({ id }: { id: string }) {
                   method: 'PATCH',
                   body: { snoozedUntil },
                 });
-                // Saved: a failed reload must not report the snooze as failed.
-                await detail.refresh().catch(() => undefined);
+                await detail.refresh();
               }}
             />
             <Select
