@@ -1088,6 +1088,11 @@ describe('HelpdeskAdmin', () => {
           if (url.includes(pending)) return new Promise(() => {});
           if (url.includes('agent/me/'))
             return Promise.resolve(new Response(JSON.stringify(me)));
+          // The inbox list stays mounted beside an open conversation.
+          if (url.includes('agent/conversations/?'))
+            return Promise.resolve(
+              new Response(JSON.stringify({ conversations: [] }))
+            );
           return Promise.resolve(new Response('{}'));
         })
       );
@@ -1719,6 +1724,35 @@ describe('conversation shortcuts', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })
     ).toBeTruthy();
+  });
+});
+
+describe('inbox beside a conversation', () => {
+  it('marks the open row, keeps the filters on the way back, and Escape returns to the row', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/support/conversations/c1/?tag=billing'
+    );
+    const { container } = render(
+      <HelpdeskAdmin basePath="/support" locale="en" />
+    );
+    await screen.findByText('The CSV export fails');
+    // jsdom ignores container queries, so the narrow rule hides the list.
+    const row = await screen.findByRole('link', {
+      name: /DG-1000/,
+      hidden: true,
+    });
+    expect(row.closest('tr')?.getAttribute('aria-current')).toBe('true');
+    expect(
+      screen.getByRole('link', { name: 'Inbox' }).getAttribute('href')
+    ).toBe('/support/conversations/?tag=billing');
+
+    const composer = container.querySelector(
+      '.sa-thread-pane [contenteditable="true"]'
+    ) as HTMLElement;
+    fireEvent.keyDown(composer, { key: 'Escape' });
+    expect(document.activeElement).toBe(row);
   });
 });
 

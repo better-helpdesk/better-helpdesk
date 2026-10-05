@@ -352,6 +352,7 @@ export function useShortcuts(
         e.ctrlKey ||
         e.altKey ||
         !(target instanceof Element) ||
+        (target instanceof HTMLElement && target.isContentEditable) ||
         target.closest(
           'input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog, [role="dialog"]'
         ) ||

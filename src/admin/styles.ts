@@ -27,6 +27,7 @@ export const adminCss = `
   line-height: 1.45;
   display: grid;
   gap: 16px;
+  container-type: inline-size;
 }
 .sa * { box-sizing: border-box; }
 .sa button, .sa input, .sa select, .sa textarea { font: inherit; color: inherit; }
@@ -69,7 +70,7 @@ export const adminCss = `
   .sa .sa-nav button, .sa .sa-nav button::after { transition: none; }
 }
 /* Six labels cannot fit a phone; the fade says the rail scrolls. */
-@media (max-width: 720px) {
+@container (max-width: 720px) {
   .sa-nav { mask-image: linear-gradient(90deg, var(--a-fg) 0 calc(100% - 20px), transparent); }
 }
 /* Who you are and whether you are away sit at the rail's end, apart from any one page. */
@@ -163,7 +164,7 @@ export const adminCss = `
 .sa-empty strong { font-weight: 600; color: var(--a-fg); }
 .sa-empty p { margin: 0; max-width: 46ch; color: var(--a-muted); text-wrap: balance; }
 .sa-empty .sa-btn { margin-top: 12px; }
-@media (max-width: 720px) { .sa-empty { padding: 32px 16px; } }
+@container (max-width: 720px) { .sa-empty { padding: 32px 16px; } }
 
 .sa-muted { color: var(--a-muted); font-size: 13px; }
 .sa-fine { color: var(--a-muted); font-size: 12px; }
@@ -189,8 +190,17 @@ export const adminCss = `
 .sa .sa-back { height: 32px; padding: 0 10px 0 6px; flex: none; }
 .sa-split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
 .sa-split > * { min-width: 0; grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 1100px) { .sa-split { grid-template-columns: 1fr; } }
+@container (max-width: 900px) { .sa-split { grid-template-columns: 1fr; } }
 .sa-split > [hidden] { display: none; }
+/* The inbox list beside an open thread on a wide container; below it the thread replaces the list. */
+.sa-panes { display: grid; gap: 24px; align-items: start; }
+.sa-panes > * { min-width: 0; }
+.sa-panes[data-open] > .sa-list-pane { display: none; }
+@container (min-width: 960px) {
+  .sa-panes[data-open] { grid-template-columns: 380px minmax(0, 1fr); }
+  .sa-panes[data-open] > .sa-list-pane { display: block; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
+  .sa-panes[data-open] .sa-back { display: none; }
+}
 .sa-split:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
 .sa .sa-aside-toggle { height: 32px; margin-inline-start: auto; flex: none; }
 .sa-kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 13px; margin: 0; }
@@ -275,7 +285,7 @@ export const adminCss = `
 @container (max-width: 520px) { .sa-composer-foot .sa-kbd { visibility: hidden; } }
 
 .sa-board { display: grid; grid-template-columns: repeat(var(--cols), minmax(180px, 1fr)); gap: 12px; }
-@media (max-width: 1100px) { .sa-board { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 220px; overflow-x: auto; } }
+@container (max-width: 1100px) { .sa-board { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 220px; overflow-x: auto; } }
 .sa-column { background: var(--a-subtle); border: 1px solid var(--a-border); border-radius: var(--a-radius); padding: 10px; display: grid; gap: 8px; align-content: start; min-height: 200px; }
 .sa-column[data-over="true"] { outline: 2px dashed var(--a-muted); outline-offset: -2px; }
 .sa-column-head { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; font-size: 13px; padding: 2px 4px; }
@@ -337,7 +347,7 @@ export const adminCss = `
 .sa-chip-warn::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--a-warn); }
 .sa .sa-chip[aria-pressed="true"] { background: var(--a-accent); border-color: var(--a-accent); color: var(--a-accent-fg); }
 .sa-drop-hint { margin: 0; padding: 14px 8px; border: 1px dashed var(--a-border); border-radius: var(--a-radius); text-align: center; font-size: 12px; color: var(--a-muted); }
-@media (max-width: 1400px) { .sa-hint { display: none; } }
+@container (max-width: 1400px) { .sa-hint { display: none; } }
 .sa-kbd kbd { font: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid var(--a-border); border-bottom-width: 2px; border-radius: min(5px, var(--a-r-inner)); background: var(--a-bg); }
 
 .sa-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

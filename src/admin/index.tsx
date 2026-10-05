@@ -188,12 +188,39 @@ export function HelpdeskAdmin({
                 </div>
               </div>
             )}
-            {view === 'inbox' && <Inbox />}
-            {view === 'conversation' && route.conversation && (
-              <ConversationView
-                key={route.conversation}
-                id={route.conversation}
-              />
+            {(view === 'inbox' || view === 'conversation') && (
+              // The list stays mounted beside the thread, so it keeps its cursor and data; CSS hides it on a narrow container.
+              <div
+                className="sa-panes"
+                data-open={route.conversation ? '' : undefined}>
+                <div className="sa-list-pane">
+                  <Inbox />
+                </div>
+                {route.conversation && (
+                  // biome-ignore lint/a11y/noStaticElementInteractions: Escape bubbles up from the composer and the thread's controls.
+                  <div
+                    className="sa-thread-pane"
+                    onKeyDown={e => {
+                      if (
+                        e.key !== 'Escape' ||
+                        e.defaultPrevented ||
+                        (e.target as Element).closest('dialog')
+                      )
+                        return;
+                      const row =
+                        e.currentTarget.parentElement?.querySelector<HTMLElement>(
+                          '.sa-list-pane tr[aria-current] a'
+                        );
+                      if (row?.checkVisibility?.() === false) return;
+                      row?.focus();
+                    }}>
+                    <ConversationView
+                      key={route.conversation}
+                      id={route.conversation}
+                    />
+                  </div>
+                )}
+              </div>
             )}
             {view === 'contacts' && <ContactList />}
             {view === 'contact' && route.contact && (

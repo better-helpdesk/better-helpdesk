@@ -27,6 +27,7 @@ const context = {
   locale: 'en',
   href: () => '#',
   inboxName: (key: string) => key,
+  route: {},
   me: {
     inboxHours: {
       support: {
@@ -42,8 +43,12 @@ const context = {
   },
 } as unknown as AdminContext;
 
-const table = (rows: ConversationRow[], onOpen: (id: string) => void) => (
-  <AdminProvider value={context}>
+const table = (
+  rows: ConversationRow[],
+  onOpen: (id: string) => void,
+  route = {}
+) => (
+  <AdminProvider value={{ ...context, route }}>
     <ConversationTable rows={rows} onOpen={onOpen} keyboard />
   </AdminProvider>
 );
@@ -101,6 +106,45 @@ it('leaves j to the text when typed in an editable field, and takes it from insi
   expect(active()).toHaveLength(0);
   fireEvent.keyDown(button, { key: 'j', composed: true });
   expect(active()).toHaveLength(1);
+});
+
+it('leaves j to the text in an element made editable without the attribute', () => {
+  const { container } = render(table([row('a'), row('b')], vi.fn()));
+  const editor = document.createElement('div');
+  // A document in design mode, say: jsdom does not compute isContentEditable.
+  Object.defineProperty(editor, 'isContentEditable', { value: true });
+  document.body.append(editor);
+  onTestFinished(() => editor.remove());
+
+  fireEvent.keyDown(editor, { key: 'j' });
+  expect(container.querySelectorAll('tr[data-active="true"]')).toHaveLength(0);
+});
+
+it('marks the open conversation and moves on from it with j', () => {
+  const onOpen = vi.fn();
+  const { container } = render(
+    table([row('a'), row('b'), row('c')], onOpen, { conversation: 'b' })
+  );
+  expect(container.querySelector('tr[aria-current]')?.textContent).toContain(
+    'DG-b'
+  );
+
+  fireEvent.keyDown(document.body, { key: 'j' });
+  fireEvent.keyDown(document.body, { key: 'Enter' });
+  expect(onOpen).toHaveBeenCalledWith('c');
+});
+
+it('takes no keys while the list is hidden behind an open thread', () => {
+  const onOpen = vi.fn();
+  const { container } = render(
+    table([row('a'), row('b')], onOpen, { conversation: 'a' })
+  );
+  const wrap = container.querySelector('.sa-table-wrap') as HTMLElement;
+  wrap.checkVisibility = () => false;
+
+  fireEvent.keyDown(document.body, { key: 'j' });
+  fireEvent.keyDown(document.body, { key: 'Enter' });
+  expect(onOpen).not.toHaveBeenCalled();
 });
 
 it('shows until when a snoozed conversation wakes in place of how long it waited', () => {
