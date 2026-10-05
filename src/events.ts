@@ -47,7 +47,8 @@ export async function emitUpdated(
   old: Conversation,
   updated: Conversation | null,
   patch: Partial<Conversation>,
-  agentId: string | null
+  agentId: string | null,
+  by?: 'customer'
 ) {
   if (!updated) return;
   const keys = Object.keys(patch) as (keyof Conversation)[];
@@ -69,7 +70,11 @@ export async function emitUpdated(
         conversationId: updated.id,
         agentId,
         kind: key,
-        data: { from: before[key] ?? null, to: updated[key] ?? null },
+        data: {
+          from: before[key] ?? null,
+          to: updated[key] ?? null,
+          ...(by && { by }),
+        },
       }))
     );
   } catch (error) {

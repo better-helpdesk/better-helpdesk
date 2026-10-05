@@ -172,6 +172,74 @@ describe('onEvent', () => {
     });
   });
 
+  it('reports a customer resolve with no agent', async () => {
+    const { id } = await open();
+    await h.call('PATCH', `widget/conversations/${id}`, {
+      user: 'ada',
+      body: { status: 'resolved' },
+    });
+    expect(events.slice(1)).toEqual([
+      {
+        kind: 'conversation.updated',
+        conversation: expect.objectContaining({ id, status: 'resolved' }),
+        before: {
+          status: 'open',
+          resolvedAt: null,
+          waitingSince: expect.any(Date),
+        },
+        agentId: null,
+      },
+    ]);
+  });
+
+  it.each(['widget', 'agent'])(
+    'reports a resolve once when two %s requests race',
+    async route => {
+      const { id } = await open();
+      h.addUser('agent', { isAgent: true });
+      const resolve = () =>
+        h.call('PATCH', `${route}/conversations/${id}`, {
+          user: route === 'agent' ? 'agent' : 'ada',
+          body: { status: 'resolved' },
+        });
+      // Both requests read the open thread, then queue behind this row lock.
+      const lock = await h.pool.connect();
+      try {
+        await lock.query('BEGIN');
+        await lock.query(
+          'SELECT 1 FROM helpdesk.conversation WHERE id = $1 FOR UPDATE',
+          [id]
+        );
+        const racing = Promise.all([resolve(), resolve()]);
+        for (;;) {
+          const { rows } = await h.pool.query(
+            `SELECT count(*)::int AS n FROM pg_stat_activity
+             WHERE wait_event_type = 'Lock' AND query LIKE 'update%'`
+          );
+          if (rows[0].n === 2) break;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        await lock.query('COMMIT');
+        const responses = await racing;
+        expect(responses.map(r => r.status)).toEqual([200, 200]);
+        if (route === 'agent') {
+          expect(responses.map(r => r.data.conversation?.status)).toEqual([
+            'resolved',
+            'resolved',
+          ]);
+        }
+      } finally {
+        lock.release();
+      }
+      expect(
+        events.filter(e => e.kind === 'conversation.updated')
+      ).toHaveLength(1);
+      expect(
+        (await h.support.store.listEvents(id)).filter(e => e.kind === 'status')
+      ).toHaveLength(1);
+    }
+  );
+
   it('reports a reply that reopens a resolved conversation as a message on an open one', async () => {
     const { id } = await open();
     h.addUser('agent', { isAgent: true });

@@ -1227,7 +1227,10 @@ function Thread({
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [resolveFailed, setResolveFailed] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  const editor = useRef<RichEditorHandle>(null);
   const count = thread.data?.messages.length ?? 0;
 
   useEffect(() => {
@@ -1254,6 +1257,25 @@ function Thread({
       setFailed(true);
     } finally {
       setSending(false);
+    }
+  };
+
+  const resolve = async () => {
+    setResolving(true);
+    setResolveFailed(false);
+    try {
+      await api(`widget/conversations/${id}`, {
+        method: 'PATCH',
+        body: { status: 'resolved' },
+      });
+      await thread.refresh();
+      // The resolve button is gone; without this, focus drops out of the phone sheet's trap.
+      editor.current?.focus();
+      onSeen();
+    } catch {
+      setResolveFailed(true);
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -1289,6 +1311,7 @@ function Thread({
             {status && (
               <div
                 className="strip"
+                role="status"
                 data-your-turn={
                   data.conversation.status === 'pending' || undefined
                 }>
@@ -1377,6 +1400,7 @@ function Thread({
           void send();
         }}>
         <RichEditor
+          ref={editor}
           className="rt-reply"
           label={t('thread.reply')}
           placeholder={t('thread.reply')}
@@ -1403,6 +1427,21 @@ function Thread({
       {failed && (
         <p className="error composer-error" role="alert">
           {t('thread.failed')}
+        </p>
+      )}
+      {data.conversation.own && data.conversation.status !== 'resolved' && (
+        <div className="resolve">
+          <button
+            type="button"
+            disabled={resolving}
+            onClick={() => void resolve()}>
+            {t('thread.resolve')}
+          </button>
+        </div>
+      )}
+      {resolveFailed && (
+        <p className="error composer-error" role="alert">
+          {t('thread.resolveFailed')}
         </p>
       )}
     </>

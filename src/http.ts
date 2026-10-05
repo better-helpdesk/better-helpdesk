@@ -244,31 +244,59 @@ export function createHandler(support: Helpdesk) {
       });
       const conversation = await support.requireVisible(customer, params.id);
       if (conversation.contactId !== customer.contact?.id) {
-        throw new HelpdeskError(403, 'Only the author can change sharing');
+        throw new HelpdeskError(403, 'Only the author can change this');
       }
       const data = z
-        .object({ sharedWithCompany: z.boolean() })
+        .object({
+          sharedWithCompany: z.boolean().optional(),
+          status: z.literal('resolved').optional(),
+        })
+        .refine(d => d.sharedWithCompany !== undefined || d.status, {
+          message: 'Nothing to change',
+        })
         .parse(await body());
-      if (data.sharedWithCompany && !conversation.companyId) {
-        throw new HelpdeskError(400, 'Conversation has no organization');
+      if (data.sharedWithCompany !== undefined) {
+        if (data.sharedWithCompany && !conversation.companyId) {
+          throw new HelpdeskError(400, 'Conversation has no organization');
+        }
+        // An agent may have linked the thread to a company its author never proved membership of.
+        if (
+          data.sharedWithCompany &&
+          !customer.companies.some(c => c.id === conversation.companyId)
+        ) {
+          throw new HelpdeskError(403, 'Not a member of that organization');
+        }
+        // An agent may move the thread between the check above and this write.
+        if (
+          conversation.companyId &&
+          !(await store.setSharing(
+            conversation.id,
+            conversation.companyId,
+            data.sharedWithCompany
+          ))
+        ) {
+          throw new HelpdeskError(409, 'Conversation moved');
+        }
       }
-      // An agent may have linked the thread to a company its author never proved membership of.
-      if (
-        data.sharedWithCompany &&
-        !customer.companies.some(c => c.id === conversation.companyId)
-      ) {
-        throw new HelpdeskError(403, 'Not a member of that organization');
-      }
-      // An agent may move the thread between the check above and this write.
-      if (
-        conversation.companyId &&
-        !(await store.setSharing(
-          conversation.id,
-          conversation.companyId,
-          data.sharedWithCompany
-        ))
-      ) {
-        throw new HelpdeskError(409, 'Conversation moved');
+      // A repeat would move resolvedAt and with it the retention deadline.
+      if (data.status && conversation.status !== 'resolved') {
+        const patch: Partial<Conversation> = {
+          status: 'resolved',
+          resolvedAt: dbNow(),
+          waitingSince: null,
+          snoozedUntil: null,
+        };
+        const updated = await store.updateConversation(conversation.id, patch, {
+          unlessResolved: true,
+        });
+        await emitUpdated(
+          config,
+          conversation,
+          updated,
+          patch,
+          null,
+          'customer'
+        );
       }
       return json({ ok: true });
     }
@@ -672,7 +700,9 @@ export function createHandler(support: Helpdesk) {
     ) {
       patch.sharedWithCompany = false;
     }
-    if (data.status === 'resolved' && conversation.status !== 'resolved') {
+    const resolving =
+      data.status === 'resolved' && conversation.status !== 'resolved';
+    if (resolving) {
       patch.resolvedAt = dbNow();
       patch.waitingSince = null;
     } else if (data.status && data.status !== 'resolved') {
@@ -685,9 +715,13 @@ export function createHandler(support: Helpdesk) {
         if (last?.authorType === 'contact') patch.waitingSince = last.createdAt;
       }
     }
-    const updated = await store.updateConversation(conversation.id, patch);
+    // A concurrent resolve that lands first keeps its resolvedAt and its timeline row.
+    const updated = await store.updateConversation(conversation.id, patch, {
+      unlessResolved: resolving,
+    });
     await emitUpdated(config, conversation, updated, patch, agent.id);
-    return json({ conversation: updated && agentView(updated) });
+    const current = updated ?? (await store.getConversation(conversation.id));
+    return json({ conversation: current && agentView(current) });
   });
 
   agentRoute(
