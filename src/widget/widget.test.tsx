@@ -466,6 +466,146 @@ describe('Widget', () => {
     ).toBeTruthy();
   });
 
+  it('lets the author mark a thread resolved and says so when that fails', async () => {
+    Element.prototype.scrollIntoView = () => {};
+    const summary = {
+      id: 'c1',
+      reference: 'DG-1',
+      subject: 'Export broken',
+      type: 'bug',
+      status: 'open',
+      inbox: 'support',
+      own: true,
+      unread: false,
+      sharedWithCompany: false,
+      lastMessageAt: '2026-01-01T00:00:00.000Z',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      preview: null,
+      lastFromSupport: true,
+    };
+    let status = 'open';
+    let failPatch = true;
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('widget/session')) {
+          return new Response(
+            JSON.stringify({ ...session, conversations: [summary] })
+          );
+        }
+        if (url.endsWith('widget/conversations/c1/')) {
+          if (init?.method === 'PATCH') {
+            patches.push(JSON.parse(String(init.body)));
+            if (failPatch) {
+              return new Response(JSON.stringify({ error: 'down' }), {
+                status: 500,
+              });
+            }
+            status = 'resolved';
+            return new Response(JSON.stringify({ ok: true }));
+          }
+          return new Response(
+            JSON.stringify({
+              conversation: { ...summary, status },
+              messages: [
+                {
+                  id: 'm1',
+                  author: 'agent',
+                  name: 'Angelo',
+                  own: false,
+                  body: 'Fixed on our side.',
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                },
+              ],
+              attachments: [],
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }));
+      })
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByText('Export broken'));
+    await screen.findByText('With our team');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as resolved' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Could not mark this resolved. Try again.'
+    );
+    expect(screen.getByText('With our team')).toBeTruthy();
+
+    failPatch = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as resolved' }));
+    await screen.findByText('Resolved');
+    expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBe(
+      null
+    );
+    expect(screen.queryByRole('alert')).toBe(null);
+    expect(patches).toEqual([{ status: 'resolved' }, { status: 'resolved' }]);
+  });
+
+  it('offers no resolve button on a teammate’s shared thread', async () => {
+    Element.prototype.scrollIntoView = () => {};
+    const summary = {
+      id: 'c1',
+      reference: 'DG-1',
+      subject: 'Shared thread',
+      type: 'question',
+      status: 'open',
+      inbox: 'support',
+      own: false,
+      unread: false,
+      sharedWithCompany: true,
+      lastMessageAt: '2026-01-01T00:00:00.000Z',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      preview: null,
+      lastFromSupport: true,
+    };
+    mockApi({
+      'widget/session': { ...session, conversations: [summary] },
+      'widget/conversations/c1/': {
+        conversation: summary,
+        messages: [
+          {
+            id: 'm1',
+            author: 'agent',
+            name: 'Angelo',
+            own: false,
+            body: 'Looking into it.',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        attachments: [],
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByText('Shared thread'));
+    await screen.findByText('Looking into it.');
+    expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBe(
+      null
+    );
+  });
+
   it('shows an agent what waits in the inbox, with a link to it', async () => {
     mockApi({
       'widget/session': {

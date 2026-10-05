@@ -120,6 +120,11 @@ button { cursor: pointer; }
 .sent-fields { display: contents; }
 .footer { border-top: 1px solid var(--s-border); padding: 16px; display: grid; gap: 8px; background: var(--s-bg); }
 .composer-error { margin: 0; padding: 0 12px 10px; }
+.resolve { display: flex; justify-content: flex-end; padding: 0 12px 8px; }
+.resolve button { min-height: 32px; padding: 0 4px; border: 0; background: none; color: var(--s-muted); font-size: 13px; }
+.resolve button:hover:not(:disabled) { color: var(--s-fg); text-decoration: underline; }
+.resolve button:focus-visible { outline: 2px solid var(--s-focus); outline-offset: 2px; border-radius: 4px; }
+.resolve button:disabled { cursor: default; opacity: 0.6; }
 img.avatar { object-fit: cover; padding: 0; }
 .body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .body > * { flex-shrink: 0; }

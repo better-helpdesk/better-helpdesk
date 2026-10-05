@@ -596,6 +596,7 @@ describe('HelpdeskAdmin', () => {
         event(10, 'participant.added', { contactId: 'p2' }),
         event(11, 'priority', { from: 'normal', to: 'urgent' }, 'gone'),
         event(12, 'mystery'),
+        event(13, 'status', { from: 'open', to: 'resolved' }, null),
       ],
     };
     onTestFinished(() => {
@@ -627,6 +628,7 @@ describe('HelpdeskAdmin', () => {
       'A customer reply reopened this',
       'Grace added Bob',
       'A former agent set the priority to Urgent',
+      'The customer marked this resolved',
     ]);
   });
 

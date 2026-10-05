@@ -179,6 +179,64 @@ describe('visibility', () => {
     expect(res.status).toBe(403);
   });
 
+  it('lets the author mark a conversation resolved, once, and nobody else', async () => {
+    h.addUser('ada', { orgs: [orgA] });
+    h.addUser('bob', { orgs: [orgA] });
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada', {
+      orgId: orgA.id,
+      sharedWithCompany: true,
+    });
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: {
+        snoozedUntil: new Date(Date.now() + 86_400_000).toISOString(),
+      },
+    });
+    const resolve = (user: string) =>
+      h.call('PATCH', `widget/conversations/${conversation.id}`, {
+        user,
+        body: { status: 'resolved' },
+      });
+
+    expect((await resolve('bob')).status).toBe(403);
+    expect((await resolve('ada')).status).toBe(200);
+    const [{ resolved_at: resolvedAt } = { resolved_at: null }] = await rows<{
+      resolved_at: string | null;
+    }>(
+      sql`SELECT resolved_at FROM helpdesk.conversation WHERE id = ${conversation.id}`
+    );
+    expect((await resolve('ada')).status).toBe(200);
+
+    expect(resolvedAt).not.toBeNull();
+    expect(
+      await rows(
+        sql`SELECT status, resolved_at, waiting_since, snoozed_until
+            FROM helpdesk.conversation WHERE id = ${conversation.id}`
+      )
+    ).toEqual([
+      {
+        status: 'resolved',
+        resolved_at: resolvedAt,
+        waiting_since: null,
+        snoozed_until: null,
+      },
+    ]);
+    expect(
+      await rows(
+        sql`SELECT agent_id, data FROM helpdesk.conversation_event
+            WHERE conversation_id = ${conversation.id} AND kind = 'status'
+              AND data->>'to' = 'resolved'`
+      )
+    ).toEqual([{ agent_id: null, data: { from: 'pending', to: 'resolved' } }]);
+    const thread = await h.call(
+      'GET',
+      `widget/conversations/${conversation.id}`,
+      { user: 'ada' }
+    );
+    expect(thread.data.conversation.status).toBe('resolved');
+  });
+
   it('never exposes internal notes to the customer', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });

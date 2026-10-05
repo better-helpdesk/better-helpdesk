@@ -245,8 +245,12 @@ export function ConversationView({ id }: { id: string }) {
     const from = e.data.from;
     switch (e.kind) {
       case 'status':
-        return e.agentId
-          ? t('event.status', { name, to: t(`agentStatus.${to}`) })
+        if (e.agentId) {
+          return t('event.status', { name, to: t(`agentStatus.${to}`) });
+        }
+        // Agentless resolves come from the customer's widget; give any other source its own event.
+        return to === 'resolved'
+          ? t('event.resolvedByCustomer')
           : t('event.statusAuto', { to: t(`agentStatus.${to}`) });
       case 'priority':
         return t('event.priority', { name, to: t(`priority.${to}`) });
