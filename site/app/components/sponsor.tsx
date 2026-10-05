@@ -1,5 +1,7 @@
 import { PiArrowUpRightBold, PiHeartBold, PiStarBold } from 'react-icons/pi';
 
+import { TextLink } from './text-link';
+
 const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 
 /** SITE_SPONSOR_URL turns on the sponsor link; without it only the star shows. */
@@ -19,11 +21,11 @@ export function Sponsor() {
             Sponsor on GitHub
           </a>
         )}
-        <a className="tlink" href={REPO}>
+        <TextLink href={REPO}>
           <PiStarBold className="ti ti-l" aria-hidden="true" />
           Star the repository
           <PiArrowUpRightBold className="ti" aria-hidden="true" />
-        </a>
+        </TextLink>
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import { Pieces } from './components/pieces';
 import { Showcase } from './components/showcase';
 import { SiteFooter, SiteHeader } from './components/site-chrome';
 import { Sponsor } from './components/sponsor';
+import { TextLink } from './components/text-link';
 import { Wall } from './components/wall';
 import { WidgetDemo } from './components/widget-demo';
 
@@ -259,10 +260,10 @@ export default function Home() {
           </p>
           <div className="row-cta">
             <Install />
-            <a className="tlink" href="#status">
+            <TextLink href="#status">
               Using it, or planning to? Tell us your story
               <PiArrowRightBold className="ti" aria-hidden="true" />
-            </a>
+            </TextLink>
           </div>
         </section>
 
@@ -362,10 +363,10 @@ export default function Home() {
               <li>Demo app built on two Next.js majors</li>
               <li>npm publish with provenance</li>
             </ul>
-            <a className="tlink" href={`${REPO}/releases`}>
+            <TextLink href={`${REPO}/releases`}>
               Read the changelog
               <PiArrowUpRightBold className="ti" aria-hidden="true" />
-            </a>
+            </TextLink>
             <Sponsor />
           </div>
           <div className="st-r">

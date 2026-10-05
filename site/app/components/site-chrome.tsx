@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { SiGithub, SiNpm } from 'react-icons/si';
 
 import { ButtonIcon } from './icons';
@@ -6,8 +7,17 @@ import { NavLinks, NavMenu } from './nav-links';
 
 const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 
-/** The one header every page shares. On subpages the links lead back to the home page's sections. */
-export function SiteHeader({ home = false }: { home?: boolean }) {
+/**
+ * The one header every page shares. On subpages the links lead back to the
+ * home page's sections; `end` replaces them, as on the inbox.
+ */
+export function SiteHeader({
+  home = false,
+  end,
+}: {
+  home?: boolean;
+  end?: ReactNode;
+}) {
   return (
     <header className="nav">
       <a className="brand" href={home ? '#top' : '/'}>
@@ -16,18 +26,24 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
         </span>
         <span>Better Helpdesk</span>
       </a>
-      <NavLinks base={home ? '' : '/'} />
-      <div className="nav-end">
-        <a className="nav-gh" href={REPO}>
-          <SiGithub aria-hidden="true" />
-          <span>Source</span>
-        </a>
-        <a className="btn btn-p btn-sm nav-cta" href="/quickstart/">
-          Quickstart
-          <ButtonIcon />
-        </a>
-        <NavMenu base={home ? '' : '/'} repo={REPO} />
-      </div>
+      {end ? (
+        <div className="nav-end">{end}</div>
+      ) : (
+        <>
+          <NavLinks base={home ? '' : '/'} />
+          <div className="nav-end">
+            <a className="nav-gh" href={REPO}>
+              <SiGithub aria-hidden="true" />
+              <span>Source</span>
+            </a>
+            <a className="btn btn-p btn-sm nav-cta" href="/quickstart/">
+              Quickstart
+              <ButtonIcon />
+            </a>
+            <NavMenu base={home ? '' : '/'} repo={REPO} />
+          </div>
+        </>
+      )}
     </header>
   );
 }

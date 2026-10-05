@@ -4,6 +4,7 @@ import { PiArrowUpRightBold } from 'react-icons/pi';
 import { highlight } from '../components/highlight';
 import { ButtonIcon } from '../components/icons';
 import { SiteFooter, SiteHeader } from '../components/site-chrome';
+import { TextLink } from '../components/text-link';
 
 export const metadata: Metadata = {
   title: 'Quickstart',
@@ -141,10 +142,10 @@ export default function Quickstart() {
               Read the guides
               <ButtonIcon />
             </a>
-            <a className="tlink" href={`${REPO}/tree/main/examples/demo`}>
+            <TextLink href={`${REPO}/tree/main/examples/demo`}>
               Run the demo app
               <PiArrowUpRightBold className="ti" aria-hidden="true" />
-            </a>
+            </TextLink>
           </div>
         </section>
       </main>

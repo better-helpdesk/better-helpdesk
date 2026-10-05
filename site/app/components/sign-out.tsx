@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 
+import { TextLink } from './text-link';
+
 export function SignOut() {
   const [busy, setBusy] = useState(false);
   return (
-    <button
-      className="tlink"
-      type="button"
+    <TextLink
       disabled={busy}
       onClick={async () => {
         setBusy(true);
@@ -19,6 +19,6 @@ export function SignOut() {
         location.assign('/login/');
       }}>
       {busy ? 'Signing out…' : 'Sign out'}
-    </button>
+    </TextLink>
   );
 }

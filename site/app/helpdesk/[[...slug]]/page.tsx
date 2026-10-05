@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { currentSession } from '../../../lib/auth';
 import { API } from '../../../lib/helpdesk';
 import { SignOut } from '../../components/sign-out';
+import { SiteFooter, SiteHeader } from '../../components/site-chrome';
 
 export const metadata: Metadata = {
   title: 'Inbox',
@@ -17,14 +18,21 @@ export default async function Page() {
   const session = await currentSession();
   if (!session) redirect('/login/');
   return (
-    <div className="inbox-page">
-      <div className="inbox-bar">
-        <span>
-          Signed in as <b>{session.user.name || session.user.email}</b>
-        </span>
-        <SignOut />
-      </div>
-      <HelpdeskAdmin api={API} basePath="/helpdesk" locale="en" />
-    </div>
+    <>
+      <SiteHeader
+        end={
+          <>
+            <span className="nav-who">
+              Signed in as <b>{session.user.name || session.user.email}</b>
+            </span>
+            <SignOut />
+          </>
+        }
+      />
+      <main className="inbox-page">
+        <HelpdeskAdmin api={API} basePath="/helpdesk" locale="en" />
+      </main>
+      <SiteFooter />
+    </>
   );
 }
