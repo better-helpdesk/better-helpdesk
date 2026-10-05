@@ -156,6 +156,13 @@ export const adminCss = `
 .sa-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .sa-avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--a-head); color: var(--a-fg); }
 .sa-avatar[data-agent="true"] { background: var(--a-accent); color: var(--a-accent-fg); }
+.sa-viewers { display: inline-flex; vertical-align: middle; margin-inline-start: 6px; }
+.sa-viewers .sa-avatar { width: 20px; height: 20px; font-size: 9px; box-shadow: 0 0 0 2px var(--a-bg); }
+.sa-viewers .sa-avatar + .sa-avatar { margin-inline-start: -6px; }
+.sa-viewing { display: flex; align-items: center; gap: 6px; }
+.sa-viewing .sa-viewers { margin: 0; }
+.sa-viewing-warning:empty { position: absolute; }
+.sa-viewing-warning { margin: 0; font-size: 13px; color: var(--a-warn); }
 
 .sa-page-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .sa-page-head h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 32px; }

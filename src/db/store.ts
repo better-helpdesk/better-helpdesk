@@ -738,6 +738,44 @@ export function createStore(db: Db) {
       return new Map(rows.map(r => [r.conversationId, r]));
     },
 
+    async markViewing(agentId: string, conversationId: string) {
+      await db
+        .update(agents)
+        .set({ viewingId: conversationId, viewingAt: sql`now()` })
+        .where(eq(agents.id, agentId));
+    },
+
+    /** Other agents with each conversation open, keyed by conversation id. */
+    async viewers(conversationIds: string[], exceptAgentId: string) {
+      const byConversation = new Map<string, { id: string; name: string }[]>();
+      if (conversationIds.length === 0) return byConversation;
+      const rows = await db
+        .select({
+          id: agents.id,
+          name: sql<string>`coalesce(${agents.name}, ${agents.email})`,
+          viewingId: agents.viewingId,
+        })
+        .from(agents)
+        .where(
+          and(
+            inArray(agents.viewingId, conversationIds),
+            // Sized against the conversation view's 5-second poll; change the two together.
+            gt(agents.viewingAt, sql`now() - interval '15 seconds'`),
+            ne(agents.id, exceptAgentId),
+            isNull(agents.deactivatedAt)
+          )
+        )
+        .orderBy(sql`coalesce(${agents.name}, ${agents.email})`);
+      for (const { viewingId, ...agent } of rows) {
+        if (!viewingId) continue;
+        byConversation.set(viewingId, [
+          ...(byConversation.get(viewingId) ?? []),
+          agent,
+        ]);
+      }
+      return byConversation;
+    },
+
     async recentAgents(limit: number) {
       return db
         .select({

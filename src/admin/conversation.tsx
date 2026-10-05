@@ -16,6 +16,8 @@ import {
   Skeleton,
   Svg,
   useToast,
+  type Viewer,
+  viewingLine,
 } from './ui';
 
 type Detail = {
@@ -71,6 +73,7 @@ type Detail = {
   suggestedCompany: { id: string; name: string } | null;
   customerContext: Record<string, string>;
   participants: { id: string; name: string | null; email: string | null }[];
+  viewers: Viewer[];
   messages: {
     id: string;
     authorType: 'contact' | 'agent' | 'system';
@@ -383,6 +386,16 @@ export function ConversationView({ id }: { id: string }) {
               onSave={subject => patch({ subject })}
             />
           </h2>
+          {data.viewers.length > 0 && (
+            <p className="sa-fine sa-viewing">
+              <span className="sa-viewers">
+                {data.viewers.map(v => (
+                  <Avatar key={v.id} name={v.name} agent />
+                ))}
+              </span>
+              {viewingLine(t, data.viewers)}
+            </p>
+          )}
           {c.title && c.customerSubject && c.customerSubject !== c.title && (
             <p className="sa-fine">
               {t('admin.customerSees', { subject: c.customerSubject })}
@@ -566,6 +579,10 @@ export function ConversationView({ id }: { id: string }) {
               e.preventDefault();
               void send(false);
             }}>
+            {/* Mounted while empty, so screen readers announce the warning when it appears. */}
+            <p className="sa-viewing-warning" role="status">
+              {data.viewers.length > 0 && t('admin.viewingWarning')}
+            </p>
             <RichEditor
               ref={composer}
               className="rt-composer"

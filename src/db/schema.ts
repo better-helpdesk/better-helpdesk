@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   customType,
   index,
@@ -115,6 +116,12 @@ export const agents = helpdesk.table(
     lastSeenAt: ts('last_seen_at').notNull().defaultNow(),
     /** Set once the host no longer counts them as an agent; they get no more mail. */
     deactivatedAt: ts('deactivated_at'),
+    /** The conversation the agent last had open; others see them on it while `viewingAt` is recent. */
+    viewingId: uuid('viewing_id').references(
+      (): AnyPgColumn => conversations.id,
+      { onDelete: 'set null' }
+    ),
+    viewingAt: ts('viewing_at'),
   },
   t => [uniqueIndex('agent_external_user_id_key').on(t.externalUserId)]
 );

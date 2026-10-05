@@ -273,6 +273,11 @@ const en = {
   'admin.company': 'Company',
   'admin.suggestedCompany': 'Suggested company',
   'admin.assignCompany': 'Assign',
+  'admin.viewing.one': '{name} is viewing',
+  'admin.viewing.two': '{name} and {other} are viewing',
+  'admin.viewing.many': '{name} and {count} others are viewing',
+  'admin.viewingWarning':
+    'Someone else on the team has this conversation open. Check they are not replying already.',
   'admin.verified': 'Verified',
   'admin.unverified': 'Unverified',
   'admin.automated': 'Automatic reply',
@@ -622,6 +627,12 @@ const de: Record<MessageKey, string> = {
   'admin.company': 'Firma',
   'admin.suggestedCompany': 'Vorgeschlagene Firma',
   'admin.assignCompany': 'Zuordnen',
+  'admin.viewing.one': '{name} hat diese Unterhaltung offen',
+  'admin.viewing.two': '{name} und {other} haben diese Unterhaltung offen',
+  'admin.viewing.many':
+    '{name} und {count} weitere haben diese Unterhaltung offen',
+  'admin.viewingWarning':
+    'Jemand anderes aus dem Team hat diese Unterhaltung offen. Prüfen Sie, ob dort nicht bereits geantwortet wird.',
   'admin.verified': 'Verifiziert',
   'admin.unverified': 'Nicht verifiziert',
   'admin.automated': 'Automatische Antwort',

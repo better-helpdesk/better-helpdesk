@@ -5,7 +5,16 @@ import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
 import { formatSnooze } from './snooze';
-import { Avatar, Dialog, Empty, paths, Skeleton, Svg } from './ui';
+import {
+  Avatar,
+  Dialog,
+  Empty,
+  paths,
+  Skeleton,
+  Svg,
+  type Viewer,
+  ViewerStack,
+} from './ui';
 
 export type ConversationRow = {
   id: string;
@@ -23,6 +32,7 @@ export type ConversationRow = {
   snoozedUntil?: string | null;
   preview?: string | null;
   contact?: { id: string; name: string | null; email: string | null };
+  viewers?: Viewer[];
 };
 
 /** The widget promises a reply within a business day; amber warns ahead of it, red is past it. */
@@ -440,6 +450,9 @@ export function ConversationTable({
                         ) && <span className="sa-preview">{c.preview}</span>}
                       <span className="sa-fine">
                         {t(`agentType.${c.type}`)} · {inboxName(c.inbox)}
+                        {c.viewers?.length ? (
+                          <ViewerStack t={t} viewers={c.viewers} />
+                        ) : null}
                       </span>
                       {c.tags.length > 0 && (
                         <span className="sa-tags">

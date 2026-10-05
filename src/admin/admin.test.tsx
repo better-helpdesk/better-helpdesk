@@ -70,6 +70,7 @@ const routes: Record<string, unknown> = {
     suggestedCompany: null,
     customerContext: {},
     participants: [],
+    viewers: [],
     messages: [
       {
         id: 'm1',
@@ -143,6 +144,35 @@ describe('HelpdeskAdmin', () => {
 
     fireEvent.click(within(group).getByRole('button', { name: /me/ }));
     expect(tabs()).toEqual(['All 4', 'Assigned to me 1 *', 'Unassigned 2']);
+  });
+
+  it('says who else has the conversation open, above the reply too, and drops them once they leave', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    onTestFinished(() => {
+      vi.useRealTimers();
+      routes['agent/conversations/c1/'] = original;
+    });
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      viewers: [
+        { id: 'a2', name: 'Grace', avatarUrl: null },
+        { id: 'a3', name: 'Linus', avatarUrl: null },
+      ],
+    };
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    expect(await screen.findByText('Grace and Linus are viewing')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe(
+      'Someone else on the team has this conversation open. Check they are not replying already.'
+    );
+
+    routes['agent/conversations/c1/'] = original;
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    await waitFor(() =>
+      expect(screen.queryByText('Grace and Linus are viewing')).toBeNull()
+    );
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('never renders a non-http context URL as a link', async () => {
