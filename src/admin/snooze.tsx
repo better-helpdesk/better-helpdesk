@@ -60,6 +60,8 @@ export function SnoozeControl({
       const target = e.target as HTMLElement;
       if (
         e.key !== 'z' ||
+        e.repeat ||
+        e.isComposing ||
         e.metaKey ||
         e.ctrlKey ||
         e.altKey ||
@@ -94,7 +96,11 @@ export function SnoozeControl({
       <select
         ref={select}
         className="sa-select"
-        aria-label={t('admin.snooze')}
+        aria-label={
+          until
+            ? t('admin.snoozedUntil', { date: formatSnooze(until, locale) })
+            : t('admin.snooze')
+        }
         title={`${t('admin.snooze')} (z)`}
         value=""
         onChange={e => {
@@ -104,8 +110,12 @@ export function SnoozeControl({
             setPicking(true);
           } else if (value === 'off') void save(null);
           else {
-            const date = presets.find(([key]) => key === value)?.[1];
+            // The view may have stayed open past a preset's time.
+            const date = snoozePresets(new Date()).find(
+              ([key]) => key === value
+            )?.[1];
             if (date) void save(date.toISOString());
+            else setFailed(true);
           }
         }}>
         <option value="" disabled hidden>

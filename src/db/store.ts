@@ -1049,7 +1049,7 @@ export function createStore(db: Db) {
     async wakeSnoozed() {
       const result = await db.execute<{
         id: string;
-        was_until: string;
+        was_until: Date | string;
       }>(sql`
         WITH due AS (
           SELECT id, status, snoozed_until FROM helpdesk.conversation

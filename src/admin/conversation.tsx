@@ -275,7 +275,14 @@ export function ConversationView({ id }: { id: string }) {
             />
             <SnoozeControl
               until={c.snoozedUntil ?? null}
-              onSave={snoozedUntil => patch({ snoozedUntil })}
+              onSave={async snoozedUntil => {
+                await api(`agent/conversations/${id}`, {
+                  method: 'PATCH',
+                  body: { snoozedUntil },
+                });
+                // Saved: a failed reload must not report the snooze as failed.
+                await detail.refresh().catch(() => undefined);
+              }}
             />
             <Select
               label={t('admin.priority')}

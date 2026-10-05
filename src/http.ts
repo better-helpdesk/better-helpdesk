@@ -647,7 +647,7 @@ export function createHandler(support: Helpdesk) {
       ...rest,
       ...(subject !== undefined ? { title: subject } : {}),
     };
-    // An open or resolved thread never keeps a snooze that would hide it from reminders.
+    // A snooze left on an open thread would hold back its reminders.
     if (data.status && data.status !== 'pending') patch.snoozedUntil = null;
     // Sharing was granted to one organization; it does not follow a move.
     if (

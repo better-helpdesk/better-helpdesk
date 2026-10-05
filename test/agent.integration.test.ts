@@ -1192,6 +1192,10 @@ describe('snooze', () => {
     );
     await h.runDueJobs();
     expect(h.emails.filter(e => e.kind === 'agent-reminder')).toEqual([]);
+
+    await snooze(conversation.id, null);
+    await h.runDueJobs();
+    expect(h.emails.filter(e => e.kind === 'agent-reminder')).toHaveLength(1);
   });
 
   it('clears the snooze when an agent unsnoozes or reopens, and refuses a time without an offset', async () => {

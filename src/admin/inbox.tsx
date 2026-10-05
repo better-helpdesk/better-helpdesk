@@ -383,7 +383,8 @@ export function ConversationTable({
                 data-active={keyboard && index === active}
                 onClick={() => onOpen(c.id)}>
                 <td className="num">
-                  {c.snoozedUntil ? (
+                  {c.snoozedUntil &&
+                  new Date(c.snoozedUntil).getTime() > Date.now() ? (
                     <span className="sa-pill">
                       {t('admin.snoozeUntil', {
                         date: formatSnooze(c.snoozedUntil, locale),

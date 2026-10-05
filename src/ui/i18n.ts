@@ -491,7 +491,7 @@ const de: Record<MessageKey, string> = {
   'admin.snooze.laterToday': 'Später heute',
   'admin.snooze.tomorrow': 'Morgen',
   'admin.snooze.nextWeek': 'Nächsten Montag',
-  'admin.snoozePick': 'Zeitpunkt wählen …',
+  'admin.snoozePick': 'Zeitpunkt wählen…',
   'admin.unsnooze': 'Wieder aufnehmen',
   'admin.snoozed': 'Zurückgestellt',
   'admin.snoozeFailed':
