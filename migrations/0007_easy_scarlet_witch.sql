@@ -1,0 +1,1 @@
+ALTER TABLE "helpdesk"."conversation" ADD COLUMN "agent_seen_at" timestamp with time zone;

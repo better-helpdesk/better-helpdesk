@@ -19,6 +19,7 @@ export type ConversationRow = {
   lastMessageAt: string;
   assigneeId: string | null;
   tags: string[];
+  unread?: boolean;
   snoozedUntil?: string | null;
   preview?: string | null;
   contact?: { id: string; name: string | null; email: string | null };
@@ -49,9 +50,10 @@ export function Inbox() {
   ).toString();
   const list = useResource(
     () =>
-      api<{ conversations: ConversationRow[] }>(
-        `agent/conversations?${params}`
-      ),
+      api<{
+        conversations: ConversationRow[];
+        counts?: Record<'all' | 'mine' | 'unassigned', number>;
+      }>(`agent/conversations?${params}`),
     params,
     10_000
   );
@@ -67,6 +69,11 @@ export function Inbox() {
     window.addEventListener(HELPDESK_CHANGED, refresh);
     return () => window.removeEventListener(HELPDESK_CHANGED, refresh);
   }, [list.refresh]);
+  // A new filter clears `list.data`; the tab counts hold until it lands.
+  const [counts, setCounts] = useState(list.data?.counts);
+  useEffect(() => {
+    if (list.data?.counts) setCounts(list.data.counts);
+  }, [list.data]);
   const all = list.data?.conversations ?? [];
   const urgent = all.filter(
     c => c.priority === 'high' || c.priority === 'urgent'
@@ -83,17 +90,18 @@ export function Inbox() {
         <fieldset className="sa-seg" aria-label={t('admin.assignee')}>
           {(
             [
-              ['', 'admin.all'],
-              ['me', 'admin.mine'],
-              ['none', 'admin.unassigned'],
+              ['', 'admin.all', 'all'],
+              ['me', 'admin.mine', 'mine'],
+              ['none', 'admin.unassigned', 'unassigned'],
             ] as const
-          ).map(([value, label]) => (
+          ).map(([value, label, count]) => (
             <button
               key={value}
               type="button"
               aria-pressed={filters.assignee === value}
               onClick={() => set('assignee', value)}>
               {t(label)}
+              {counts && <span className="sa-count num"> {counts[count]}</span>}
             </button>
           ))}
         </fieldset>
@@ -380,6 +388,7 @@ export function ConversationTable({
               <tr
                 key={c.id}
                 className={waiting ? 'sa-waiting' : undefined}
+                data-unread={c.unread || undefined}
                 data-active={keyboard && index === active}
                 onClick={() => onOpen(c.id)}>
                 <td className="num">
@@ -416,6 +425,13 @@ export function ConversationTable({
                           e.stopPropagation();
                           onOpen(c.id);
                         }}>
+                        {c.unread && (
+                          <span className="sa-dot">
+                            <span className="sa-sr-only">
+                              {t('admin.unread')}{' '}
+                            </span>
+                          </span>
+                        )}
                         <span className="num sa-fine">{c.reference}</span>{' '}
                         {c.subject ?? t(`agentType.${c.type}`)}
                       </a>

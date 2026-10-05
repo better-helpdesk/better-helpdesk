@@ -127,7 +127,9 @@ export const adminCss = `
 .sa-table tbody tr:hover td { background: var(--a-subtle); }
 .sa-table tbody tr[data-active="true"] td { background: color-mix(in srgb, var(--a-accent) 7%, var(--a-bg)); }
 .sa-table tbody tr[data-active="true"] td:first-child { box-shadow: inset 3px 0 0 var(--a-accent); }
-.sa-table .sa-waiting .sa-cell-title a { font-weight: 700; }
+.sa-table [data-unread] .sa-cell-title a { font-weight: 700; }
+.sa-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--a-accent); vertical-align: middle; }
+.sa .sa-seg .sa-count { font-weight: 400; opacity: .7; }
 .sa-cell-title a { font-weight: 500; text-decoration: none; }
 .sa-cell-title a:hover { text-decoration: underline; }
 .sa-cell-title { display: grid; gap: 2px; min-width: 0; }

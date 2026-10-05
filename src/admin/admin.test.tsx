@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react';
 import {
@@ -119,6 +120,28 @@ describe('HelpdeskAdmin', () => {
     fireEvent.click(row);
     expect(window.location.pathname).toBe('/support/conversations/c1/');
     expect(await screen.findByText('The CSV export fails')).toBeTruthy();
+  });
+
+  it('shows the open count on each assignee tab and keeps it while another tab loads', async () => {
+    routes['agent/conversations/?'] = {
+      conversations: [conversation],
+      counts: { all: 4, mine: 1, unassigned: 2 },
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/?'] = { conversations: [conversation] };
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const group = await screen.findByRole('group', { name: 'Assignee' });
+    const tabs = () =>
+      within(group)
+        .getAllByRole('button')
+        .map(b => `${b.textContent}${b.ariaPressed === 'true' ? ' *' : ''}`);
+    await waitFor(() =>
+      expect(tabs()).toEqual(['All 4 *', 'Assigned to me 1', 'Unassigned 2'])
+    );
+
+    fireEvent.click(within(group).getByRole('button', { name: /me/ }));
+    expect(tabs()).toEqual(['All 4', 'Assigned to me 1 *', 'Unassigned 2']);
   });
 
   it('never renders a non-http context URL as a link', async () => {

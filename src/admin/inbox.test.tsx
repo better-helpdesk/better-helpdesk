@@ -86,3 +86,20 @@ it('shows until when a snoozed conversation wakes in place of how long it waited
   const cell = container.querySelector('td');
   expect(cell?.textContent).toBe('until Mon 12 Oct, 09:00');
 });
+
+it('marks only unread conversations as unread, waiting or not', () => {
+  const { container } = render(
+    table(
+      [
+        { ...row('a'), unread: true },
+        { ...row('b'), waitingSince: new Date().toISOString(), unread: false },
+      ],
+      vi.fn()
+    )
+  );
+  const links = [...container.querySelectorAll('tbody a')].map(
+    a => a.textContent
+  );
+  expect(links).toEqual(['Unread DG-a a', 'DG-b b']);
+  expect(container.querySelectorAll('tr[data-unread]')).toHaveLength(1);
+});
