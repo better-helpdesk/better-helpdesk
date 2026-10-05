@@ -15,6 +15,7 @@ import {
   Select,
   Skeleton,
   Svg,
+  useKeysOn,
   useShortcuts,
   useToast,
   type Viewer,
@@ -45,7 +46,9 @@ const SOON_HOURS = 6;
 const LATE_HOURS = 24;
 
 export function Inbox() {
-  const { api, t, me, route, navigate, inboxName, nav } = useAdmin();
+  const { api, t, me, route, navigate, inboxName, nav, openShortcuts } =
+    useAdmin();
+  const keysOn = useKeysOn();
   const [query, setQuery] = useState(route.q ?? '');
   const [tag, setTag] = useState(route.tag ?? '');
   const tagListId = useId();
@@ -214,12 +217,21 @@ export function Inbox() {
           </option>
         </select>
         {!nav && <AwayControl />}
-        {rows.length > 1 && (
-          <span className="sa-kbd sa-hint">
-            <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
-            {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')} · <kbd>?</kbd>{' '}
-            {t('admin.allShortcuts')}
-          </span>
+        {!keysOn ? (
+          <button
+            type="button"
+            className="sa-btn sa-ghost"
+            onClick={openShortcuts}>
+            {t('admin.shortcuts')}
+          </button>
+        ) : (
+          rows.length > 1 && (
+            <span className="sa-kbd sa-hint">
+              <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
+              {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')} ·{' '}
+              <kbd>?</kbd> {t('admin.allShortcuts')}
+            </span>
+          )
         )}
       </div>
       <p className="sa-sr-only" role="status">

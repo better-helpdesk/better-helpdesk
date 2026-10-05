@@ -17,6 +17,7 @@ import {
   Select,
   Skeleton,
   Svg,
+  useKeysOn,
   useShortcuts,
   useToast,
   type Viewer,
@@ -212,6 +213,7 @@ export function ConversationView({ id }: { id: string }) {
       .catch(() => setError('action'))
       .finally(() => acting.current.delete(field));
   };
+  const keysOn = useKeysOn();
   const compose = (note: boolean) => {
     setInternal(note);
     composer.current?.focus();
@@ -696,14 +698,14 @@ export function ConversationView({ id }: { id: string }) {
               <button
                 type="button"
                 aria-pressed={!internal}
-                aria-keyshortcuts="R"
+                aria-keyshortcuts={keysOn ? 'R' : undefined}
                 onClick={() => setInternal(false)}>
                 {t('admin.reply')}
               </button>
               <button
                 type="button"
                 aria-pressed={internal}
-                aria-keyshortcuts="N"
+                aria-keyshortcuts={keysOn ? 'N' : undefined}
                 onClick={() => setInternal(true)}>
                 {t('admin.note')}
               </button>
