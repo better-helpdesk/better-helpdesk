@@ -127,6 +127,10 @@ export const adminCss = `
 .sa-table tbody tr:hover td { background: var(--a-subtle); }
 .sa-table tbody tr[data-active="true"] td { background: color-mix(in srgb, var(--a-accent) 7%, var(--a-bg)); }
 .sa-table tbody tr[data-active="true"] td:first-child { box-shadow: inset 3px 0 0 var(--a-accent); }
+.sa-table tbody tr[data-selected] td { background: color-mix(in srgb, var(--a-accent) 4%, var(--a-bg)); }
+.sa-table .sa-check { width: 1%; padding-right: 0; cursor: default; }
+.sa-check input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--a-accent); cursor: pointer; }
+.sa-bulk { margin-bottom: 12px; padding: 8px 12px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-subtle); }
 .sa-table [data-unread] .sa-cell-title a { font-weight: 700; }
 .sa-dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--a-accent); vertical-align: middle; }
 .sa .sa-seg .sa-count { font-weight: 400; opacity: .7; }

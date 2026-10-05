@@ -324,3 +324,41 @@ export function money(value: string | null, currency: string, locale: string) {
     maximumFractionDigits: 0,
   }).format(Number(value));
 }
+
+export function Select({
+  label,
+  value,
+  options,
+  render,
+  onChange,
+  placeholder = false,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  render: (value: string) => string;
+  onChange: (value: string) => void;
+  /** Adds an empty `''` option that shows the label alone; no option may then be `''`. */
+  placeholder?: boolean;
+}) {
+  return (
+    <select
+      className="sa-select"
+      aria-label={label}
+      title={label}
+      value={value}
+      onChange={e => onChange(e.target.value)}>
+      {placeholder && (
+        <option value="" disabled>
+          {label}
+        </option>
+      )}
+      {options.map(o => (
+        // The closed select shows only this text, so it names its field.
+        <option key={o} value={o}>
+          {label}: {render(o)}
+        </option>
+      ))}
+    </select>
+  );
+}

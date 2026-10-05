@@ -1053,3 +1053,168 @@ describe('empty states', () => {
     expect(screen.queryByText('Drag a deal here')).toBeNull();
   });
 });
+
+describe('bulk changes', () => {
+  const three = ['c1', 'c2', 'c3'].map((id, i) => ({
+    ...conversation,
+    id,
+    reference: `DG-100${i}`,
+    subject: `Outage report ${i}`,
+  }));
+  const posts: unknown[] = [];
+  let fail = false;
+
+  beforeEach(() => {
+    posts.length = 0;
+    fail = false;
+    routes['agent/conversations/?'] = { conversations: three };
+    routes['agent/agents/'] = {
+      agents: [{ id: 'a2', name: 'Grace Hopper', email: null }],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('agent/conversations/bulk')) {
+          posts.push(JSON.parse(String(init?.body)));
+          return fail
+            ? new Response(JSON.stringify({ error: 'Not found: c3' }), {
+                status: 404,
+              })
+            : new Response(JSON.stringify({ ok: true }));
+        }
+        return respond(url);
+      })
+    );
+    onTestFinished(() => {
+      routes['agent/conversations/?'] = { conversations: [conversation] };
+      routes['agent/agents/'] = { agents: [] };
+    });
+  });
+
+  const status = () => screen.getByRole('status');
+
+  it('selects a range with shift-click and resolves it in one request', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Select DG-1000' })
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select DG-1002' }), {
+      shiftKey: true,
+    });
+    const bar = screen.getByRole('toolbar', { name: 'Change selected' });
+
+    fireEvent.change(within(bar).getByRole('combobox', { name: 'Status' }), {
+      target: { value: 'resolved' },
+    });
+
+    await waitFor(() =>
+      expect(posts).toEqual([{ ids: ['c1', 'c2', 'c3'], status: 'resolved' }])
+    );
+    expect(status().textContent).toBe('3 selected');
+    expect(window.location.pathname).toBe('/support/conversations/');
+  });
+
+  it('assigns, sets the priority and adds a tag to the selection', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Select DG-1001' })
+    );
+    const bar = screen.getByRole('toolbar', { name: 'Change selected' });
+    await within(bar).findByRole('option', { name: 'Assignee: Grace Hopper' });
+
+    fireEvent.change(within(bar).getByRole('combobox', { name: 'Assignee' }), {
+      target: { value: 'a2' },
+    });
+    fireEvent.change(within(bar).getByRole('combobox', { name: 'Priority' }), {
+      target: { value: 'urgent' },
+    });
+    fireEvent.change(within(bar).getByRole('combobox', { name: 'Add tag' }), {
+      target: { value: ' Outage ' },
+    });
+    fireEvent.submit(within(bar).getByRole('combobox', { name: 'Add tag' }));
+    fireEvent.change(within(bar).getByRole('combobox', { name: 'Assignee' }), {
+      target: { value: 'none' },
+    });
+
+    await waitFor(() =>
+      expect(posts).toEqual([
+        { ids: ['c2'], assigneeId: 'a2' },
+        { ids: ['c2'], priority: 'urgent' },
+        { ids: ['c2'], addTag: 'outage' },
+        { ids: ['c2'], assigneeId: null },
+      ])
+    );
+  });
+
+  it('selects all, keeps the selection across a refresh that drops a row, and clears it', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Select all' })
+    );
+    expect(status().textContent).toBe('3 selected');
+
+    routes['agent/conversations/?'] = { conversations: [three[2], three[0]] };
+    act(() => {
+      window.dispatchEvent(new Event('helpdesk:changed'));
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('checkbox', { name: 'Select DG-1001' })
+      ).toBeNull()
+    );
+    expect(status().textContent).toBe('2 selected');
+    const all = screen.getByRole('checkbox', {
+      name: 'Select all',
+    }) as HTMLInputElement;
+    expect([all.checked, all.indeterminate]).toEqual([true, false]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+    expect(status().textContent).toBe('');
+    expect(
+      screen.queryByRole('toolbar', { name: 'Change selected' })
+    ).toBeNull();
+  });
+
+  it('toggles the highlighted row with x and marks select-all as partial', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('checkbox', { name: 'Select DG-1000' });
+
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: 'x' });
+
+    const second = screen.getByRole('checkbox', {
+      name: 'Select DG-1001',
+    }) as HTMLInputElement;
+    const all = screen.getByRole('checkbox', {
+      name: 'Select all',
+    }) as HTMLInputElement;
+    expect([second.checked, all.checked, all.indeterminate]).toEqual([
+      true,
+      false,
+      true,
+    ]);
+    expect(status().textContent).toBe('1 selected');
+  });
+
+  it('says so when the change fails and keeps the selection', async () => {
+    fail = true;
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Select DG-1000' })
+    );
+    const bar = screen.getByRole('toolbar', { name: 'Change selected' });
+
+    fireEvent.change(within(bar).getByRole('combobox', { name: 'Status' }), {
+      target: { value: 'resolved' },
+    });
+
+    expect(
+      await screen.findByText(
+        'None of the selected conversations were changed. Try again.'
+      )
+    ).toBeTruthy();
+    expect(status().textContent).toBe('1 selected');
+  });
+});

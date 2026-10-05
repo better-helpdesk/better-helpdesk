@@ -13,6 +13,7 @@ import {
   browserLabel,
   humanizeKey,
   paths,
+  Select,
   Skeleton,
   Svg,
   useToast,
@@ -1208,36 +1209,6 @@ function CannedMenu({
         </div>
       )}
     </div>
-  );
-}
-
-function Select({
-  label,
-  value,
-  options,
-  render,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  render: (value: string) => string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <select
-      className="sa-select"
-      aria-label={label}
-      title={label}
-      value={value}
-      onChange={e => onChange(e.target.value)}>
-      {options.map(o => (
-        // The closed select shows only this text, so it names its field.
-        <option key={o} value={o}>
-          {label}: {render(o)}
-        </option>
-      ))}
-    </select>
   );
 }
 
