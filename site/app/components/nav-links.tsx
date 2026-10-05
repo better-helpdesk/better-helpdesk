@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { PiListBold } from 'react-icons/pi';
 
 const LINKS: [string, string][] = [
   ['product', 'Product'],
@@ -44,5 +45,34 @@ export function NavLinks({ base = '' }: { base?: string }) {
         </a>
       ))}
     </nav>
+  );
+}
+
+/** The section links on phones, in a popover so the nav's clip-path cannot cut it off. */
+export function NavMenu({ base = '', repo }: { base?: string; repo: string }) {
+  const menu = useRef<HTMLDivElement>(null);
+  const close = () => menu.current?.hidePopover();
+  return (
+    <>
+      <button className="nav-menu-btn" type="button" popoverTarget="nav-menu">
+        <PiListBold aria-hidden="true" />
+        Menu
+      </button>
+      <div className="nav-menu" id="nav-menu" popover="auto" ref={menu}>
+        <nav aria-label="Menu">
+          {LINKS.map(([id, label]) => (
+            <a key={id} href={`${base}#${id}`} onClick={close}>
+              {label}
+            </a>
+          ))}
+          <a href={repo} onClick={close}>
+            Source
+          </a>
+          <a className="btn btn-p" href="/quickstart/" onClick={close}>
+            Quickstart
+          </a>
+        </nav>
+      </div>
+    </>
   );
 }

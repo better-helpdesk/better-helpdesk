@@ -2,7 +2,7 @@ import { SiGithub, SiNpm } from 'react-icons/si';
 
 import { ButtonIcon } from './icons';
 import { LiveMark } from './live-mark';
-import { NavLinks } from './nav-links';
+import { NavLinks, NavMenu } from './nav-links';
 
 const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 
@@ -22,10 +22,11 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
           <SiGithub aria-hidden="true" />
           <span>Source</span>
         </a>
-        <a className="btn btn-p btn-sm" href="/quickstart/">
+        <a className="btn btn-p btn-sm nav-cta" href="/quickstart/">
           Quickstart
           <ButtonIcon />
         </a>
+        <NavMenu base={home ? '' : '/'} repo={REPO} />
       </div>
     </header>
   );

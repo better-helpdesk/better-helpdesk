@@ -10,7 +10,7 @@ import './site.css';
 const doto = Doto({
   subsets: ['latin'],
   variable: '--font-doto',
-  weight: ['700', '800', '900'],
+  weight: ['800', '900'],
 });
 const rethink = Rethink_Sans({
   subsets: ['latin'],
