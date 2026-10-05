@@ -129,6 +129,30 @@ describe('Widget', () => {
     ).toBeUndefined();
   });
 
+  it('keeps the formatting toolbar behind one toggle on the bug form', async () => {
+    mockApi({ 'widget/session': session });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['question', 'bug', 'feature']}
+        errors={() => []}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Report a bug/ })
+    );
+    expect(screen.queryByRole('toolbar', { name: 'Formatting' })).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'Formatting' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeTruthy();
+  });
+
   it('sends a pasted three-line trace as a code block', async () => {
     const calls = mockApi({
       'widget/session': session,
@@ -443,6 +467,7 @@ describe('Widget', () => {
     fireEvent.change(screen.getByLabelText('Subject (optional)'), {
       target: { value: 'Export broken' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Formatting' }));
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'What happened?' }), {
       key: 'k',
       metaKey: true,

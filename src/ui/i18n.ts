@@ -68,9 +68,8 @@ const en = {
   'thread.thanks.feature': 'Thank you for your suggestion',
   'thread.thanks.lead': 'Thank you for your message',
   'thread.confirmEmail':
-    "We'll get back to you as soon as possible. You'll be notified at {email} and here, under {reference}.",
-  'thread.confirmHere':
-    "We'll get back to you as soon as possible. You'll be notified here, under {reference}.",
+    "You'll be notified at {email} and here, under {reference}.",
+  'thread.confirmHere': "You'll be notified here, under {reference}.",
   'thread.bookLead': 'Rather talk it through?',
   'thread.book': 'Book a 30-minute call',
   'thread.sent': 'Sent',
@@ -460,9 +459,9 @@ const de: Record<MessageKey, string> = {
   'thread.thanks.feature': 'Vielen Dank für Ihren Vorschlag',
   'thread.thanks.lead': 'Vielen Dank für Ihre Nachricht',
   'thread.confirmEmail':
-    'Wir melden uns so bald wie möglich. Sie werden per E-Mail an {email} und hier benachrichtigt (Referenz {reference}).',
+    'Sie werden per E-Mail an {email} und hier benachrichtigt (Referenz {reference}).',
   'thread.confirmHere':
-    'Wir melden uns so bald wie möglich. Sie werden hier benachrichtigt (Referenz {reference}).',
+    'Sie werden hier benachrichtigt (Referenz {reference}).',
   'thread.bookLead': 'Lieber direkt sprechen?',
   'thread.book': 'Buchen Sie ein 30-Minuten-Gespräch',
   'thread.sent': 'Gesendet',

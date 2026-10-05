@@ -165,6 +165,10 @@ img.avatar { object-fit: cover; padding: 0; }
 
 .field { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
 .field .hint { color: var(--s-muted); font-weight: 400; }
+.field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.format-toggle { min-height: 24px; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: var(--s-muted); font-size: 13px; cursor: pointer; }
+.format-toggle:hover, .format-toggle[aria-pressed="true"] { color: var(--s-fg); }
+.format-toggle:focus-visible { outline: 2px solid var(--s-focus); outline-offset: 2px; }
 .choices { border: 0; margin: 0; padding: 0; min-width: 0; }
 .choices legend { padding: 0; margin-bottom: 6px; }
 .choice { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; margin-top: 6px; padding: 8px 12px; text-align: left; font: inherit; font-weight: 400; color: inherit; background: var(--s-subtle); border: 1px solid transparent; border-radius: var(--s-r-control); cursor: pointer; }
@@ -246,6 +250,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .box > summary::-webkit-details-marker { display: none; }
 .box > summary .muted { margin-left: auto; }
 .box-body { padding: 0 12px 12px; display: grid; gap: 8px; }
+/* Sits at the bottom of the form body, right above the footer. */
+.box.context { margin-top: auto; }
 .help { overflow: hidden; }
 .help-heading { display: block; padding: 8px 12px 4px; font-size: 12px; color: var(--s-muted); }
 .help ul { list-style: none; margin: 0; padding: 0 0 4px; }

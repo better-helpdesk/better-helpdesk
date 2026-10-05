@@ -710,6 +710,9 @@ function NewMessage({
     { title: string; url: string; excerpt?: string }[]
   >([]);
   const technical = TECHNICAL.has(type);
+  // A bug or feature report is rarely formatted; the toolbar waits behind a toggle.
+  const plain = type === 'bug' || type === 'feature';
+  const [formatting, setFormatting] = useState(false);
   const qualify = session.inbox?.qualify;
 
   // Read once per form: the checkboxes refer to these entries, and the page
@@ -872,7 +875,18 @@ function NewMessage({
       <div className="body">
         <fieldset className="sent-fields" disabled={sent}>
           <div className="field">
-            <span aria-hidden="true">{messageLabel}</span>
+            <div className="field-head">
+              <span aria-hidden="true">{messageLabel}</span>
+              {plain && (
+                <button
+                  type="button"
+                  className="format-toggle"
+                  aria-pressed={formatting}
+                  onClick={() => setFormatting(on => !on)}>
+                  {t('rich.toolbar')}
+                </button>
+              )}
+            </div>
             <RichEditor
               ref={message}
               className="rt-form"
@@ -881,6 +895,7 @@ function NewMessage({
               value={body}
               onChange={setBody}
               t={t}
+              toolbar={!plain || formatting}
               readOnly={sent}
             />
           </div>
@@ -1044,7 +1059,7 @@ function NewMessage({
             )}
             {contextKeys.length > 0 && (
               <fieldset className="sent-fields" disabled={sent}>
-                <details className="box">
+                <details className="box context">
                   <summary>
                     {t('form.contextSummary', {
                       count: String(
