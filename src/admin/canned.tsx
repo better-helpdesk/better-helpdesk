@@ -4,7 +4,7 @@ import { useResource } from '../ui/api';
 import { RichText } from '../ui/rich';
 import { RichEditor, type RichEditorHandle } from '../ui/rich-editor';
 import { useAdmin } from './context';
-import { Dialog, paths, Svg } from './ui';
+import { Dialog, Empty, paths, Svg } from './ui';
 
 export function CannedReplies() {
   const { api, t } = useAdmin();
@@ -38,7 +38,7 @@ export function CannedReplies() {
       </div>
       {list.data?.replies.length === 0 && (
         <div className="sa-table-wrap">
-          <p className="sa-empty">{t('admin.empty')}</p>
+          <Empty text={t('admin.emptyCanned')} />
         </div>
       )}
       {list.data?.replies.map(r => (

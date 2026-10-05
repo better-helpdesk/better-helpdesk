@@ -193,7 +193,18 @@ const en = {
   'admin.mine': 'Assigned to me',
   'admin.unassigned': 'Unassigned',
   'admin.waiting': 'Waiting {time}',
-  'admin.empty': 'Nothing here yet.',
+  'admin.emptyInbox':
+    'No conversations yet. The first message from the widget or by email shows up here.',
+  'admin.emptyFiltered': 'Nothing matches these filters.',
+  'admin.clearFilters': 'Clear filters',
+  'admin.emptyContacts':
+    "No contacts yet. A contact is created with a person's first message, or add one by hand.",
+  'admin.emptyCompanies':
+    "No companies yet. Link a contact to a company, or create one from a work email's domain.",
+  'admin.emptyCanned':
+    'No canned replies yet. Save an answer you type often; in the reply box, / inserts it.',
+  'admin.emptyDeals':
+    "No deals yet. Create one here, or from a sales lead's conversation.",
   'admin.status': 'Status',
   'admin.priority': 'Priority',
   'admin.type': 'Type',
@@ -476,7 +487,18 @@ const de: Record<MessageKey, string> = {
   'admin.mine': 'Mir zugewiesen',
   'admin.unassigned': 'Nicht zugewiesen',
   'admin.waiting': 'Wartet seit {time}',
-  'admin.empty': 'Noch keine Einträge.',
+  'admin.emptyInbox':
+    'Noch keine Unterhaltungen. Die erste Nachricht aus dem Widget oder per E-Mail erscheint hier.',
+  'admin.emptyFiltered': 'Nichts passt zu diesen Filtern.',
+  'admin.clearFilters': 'Filter zurücksetzen',
+  'admin.emptyContacts':
+    'Noch keine Kontakte. Ein Kontakt entsteht mit der ersten Nachricht einer Person, oder Sie legen ihn von Hand an.',
+  'admin.emptyCompanies':
+    'Noch keine Firmen. Verknüpfen Sie einen Kontakt mit einer Firma, oder legen Sie eine aus der Domain einer Geschäftsadresse an.',
+  'admin.emptyCanned':
+    'Noch keine Textbausteine. Speichern Sie eine Antwort, die Sie oft schreiben; im Antwortfeld fügt / sie ein.',
+  'admin.emptyDeals':
+    'Noch keine Deals. Legen Sie einen hier an oder aus der Unterhaltung eines Sales-Leads.',
   'admin.status': 'Status',
   'admin.priority': 'Priorität',
   'admin.type': 'Typ',

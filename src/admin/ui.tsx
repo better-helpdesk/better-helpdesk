@@ -168,6 +168,18 @@ export function Skeleton({
   );
 }
 
+/** The copy's first sentence is the title, the rest says how to fill the screen. */
+export function Empty({ text, action }: { text: string; action?: ReactNode }) {
+  const [, title = text, body] = /^(.+?[.…])\s+(.+)$/.exec(text) ?? [];
+  return (
+    <div className="sa-empty">
+      <strong>{title}</strong>
+      {body && <p>{body}</p>}
+      {action}
+    </div>
+  );
+}
+
 export function initials(value: string | null | undefined) {
   const words = (value ?? '?').replace(/@.*/, '').split(/[\s._-]+/);
   return words

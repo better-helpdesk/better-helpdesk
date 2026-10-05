@@ -8,7 +8,7 @@ import { FREE_MAIL } from './conversation';
 import { DealDialog } from './deals';
 import { type ConversationRow, ConversationTable } from './inbox';
 import { CompanyPicker, ContactPicker } from './pickers';
-import { Avatar, Dialog, money, paths, Skeleton, Svg } from './ui';
+import { Avatar, Dialog, Empty, money, paths, Skeleton, Svg } from './ui';
 
 type Contact = {
   id: string;
@@ -200,7 +200,13 @@ export function ContactList() {
       {list.data && (
         <div className="sa-table-wrap">
           {list.data.contacts.length === 0 ? (
-            <p className="sa-empty">{t('admin.empty')}</p>
+            <Empty
+              text={t(
+                route.q || route.leadStage
+                  ? 'admin.emptyFiltered'
+                  : 'admin.emptyContacts'
+              )}
+            />
           ) : (
             <table className="sa-table">
               <thead>
@@ -611,7 +617,9 @@ export function CompanyList() {
       {list.data && (
         <div className="sa-table-wrap">
           {list.data.companies.length === 0 ? (
-            <p className="sa-empty">{t('admin.empty')}</p>
+            <Empty
+              text={t(q ? 'admin.emptyFiltered' : 'admin.emptyCompanies')}
+            />
           ) : (
             <table className="sa-table">
               <thead>

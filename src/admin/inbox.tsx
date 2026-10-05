@@ -4,7 +4,7 @@ import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
-import { Avatar, Dialog, paths, Skeleton, Svg } from './ui';
+import { Avatar, Dialog, Empty, paths, Skeleton, Svg } from './ui';
 
 export type ConversationRow = {
   id: string;
@@ -61,6 +61,9 @@ export function Inbox() {
     c => c.priority === 'high' || c.priority === 'urgent'
   );
   const rows = priority === 'high' ? urgent : all;
+  const filtered =
+    Boolean(filters.assignee || filters.inbox || filters.q || priority) ||
+    filters.status !== 'open';
 
   return (
     <div className="sa">
@@ -156,7 +159,27 @@ export function Inbox() {
       {!list.data && !list.error && (
         <Skeleton kind="table" label={t('admin.loading')} />
       )}
-      {list.data && (
+      {list.data && rows.length === 0 && (
+        <div className="sa-table-wrap">
+          <Empty
+            text={t(filtered ? 'admin.emptyFiltered' : 'admin.emptyInbox')}
+            action={
+              filtered && (
+                <button
+                  type="button"
+                  className="sa-btn"
+                  onClick={() => {
+                    setQuery('');
+                    navigate({});
+                  }}>
+                  {t('admin.clearFilters')}
+                </button>
+              )
+            }
+          />
+        </div>
+      )}
+      {list.data && rows.length > 0 && (
         <ConversationTable
           rows={rows}
           hideStatus={filters.status !== 'any'}
@@ -287,14 +310,6 @@ export function ConversationTable({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [keyboard, rows, active, onOpen]);
-
-  if (rows.length === 0) {
-    return (
-      <div className="sa-table-wrap">
-        <p className="sa-empty">{t('admin.empty')}</p>
-      </div>
-    );
-  }
 
   return (
     <div className="sa-table-wrap">

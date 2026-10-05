@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
 import { useAdmin } from './context';
-import { Dialog, money, paths, Svg } from './ui';
+import { Dialog, Empty, money, paths, Svg } from './ui';
 
 /** A deal this long in one stage is flagged for a nudge. */
 const STALE_DAYS = 14;
@@ -63,6 +63,7 @@ export function DealsBoard() {
           {t('admin.newDeal')}
         </button>
       </div>
+      {deals.data?.deals.length === 0 && <Empty text={t('admin.emptyDeals')} />}
       <div
         className="sa-board"
         style={{ '--cols': me.dealStages.length } as React.CSSProperties}>
@@ -99,7 +100,7 @@ export function DealsBoard() {
                   {money(String(total), 'CHF', locale)}
                 </span>
               </div>
-              {inStage.length === 0 && (
+              {inStage.length === 0 && Boolean(deals.data?.deals.length) && (
                 <p className="sa-drop-hint">{t('admin.dropDeal')}</p>
               )}
               {inStage.map(d => (
