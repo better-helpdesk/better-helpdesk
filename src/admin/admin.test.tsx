@@ -157,6 +157,45 @@ describe('HelpdeskAdmin', () => {
     ).toBeNull();
   });
 
+  it('shows pasted code and captured errors as code blocks with a copy button', async () => {
+    const trace = '<script>alert(1)</script>\n    at f (a.js:1:1)';
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      conversation: {
+        ...conversation,
+        context: { errors: ['Error: <img src=x onerror=alert(2)>'] },
+      },
+      messages: [
+        {
+          id: 'm1',
+          authorType: 'contact',
+          body: `It broke:\n\`\`\`\n${trace}\n\`\`\``,
+          internal: false,
+          createdAt: new Date().toISOString(),
+          agentName: null,
+          contactName: 'Ada',
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    const { container } = render(
+      <HelpdeskAdmin basePath="/support" locale="en" />
+    );
+    await screen.findByText('It broke:');
+    fireEvent.click(screen.getByText('1 recent error'));
+
+    expect(
+      [...container.querySelectorAll('.code pre')].map(p => p.textContent)
+    ).toEqual([trace, 'Error: <img src=x onerror=alert(2)>']);
+    expect(screen.getAllByRole('button', { name: 'Copy code' })).toHaveLength(
+      2
+    );
+    expect(container.querySelector('script, img')).toBeNull();
+  });
+
   it('clears a sent reply when resolving it fails, so a retry cannot send it twice', async () => {
     const posts: string[] = [];
     vi.stubGlobal(

@@ -23,6 +23,11 @@ const en = {
   'rich.link': 'Link',
   'rich.linkUrl': 'Link address',
   'rich.addLink': 'Add link',
+  'rich.pre': 'Code block',
+  'rich.copy': 'Copy',
+  'rich.copyCode': 'Copy code',
+  'rich.copied': 'Copied',
+  'rich.copyByHand': 'Press {keys} to copy',
   'widget.replyPromise':
     'We reply personally, usually within one business day.',
   'widget.more': 'More options',
@@ -361,6 +366,11 @@ const de: Record<MessageKey, string> = {
   'rich.link': 'Link',
   'rich.linkUrl': 'Link-Adresse',
   'rich.addLink': 'Link einfügen',
+  'rich.pre': 'Codeblock',
+  'rich.copy': 'Kopieren',
+  'rich.copyCode': 'Code kopieren',
+  'rich.copied': 'Kopiert',
+  'rich.copyByHand': 'Drücken Sie {keys} zum Kopieren',
   'widget.replyPromise':
     'Wir antworten persönlich, meist innerhalb eines Werktags.',
   'widget.more': 'Weitere Optionen',

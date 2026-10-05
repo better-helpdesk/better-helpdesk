@@ -6,6 +6,8 @@ import { createElement, Fragment, type ReactNode } from 'react';
  *
  *   **bold**  _italic_  ++underline++  [text](https://…)  bare https://… links
  *   "- item" and "1. item" lines make lists; a blank line starts a paragraph.
+ *   A line of three or more backticks opens a code block, kept verbatim until
+ *   a line of at least as many backticks.
  */
 
 export type Inline =
@@ -17,10 +19,13 @@ export type Block =
   | { type: 'p'; lines: Inline[][] }
   | { type: 'ul'; items: Inline[][] }
   // `start`: the source's first number ("15. Oktober" stays 15).
-  | { type: 'ol'; items: Inline[][]; start: number };
+  | { type: 'ol'; items: Inline[][]; start: number }
+  | { type: 'pre'; text: string };
 
 const BULLET = /^\s*[-*•]\s+/;
 const NUMBER = /^\s*(\d+)[.)]\s+/;
+// Anything after the backticks (a language tag) is dropped.
+const FENCE = /^\s*(`{3,})[^`]*$/;
 
 // Earliest match wins; `_` italics need a non-word character on each side so
 // snake_case and file_names stay text. The bounds keep a crafted body (a
@@ -80,6 +85,13 @@ export function parseInline(text: string): Inline[] {
   return out;
 }
 
+/** `text` between backtick lines longer than any run of backticks inside it. */
+export function fence(text: string) {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map(r => r.length));
+  const marks = '`'.repeat(Math.max(3, longest + 1));
+  return `${marks}\n${text}\n${marks}`;
+}
+
 export function parseRich(text: string): Block[] {
   const blocks: Block[] = [];
   let paragraph: Inline[][] = [];
@@ -87,7 +99,22 @@ export function parseRich(text: string): Block[] {
     if (paragraph.length) blocks.push({ type: 'p', lines: paragraph });
     paragraph = [];
   };
+  let code: { fence: string; lines: string[] } | null = null;
   for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+    if (code) {
+      const close = line.trim();
+      if (/^`+$/.test(close) && close.length >= code.fence.length) {
+        blocks.push({ type: 'pre', text: code.lines.join('\n') });
+        code = null;
+      } else code.lines.push(line);
+      continue;
+    }
+    const fence = FENCE.exec(line)?.[1];
+    if (fence) {
+      flush();
+      code = { fence, lines: [] };
+      continue;
+    }
     const kind = BULLET.test(line) ? 'ul' : NUMBER.test(line) ? 'ol' : null;
     if (kind) {
       flush();
@@ -108,6 +135,7 @@ export function parseRich(text: string): Block[] {
     }
   }
   flush();
+  if (code) blocks.push({ type: 'pre', text: code.lines.join('\n') });
   return blocks;
 }
 
@@ -121,14 +149,16 @@ function inlineText(nodes: Inline[]): string {
 export function plainText(text: string) {
   return parseRich(text)
     .map(block =>
-      block.type === 'p'
-        ? block.lines.map(inlineText).join('\n')
-        : block.items
-            .map(
-              (item, i) =>
-                `${block.type === 'ul' ? '•' : `${block.start + i}.`} ${inlineText(item)}`
-            )
-            .join('\n')
+      block.type === 'pre'
+        ? block.text
+        : block.type === 'p'
+          ? block.lines.map(inlineText).join('\n')
+          : block.items
+              .map(
+                (item, i) =>
+                  `${block.type === 'ul' ? '•' : `${block.start + i}.`} ${inlineText(item)}`
+              )
+              .join('\n')
     )
     .join('\n\n');
 }
@@ -190,6 +220,7 @@ const lines = (rows: Inline[][], hosts: boolean) =>
   );
 
 function compactBlock(block: Block, hosts: boolean) {
+  if (block.type === 'pre') return joined(block.text.split('\n'), 1);
   if (block.type === 'p') return lines(block.lines, hosts);
   return lines(
     block.items.map((item, n) => [
@@ -203,7 +234,12 @@ function compactBlock(block: Block, hosts: boolean) {
   );
 }
 
-function block(b: Block, hosts: boolean) {
+function block(b: Block, hosts: boolean, code?: (text: string) => ReactNode) {
+  if (b.type === 'pre') {
+    return code
+      ? code(b.text)
+      : createElement('pre', null, createElement('code', null, b.text));
+  }
   if (b.type === 'p') return createElement('p', null, lines(b.lines, hosts));
   return createElement(
     b.type,
@@ -216,15 +252,19 @@ function block(b: Block, hosts: boolean) {
  * A message body, formatted. `compact` renders inline only (lists as "•"
  * lines), for places that already sit inside a paragraph, such as email.
  * `hosts` shows where each labelled link goes, for text someone else wrote.
+ * `code` renders a code block, so a client UI can add its copy button; this
+ * module also loads on the server, where hooks do not exist.
  */
 export function RichText({
   text,
   compact = false,
   hosts = false,
+  code,
 }: {
   text: string;
   compact?: boolean;
   hosts?: boolean;
+  code?: (text: string) => ReactNode;
 }) {
   const blocks = parseRich(text);
   if (compact)
@@ -235,6 +275,6 @@ export function RichText({
   return createElement(
     'div',
     { className: 'rich' },
-    ...blocks.map(b => block(b, hosts))
+    ...blocks.map(b => block(b, hosts, code))
   );
 }

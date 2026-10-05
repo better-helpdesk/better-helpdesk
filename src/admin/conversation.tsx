@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { useResource } from '../ui/api';
+import { CodeBlock } from '../ui/code-block';
 import { relativeTime } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
 import { RichEditor, type RichEditorHandle } from '../ui/rich-editor';
@@ -493,6 +494,7 @@ export function ConversationView({ id }: { id: string }) {
                       <RichText
                         text={m.body}
                         hosts={m.authorType !== 'agent'}
+                        code={text => <CodeBlock text={text} t={t} />}
                       />
                     </div>
                   </div>
@@ -892,7 +894,7 @@ export function ConversationView({ id }: { id: string }) {
                           count: String(context.errors.length),
                         })}
                   </summary>
-                  <pre>{context.errors.join('\n')}</pre>
+                  <CodeBlock text={context.errors.join('\n')} t={t} />
                 </details>
               )}
             </div>

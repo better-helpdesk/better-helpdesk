@@ -9,6 +9,7 @@ import {
 
 import type { Locale } from '../config';
 import { type Api, createApi, uploadToStorage, useResource } from '../ui/api';
+import { CodeBlock } from '../ui/code-block';
 import {
   nextWorkday,
   relativeTime,
@@ -1338,7 +1339,11 @@ function Thread({
                         : m.name}{' '}
                     · {timeAgo(m.createdAt, locale, t)}
                   </span>
-                  <RichText text={m.body} hosts={!m.own} />
+                  <RichText
+                    text={m.body}
+                    hosts={!m.own}
+                    code={text => <CodeBlock text={text} t={t} />}
+                  />
                 </div>
               </div>
               {index === 0 && !answered && (

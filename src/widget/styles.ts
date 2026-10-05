@@ -54,6 +54,13 @@ button { cursor: pointer; }
 .rich p, .rich ul, .rich ol { margin: 0; }
 .rich ul, .rich ol { padding-left: 20px; }
 .rich a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.code { display: flex; flex-direction: column; min-width: 0; border: 1px solid color-mix(in srgb, currentColor 15%, transparent); border-radius: 8px; background: color-mix(in srgb, currentColor 6%, transparent); white-space: normal; }
+.code pre { margin: 0; padding: 2px 10px 8px; overflow: auto; max-height: 240px; white-space: pre; tab-size: 4; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.code pre:focus-visible { outline-offset: -2px; }
+.code-bar { order: -1; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 4px 4px 0; font-size: 12px; }
+.code-bar button { min-height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.code-bar button:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.rt-input pre { margin: 4px 0; padding: 8px 10px; border-radius: 8px; background: var(--s-subtle); white-space: pre-wrap; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .rt-toolbar { display: flex; gap: 2px; margin-top: 4px; }
 .rt-toolbar button { display: grid; place-items: center; width: 32px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--s-muted); cursor: pointer; }
 .rt-toolbar button:hover { background: var(--s-subtle); color: var(--s-fg); }

@@ -9,11 +9,20 @@ import {
 } from 'react';
 
 import type { Translate } from './i18n';
-import { type Inline, parseRich, safeHref } from './rich';
+import { fence, type Inline, parseRich, safeHref } from './rich';
 
-type Format = 'bold' | 'italic' | 'underline' | 'ul' | 'ol' | 'link';
+type Format = 'bold' | 'italic' | 'underline' | 'ul' | 'ol' | 'pre' | 'link';
 
 const URL_ONLY = /^(https?:\/\/|mailto:)\S+$/i;
+
+// ponytail: an indentation sniff, so traces (JS, Java, Python), JSON and YAML
+// paste as code; unindented log lines stay text until the toolbar toggles them.
+export const looksLikeCode = (text: string) =>
+  text.trim().split('\n').length >= 3 &&
+  /^(\t| {2,})(?![-*•]\s|\d+[.)]\s)\S/m.test(text);
+
+const inCode = (node: Node | null | undefined) =>
+  !!(node instanceof Element ? node : node?.parentElement)?.closest('pre');
 
 // Markdown → editor HTML ------------------------------------------------------
 
@@ -39,17 +48,35 @@ function inlineHtml(nodes: Inline[]): string {
 
 /** The message format as the editor's own markup: one div per line. */
 export function richToHtml(text: string) {
-  return parseRich(text)
+  const blocks = parseRich(text);
+  const html = blocks
     .map(block =>
-      block.type === 'p'
-        ? block.lines
-            .map(line => `<div>${inlineHtml(line) || '<br>'}</div>`)
-            .join('')
-        : `<${block.type}${block.type === 'ol' && block.start !== 1 ? ` start="${block.start}"` : ''}>${block.items
-            .map(item => `<li>${inlineHtml(item)}</li>`)
-            .join('')}</${block.type}>`
+      // The HTML parser drops a newline right after <pre>, so lead with one.
+      block.type === 'pre'
+        ? `<pre>\n${escapeHtml(block.text)}</pre>`
+        : block.type === 'p'
+          ? block.lines
+              .map(line => `<div>${inlineHtml(line) || '<br>'}</div>`)
+              .join('')
+          : `<${block.type}${block.type === 'ol' && block.start !== 1 ? ` start="${block.start}"` : ''}>${block.items
+              .map(item => `<li>${inlineHtml(item)}</li>`)
+              .join('')}</${block.type}>`
     )
     .join('<div><br></div>');
+  // A line after a closing code block, or the caret has no way out of it.
+  return blocks.at(-1)?.type === 'pre' ? `${html}<div><br></div>` : html;
+}
+
+/** What a code element holds, as lines: breaks and line-wise children count. */
+function codeText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+  if (!(node instanceof HTMLElement)) return '';
+  if (node.tagName === 'BR') return '\n';
+  const inner = [...node.childNodes].map(codeText).join('');
+  // A line's trailing <br> only holds an empty line open.
+  return /^(DIV|P|LI)$/.test(node.tagName)
+    ? `\n${inner.replace(/\n$/, '')}`
+    : inner;
 }
 
 // Editor or pasted HTML → Markdown -------------------------------------------
@@ -57,14 +84,25 @@ export function richToHtml(text: string) {
 /** The editor's markup, or pasted HTML, reduced to the message format. */
 export function htmlToRich(html: string) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
+  // Kept out of the whitespace clean-up below until the end.
+  const code: string[] = [];
   const walk = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return (node.textContent ?? '').replace(/[ \t\r\n]+/g, ' ');
+      return (node.textContent ?? '')
+        .replace(/[ \t\r\n]+/g, ' ')
+        .replace(/\uE000/g, '');
     }
     if (!(node instanceof HTMLElement)) return '';
     const tag = node.tagName;
     if (tag === 'BR') return '\n';
     if (tag === 'SCRIPT' || tag === 'STYLE') return '';
+    // A div with exactly white-space: pre is how code editors copy; pre-wrap
+    // is everywhere in word processor HTML, so it does not count.
+    if (tag === 'PRE' || (tag === 'DIV' && node.style.whiteSpace === 'pre')) {
+      const text = [...node.childNodes].map(codeText).join('');
+      code.push(text.replace(/^\n/, '').replace(/\n$/, ''));
+      return `\n\n\uE000${code.length - 1}\uE000\n\n`;
+    }
     if (tag === 'UL' || tag === 'OL') {
       const items = [...node.children].filter(c => c.tagName === 'LI');
       return `\n${items
@@ -112,7 +150,8 @@ export function htmlToRich(html: string) {
   return walk(doc.body)
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .trim()
+    .replace(/\uE000(\d+)\uE000/g, (_, i) => fence(code[Number(i)] ?? ''));
 }
 
 // The editor -----------------------------------------------------------------
@@ -120,14 +159,17 @@ export function htmlToRich(html: string) {
 export type RichEditorHandle = { focus(): void };
 
 /** The selection, which inside a shadow root only the root itself knows. */
-function selectionIn(el: HTMLElement) {
+export function selectionIn(el: HTMLElement) {
   const root = el.getRootNode() as Document & {
     getSelection?: () => Selection | null;
   };
   return root.getSelection?.() ?? document.getSelection();
 }
 
-const COMMANDS: Record<Exclude<Format, 'link'>, string> = {
+export const isMac = () =>
+  typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
+
+const COMMANDS: Record<Exclude<Format, 'link' | 'pre'>, string> = {
   bold: 'bold',
   italic: 'italic',
   underline: 'underline',
@@ -141,6 +183,7 @@ const ICONS: Record<Format, string> = {
   underline: 'M6 4v6a6 6 0 0 0 12 0V4M4 20h16',
   ul: 'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
   ol: 'M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1',
+  pre: 'm16 18 6-6-6-6M8 6l-6 6 6 6',
   link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
 };
 const SHORTCUT: Partial<Record<Format, string>> = {
@@ -254,12 +297,14 @@ export function RichEditor({
       return;
     }
     el.current?.focus();
-    document.execCommand(COMMANDS[f]);
+    if (f === 'pre') {
+      const inCode = document.queryCommandValue('formatBlock') === 'pre';
+      document.execCommand('formatBlock', false, inCode ? 'div' : 'pre');
+    } else document.execCommand(COMMANDS[f]);
     emit();
   };
 
-  const mac =
-    typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
+  const mac = isMac();
 
   return (
     <div className={`rt ${className}`}>
@@ -306,12 +351,22 @@ export function RichEditor({
             !URL_ONLY.test(selection.toString().trim())
           ) {
             document.execCommand('createLink', false, text.trim());
+          } else if (inCode(selection?.anchorNode)) {
+            document.execCommand('insertText', false, text);
           } else {
             const html = event.clipboardData.getData('text/html');
             document.execCommand(
               'insertHTML',
               false,
-              richToHtml(html ? htmlToRich(html) : text)
+              richToHtml(
+                looksLikeCode(text)
+                  ? fence(
+                      text.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, '')
+                    )
+                  : html
+                    ? htmlToRich(html)
+                    : text
+              )
             );
           }
           emit();
