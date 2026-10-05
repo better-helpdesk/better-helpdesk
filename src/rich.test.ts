@@ -145,9 +145,9 @@ describe('RichText code blocks', () => {
     );
   });
 
-  it('shows the code as lines in compact output', () => {
-    expect(show('```\none <two>\nthree\n```', true)).toBe(
-      'one &lt;two&gt;<br/>three'
+  it('keeps the code’s lines and indentation, in monospace, in compact output', () => {
+    expect(show('```\none <two>\n  three\n```', true)).toBe(
+      '<code style="white-space:pre-wrap;font-family:monospace">one &lt;two&gt;\n  three</code>'
     );
   });
 

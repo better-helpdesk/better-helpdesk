@@ -220,7 +220,13 @@ const lines = (rows: Inline[][], hosts: boolean) =>
   );
 
 function compactBlock(block: Block, hosts: boolean) {
-  if (block.type === 'pre') return joined(block.text.split('\n'), 1);
+  if (block.type === 'pre') {
+    return createElement(
+      'code',
+      { style: { whiteSpace: 'pre-wrap', fontFamily: 'monospace' } },
+      block.text
+    );
+  }
   if (block.type === 'p') return lines(block.lines, hosts);
   return lines(
     block.items.map((item, n) => [
