@@ -413,7 +413,7 @@ describe('Widget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'Something went wrong. Please try again.'
+      'This could not be loaded.'
     );
 
     up = true;
