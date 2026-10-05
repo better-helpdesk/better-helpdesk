@@ -31,6 +31,11 @@ function render(m: HelpdeskEmail) {
         subject: m.reopened ? `Reopened: ${m.subject}` : m.subject,
         text: `${m.body}\n\n${m.url}`,
       };
+    case 'agent-mention':
+      return {
+        subject: `${m.authorName} mentioned you: ${m.subject}`,
+        text: `${m.body}\n\n${m.url}`,
+      };
   }
 }
 
