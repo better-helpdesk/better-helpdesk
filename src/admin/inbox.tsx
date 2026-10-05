@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useState,
+} from 'react';
 
 import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
@@ -14,6 +20,7 @@ import {
   Select,
   Skeleton,
   Svg,
+  useToast,
   type Viewer,
   ViewerStack,
 } from './ui';
@@ -270,6 +277,9 @@ export function Inbox() {
   );
 }
 
+/** The most conversations the server changes in one bulk request. */
+const BULK_LIMIT = 100;
+
 /** Applies one change to every selected conversation, all or none. */
 function BulkBar({
   rows,
@@ -284,6 +294,8 @@ function BulkBar({
   const [error, setError] = useState<string | null>(null);
   const [tag, setTag] = useState('');
   const tagListId = useId();
+  const toast = useToast();
+  const tooMany = rows.length > BULK_LIMIT;
   const agents = useResource(
     () =>
       api<{
@@ -297,26 +309,41 @@ function BulkBar({
     priority?: string;
     addTag?: string;
   }) => {
+    if (tooMany) return;
     setError(null);
     try {
       await api('agent/conversations/bulk', {
         body: { ids: rows.map(r => r.id), ...change },
       });
+      toast.show(t('admin.bulkDone'));
     } catch (e) {
-      const failed = rows.filter(r => (e as ApiError).ids?.includes(r.id));
+      const failure = e as ApiError;
+      const failed = rows.filter(r => failure.ids?.includes(r.id));
       setError(
         failed.length > 0
           ? t('admin.bulkFailedOn', {
               references: failed.map(r => r.reference).join(', '),
             })
-          : t('admin.bulkError')
+          : failure.status === 400 && failure.message
+            ? failure.message
+            : t('admin.bulkError')
       );
     }
   };
 
   return (
     <>
-      {error && <p className="sa-error">{error}</p>}
+      {error && (
+        <p className="sa-error" role="alert">
+          {error}
+        </p>
+      )}
+      {tooMany && (
+        <p className="sa-error" role="alert">
+          {t('admin.bulkTooMany', { count: String(BULK_LIMIT) })}
+        </p>
+      )}
+      {toast.node}
       <div
         className="sa-toolbar sa-bulk"
         role="toolbar"
@@ -336,6 +363,7 @@ function BulkBar({
               : t('admin.unassigned');
           }}
           onChange={v => apply({ assigneeId: v === 'none' ? null : v })}
+          disabled={tooMany}
         />
         <Select
           label={t('admin.status')}
@@ -344,6 +372,7 @@ function BulkBar({
           options={me.statuses}
           render={s => t(`agentStatus.${s}`)}
           onChange={v => apply({ status: v })}
+          disabled={tooMany}
         />
         <Select
           label={t('admin.priority')}
@@ -352,6 +381,7 @@ function BulkBar({
           options={me.priorities}
           render={p => t(`priority.${p}`)}
           onChange={v => apply({ priority: v })}
+          disabled={tooMany}
         />
         <form
           onSubmit={e => {
@@ -367,6 +397,7 @@ function BulkBar({
             placeholder={t('admin.addTag')}
             list={tagListId}
             maxLength={50}
+            disabled={tooMany}
             value={tag}
             onChange={e => setTag(e.target.value)}
           />
@@ -530,11 +561,15 @@ export function ConversationTable({
     r => r.priority === 'high' || r.priority === 'urgent'
   );
 
-  useEffect(() => {
+  // Bound before paint, so the keys reach rows as soon as they show.
+  useLayoutEffect(() => {
     if (!keyboard) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey ||
         /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName) ||
         target.closest('[role="tab"], [role="dialog"]')
       ) {

@@ -1062,11 +1062,11 @@ describe('bulk changes', () => {
     subject: `Outage report ${i}`,
   }));
   const posts: unknown[] = [];
-  let fail = false;
+  let fail: { status: number; error: string; ids?: string[] } | null = null;
 
   beforeEach(() => {
     posts.length = 0;
-    fail = false;
+    fail = null;
     routes['agent/conversations/?'] = { conversations: three };
     routes['agent/agents/'] = {
       agents: [{ id: 'a2', name: 'Grace Hopper', email: null }],
@@ -1078,10 +1078,7 @@ describe('bulk changes', () => {
         if (url.includes('agent/conversations/bulk')) {
           posts.push(JSON.parse(String(init?.body)));
           return fail
-            ? new Response(
-                JSON.stringify({ error: 'Not found', ids: ['c3'] }),
-                { status: 404 }
-              )
+            ? new Response(JSON.stringify(fail), { status: fail.status })
             : new Response(JSON.stringify({ ok: true }));
         }
         return respond(url);
@@ -1093,7 +1090,9 @@ describe('bulk changes', () => {
     });
   });
 
-  const status = () => screen.getByRole('status');
+  // The selection count; a toast is a second status.
+  const status = () =>
+    document.querySelector('.sa-sr-only[role="status"]') as HTMLElement;
 
   it('selects a range with shift-click and resolves it in one request', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
@@ -1112,6 +1111,11 @@ describe('bulk changes', () => {
     await waitFor(() =>
       expect(posts).toEqual([{ ids: ['c1', 'c2', 'c3'], status: 'resolved' }])
     );
+    expect(
+      (await screen.findByText('Selected conversations changed.')).getAttribute(
+        'role'
+      )
+    ).toBe('status');
     expect(status().textContent).toBe('3 selected');
     expect(window.location.pathname).toBe('/support/conversations/');
   });
@@ -1200,7 +1204,7 @@ describe('bulk changes', () => {
   });
 
   it('names the conversation a change failed on and keeps the selection', async () => {
-    fail = true;
+    fail = { status: 404, error: 'Not found', ids: ['c3'] };
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     fireEvent.click(
       await screen.findByRole('checkbox', { name: 'Select DG-1000' })
@@ -1212,12 +1216,75 @@ describe('bulk changes', () => {
       target: { value: 'resolved' },
     });
 
-    expect(
-      await screen.findByText(
-        'None of the selected conversations were changed. It failed on DG-1002.'
-      )
-    ).toBeTruthy();
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'None of the selected conversations were changed. It failed on DG-1002.'
+    );
     expect(status().textContent).toBe('2 selected');
+  });
+
+  it("shows the server's reason for a refusal that names no conversation", async () => {
+    fail = { status: 400, error: 'Unknown agent' };
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Select DG-1000' })
+    );
+    const bar = screen.getByRole('toolbar', { name: 'Change selected' });
+
+    fireEvent.change(within(bar).getByRole('combobox', { name: 'Status' }), {
+      target: { value: 'resolved' },
+    });
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Unknown agent'
+    );
+  });
+
+  it('refuses a selection over the bulk limit without sending it', async () => {
+    routes['agent/conversations/?'] = {
+      conversations: Array.from({ length: 101 }, (_, i) => ({
+        ...conversation,
+        id: `m${i}`,
+        reference: `DG-${2000 + i}`,
+      })),
+    };
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Select all' })
+    );
+    const bar = screen.getByRole('toolbar', { name: 'Change selected' });
+    const select = within(bar).getByRole('combobox', {
+      name: 'Status',
+    }) as HTMLSelectElement;
+
+    fireEvent.change(select, { target: { value: 'resolved' } });
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Select at most 100 conversations.'
+    );
+    expect(select.disabled).toBe(true);
+    expect(
+      (
+        within(bar).getByRole('combobox', {
+          name: 'Add tag',
+        }) as HTMLInputElement
+      ).disabled
+    ).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(posts).toEqual([]);
+  });
+
+  it('leaves the selection alone when x comes with Ctrl, Cmd or Alt', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('checkbox', { name: 'Select DG-1000' });
+
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: 'x', ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: 'x', metaKey: true });
+    fireEvent.keyDown(document.body, { key: 'x', altKey: true });
+
+    expect(status().textContent).toBe('');
+    fireEvent.keyDown(document.body, { key: 'x' });
+    expect(status().textContent).toBe('1 selected');
   });
 
   it('selects a range from the keyboard with shift and x', async () => {

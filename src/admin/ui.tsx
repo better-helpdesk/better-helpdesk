@@ -332,6 +332,7 @@ export function Select({
   render,
   onChange,
   placeholder = false,
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -340,12 +341,14 @@ export function Select({
   onChange: (value: string) => void;
   /** Adds an empty `''` option that shows the label alone; no option may then be `''`. */
   placeholder?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <select
       className="sa-select"
       aria-label={label}
       title={label}
+      disabled={disabled}
       value={value}
       onChange={e => onChange(e.target.value)}>
       {placeholder && (
