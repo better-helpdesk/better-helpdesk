@@ -1639,6 +1639,62 @@ describe('conversation shortcuts', () => {
     fireEvent.click(closeButton);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
+
+  it('takes no single key once the agent turns them off, and remembers it', async () => {
+    vi.stubGlobal('localStorage', sessionStorage);
+    onTestFinished(() => sessionStorage.removeItem('helpdesk.keys'));
+    const { showModal, close } = HTMLDialogElement.prototype;
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+    onTestFinished(() => {
+      Object.assign(HTMLDialogElement.prototype, { showModal, close });
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByText('The CSV export fails');
+    const reply = screen.getByRole('button', { name: 'Reply' });
+    expect(reply.getAttribute('aria-keyshortcuts')).toBe('R');
+
+    fireEvent.keyDown(document.body, { key: '?', shiftKey: true });
+    const sheet = await screen.findByRole('dialog', {
+      name: 'Keyboard shortcuts',
+    });
+    const box = within(sheet).getByRole('checkbox', {
+      name: 'Single-key shortcuts',
+    });
+    expect((box as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(box);
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    expect(fireEvent.keyDown(document.body, { key: 'e' })).toBe(true);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(patches).toEqual([]);
+    expect(reply.hasAttribute('aria-keyshortcuts')).toBe(false);
+
+    cleanup();
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByText('The CSV export fails');
+    fireEvent.keyDown(document.body, { key: '?', shiftKey: true });
+    fireEvent.keyDown(document.body, { key: 'e' });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(patches).toEqual([]);
+
+    cleanup();
+    window.history.replaceState(null, '', '/support/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Keyboard shortcuts' })
+    );
+    expect(
+      await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })
+    ).toBeTruthy();
+  });
 });
 
 describe('details sidebar', () => {

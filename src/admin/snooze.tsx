@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 
 import type { Locale } from '../config';
 import { useAdmin } from './context';
-import { useShortcuts } from './ui';
+import { useKeysOn, useShortcuts } from './ui';
 
 type Preset = 'laterToday' | 'tomorrow' | 'nextWeek';
 
@@ -50,6 +50,7 @@ export function SnoozeControl({
   onSave: (snoozedUntil: string | null) => Promise<void>;
 }) {
   const { t, locale } = useAdmin();
+  const keysOn = useKeysOn();
   const select = useRef<HTMLSelectElement>(null);
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState('');
@@ -80,7 +81,7 @@ export function SnoozeControl({
       <select
         ref={select}
         className="sa-select"
-        aria-keyshortcuts="Z"
+        aria-keyshortcuts={keysOn ? 'Z' : undefined}
         aria-label={
           until
             ? t('admin.snoozedUntil', { date: formatSnooze(until, locale) })

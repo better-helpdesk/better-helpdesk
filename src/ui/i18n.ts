@@ -147,6 +147,9 @@ const en = {
   'admin.keyNote': 'Write an internal note',
   'admin.keyCanned': 'Canned replies, typed into an empty reply',
   'admin.keyHelp': 'This list',
+  'admin.singleKeys': 'Single-key shortcuts',
+  'admin.singleKeysHint':
+    'Turn them off if you use speech input or press keys by accident. Shortcuts with {mod} keep working. While they are off, open this list with the Keyboard shortcuts button in the inbox.',
   'admin.resolvedToast': 'Resolved {reference}',
   'admin.assignedToYou': 'Assigned to you',
   'admin.newContact': 'New contact',
@@ -540,6 +543,9 @@ const de: Record<MessageKey, string> = {
   'admin.keyNote': 'Interne Notiz schreiben',
   'admin.keyCanned': 'Textbausteine, in eine leere Antwort getippt',
   'admin.keyHelp': 'Diese Liste',
+  'admin.singleKeys': 'Kürzel mit einer Taste',
+  'admin.singleKeysHint':
+    'Schalten Sie diese aus, wenn Sie Spracheingabe nutzen oder versehentlich Tasten drücken. Kürzel mit {mod} funktionieren weiterhin. Solange sie aus sind, öffnen Sie diese Liste über die Schaltfläche «Tastaturkürzel» im Posteingang.',
   'admin.resolvedToast': '{reference} gelöst',
   'admin.assignedToYou': 'Ihnen zugewiesen',
   'admin.newContact': 'Neuer Kontakt',

@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 
 import type { Translate } from '../ui/i18n';
@@ -289,11 +290,45 @@ export function Dialog({
   );
 }
 
+const KEYS_KEY = 'helpdesk.keys';
+const KEYS_CHANGED = 'helpdesk:keys';
+// Stands in for localStorage where it throws, so the switch still works for this page.
+let keysOff = false;
+
+function keysOn() {
+  try {
+    return localStorage.getItem(KEYS_KEY) !== 'off';
+  } catch {
+    return !keysOff;
+  }
+}
+
+export function setKeysOn(on: boolean) {
+  keysOff = !on;
+  try {
+    if (on) localStorage.removeItem(KEYS_KEY);
+    else localStorage.setItem(KEYS_KEY, 'off');
+  } catch {}
+  window.dispatchEvent(new Event(KEYS_CHANGED));
+}
+
+/** Whether the agent left single-key shortcuts on (WCAG 2.1.4); remembered in this browser. */
+export function useKeysOn() {
+  return useSyncExternalStore(
+    change => {
+      window.addEventListener(KEYS_CHANGED, change);
+      return () => window.removeEventListener(KEYS_CHANGED, change);
+    },
+    keysOn,
+    () => true
+  );
+}
+
 /**
  * Single-key shortcuts on the window, keyed by `KeyboardEvent.key` with letters
  * in lower case.
  * Keys typed into a field, held with Cmd/Ctrl/Alt, or pressed in or behind an
- * open dialog are left alone.
+ * open dialog are left alone, and none run while the agent has turned them off.
  */
 export function useShortcuts(
   map: Record<string, ((e: KeyboardEvent) => void) | undefined>
@@ -311,6 +346,7 @@ export function useShortcuts(
       const target = e.composedPath()[0];
       if (
         !run ||
+        !keysOn() ||
         e.isComposing ||
         e.metaKey ||
         e.ctrlKey ||

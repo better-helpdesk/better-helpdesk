@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import type { Locale } from '../config';
 import { type Api, ApiError, createApi, useResource } from '../ui/api';
@@ -20,7 +20,14 @@ import { DealsBoard } from './deals';
 import { AwayControl, Inbox } from './inbox';
 import { Settings } from './settings';
 import { adminCss } from './styles';
-import { Avatar, Dialog, LoadError, useShortcuts } from './ui';
+import {
+  Avatar,
+  Dialog,
+  LoadError,
+  setKeysOn,
+  useKeysOn,
+  useShortcuts,
+} from './ui';
 
 /** The agent UI's sections, for a host that renders its own tabs. */
 export { HELPDESK_CHANGED };
@@ -152,6 +159,7 @@ export function HelpdeskAdmin({
               me.data?.inboxNames?.[key]?.[locale] ??
               key.charAt(0).toUpperCase() + key.slice(1),
             nav,
+            openShortcuts: () => setSheet(true),
           }}>
           <div className="sa">
             {nav && (
@@ -211,6 +219,8 @@ export function HelpdeskAdmin({
 
 function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
   const mod = isMac() ? '⌘' : 'Ctrl';
+  const keysOn = useKeysOn();
+  const hintId = useId();
   const groups: [string, [string[], string][]][] = [
     [
       t('admin.inbox'),
@@ -243,6 +253,18 @@ function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
   return (
     <div className="sa-dialog-body">
       <h2>{t('admin.shortcuts')}</h2>
+      <label>
+        <input
+          type="checkbox"
+          checked={keysOn}
+          aria-describedby={hintId}
+          onChange={e => setKeysOn(e.target.checked)}
+        />{' '}
+        {t('admin.singleKeys')}
+      </label>
+      <p id={hintId} className="sa-muted">
+        {t('admin.singleKeysHint', { mod })}
+      </p>
       {groups.map(([heading, keys]) => (
         <section key={heading}>
           <h3>{heading}</h3>

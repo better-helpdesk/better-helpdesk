@@ -51,6 +51,7 @@ export type AdminContext = {
   inboxName: (key: string) => string;
   /** False when the host renders its own section tabs instead of the rail. */
   nav: boolean;
+  openShortcuts: () => void;
 };
 
 export type Route = Record<string, string>;
