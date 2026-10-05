@@ -322,6 +322,61 @@ describe('HelpdeskAdmin', () => {
     ).toBe('Ask billing first');
   });
 
+  it('mentions a teammate picked with @ in a note and notifies only who is still named', async () => {
+    const sent: unknown[] = [];
+    routes['agent/agents/'] = {
+      agents: [
+        { id: 'a1', name: 'Agent', email: 'agent@devguard.test' },
+        { id: 'a2', name: 'Bea', email: 'bea@devguard.test' },
+        { id: 'a3', name: 'Cy', email: 'cy@devguard.test' },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST' && url.includes('/messages')) {
+          sent.push(JSON.parse(String(init.body)));
+          return new Response('{"id":"m2"}', { status: 201 });
+        }
+        return respond(url);
+      })
+    );
+    try {
+      window.history.replaceState(null, '', '/support/conversations/c1/');
+      render(<HelpdeskAdmin basePath="/support" locale="en" />);
+      await screen.findByRole('textbox', { name: 'Reply' });
+      fireEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+      const note = screen.getByRole('textbox', { name: 'Internal note' });
+      note.innerHTML = 'Ask @b';
+      fireEvent.input(note);
+      const list = await screen.findByRole('listbox', {
+        name: 'Mention a teammate',
+      });
+      expect(within(list).queryByText('Agent')).toBeNull();
+      fireEvent.keyDown(note, { key: 'Enter' });
+      await waitFor(() => expect(note.textContent).toBe('Ask @Bea '));
+      expect(screen.queryByRole('listbox')).toBeNull();
+      note.innerHTML = 'Ask @Bea';
+      fireEvent.input(note);
+      expect(screen.queryByRole('listbox')).toBeNull();
+      note.innerHTML = 'Ask @Bea and @c';
+      fireEvent.input(note);
+      fireEvent.mouseDown(await screen.findByRole('option', { name: 'Cy' }));
+      await waitFor(() => expect(note.textContent).toBe('Ask @Bea and @Cy '));
+      note.innerHTML = 'Ask @Cy';
+      fireEvent.input(note);
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await waitFor(() =>
+        expect(sent).toEqual([
+          { body: 'Ask @Cy', internal: true, notify: ['a3'] },
+        ])
+      );
+    } finally {
+      routes['agent/agents/'] = { agents: [] };
+    }
+  });
+
   it('keeps a draft when sending it fails', async () => {
     vi.stubGlobal(
       'fetch',
@@ -854,6 +909,7 @@ describe('HelpdeskAdmin', () => {
         event(8, 'status', { from: 'pending', to: 'open' }, null),
         event(9, 'reopened', {}, null),
         event(10, 'participant.added', { contactId: 'p2' }),
+        event(10, 'mentioned', { agentIds: ['a2', 'gone'] }),
         event(11, 'priority', { from: 'normal', to: 'urgent' }, 'gone'),
         event(12, 'mystery'),
         event(
@@ -898,6 +954,7 @@ describe('HelpdeskAdmin', () => {
       'Status changed to Open',
       'A customer reply reopened this',
       'Grace added Bob',
+      'Grace mentioned Grace, A former agent',
       'A former agent set the priority to Urgent',
       'The customer marked this resolved',
     ]);

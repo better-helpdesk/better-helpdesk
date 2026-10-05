@@ -276,7 +276,7 @@ token is refused with 401, and a token never grants the agent UI.
 
 ### Email
 
-**Outbound** mail goes through your sender. The adapter receives one of four
+**Outbound** mail goes through your sender. The adapter receives one of five
 message kinds and decides how each is rendered and sent:
 
 ```ts
@@ -300,6 +300,12 @@ email: {
           subject: message.reopened ? `Reopened: ${message.subject}` : message.subject,
           text: `${message.body}\n\n${message.url}`,
         });
+      case 'agent-mention':
+        return mailer.send({
+          to: message.to,
+          subject: `${message.authorName} mentioned you in ${message.reference}`,
+          text: `${message.body}\n\n${message.url}`,
+        });
     }
   },
 },
@@ -309,7 +315,8 @@ email: {
 carries the responder's name, their away date when the team is out, and the
 inbox's booking link, so your template can show them. An `agent-new` with
 `reopened: true` means a customer wrote on a resolved conversation; its body
-is what they wrote then.
+is what they wrote then. An `agent-mention` goes to each teammate picked with
+`@` in an internal note; its body is the note.
 
 **Inbound** mail arrives through a webhook. Any relay that can forward a raw
 message to a URL will do; [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays)
