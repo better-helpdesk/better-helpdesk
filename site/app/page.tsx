@@ -38,7 +38,7 @@ export default function Home() {
           <div className="hero-l">
             <span className="eyebrow">Open source · MIT · npm</span>
             <h1 id="hero-h">
-              The helpdesk that lives <em>inside</em> your Next.js app.
+              Your helpdesk, <em>inside</em> your app.
             </h1>
             <p className="sub">
               An open-source support inbox, ticketing and lightweight CRM you
