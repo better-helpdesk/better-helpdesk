@@ -51,10 +51,16 @@ export type AdminContext = {
   inboxName: (key: string) => string;
   /** False when the host renders its own section tabs instead of the rail. */
   nav: boolean;
+  /** The inbox list's rows in their current order, kept by `Inbox` for working the queue. */
+  queue: QueueEntry[];
+  setQueue: (update: (queue: QueueEntry[]) => QueueEntry[]) => void;
   openShortcuts: () => void;
 };
 
 export type Route = Record<string, string>;
+
+/** `viewed`: a teammate has it open. */
+export type QueueEntry = { id: string; viewed: boolean };
 
 const Ctx = createContext<AdminContext | null>(null);
 

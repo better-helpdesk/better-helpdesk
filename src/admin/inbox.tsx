@@ -16,7 +16,9 @@ import {
   Select,
   Skeleton,
   Svg,
+  setQueueOn,
   useKeysOn,
+  useQueueOn,
   useShortcuts,
   useToast,
   type Viewer,
@@ -48,8 +50,18 @@ const SOON_HOURS = 6;
 const LATE_HOURS = 24;
 
 export function Inbox() {
-  const { api, t, me, route, navigate, inboxName, nav, openShortcuts } =
-    useAdmin();
+  const {
+    api,
+    t,
+    me,
+    route,
+    navigate,
+    inboxName,
+    nav,
+    openShortcuts,
+    setQueue,
+  } = useAdmin();
+  const queueOn = useQueueOn();
   const keysOn = useKeysOn();
   const [query, setQuery] = useState(route.q ?? '');
   const [tag, setTag] = useState(route.tag ?? '');
@@ -106,6 +118,16 @@ export function Inbox() {
     c => c.priority === 'high' || c.priority === 'urgent'
   );
   const rows = priority === 'high' ? urgent : all;
+  useEffect(() => {
+    const next = rows.map(r => ({
+      id: r.id,
+      viewed: Boolean(r.viewers?.length),
+    }));
+    const key = (entries: typeof next) =>
+      entries.map(e => `${e.id}${e.viewed ? '*' : ''}`).join(' ');
+    // Polling hands over new rows every time; only a changed order is news.
+    setQueue(current => (key(current) === key(next) ? current : next));
+  });
   const visibleSelected = selected.filter(id => rows.some(r => r.id === id));
   const filtered =
     Boolean(
@@ -222,6 +244,14 @@ export function Inbox() {
           </option>
         </select>
         {!nav && <AwayControl />}
+        <label className="sa-toggle">
+          <input
+            type="checkbox"
+            checked={queueOn}
+            onChange={e => setQueueOn(e.target.checked)}
+          />
+          {t('admin.workQueue')}
+        </label>
         {!keysOn ? (
           <button
             type="button"

@@ -290,39 +290,48 @@ export function Dialog({
   );
 }
 
-const KEYS_KEY = 'helpdesk.keys';
-const KEYS_CHANGED = 'helpdesk:keys';
-// Stands in for localStorage where it throws, so the switch still works for this page.
-let keysOff = false;
-
-function keysOn() {
-  try {
-    return localStorage.getItem(KEYS_KEY) !== 'off';
-  } catch {
-    return !keysOff;
-  }
+/** An agent's on/off preference, remembered in this browser. */
+function storedSwitch(key: string, byDefault: boolean) {
+  const changed = `${key}:changed`;
+  // Stands in for localStorage where it throws, so the switch still works for this page.
+  let fallback = byDefault;
+  const read = () => {
+    try {
+      const value = localStorage.getItem(key);
+      return value === null ? byDefault : value === 'on';
+    } catch {
+      return fallback;
+    }
+  };
+  const set = (on: boolean) => {
+    fallback = on;
+    try {
+      if (on === byDefault) localStorage.removeItem(key);
+      else localStorage.setItem(key, on ? 'on' : 'off');
+    } catch {}
+    window.dispatchEvent(new Event(changed));
+  };
+  const useSwitch = () =>
+    useSyncExternalStore(
+      change => {
+        window.addEventListener(changed, change);
+        return () => window.removeEventListener(changed, change);
+      },
+      read,
+      () => byDefault
+    );
+  return { read, set, useSwitch };
 }
 
-export function setKeysOn(on: boolean) {
-  keysOff = !on;
-  try {
-    if (on) localStorage.removeItem(KEYS_KEY);
-    else localStorage.setItem(KEYS_KEY, 'off');
-  } catch {}
-  window.dispatchEvent(new Event(KEYS_CHANGED));
-}
+const keys = storedSwitch('helpdesk.keys', true);
+export const setKeysOn = keys.set;
+/** Whether the agent left single-key shortcuts on (WCAG 2.1.4). */
+export const useKeysOn = keys.useSwitch;
 
-/** Whether the agent left single-key shortcuts on (WCAG 2.1.4); remembered in this browser. */
-export function useKeysOn() {
-  return useSyncExternalStore(
-    change => {
-      window.addEventListener(KEYS_CHANGED, change);
-      return () => window.removeEventListener(KEYS_CHANGED, change);
-    },
-    keysOn,
-    () => true
-  );
-}
+const queue = storedSwitch('helpdesk.queue', false);
+export const setQueueOn = queue.set;
+/** "Work the queue": after a reply, the next conversation in the inbox's order opens. */
+export const useQueueOn = queue.useSwitch;
 
 /**
  * Single-key shortcuts on the window, keyed by `KeyboardEvent.key` with letters
@@ -346,7 +355,7 @@ export function useShortcuts(
       const target = e.composedPath()[0];
       if (
         !run ||
-        !keysOn() ||
+        !keys.read() ||
         e.isComposing ||
         e.metaKey ||
         e.ctrlKey ||

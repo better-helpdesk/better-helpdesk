@@ -80,6 +80,7 @@ export const adminCss = `
 
 .sa-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .sa-toolbar .sa-grow { flex: 1; min-width: 200px; }
+.sa-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
 .sa-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .sa-fields .sa-select { width: 100%; min-width: 0; text-overflow: ellipsis; }
 .sa-snooze-pick { display: flex; gap: 6px; align-items: center; grid-column: 1 / -1; }
@@ -203,6 +204,9 @@ export const adminCss = `
 }
 .sa-split:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
 .sa .sa-aside-toggle { height: 32px; margin-inline-start: auto; flex: none; }
+.sa-queue { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; flex: none; }
+.sa-queue .sa-btn { height: 32px; }
+.sa .sa-queue + .sa-aside-toggle { margin-inline-start: 0; }
 .sa-kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 13px; margin: 0; }
 .sa-kv dt { color: var(--a-muted); }
 .sa-kv dd { margin: 0; overflow-wrap: anywhere; }
