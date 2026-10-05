@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 
 import { useResource } from '../ui/api';
+import { openHoursBetween } from '../ui/hours';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
@@ -35,7 +36,7 @@ export type ConversationRow = {
   viewers?: Viewer[];
 };
 
-/** The widget promises a reply within a business day; amber warns ahead of it, red is past it. */
+/** Hours waited before amber and red; open hours only, in an inbox with `hours`. */
 const SOON_HOURS = 6;
 const LATE_HOURS = 24;
 
@@ -339,7 +340,7 @@ export function ConversationTable({
   /** j/k move, Enter opens; for the inbox, which owns the page. */
   keyboard?: boolean;
 }) {
-  const { t, href, locale, inboxName } = useAdmin();
+  const { t, href, locale, inboxName, me } = useAdmin();
   // By id: polling re-sorts the rows and a filter swaps them.
   const [activeId, setActiveId] = useState<string | null>(null);
   // -1 until the first j/k: the cursor shows only once someone uses it.
@@ -384,10 +385,13 @@ export function ConversationTable({
         <tbody>
           {rows.map((c, index) => {
             const waiting = Boolean(c.waitingSince) && c.status !== 'resolved';
-            const hours = waiting
-              ? (Date.now() - new Date(c.waitingSince as string).getTime()) /
-                3_600_000
-              : 0;
+            const since = waiting ? new Date(c.waitingSince as string) : null;
+            const inboxHours = me.inboxHours[c.inbox];
+            const hours = !since
+              ? 0
+              : inboxHours
+                ? openHoursBetween(since, new Date(), inboxHours)
+                : (Date.now() - since.getTime()) / 3_600_000;
             const tone =
               hours > LATE_HOURS
                 ? 'late'

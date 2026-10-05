@@ -1,5 +1,5 @@
 import type { DNSResolver } from 'mailauth';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { HelpdeskStore } from './db/store';
 import type { HelpdeskEvent } from './events';
@@ -25,6 +25,40 @@ export type Identity = {
   isAgent: boolean;
 };
 
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+/**
+ * When the team answers, as wall-clock spans per weekday in `timeZone`.
+ * A span whose end is not after its start runs into the next day; `24:00` ends at midnight.
+ */
+export type BusinessHours = {
+  timeZone: string;
+  weekly: Partial<Record<(typeof DAY_KEYS)[number], [string, string][]>>;
+};
+
+const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const endTime = z.union([time, z.literal('24:00')]);
+const businessHours = z.object({
+  timeZone: z.string().refine(zone => {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: zone });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Unknown time zone'),
+  weekly: z
+    .strictObject(
+      Object.fromEntries(
+        DAY_KEYS.map(d => [d, z.array(z.tuple([time, endTime])).optional()])
+      )
+    )
+    .refine(
+      weekly => Object.values(weekly).some(spans => spans?.length),
+      'At least one open span'
+    ),
+});
+
 export type InboxConfig = {
   /** What agents see instead of the key, per locale. */
   name?: Partial<Record<Locale, string>>;
@@ -32,8 +66,10 @@ export type InboxConfig = {
   public?: boolean;
   /** Origins allowed to call the widget API cross-origin. */
   allowedOrigins?: string[];
-  /** Email agents when a customer has waited this long. */
+  /** Email agents when a customer has waited this long; open hours only when `hours` is set. */
   reminderAfterHours?: number;
+  /** Unset, reminders and the waiting colours count every hour, and the team is back on the next weekday. */
+  hours?: BusinessHours;
   /** Priority new conversations start with, e.g. `high` for sales. */
   defaultPriority?: (typeof PRIORITIES)[number];
   /** Widget header for this inbox, per locale. */
@@ -82,7 +118,10 @@ export type HelpdeskEmail =
       responderName?: string;
       responderTitle?: string;
       responderAvatarUrl?: string;
-      /** Everyone who answers is away until then, back on `backOn`; ISO timestamps. */
+      /**
+       * Everyone who answers is away until then, back on `backOn`; ISO timestamps.
+       * An inbox with `hours` sets `backOn` alone while it is closed.
+       */
       awayUntil?: string;
       backOn?: string;
       bookingUrl?: string;
@@ -227,6 +266,14 @@ export type ResolvedConfig = HelpdeskConfig & {
 };
 
 export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
+  for (const [key, inbox] of Object.entries(config.inboxes)) {
+    if (!inbox.hours) continue;
+    const parsed = businessHours.safeParse(inbox.hours);
+    if (!parsed.success)
+      throw new Error(
+        `Invalid hours for inbox ${key}: ${z.prettifyError(parsed.error)}`
+      );
+  }
   return {
     ...config,
     basePath: (config.basePath ?? '/api/helpdesk').replace(/\/$/, ''),

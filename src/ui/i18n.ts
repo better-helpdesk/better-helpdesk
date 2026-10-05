@@ -10,6 +10,10 @@ const en = {
   'widget.awayNamed':
     '{name} is away until {date}. You will hear back by {nextDay}.',
   'widget.away': 'We are away until {date}. You will hear back by {nextDay}.',
+  'widget.closedNamed':
+    '{name} is back on {day} at {time} and replies to your message then.',
+  'widget.closed':
+    'We are back on {day} at {time} and reply to your message then.',
   'widget.agentWaitingOne': '1 conversation is waiting in the support inbox',
   'widget.agentWaiting':
     '{count} conversations are waiting in the support inbox',
@@ -359,6 +363,10 @@ const de: Record<MessageKey, string> = {
     '{name} ist bis {date} abwesend. Sie hören spätestens am {nextDay} von uns.',
   'widget.away':
     'Wir sind bis {date} abwesend. Sie hören spätestens am {nextDay} von uns.',
+  'widget.closedNamed':
+    '{name} ist am {day} um {time} wieder da und antwortet Ihnen dann.',
+  'widget.closed':
+    'Wir sind am {day} um {time} wieder da und antworten Ihnen dann.',
   'widget.agentWaitingOne': '1 Unterhaltung wartet im Support-Posteingang',
   'widget.agentWaiting': '{count} Unterhaltungen warten im Support-Posteingang',
   'widget.agentOpenInbox': 'Posteingang öffnen',

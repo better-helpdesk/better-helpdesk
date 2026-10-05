@@ -30,6 +30,7 @@ const me = {
   priorities: ['low', 'normal', 'high', 'urgent'],
   inboxes: ['support', 'sales'],
   inboxNames: { sales: { en: 'Sales' } },
+  inboxHours: {},
   segments: {},
   leadStages: ['lead', 'customer'],
   dealStages: ['new', 'won'],

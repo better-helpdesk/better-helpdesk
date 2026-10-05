@@ -27,6 +27,19 @@ const context = {
   locale: 'en',
   href: () => '#',
   inboxName: (key: string) => key,
+  me: {
+    inboxHours: {
+      support: {
+        timeZone: 'Europe/Zurich',
+        weekly: Object.fromEntries(
+          ['mon', 'tue', 'wed', 'thu', 'fri'].map(d => [
+            d,
+            [['08:00', '17:00']],
+          ])
+        ),
+      },
+    },
+  },
 } as unknown as AdminContext;
 
 const table = (rows: ConversationRow[], onOpen: (id: string) => void) => (
@@ -124,4 +137,27 @@ it('stacks the agents viewing a conversation on its row', () => {
     name: 'Grace Hopper and 2 others are viewing',
   });
   expect(stack.textContent).toBe('GHLK');
+});
+
+it('colours the wait by open hours in an inbox with hours, by the clock in one without', () => {
+  // Monday 26 October 09:00 in Zurich, the first Monday after DST ends.
+  vi.useFakeTimers({ now: new Date('2026-10-26T08:00:00Z'), toFake: ['Date'] });
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  // Friday 17:30, after closing.
+  const waitingSince = '2026-10-23T15:30:00Z';
+  const { container } = render(
+    table(
+      [
+        { ...row('a'), waitingSince },
+        { ...row('b'), inbox: 'sales', waitingSince },
+      ],
+      vi.fn()
+    )
+  );
+  const tones = [...container.querySelectorAll('td.num .sa-pill')].map(p =>
+    p.getAttribute('data-tone')
+  );
+  expect(tones).toEqual([null, 'late']);
 });

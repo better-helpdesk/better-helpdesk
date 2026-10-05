@@ -128,6 +128,7 @@ export function createHandler(support: Helpdesk) {
           }
         : null,
       awayUntil: awayUntil?.toISOString() ?? null,
+      nextOpening: support.reopensAt(key, awayUntil)?.toISOString() ?? null,
       confirmation:
         confirmation?.[support.toLocale(url.searchParams.get('locale'))] ||
         null,
@@ -518,6 +519,11 @@ export function createHandler(support: Helpdesk) {
       statuses: STATUSES,
       priorities: PRIORITIES,
       inboxes: Object.keys(config.inboxes),
+      inboxHours: Object.fromEntries(
+        Object.entries(config.inboxes).flatMap(([key, inbox]) =>
+          inbox.hours ? [[key, inbox.hours]] : []
+        )
+      ),
       inboxNames: Object.fromEntries(
         Object.entries(config.inboxes).map(([key, inbox]) => [
           key,
