@@ -289,7 +289,7 @@ export function ConversationView({ id }: { id: string }) {
             ? t('event.unsnoozed', { name })
             : // A customer's resolve ends the snooze; its status line says so.
               e.data.by === 'customer'
-              ? ''
+              ? null
               : t('event.woken');
       case 'reopened':
         return t('event.reopened');
