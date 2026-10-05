@@ -18,11 +18,30 @@ Then, from the repository root:
 pnpm install
 cp examples/demo/.env.example examples/demo/.env.local
 pnpm --filter better-helpdesk-demo db:migrate
+pnpm --filter better-helpdesk-demo seed
 pnpm --filter better-helpdesk-demo dev
 ```
 
-`http://localhost:3000`. Send a message from the launcher, switch to Rowan,
-answer it from the inbox.
+`seed` writes a dozen invented conversations across both inboxes, and does
+nothing once the database has handed out a reference.
+
+## What to try
+
+1. Open `http://localhost:3000`, send a message from the launcher, switch to
+   Rowan and answer it from the inbox.
+2. Press "Try the broken button", then report a bug from the launcher. The
+   form lists the error it caught; the conversation shows it beside the URL,
+   viewport and app version. `next dev` puts its error overlay over the page
+   too; close it and carry on.
+3. Open HRB-1000 as Rowan. The company card shows Brightline's plan and usage,
+   which `resolveContext` in `lib/helpdesk.ts` returns.
+4. Look at the rows behind the inbox, in your own database:
+
+   ```sh
+   psql postgres://postgres@localhost:5432/helpdesk_demo -c \
+     "select number, inbox, type, status, subject
+        from helpdesk.conversation order by created_at desc limit 5"
+   ```
 
 Emails are printed to the terminal rather than sent — look for
 `[helpdesk email]` when a receipt or an agent notification goes out.

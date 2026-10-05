@@ -1,14 +1,15 @@
-import { Bar, Foot } from './chrome';
+import { Bar, Foot } from '../chrome';
 
-export default function NotFound() {
+export default function Privacy() {
   return (
     <>
       <Bar here="site" />
       <main id="main" className="shell band">
         <div className="notice">
-          <h1>No such page</h1>
+          <h1>Privacy</h1>
           <p>
-            Harbor only has the overview, the agent inbox and a privacy note.
+            Harbor is make-believe. What you send through the widget is stored
+            in the Postgres this demo runs against, and nowhere else.
           </p>
           <a className="btn" href="/">
             Back to the overview
