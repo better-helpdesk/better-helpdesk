@@ -865,6 +865,41 @@ export function createStore(db: Db) {
       return row ?? null;
     },
 
+    /**
+     * Updates each conversation with the patch `plan` makes from it, locked and
+     * in one transaction: all of them, or none when an id is missing or `plan` throws.
+     * `plan` is synchronous so it cannot wait on the pool while holding a connection.
+     */
+    async updateConversations(
+      ids: string[],
+      plan: (
+        conversation: Conversation
+      ) => Partial<typeof conversations.$inferInsert>
+    ) {
+      return db.transaction(async tx => {
+        // Locked in id order, so overlapping batches cannot deadlock each other.
+        const rows = await tx
+          .select()
+          .from(conversations)
+          .where(inArray(conversations.id, ids))
+          .orderBy(conversations.id)
+          .for('update');
+        const missing = ids.filter(id => !rows.some(r => r.id === id));
+        if (missing.length > 0) return { missing, changes: [] };
+        const changes = [];
+        for (const before of rows) {
+          const patch = plan(before);
+          const [updated] = await tx
+            .update(conversations)
+            .set(patch)
+            .where(eq(conversations.id, before.id))
+            .returning();
+          changes.push({ before, patch, updated: updated ?? null });
+        }
+        return { missing, changes };
+      });
+    },
+
     /** Changes sharing only while the thread is still with `companyId`. */
     async setSharing(id: string, companyId: string, shared: boolean) {
       const [row] = await db

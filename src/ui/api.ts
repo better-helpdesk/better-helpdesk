@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export class ApiError extends Error {
   constructor(
     readonly status: number,
-    message: string
+    message: string,
+    readonly ids?: string[]
   ) {
     super(message);
   }
@@ -33,7 +34,11 @@ export function createApi(
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new ApiError(response.status, data?.error ?? response.statusText);
+      throw new ApiError(
+        response.status,
+        data?.error ?? response.statusText,
+        data?.ids
+      );
     }
     return data;
   };

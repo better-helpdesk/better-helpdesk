@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
-import type { Agent, Conversation } from './db/store';
+import type { Agent, Conversation, Message } from './db/store';
 import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
@@ -51,6 +51,7 @@ type ConfirmationSetting = Partial<Record<Locale, string>>;
 // Timestamps compared with message and job times come from the same clock:
 // the database's; the app host's may drift from it.
 const dbNow = () => sql`now()` as unknown as Date;
+const MAX_TAGS = 50;
 // A message is at most 20,000 characters; this leaves room for its context.
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_INBOUND_BYTES = 25 * 1024 * 1024;
@@ -455,7 +456,7 @@ export function createHandler(support: Helpdesk) {
     );
 
   const tag = z.string().trim().min(1).max(50);
-  const tags = z.array(tag).max(50).optional();
+  const tags = z.array(tag).max(MAX_TAGS).optional();
 
   const requireConversation = async (id: string) => {
     if (!uuid.safeParse(id).success) throw new HelpdeskError(404, 'Not found');
@@ -659,36 +660,35 @@ export function createHandler(support: Helpdesk) {
     });
   });
 
-  agentRoute('PATCH', 'conversations/:id', async ({ params, body, agent }) => {
-    const conversation = await requireConversation(params.id);
-    const data = z
-      .object({
-        status: z.enum(STATUSES).optional(),
-        priority: z.enum(PRIORITIES).optional(),
-        type: z
-          .string()
-          .refine(t => config.types.includes(t))
-          .optional(),
-        inbox: z
-          .string()
-          .refine(i => Object.hasOwn(config.inboxes, i))
-          .optional(),
-        subject: z.string().trim().max(200).nullable().optional(),
-        assigneeId: uuid.nullable().optional(),
-        companyId: uuid.nullable().optional(),
-        tags: z
-          .array(tag.toLowerCase())
-          .max(50)
-          .transform(list => [...new Set(list)])
-          .optional(),
-        snoozedUntil: z.iso
-          .datetime({ offset: true })
-          .transform(v => new Date(v))
-          .refine(d => d.getTime() > Date.now(), 'Must be in the future')
-          .nullable()
-          .optional(),
-      })
-      .parse(await body());
+  const conversationBody = z.object({
+    status: z.enum(STATUSES).optional(),
+    priority: z.enum(PRIORITIES).optional(),
+    type: z
+      .string()
+      .refine(t => config.types.includes(t))
+      .optional(),
+    inbox: z
+      .string()
+      .refine(i => Object.hasOwn(config.inboxes, i))
+      .optional(),
+    subject: z.string().trim().max(200).nullable().optional(),
+    assigneeId: uuid.nullable().optional(),
+    companyId: uuid.nullable().optional(),
+    tags: z
+      .array(tag.toLowerCase())
+      .max(MAX_TAGS)
+      .transform(list => [...new Set(list)])
+      .optional(),
+    snoozedUntil: z.iso
+      .datetime({ offset: true })
+      .transform(v => new Date(v))
+      .refine(d => d.getTime() > Date.now(), 'Must be in the future')
+      .nullable()
+      .optional(),
+  });
+  type ConversationBody = z.infer<typeof conversationBody>;
+
+  const checkConversationBody = async (data: ConversationBody) => {
     if (data.snoozedUntil) {
       if (data.status && data.status !== 'pending') {
         throw new HelpdeskError(400, 'A snoozed conversation is pending');
@@ -701,6 +701,19 @@ export function createHandler(support: Helpdesk) {
     if (data.companyId && !(await store.getCompany(data.companyId))) {
       throw new HelpdeskError(400, 'Unknown company');
     }
+    return data;
+  };
+
+  /**
+   * The row update an agent's change makes to `conversation` as it stands, with
+   * whether it resolves it. `last` is its newest public message, needed when
+   * a resolved conversation is reopened.
+   */
+  function conversationPatch(
+    conversation: Conversation,
+    data: ConversationBody,
+    last: Message | undefined
+  ) {
     const { subject, ...rest } = data;
     const patch: Partial<Conversation> = {
       ...rest,
@@ -723,13 +736,26 @@ export function createHandler(support: Helpdesk) {
     } else if (data.status && data.status !== 'resolved') {
       patch.resolvedAt = null;
       // Reopened while the customer had the last word: they are waiting again.
-      if (conversation.status === 'resolved') {
-        const last = (await store.lastMessages([conversation.id])).get(
-          conversation.id
-        );
-        if (last?.authorType === 'contact') patch.waitingSince = last.createdAt;
+      if (
+        conversation.status === 'resolved' &&
+        last?.authorType === 'contact'
+      ) {
+        patch.waitingSince = last.createdAt;
       }
     }
+    return { patch, resolving };
+  }
+
+  agentRoute('PATCH', 'conversations/:id', async ({ params, body, agent }) => {
+    const conversation = await requireConversation(params.id);
+    const data = await checkConversationBody(
+      conversationBody.parse(await body())
+    );
+    const last =
+      conversation.status === 'resolved'
+        ? (await store.lastMessages([conversation.id])).get(conversation.id)
+        : undefined;
+    const { patch, resolving } = conversationPatch(conversation, data, last);
     // A concurrent resolve that lands first keeps its resolvedAt and its timeline row.
     const updated = await store.updateConversation(conversation.id, patch, {
       unlessResolved: resolving,
@@ -737,6 +763,50 @@ export function createHandler(support: Helpdesk) {
     await emitUpdated(config, conversation, updated, patch, agent.id);
     const current = updated ?? (await store.getConversation(conversation.id));
     return json({ conversation: current && agentView(current) });
+  });
+
+  const bulkBody = conversationBody
+    .omit({ subject: true, companyId: true, tags: true })
+    .extend({
+      ids: z
+        .array(uuid)
+        .min(1)
+        .max(100)
+        .transform(list => [...new Set(list)]),
+      addTag: tag.toLowerCase().optional(),
+    });
+
+  agentRoute('POST', 'conversations/bulk', async ({ body, agent }) => {
+    const { ids, addTag, ...fields } = bulkBody.parse(await body());
+    const data = await checkConversationBody(fields);
+    // Read before the transaction: inside it a second pool connection could
+    // wait on connections held by batches that wait on it.
+    const lastMessages =
+      data.status && data.status !== 'resolved'
+        ? await store.lastMessages(ids)
+        : new Map<string, Message>();
+    const { missing, changes } = await store.updateConversations(
+      ids,
+      conversation => {
+        const tags =
+          addTag && !conversation.tags.includes(addTag)
+            ? [...conversation.tags, addTag]
+            : undefined;
+        if (tags && tags.length > MAX_TAGS) {
+          throw new HelpdeskError(400, 'Too many tags', [conversation.id]);
+        }
+        return conversationPatch(
+          conversation,
+          tags ? { ...data, tags } : data,
+          lastMessages.get(conversation.id)
+        ).patch;
+      }
+    );
+    if (missing.length > 0) throw new HelpdeskError(404, 'Not found', missing);
+    for (const { before, updated, patch } of changes) {
+      await emitUpdated(config, before, updated, patch, agent.id);
+    }
+    return json({ ok: true });
   });
 
   agentRoute(
@@ -1324,7 +1394,11 @@ type RouteDefiner = (method: string, path: string, run: Route['run']) => void;
 
 function errorResponse(error: unknown, headers: HeadersInit) {
   if (error instanceof HelpdeskError) {
-    return json({ error: error.message }, error.status, headers);
+    return json(
+      { error: error.message, ...(error.ids && { ids: error.ids }) },
+      error.status,
+      headers
+    );
   }
   if (error instanceof z.ZodError) {
     return json(

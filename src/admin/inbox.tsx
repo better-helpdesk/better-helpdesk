@@ -1,6 +1,12 @@
-import { useEffect, useId, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useState,
+} from 'react';
 
-import { useResource } from '../ui/api';
+import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
@@ -11,8 +17,10 @@ import {
   Dialog,
   Empty,
   paths,
+  Select,
   Skeleton,
   Svg,
+  useToast,
   type Viewer,
   ViewerStack,
 } from './ui';
@@ -82,6 +90,13 @@ export function Inbox() {
   }, [list.refresh]);
   // A new filter clears `list.data`; the tab counts hold until it lands.
   const [counts, setCounts] = useState(list.data?.counts);
+  const [selected, setSelected] = useState<string[]>([]);
+  useEffect(() => {
+    const listed = new Set(list.data?.conversations.map(c => c.id));
+    setSelected(ids =>
+      ids.every(id => listed.has(id)) ? ids : ids.filter(id => listed.has(id))
+    );
+  }, [list.data]);
   useEffect(() => {
     if (list.data?.counts) setCounts(list.data.counts);
   }, [list.data]);
@@ -90,6 +105,7 @@ export function Inbox() {
     c => c.priority === 'high' || c.priority === 'urgent'
   );
   const rows = priority === 'high' ? urgent : all;
+  const visibleSelected = selected.filter(id => rows.some(r => r.id === id));
   const filtered =
     Boolean(
       filters.assignee || filters.inbox || filters.q || filters.tag || priority
@@ -204,11 +220,16 @@ export function Inbox() {
         <AwayControl />
         {rows.length > 1 && (
           <span className="sa-kbd sa-hint">
-            <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>↵</kbd>{' '}
-            {t('admin.open')}
+            <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
+            {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')}
           </span>
         )}
       </div>
+      <p className="sa-sr-only" role="status">
+        {visibleSelected.length > 0
+          ? t('admin.selected', { count: String(visibleSelected.length) })
+          : ''}
+      </p>
       {list.error && <p className="sa-error">{t('admin.error')}</p>}
       {!list.data && !list.error && (
         <Skeleton kind="table" label={t('admin.loading')} />
@@ -240,10 +261,157 @@ export function Inbox() {
           hideStatus={filters.status !== 'any'}
           onTag={name => set('tag', name)}
           onOpen={id => navigate({ conversation: id })}
+          selected={visibleSelected}
+          onSelect={setSelected}
           keyboard
         />
       )}
+      {visibleSelected.length > 0 && (
+        <BulkBar
+          rows={rows.filter(r => visibleSelected.includes(r.id))}
+          tags={topTags.data?.tags ?? []}
+          onClear={() => setSelected([])}
+        />
+      )}
     </div>
+  );
+}
+
+/** The most conversations the server changes in one bulk request. */
+const BULK_LIMIT = 100;
+
+/** Applies one change to every selected conversation, all or none. */
+function BulkBar({
+  rows,
+  tags,
+  onClear,
+}: {
+  rows: ConversationRow[];
+  tags: string[];
+  onClear: () => void;
+}) {
+  const { api, t, me } = useAdmin();
+  const [error, setError] = useState<string | null>(null);
+  const [tag, setTag] = useState('');
+  const tagListId = useId();
+  const toast = useToast();
+  const tooMany = rows.length > BULK_LIMIT;
+  const agents = useResource(
+    () =>
+      api<{
+        agents: { id: string; name: string | null; email: string | null }[];
+      }>('agent/agents'),
+    'agents'
+  );
+  const apply = async (change: {
+    assigneeId?: string | null;
+    status?: string;
+    priority?: string;
+    addTag?: string;
+  }) => {
+    if (tooMany) return;
+    setError(null);
+    try {
+      await api('agent/conversations/bulk', {
+        body: { ids: rows.map(r => r.id), ...change },
+      });
+      toast.show(t('admin.bulkDone'));
+    } catch (e) {
+      const failure = e as ApiError;
+      const failed = rows.filter(r => failure.ids?.includes(r.id));
+      setError(
+        failed.length > 0
+          ? t('admin.bulkFailedOn', {
+              references: failed.map(r => r.reference).join(', '),
+            })
+          : failure.status === 400 && failure.message
+            ? failure.message
+            : t('admin.bulkError')
+      );
+    }
+  };
+
+  return (
+    <>
+      {error && (
+        <p className="sa-error" role="alert">
+          {error}
+        </p>
+      )}
+      {tooMany && (
+        <p className="sa-error" role="alert">
+          {t('admin.bulkTooMany', { count: String(BULK_LIMIT) })}
+        </p>
+      )}
+      {toast.node}
+      <div
+        className="sa-toolbar sa-bulk"
+        role="toolbar"
+        aria-label={t('admin.changeSelected')}>
+        <span className="sa-count num" aria-hidden="true">
+          {t('admin.selected', { count: String(rows.length) })}
+        </span>
+        <Select
+          label={t('admin.assignee')}
+          value=""
+          placeholder
+          options={['none', ...(agents.data?.agents.map(a => a.id) ?? [])]}
+          render={id => {
+            const agent = agents.data?.agents.find(a => a.id === id);
+            return agent
+              ? (agent.name ?? agent.email ?? id)
+              : t('admin.unassigned');
+          }}
+          onChange={v => apply({ assigneeId: v === 'none' ? null : v })}
+          disabled={tooMany}
+        />
+        <Select
+          label={t('admin.status')}
+          value=""
+          placeholder
+          options={me.statuses}
+          render={s => t(`agentStatus.${s}`)}
+          onChange={v => apply({ status: v })}
+          disabled={tooMany}
+        />
+        <Select
+          label={t('admin.priority')}
+          value=""
+          placeholder
+          options={me.priorities}
+          render={p => t(`priority.${p}`)}
+          onChange={v => apply({ priority: v })}
+          disabled={tooMany}
+        />
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            const name = tag.trim().toLowerCase();
+            if (!name) return;
+            setTag('');
+            void apply({ addTag: name });
+          }}>
+          <input
+            className="sa-input sa-tag-filter"
+            aria-label={t('admin.addTag')}
+            placeholder={t('admin.addTag')}
+            list={tagListId}
+            maxLength={50}
+            disabled={tooMany}
+            value={tag}
+            onChange={e => setTag(e.target.value)}
+          />
+          <datalist id={tagListId}>
+            {tags.map(name => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </form>
+        <button type="button" className="sa-btn sa-ghost" onClick={onClear}>
+          {t('admin.clearSelection')}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -328,8 +496,13 @@ export function ConversationTable({
   hideContact = false,
   hideStatus = false,
   onTag,
+  selected,
+  onSelect,
 }: {
   rows: ConversationRow[];
+  /** Adds a checkbox column; with shift, a box's change extends to the range from the last box toggled. */
+  selected?: string[];
+  onSelect?: (ids: string[]) => void;
   /** Narrows the list to a tag; without it, row tags are plain labels. */
   onTag?: (tag: string) => void;
   /** When the list is filtered to one status, the column would repeat it. */
@@ -360,15 +533,43 @@ export function ConversationTable({
   const [activeId, setActiveId] = useState<string | null>(null);
   // -1 until the first j/k: the cursor shows only once someone uses it.
   const active = rows.findIndex(r => r.id === activeId);
+  const [anchorId, setAnchorId] = useState<string | null>(null);
+  const toggle = useCallback(
+    (id: string, range: boolean) => {
+      if (!selected || !onSelect) return;
+      const from = rows.findIndex(r => r.id === anchorId);
+      const to = rows.findIndex(r => r.id === id);
+      const ids =
+        range && from !== -1
+          ? rows
+              .slice(Math.min(from, to), Math.max(from, to) + 1)
+              .map(r => r.id)
+          : [id];
+      onSelect(
+        selected.includes(id)
+          ? selected.filter(s => !ids.includes(s))
+          : [...new Set([...selected, ...ids])]
+      );
+      setAnchorId(id);
+    },
+    [rows, selected, onSelect, anchorId]
+  );
+  const allSelected =
+    rows.length > 0 && rows.every(r => selected?.includes(r.id));
+  const someSelected = !allSelected && rows.some(r => selected?.includes(r.id));
   const showPriority = rows.some(
     r => r.priority === 'high' || r.priority === 'urgent'
   );
 
-  useEffect(() => {
+  // Bound before paint, so the keys reach rows as soon as they show.
+  useLayoutEffect(() => {
     if (!keyboard) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (
+        e.metaKey ||
+        e.ctrlKey ||
+        e.altKey ||
         /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName) ||
         target.closest('[role="tab"], [role="dialog"]')
       ) {
@@ -380,16 +581,32 @@ export function ConversationTable({
         move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1));
       else if (e.key === 'k') move(active === -1 ? 0 : Math.max(active - 1, 0));
       else if (e.key === 'Enter' && row) onOpen(row.id);
+      else if (e.key.toLowerCase() === 'x' && row) toggle(row.id, e.shiftKey);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [keyboard, rows, active, onOpen]);
+  }, [keyboard, rows, active, onOpen, toggle]);
 
   return (
     <div className="sa-table-wrap">
       <table className="sa-table">
         <thead>
           <tr>
+            {selected && (
+              <th className="sa-check">
+                <input
+                  type="checkbox"
+                  aria-label={t('admin.selectAll')}
+                  checked={allSelected}
+                  ref={el => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={() =>
+                    onSelect?.(allSelected ? [] : rows.map(r => r.id))
+                  }
+                />
+              </th>
+            )}
             <th>{t('admin.waitingCol')}</th>
             <th>{t('admin.subjectCol')}</th>
             {!hideContact && <th>{t('admin.contact')}</th>}
@@ -414,7 +631,24 @@ export function ConversationTable({
                 key={c.id}
                 data-unread={c.unread || undefined}
                 data-active={keyboard && index === active}
-                onClick={() => onOpen(c.id)}>
+                data-selected={selected?.includes(c.id) || undefined}
+                onClick={e => {
+                  if (!(e.target as Element).closest('.sa-check')) onOpen(c.id);
+                }}>
+                {selected && (
+                  <td className="sa-check">
+                    <input
+                      type="checkbox"
+                      aria-label={t('admin.selectRow', {
+                        reference: c.reference,
+                      })}
+                      checked={selected.includes(c.id)}
+                      onChange={e =>
+                        toggle(c.id, (e.nativeEvent as MouseEvent).shiftKey)
+                      }
+                    />
+                  </td>
+                )}
                 <td className="num">
                   {c.snoozedUntil &&
                   new Date(c.snoozedUntil).getTime() > Date.now() ? (
