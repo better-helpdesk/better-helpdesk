@@ -91,6 +91,31 @@ const routes: Record<string, unknown> = {
   'agent/tags/': { tags: ['billing', 'vip'] },
   'agent/settings/': { confirmation: {} },
   'agent/deals/': { deals: [] },
+  'agent/overview/?days=30': {
+    openHours: false,
+    total: { new: 4, resolved: 2, firstResponse: 2, resolution: 50 },
+    inboxes: [
+      { inbox: 'sales', new: 4, resolved: 2, firstResponse: 2, resolution: 50 },
+    ],
+    agents: [
+      {
+        agentId: null,
+        name: null,
+        new: 4,
+        resolved: 2,
+        firstResponse: 0.5,
+        resolution: null,
+      },
+    ],
+    tags: [{ tag: 'billing', count: 3 }],
+  },
+  'agent/overview/?days=7': {
+    openHours: false,
+    total: { new: 0, resolved: 0, firstResponse: null, resolution: null },
+    inboxes: [],
+    agents: [],
+    tags: [],
+  },
 };
 
 const original = routes['agent/conversations/c1/'];
@@ -1876,5 +1901,42 @@ describe('details sidebar', () => {
     expect(banner.getAttribute('href')).toBe('/support/conversations/c2/');
     expect(screen.getByText('Grace merged this into DG-1001')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Merge into…' })).toBeNull();
+  });
+
+  it('shows the overview numbers and a table by inbox and assignee for the chosen period', async () => {
+    window.history.replaceState(null, '', '/support/overview/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const totals = await waitFor(() => {
+      const list = document.querySelector('.sa-stats');
+      if (!list) throw new Error('no stats');
+      return list as HTMLElement;
+    });
+    expect([...totals.querySelectorAll('div')].map(d => d.textContent)).toEqual(
+      [
+        'New4',
+        'Resolved2',
+        'Median first response2 hr',
+        'Median resolution2 days',
+      ]
+    );
+    const [byInbox, byAgent] = screen.getAllByRole('table');
+    expect(
+      within(byInbox as HTMLElement).getByRole('row', { name: /Sales/ })
+        .textContent
+    ).toBe('Sales422 hr2 days');
+    expect(
+      within(byAgent as HTMLElement).getByRole('row', { name: /Unassigned/ })
+        .textContent
+    ).toBe('Unassigned4230 min—');
+    expect(screen.getByText('billing · 3')).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Period' }), {
+      target: { value: '7' },
+    });
+    expect(
+      await screen.findByText(
+        'No conversations were opened or resolved in this period.'
+      )
+    ).toBeTruthy();
   });
 });

@@ -18,6 +18,7 @@ import { ConversationView } from './conversation';
 import { CompanyList, CompanyView, ContactList, ContactView } from './crm';
 import { DealsBoard } from './deals';
 import { AwayControl, Inbox } from './inbox';
+import { OverviewPage } from './overview';
 import { Settings } from './settings';
 import { adminCss } from './styles';
 import {
@@ -38,6 +39,7 @@ export const HELPDESK_SECTIONS = [
   'companies',
   'deals',
   'canned',
+  'overview',
   'settings',
 ] as const;
 const VIEWS = HELPDESK_SECTIONS;
@@ -203,6 +205,7 @@ export function HelpdeskAdmin({
             )}
             {view === 'deals' && <DealsBoard />}
             {view === 'canned' && <CannedReplies />}
+            {view === 'overview' && <OverviewPage />}
             {view === 'settings' && <Settings />}
           </div>
           <Dialog
