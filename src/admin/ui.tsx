@@ -16,6 +16,7 @@ export const paths = {
   check: 'M20 6 9 17l-5-5',
   x: 'M18 6 6 18M6 6l12 12',
   text: 'M4 6h16M4 12h10M4 18h7',
+  panel: 'M4 5h16v14H4zM15 5v14',
 };
 
 export function Svg({ d }: { d: string }) {
