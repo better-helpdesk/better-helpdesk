@@ -494,9 +494,9 @@ export async function POST(request: Request) {
 The conversation lands on the customer's contact, creating it if they never
 wrote in, and goes through the same path as one from the widget: agents are
 notified, AI triage runs when `ai` is set and `onEvent` hears
-`conversation.created`. The body is stored as the customer's first message. Give `billing` an entry in
-`inboxes` without `receipt`, or the customer is mailed a receipt for a
-message they did not send.
+`conversation.created`. The body is stored as the customer's first message.
+Give `billing` an entry in `inboxes` without `receipt`, or the customer is
+mailed a receipt for a message they did not send.
 
 To put a "plan upgraded" event on a contact's timeline from your billing
 code:
