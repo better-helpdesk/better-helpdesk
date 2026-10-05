@@ -1,7 +1,9 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { parseInline, parseRich, plainText } from './rich';
-import { unlabelLinks } from './ui/rich';
+import { RichText, unlabelLinks } from './ui/rich';
 
 describe('parseInline', () => {
   it('reads bold, italic, underline and links, nested', () => {
@@ -53,6 +55,30 @@ describe('parseRich', () => {
       )
     ).toEqual(['p', 'ol', 'ul', 'p']);
   });
+
+  it('keeps a fenced block verbatim, blank lines and markers included', () => {
+    expect(
+      parseRich(
+        'It fails:\n```js\nTypeError: **x** is _undefined_\n\n    at f (a.js:1)\n```\n- after'
+      )
+    ).toEqual([
+      { type: 'p', lines: [[{ type: 'text', text: 'It fails:' }]] },
+      {
+        type: 'pre',
+        text: 'TypeError: **x** is _undefined_\n\n    at f (a.js:1)',
+      },
+      { type: 'ul', items: [[{ type: 'text', text: 'after' }]] },
+    ]);
+  });
+
+  it('closes a fence only on as many backticks, and runs an unclosed one to the end', () => {
+    expect(parseRich('````\n```\ninner\n````')).toEqual([
+      { type: 'pre', text: '```\ninner' },
+    ]);
+    expect(parseRich('```\nlast line')).toEqual([
+      { type: 'pre', text: 'last line' },
+    ]);
+  });
 });
 
 describe('plainText', () => {
@@ -63,6 +89,12 @@ describe('plainText', () => {
   it('drops the markers and keeps the words', () => {
     expect(plainText('**Hi** _you_\n- a\n- [b](https://b.ch)')).toBe(
       'Hi you\n\n• a\n• b'
+    );
+  });
+
+  it('keeps code as written', () => {
+    expect(plainText('Run:\n```\nnpm i **x**\n```')).toBe(
+      'Run:\n\nnpm i **x**'
     );
   });
 });
@@ -90,5 +122,43 @@ describe('unlabelLinks', () => {
         'See [the guide](https://docs.test/a) or [https://x.test](https://x.test).'
       )
     ).toBe('See the guide (https://docs.test/a) or https://x.test.');
+  });
+});
+
+describe('RichText code blocks', () => {
+  const show = (text: string, compact = false) =>
+    renderToStaticMarkup(createElement(RichText, { text, compact }));
+
+  it('renders HTML and scripts inside a code block as text', () => {
+    expect(
+      show(
+        '```\n<script>alert(1)</script>\n<img src=x onerror="alert(2)">\n```'
+      )
+    ).toBe(
+      '<div class="rich"><pre><code>&lt;script&gt;alert(1)&lt;/script&gt;\n&lt;img src=x onerror=&quot;alert(2)&quot;&gt;</code></pre></div>'
+    );
+  });
+
+  it('leaves markers and links inside the block unformatted', () => {
+    expect(show('```\n**x** https://a.test\n```')).toBe(
+      '<div class="rich"><pre><code>**x** https://a.test</code></pre></div>'
+    );
+  });
+
+  it('keeps the code’s lines and indentation, in monospace, in compact output', () => {
+    expect(show('```\none <two>\n  three\n```', true)).toBe(
+      '<code style="white-space:pre-wrap;font-family:monospace">one &lt;two&gt;\n  three</code>'
+    );
+  });
+
+  it('hands each block to the code renderer when given one', () => {
+    expect(
+      renderToStaticMarkup(
+        createElement(RichText, {
+          text: 'Hi\n```\na\n```',
+          code: text => createElement('figure', null, text),
+        })
+      )
+    ).toBe('<div class="rich"><p>Hi</p><figure>a</figure></div>');
   });
 });

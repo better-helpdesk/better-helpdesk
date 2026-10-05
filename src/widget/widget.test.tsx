@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { Widget } from './widget';
 
@@ -127,6 +127,108 @@ describe('Widget', () => {
     ).toBeUndefined();
   });
 
+  it('sends a pasted three-line trace as a code block', async () => {
+    const calls = mockApi({
+      'widget/session': session,
+      'widget/conversations/': {
+        conversation: { id: 'c1', reference: 'DG-1000' },
+      },
+    });
+    // jsdom has no editing commands; this one only appends, as at the end.
+    document.execCommand = (command: string, _?: boolean, html?: string) => {
+      if (command !== 'insertHTML' || !html) return false;
+      screen
+        .getByRole('textbox', { name: 'What happened?' })
+        .insertAdjacentHTML('beforeend', html);
+      return true;
+    };
+    onTestFinished(() => {
+      Reflect.deleteProperty(document, 'execCommand');
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['question', 'bug']}
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Report a bug/ })
+    );
+    const message = screen.getByRole('textbox', { name: 'What happened?' });
+    const trace =
+      'TypeError: <b>x</b> is undefined\n    at render (app.js:10:5)\n    at main (app.js:2:1)';
+    fireEvent.paste(message, {
+      clipboardData: {
+        items: [],
+        getData: (type: string) => (type === 'text/plain' ? trace : ''),
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({ body: `\`\`\`\n${trace}\n\`\`\`` })
+    );
+  });
+
+  it('keeps the formatting of a rich paste whose text is indented', async () => {
+    const calls = mockApi({
+      'widget/session': session,
+      'widget/conversations/': {
+        conversation: { id: 'c1', reference: 'DG-1000' },
+      },
+    });
+    // jsdom has no editing commands; this one only appends, as at the end.
+    document.execCommand = (command: string, _?: boolean, html?: string) => {
+      if (command !== 'insertHTML' || !html) return false;
+      screen
+        .getByRole('textbox', { name: 'What happened?' })
+        .insertAdjacentHTML('beforeend', html);
+      return true;
+    };
+    onTestFinished(() => {
+      Reflect.deleteProperty(document, 'execCommand');
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['question', 'bug']}
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Report a bug/ })
+    );
+    const message = screen.getByRole('textbox', { name: 'What happened?' });
+    const trace = 'Plan:\n    ◦ export\n    ◦ import';
+    const html = '<p><b>Plan:</b></p><ul><li>export</li><li>import</li></ul>';
+    fireEvent.paste(message, {
+      clipboardData: {
+        items: [],
+        getData: (type: string) => (type === 'text/plain' ? trace : html),
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({ body: '**Plan:**\n\n- export\n- import' })
+    );
+  });
+
   it('shows each captured page error and sends only the ones left ticked', async () => {
     const calls = mockApi({
       'widget/session': session,
@@ -243,6 +345,48 @@ describe('Widget', () => {
     expect(
       screen.getByText('My notes').parentElement?.textContent
     ).not.toContain('docs.example');
+  });
+
+  it('shows a code block in a reply with a button to copy it', async () => {
+    Element.prototype.scrollIntoView = () => {};
+    mockApi({
+      'widget/session': { ...session, conversations: [ownThread] },
+      'widget/conversations/c1/': {
+        conversation: {
+          id: 'c1',
+          reference: 'DG-1',
+          subject: 'Export broken',
+          type: 'bug',
+          status: 'open',
+        },
+        messages: [
+          {
+            id: 'm1',
+            author: 'agent',
+            name: 'Angelo',
+            own: false,
+            body: 'Run this:\n```\nnpm run export -- --since <date>\n```',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        attachments: [],
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="de"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Support/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Nachrichten/ }));
+    fireEvent.click(await screen.findByText('Export broken'));
+    const copy = await screen.findByRole('button', { name: 'Code kopieren' });
+    expect(copy.closest('.code')?.querySelector('pre')?.textContent).toBe(
+      'npm run export -- --since <date>'
+    );
   });
 
   it('cancels a link with Escape without closing the panel or losing the draft', async () => {
