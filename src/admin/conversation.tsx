@@ -29,6 +29,7 @@ type Detail = {
     inbox: string;
     assigneeId: string | null;
     companyId: string | null;
+    tags: string[];
     context: {
       url?: string;
       title?: string;
@@ -241,6 +242,11 @@ export function ConversationView({ id }: { id: string }) {
               {t('admin.customerSees', { subject: c.customerSubject })}
             </p>
           )}
+          <TagsEditor
+            key={c.tags.join()}
+            value={c.tags}
+            onSave={tags => patch({ tags })}
+          />
         </div>
       </div>
       <div className="sa-split">
@@ -805,6 +811,53 @@ function TitleEditor({
         if (e.key === 'Escape') setDraft(null);
       }}
     />
+  );
+}
+
+function TagsEditor({
+  value,
+  onSave,
+}: {
+  value: string[];
+  onSave: (tags: string[]) => Promise<void>;
+}) {
+  const { api, t } = useAdmin();
+  const listId = useId();
+  const [draft, setDraft] = useState(value.join(', '));
+  const top = useResource(() => api<{ tags: string[] }>('agent/tags'), 'tags');
+  // A datalist completes the whole value, so each option carries what is already typed.
+  const head = draft.slice(0, draft.lastIndexOf(',') + 1);
+  const have = new Set(draft.split(',').map(s => s.trim().toLowerCase()));
+  const commit = async () => {
+    const next = draft
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    if (next.join() !== value.join()) await onSave(next);
+  };
+  return (
+    <>
+      <input
+        className="sa-input sa-tags-input"
+        aria-label={t('admin.tags')}
+        placeholder={t('admin.addTags')}
+        list={listId}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={e => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key === 'Escape') setDraft(value.join(', '));
+        }}
+      />
+      <datalist id={listId}>
+        {(top.data?.tags ?? [])
+          .filter(tag => !have.has(tag))
+          .map(tag => (
+            <option key={tag} value={`${head}${head ? ' ' : ''}${tag}`} />
+          ))}
+      </datalist>
+    </>
   );
 }
 

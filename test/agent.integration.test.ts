@@ -1044,3 +1044,62 @@ describe('away', () => {
     expect((await session()).data.awayUntil).toBeNull();
   });
 });
+
+describe('tags', () => {
+  it('stores tags lower-cased once each and filters the inbox by one', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const billing = await open('ada');
+    await open('ada');
+    const res = await h.call('PATCH', `agent/conversations/${billing.id}`, {
+      user: 'agent',
+      body: { tags: [' Billing', 'billing', 'Bug-1234'] },
+    });
+    expect(res.status).toBe(200);
+    expect(
+      await rows(
+        sql`SELECT tags FROM helpdesk.conversation WHERE id = ${billing.id}::uuid`
+      )
+    ).toEqual([{ tags: ['billing', 'bug-1234'] }]);
+
+    const list = async (query: string) =>
+      (
+        await h.call('GET', `agent/conversations?${query}`, {
+          user: 'agent',
+        })
+      ).data.conversations.map((c: { id: string; tags: string[] }) => [
+        c.id,
+        c.tags,
+      ]);
+    expect(await list('tag=BILLING')).toEqual([
+      [billing.id, ['billing', 'bug-1234']],
+    ]);
+    expect(await list('tag=refunds')).toEqual([]);
+    expect(await list('')).toHaveLength(2);
+  });
+
+  it('refuses a tag longer than fifty characters', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const { id } = await open('ada');
+    const res = await h.call('PATCH', `agent/conversations/${id}`, {
+      user: 'agent',
+      body: { tags: ['x'.repeat(51)] },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('suggests the most-used tags first', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    for (const tags of [['billing', 'vip'], ['billing'], ['onboarding']]) {
+      const { id } = await open('ada');
+      await h.call('PATCH', `agent/conversations/${id}`, {
+        user: 'agent',
+        body: { tags },
+      });
+    }
+    const res = await h.call('GET', 'agent/tags', { user: 'agent' });
+    expect(res.data.tags).toEqual(['billing', 'onboarding', 'vip']);
+  });
+});

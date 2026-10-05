@@ -265,6 +265,12 @@ export const adminCss = `
 .sa .sa-title-edit { font: inherit; color: inherit; background: none; border: 0; padding: 0 4px; margin: 0 -4px; border-radius: 6px; cursor: text; text-align: left; }
 .sa .sa-title-edit:hover { background: var(--a-subtle); }
 .sa-title-input { font: inherit; width: min(640px, 100%); height: auto; padding: 2px 6px; }
+.sa-tags-input { display: block; width: min(640px, 100%); height: 28px; margin: 4px 0 0 -6px; padding: 0 6px; font-size: 13px; border-color: transparent; background: none; }
+.sa-tags-input:hover { border-color: var(--a-border); }
+.sa-tag-filter { width: 160px; }
+.sa-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.sa .sa-tag { height: 20px; padding: 0 7px; font-weight: 500; color: var(--a-muted); }
+.sa button.sa-tag:hover { color: var(--a-fg); border-color: var(--a-muted); }
 .sa-chip-warn::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--a-warn); }
 .sa .sa-chip[aria-pressed="true"] { background: var(--a-accent); border-color: var(--a-accent); color: var(--a-accent-fg); }
 .sa-drop-hint { margin: 0; padding: 14px 8px; border: 1px dashed var(--a-border); border-radius: var(--a-radius); text-align: center; font-size: 12px; color: var(--a-muted); }
