@@ -1,0 +1,44 @@
+{
+  "FromName": "Mara Keller",
+  "MessageStream": "inbound",
+  "From": "mara.keller@customer.test",
+  "FromFull": {
+    "Email": "mara.keller@customer.test",
+    "Name": "Mara Keller",
+    "MailboxHash": ""
+  },
+  "To": "support@harbor.test",
+  "ToFull": [
+    {
+      "Email": "support@harbor.test",
+      "Name": "",
+      "MailboxHash": ""
+    }
+  ],
+  "Cc": "",
+  "CcFull": [],
+  "Bcc": "",
+  "BccFull": [],
+  "OriginalRecipient": "support@harbor.test",
+  "Subject": "Grüezi, the export is empty",
+  "MessageID": "5c1f0e2a-7d3b-4c8e-9a61-2b0f3e4d5a6b",
+  "ReplyTo": "",
+  "MailboxHash": "",
+  "Date": "Mon, 05 Oct 2026 09:12:44 +0200",
+  "TextBody": "Hello, the CSV export of last month is empty. Können Sie helfen?\r\n\r\nMara\r\n",
+  "HtmlBody": "",
+  "StrippedTextReply": "",
+  "Tag": "",
+  "Headers": [
+    {
+      "Name": "Return-Path",
+      "Value": "<mara.keller@customer.test>"
+    },
+    {
+      "Name": "Message-ID",
+      "Value": "<a1b2c3@customer.test>"
+    }
+  ],
+  "Attachments": [],
+  "RawEmail": "Return-Path: <mara.keller@customer.test>\r\nDKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=customer.test; s=mail; h=from:to:subject:date:message-id; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=; b=dGVzdA==\r\nFrom: Mara Keller <mara.keller@customer.test>\r\nTo: support@harbor.test\r\nSubject: Grüezi, the export is empty\r\nDate: Mon, 05 Oct 2026 09:12:44 +0200\r\nMessage-ID: <a1b2c3@customer.test>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\nHello, the CSV export of last month is empty. Können Sie helfen?\r\n\r\nMara\r\n"
+}

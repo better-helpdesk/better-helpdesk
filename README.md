@@ -366,8 +366,10 @@ is what they wrote then. An `agent-mention` goes to each teammate picked with
 `@` in an internal note; its body is the note.
 
 **Inbound** mail arrives through a webhook. Any relay that can forward a raw
-message to a URL will do; [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays)
-has a Cloudflare Email Worker. Configure:
+message to a URL will do. [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays)
+has a relay for Postmark's inbound webhook and a Cloudflare Email Worker,
+and recipes for forwarding support@ from Google Workspace and Microsoft 365
+with two weeks of dual delivery before the cutover. Configure:
 
 ```ts
 inboundWebhookSecret: process.env.HELPDESK_INBOUND_SECRET,
@@ -625,6 +627,21 @@ falls back to the browser's language. Inbox copy such as `name`, `title`,
 `replyPromise` and the qualifying question is given per locale in the
 config, and `HelpdeskAdmin` takes a `messages` prop that overrides any of the
 package's own strings by key, for example `admin.inbox`.
+
+### Switching from another helpdesk
+
+- **Pick a cutover date.** New conversations start here from that date;
+  history is not imported. Keep the old tool read-only for 60 to 90 days so
+  agents can look up what came before.
+- **Re-point support@** with the recipe for your mail provider in
+  [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays),
+  with two weeks of dual delivery before the cutover.
+- **Swap the widget script** for [the widget](#the-widget) on the cutover
+  date.
+- **Identity verification carries over.** Where your backend computes
+  Intercom's `user_hash` or Chatwoot's `identifier_hash` for a user id, it
+  signs an [identity token](#signed-in-users-on-another-origin) with that
+  id as `sub` instead.
 
 ## Configuration
 
