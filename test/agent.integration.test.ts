@@ -1579,6 +1579,8 @@ describe('inbox counts and unread', () => {
     await h.call('GET', `agent/conversations/${conversation.id}`, {
       user: 'agent',
     });
+    expect(await unread()).toBe(false);
+
     await h.call('POST', `agent/conversations/${conversation.id}/messages`, {
       user: 'agent',
       body: { body: 'on it' },

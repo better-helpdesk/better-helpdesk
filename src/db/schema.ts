@@ -177,7 +177,7 @@ export const conversations = helpdesk.table(
     remindedAt: ts('reminded_at'),
     snoozedUntil: ts('snoozed_until'),
     customerSeenAt: ts('customer_seen_at'),
-    /** When any agent last opened it; a customer message after this makes it unread. */
+    /** `last_message_at` as of the last time any agent opened it; a newer message makes it unread. */
     agentSeenAt: ts('agent_seen_at'),
     lastMessageAt: ts('last_message_at').notNull().defaultNow(),
     resolvedAt: ts('resolved_at'),

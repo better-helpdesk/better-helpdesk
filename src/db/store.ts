@@ -765,8 +765,8 @@ export function createStore(db: Db) {
       return result.rows.map(r => r.tag);
     },
 
-    // Copies `last_message_at` rather than `now()` so the unread comparison
-    // holds exactly despite clock skew; a poll with nothing new writes nothing.
+    // Copies `last_message_at`, not `now()`: `now()` is the transaction start, so a
+    // customer message committing concurrently could predate it and never read as unread.
     async markAgentSeen(id: string) {
       await db
         .update(conversations)
