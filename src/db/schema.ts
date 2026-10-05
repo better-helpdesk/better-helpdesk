@@ -251,6 +251,28 @@ export const messages = helpdesk.table(
   ]
 );
 
+export const conversationEvents = helpdesk.table(
+  'conversation_event',
+  {
+    id: id(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    agentId: uuid('agent_id').references(() => agents.id, {
+      onDelete: 'set null',
+    }),
+    kind: text('kind').notNull(),
+    data: jsonb('data').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: createdAt(),
+  },
+  t => [
+    index('conversation_event_conversation_idx').on(
+      t.conversationId,
+      t.createdAt
+    ),
+  ]
+);
+
 export const attachments = helpdesk.table(
   'attachment',
   {

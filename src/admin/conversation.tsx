@@ -6,7 +6,7 @@ import { plainText, RichText } from '../ui/rich';
 import { RichEditor, type RichEditorHandle } from '../ui/rich-editor';
 import { useAdmin } from './context';
 import { ContactPicker } from './pickers';
-import { SnoozeControl } from './snooze';
+import { formatSnooze, SnoozeControl } from './snooze';
 import {
   Avatar,
   browserLabel,
@@ -81,6 +81,16 @@ type Detail = {
     contactName: string | null;
   }[];
   attachments: { id: string; filename: string; size: number }[];
+  events: TimelineEvent[];
+};
+
+type TimelineEvent = {
+  id: string;
+  kind: string;
+  data: Record<string, unknown>;
+  agentId: string | null;
+  agentName: string | null;
+  createdAt: string;
 };
 
 export const FREE_MAIL =
@@ -216,6 +226,96 @@ export function ConversationView({ id }: { id: string }) {
         (suggestion.duplicates?.length ?? 0) > 0);
   const domain = data.contact?.email?.split('@')[1];
   const context = c.context;
+  const agentLabel = (agentId: unknown) => {
+    if (!agents.data && !agents.error) return '…';
+    const agent = agents.data?.agents.find(a => a.id === agentId);
+    return agent?.name ?? agent?.email ?? t('event.formerAgent');
+  };
+  const contactName = (contactId: unknown) => {
+    const contact = [data.contact, ...data.participants].find(
+      p => p?.id === contactId
+    );
+    return contact?.name ?? contact?.email;
+  };
+  const eventText = (e: TimelineEvent) => {
+    const name = e.agentId
+      ? (e.agentName ?? agentLabel(e.agentId))
+      : t('event.system');
+    const to = e.data.to;
+    const from = e.data.from;
+    switch (e.kind) {
+      case 'status':
+        return e.agentId
+          ? t('event.status', { name, to: t(`agentStatus.${to}`) })
+          : t('event.statusAuto', { to: t(`agentStatus.${to}`) });
+      case 'priority':
+        return t('event.priority', { name, to: t(`priority.${to}`) });
+      case 'type':
+        return t('event.type', { name, to: t(`agentType.${to}`) });
+      case 'inbox':
+        return t('event.inbox', { name, to: inboxName(String(to)) });
+      case 'assigneeId':
+        return to
+          ? t('event.assigned', { name, to: agentLabel(to) })
+          : t('event.unassigned', { name });
+      case 'title':
+        return to
+          ? t('event.title', { name, to: String(to) })
+          : t('event.titleCleared', { name });
+      case 'tags': {
+        const before = (from ?? []) as string[];
+        const after = (to ?? []) as string[];
+        const added = after.filter(tag => !before.includes(tag));
+        const removed = before.filter(tag => !after.includes(tag));
+        return [
+          added.length > 0 &&
+            t('event.tagsAdded', { name, tags: added.join(', ') }),
+          removed.length > 0 &&
+            t('event.tagsRemoved', { name, tags: removed.join(', ') }),
+        ]
+          .filter(Boolean)
+          .join(' · ');
+      }
+      case 'snoozedUntil':
+        return to
+          ? t('event.snoozed', {
+              name,
+              date: formatSnooze(String(to), locale),
+            })
+          : e.agentId
+            ? t('event.unsnoozed', { name })
+            : t('event.woken');
+      case 'reopened':
+        return t('event.reopened');
+      case 'suggestion.accepted':
+        return t('event.suggestionAccepted', { name });
+      case 'suggestion.dismissed':
+        return t('event.suggestionDismissed', { name });
+      case 'participant.added': {
+        const contact = contactName(e.data.contactId);
+        if (e.agentId) {
+          return t('event.participant', {
+            name,
+            contact: contact ?? t('event.unknownContact'),
+          });
+        }
+        return contact
+          ? t('event.participantAuto', { contact })
+          : t('event.participantAutoUnknown');
+      }
+      case 'email.sent':
+        return t(`event.email.${e.data.kind}`, {
+          to: ((to ?? []) as string[]).join(', '),
+        });
+      default:
+        return null;
+    }
+  };
+  // A stable sort keeps a message ahead of the events it caused.
+  const timeline = [
+    ...data.messages.map(m => ({ at: m.createdAt, message: m })),
+    ...data.events.map(e => ({ at: e.createdAt, event: e })),
+  ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
   return (
     <div className="sa">
@@ -307,7 +407,23 @@ export function ConversationView({ id }: { id: string }) {
           </div>
 
           <div className="sa-thread">
-            {data.messages.map(m => {
+            {timeline.map(item => {
+              if ('event' in item) {
+                const text = eventText(item.event);
+                return (
+                  text && (
+                    <p key={item.event.id} className="sa-event">
+                      <span>{text}</span> ·{' '}
+                      <time
+                        dateTime={item.at}
+                        title={formatSnooze(item.at, locale)}>
+                        {relativeTime(item.at, locale)}
+                      </time>
+                    </p>
+                  )
+                );
+              }
+              const m = item.message;
               const name =
                 m.authorType === 'agent'
                   ? (m.agentName ?? t('thread.support'))

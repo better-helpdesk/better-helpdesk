@@ -30,7 +30,18 @@ export async function emit(config: HelpdeskConfig, event: HelpdeskEvent) {
   }
 }
 
-/** Reports the `patch` keys whose stored value changed; the patch itself may hold SQL such as `now()`. */
+const TRACKED = [
+  'status',
+  'priority',
+  'assigneeId',
+  'type',
+  'inbox',
+  'title',
+  'tags',
+  'snoozedUntil',
+] as const;
+
+/** Records and reports the `patch` keys whose stored value changed; the patch itself may hold SQL such as `now()`. */
 export async function emitUpdated(
   config: HelpdeskConfig,
   old: Conversation,
@@ -52,4 +63,16 @@ export async function emitUpdated(
     before,
     agentId,
   });
+  try {
+    await config.db.recordEvents(
+      TRACKED.filter(key => Object.hasOwn(before, key)).map(key => ({
+        conversationId: updated.id,
+        agentId,
+        kind: key,
+        data: { from: before[key] ?? null, to: updated[key] ?? null },
+      }))
+    );
+  } catch (error) {
+    console.error('[helpdesk] recording conversation events failed', error);
+  }
 }

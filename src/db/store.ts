@@ -30,6 +30,7 @@ const {
   cannedReplies,
   companies,
   contacts,
+  conversationEvents,
   conversations,
   deals,
   identities,
@@ -270,6 +271,10 @@ export function createStore(db: Db) {
           SELECT conversation_id, ${targetId}::uuid FROM helpdesk.participant
           WHERE contact_id = ${sourceId}::uuid
           ON CONFLICT DO NOTHING`);
+        await tx.execute(sql`
+          UPDATE helpdesk.conversation_event
+          SET data = jsonb_set(data, '{contactId}', to_jsonb(${targetId}::text))
+          WHERE kind = 'participant.added' AND data->>'contactId' = ${sourceId}`);
         // Identities move rather than copy: a copied verified row would collide
         // with its own original and be skipped. No visitor token survives a
         // merge on either side: it proves nothing about the merged person.
@@ -471,16 +476,21 @@ export function createStore(db: Db) {
             )
           )
           .returning({ id: agents.id });
-        if (removed.length === 0) return;
-        await tx
+        const [agent] = removed;
+        if (!agent) return;
+        const unassigned = await tx
           .update(conversations)
           .set({ assigneeId: null })
-          .where(
-            inArray(
-              conversations.assigneeId,
-              removed.map(r => r.id)
-            )
-          );
+          .where(eq(conversations.assigneeId, agent.id))
+          .returning({ id: conversations.id });
+        if (unassigned.length === 0) return;
+        await tx.insert(conversationEvents).values(
+          unassigned.map(c => ({
+            conversationId: c.id,
+            kind: 'assigneeId',
+            data: { from: agent.id, to: null },
+          }))
+        );
       });
     },
 
@@ -581,11 +591,38 @@ export function createStore(db: Db) {
       return Boolean(row);
     },
 
+    /** True when the contact was not a participant before. */
     async addParticipant(conversationId: string, contactId: string) {
-      await db
+      const added = await db
         .insert(participants)
         .values({ conversationId, contactId })
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning({ contactId: participants.contactId });
+      return added.length > 0;
+    },
+
+    async recordEvents(values: (typeof conversationEvents.$inferInsert)[]) {
+      if (values.length === 0) return;
+      await db.insert(conversationEvents).values(values);
+    },
+
+    async listEvents(conversationId: string) {
+      return db
+        .select({
+          id: conversationEvents.id,
+          kind: conversationEvents.kind,
+          data: conversationEvents.data,
+          agentId: conversationEvents.agentId,
+          agentName: agents.name,
+          createdAt: conversationEvents.createdAt,
+        })
+        .from(conversationEvents)
+        .leftJoin(agents, eq(agents.id, conversationEvents.agentId))
+        .where(eq(conversationEvents.conversationId, conversationId))
+        .orderBy(
+          asc(conversationEvents.createdAt),
+          asc(conversationEvents.kind)
+        );
     },
 
     async listParticipants(conversationId: string) {
