@@ -21,6 +21,7 @@ import {
 import { ApiError } from '../ui/api';
 import { HelpdeskAdmin } from './index';
 import { formatSnooze } from './snooze';
+import { setQueueOn } from './ui';
 
 const me = {
   agent: { id: 'a1', name: 'Agent' },
@@ -289,6 +290,63 @@ describe('HelpdeskAdmin', () => {
     ).toBeTruthy();
     expect(composer.textContent).toBe('');
     expect(posts.filter(u => u.includes('/messages'))).toHaveLength(1);
+  });
+
+  it('works the queue: a reply opens the next conversation, s skips, and one a teammate has open is passed over', async () => {
+    const next = (id: string, n: number, extra = {}) => ({
+      ...conversation,
+      id,
+      reference: `DG-100${n}`,
+      subject: `Conversation ${n}`,
+      ...extra,
+    });
+    const second = next('c2', 1);
+    const third = next('c3', 2, { viewers: [{ id: 'a2', name: 'Grace' }] });
+    const fourth = next('c4', 3);
+    routes['agent/conversations/?'] = {
+      conversations: [conversation, second, third, fourth],
+    };
+    for (const c of [second, fourth])
+      routes[`agent/conversations/${c.id}/`] = {
+        ...(original as object),
+        conversation: c,
+      };
+    onTestFinished(() => {
+      routes['agent/conversations/?'] = { conversations: [conversation] };
+      delete routes['agent/conversations/c2/'];
+      delete routes['agent/conversations/c4/'];
+      setQueueOn(false);
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    fireEvent.click(
+      await screen.findByRole('checkbox', { name: 'Work the queue' })
+    );
+    fireEvent.click(await screen.findByRole('link', { name: /DG-1000/ }));
+    expect(await screen.findByText('1 of 4')).toBeTruthy();
+
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    reply.innerHTML = 'Fixed in the next release';
+    fireEvent.input(reply);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(window.location.pathname).toBe('/support/conversations/c2/')
+    );
+    expect(await screen.findByText('2 of 4')).toBeTruthy();
+
+    fireEvent.keyDown(document.body, { key: 's' });
+    await waitFor(() =>
+      expect(window.location.pathname).toBe('/support/conversations/c4/')
+    );
+  });
+
+  it('leaves the queue off until the agent turns it on', async () => {
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('textbox', { name: 'Reply' });
+    expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull();
+    fireEvent.keyDown(document.body, { key: 's' });
+    expect(window.location.pathname).toBe('/support/conversations/c1/');
   });
 
   it('keeps the unsent reply and note across navigation and a reload, and clears only what was sent', async () => {
@@ -1649,6 +1707,7 @@ describe('conversation shortcuts', () => {
       'a',
       'r',
       'n',
+      's',
       'z',
       'Ctrl ↵',
       'Ctrl ⇧ ↵',

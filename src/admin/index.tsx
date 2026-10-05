@@ -12,6 +12,7 @@ import {
   HELPDESK_CHANGED,
   hrefForRoute,
   type Me,
+  type QueueEntry,
   useAdminRoute,
 } from './context';
 import { ConversationView } from './conversation';
@@ -122,6 +123,7 @@ export function HelpdeskAdmin({
   // On a phone the rail scrolls, and the section you are in can start off-screen.
   // `ready` is in the deps because the nav is not mounted until `me` lands.
   const navRef = useRef<HTMLElement>(null);
+  const [queue, setQueue] = useState<QueueEntry[]>([]);
   const ready = Boolean(me.data);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tab to show is the one the section moved to.
   useEffect(() => {
@@ -161,6 +163,8 @@ export function HelpdeskAdmin({
               me.data?.inboxNames?.[key]?.[locale] ??
               key.charAt(0).toUpperCase() + key.slice(1),
             nav,
+            queue,
+            setQueue,
             openShortcuts: () => setSheet(true),
           }}>
           <div className="sa">
@@ -268,6 +272,7 @@ function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
         [['a'], t('admin.keyAssign')],
         [['r'], t('admin.keyReply')],
         [['n'], t('admin.keyNote')],
+        [['s'], t('admin.keySkip')],
         [['z'], t('admin.snooze')],
         [[mod, '↵'], t('admin.send')],
         [[mod, '⇧', '↵'], t('admin.sendResolve')],

@@ -20,6 +20,7 @@ import {
   Skeleton,
   Svg,
   useKeysOn,
+  useQueueOn,
   useShortcuts,
   useToast,
   type Viewer,
@@ -151,8 +152,31 @@ function writeAside(open: boolean) {
 }
 
 export function ConversationView({ id }: { id: string }) {
-  const { api, apiBase, t, me, href, navigate, route, locale, inboxName } =
-    useAdmin();
+  const {
+    api,
+    apiBase,
+    t,
+    me,
+    href,
+    navigate,
+    route,
+    locale,
+    inboxName,
+    queue,
+  } = useAdmin();
+  const queueOn = useQueueOn();
+  const order = queue;
+  const position = order.findIndex(r => r.id === id);
+  // The next conversation after this one in the inbox's order, wrapping round,
+  // passing over any a teammate has open; the list when none is left.
+  const advance = () => {
+    const after = [
+      ...order.slice(position + 1),
+      ...order.slice(0, Math.max(position, 0)),
+    ];
+    const next = after.find(r => r.id !== id && !r.viewed);
+    navigate({ ...route, conversation: next?.id ?? '' });
+  };
   const detail = useResource(
     () => api<Detail>(`agent/conversations/${id}`),
     id,
@@ -237,6 +261,7 @@ export function ConversationView({ id }: { id: string }) {
             act({ assigneeId: me.agent.id }, () => t('admin.assignedToYou')),
           r: () => compose(false),
           n: () => compose(true),
+          s: queueOn ? advance : undefined,
         }
       : {}
   );
@@ -288,6 +313,8 @@ export function ConversationView({ id }: { id: string }) {
       if (resolve) await patch({ status: 'resolved' });
       else await detail.refresh();
       toast.show(t('thread.sent'));
+      // A note leaves the customer waiting, so only a reply moves the queue on.
+      if (queueOn && !internal) advance();
     } catch {
       setError('resolve');
       await detail.refresh().catch(() => undefined);
@@ -558,6 +585,23 @@ export function ConversationView({ id }: { id: string }) {
             onClick={() => setMerging(true)}>
             {t('admin.mergeInto')}
           </button>
+        )}
+        {queueOn && position >= 0 && (
+          <span className="sa-queue">
+            <span className="sa-muted">
+              {t('admin.queuePosition', {
+                index: String(position + 1),
+                count: String(order.length),
+              })}
+            </span>
+            <button
+              type="button"
+              className="sa-btn"
+              aria-keyshortcuts={keysOn ? 'S' : undefined}
+              onClick={advance}>
+              {t('admin.skip')}
+            </button>
+          </span>
         )}
         <button
           ref={asideToggle}
