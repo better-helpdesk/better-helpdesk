@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 
-import { useResource } from '../ui/api';
+import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
@@ -98,7 +98,7 @@ export function Inbox() {
     c => c.priority === 'high' || c.priority === 'urgent'
   );
   const rows = priority === 'high' ? urgent : all;
-  const chosen = selected.filter(id => rows.some(r => r.id === id));
+  const visibleSelected = selected.filter(id => rows.some(r => r.id === id));
   const filtered =
     Boolean(
       filters.assignee || filters.inbox || filters.q || filters.tag || priority
@@ -219,17 +219,10 @@ export function Inbox() {
         )}
       </div>
       <p className="sa-sr-only" role="status">
-        {chosen.length > 0
-          ? t('admin.selected', { count: String(chosen.length) })
+        {visibleSelected.length > 0
+          ? t('admin.selected', { count: String(visibleSelected.length) })
           : ''}
       </p>
-      {chosen.length > 0 && (
-        <BulkBar
-          ids={chosen}
-          tags={topTags.data?.tags ?? []}
-          onClear={() => setSelected([])}
-        />
-      )}
       {list.error && <p className="sa-error">{t('admin.error')}</p>}
       {!list.data && !list.error && (
         <Skeleton kind="table" label={t('admin.loading')} />
@@ -261,9 +254,16 @@ export function Inbox() {
           hideStatus={filters.status !== 'any'}
           onTag={name => set('tag', name)}
           onOpen={id => navigate({ conversation: id })}
-          selected={chosen}
+          selected={visibleSelected}
           onSelect={setSelected}
           keyboard
+        />
+      )}
+      {visibleSelected.length > 0 && (
+        <BulkBar
+          rows={rows.filter(r => visibleSelected.includes(r.id))}
+          tags={topTags.data?.tags ?? []}
+          onClear={() => setSelected([])}
         />
       )}
     </div>
@@ -272,16 +272,16 @@ export function Inbox() {
 
 /** Applies one change to every selected conversation, all or none. */
 function BulkBar({
-  ids,
+  rows,
   tags,
   onClear,
 }: {
-  ids: string[];
+  rows: ConversationRow[];
   tags: string[];
   onClear: () => void;
 }) {
   const { api, t, me } = useAdmin();
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [tag, setTag] = useState('');
   const tagListId = useId();
   const agents = useResource(
@@ -291,23 +291,38 @@ function BulkBar({
       }>('agent/agents'),
     'agents'
   );
-  const apply = async (change: Record<string, unknown>) => {
-    setError(false);
+  const apply = async (change: {
+    assigneeId?: string | null;
+    status?: string;
+    priority?: string;
+    addTag?: string;
+  }) => {
+    setError(null);
     try {
-      await api('agent/conversations/bulk', { body: { ids, ...change } });
-    } catch {
-      setError(true);
+      await api('agent/conversations/bulk', {
+        body: { ids: rows.map(r => r.id), ...change },
+      });
+    } catch (e) {
+      const failed = rows.filter(r => (e as ApiError).ids?.includes(r.id));
+      setError(
+        failed.length > 0
+          ? t('admin.bulkFailedOn', {
+              references: failed.map(r => r.reference).join(', '),
+            })
+          : t('admin.bulkError')
+      );
     }
   };
 
   return (
     <>
+      {error && <p className="sa-error">{error}</p>}
       <div
         className="sa-toolbar sa-bulk"
         role="toolbar"
         aria-label={t('admin.changeSelected')}>
         <span className="sa-count num" aria-hidden="true">
-          {t('admin.selected', { count: String(ids.length) })}
+          {t('admin.selected', { count: String(rows.length) })}
         </span>
         <Select
           label={t('admin.assignee')}
@@ -365,7 +380,6 @@ function BulkBar({
           {t('admin.clearSelection')}
         </button>
       </div>
-      {error && <p className="sa-error">{t('admin.bulkError')}</p>}
     </>
   );
 }
@@ -455,7 +469,7 @@ export function ConversationTable({
   onSelect,
 }: {
   rows: ConversationRow[];
-  /** Adds a checkbox column; shift-click selects the range from the last one clicked. */
+  /** Adds a checkbox column; with shift, a box's change extends to the range from the last box toggled. */
   selected?: string[];
   onSelect?: (ids: string[]) => void;
   /** Narrows the list to a tag; without it, row tags are plain labels. */
@@ -532,7 +546,7 @@ export function ConversationTable({
         move(active === -1 ? 0 : Math.min(active + 1, rows.length - 1));
       else if (e.key === 'k') move(active === -1 ? 0 : Math.max(active - 1, 0));
       else if (e.key === 'Enter' && row) onOpen(row.id);
-      else if (e.key === 'x' && row) toggle(row.id, false);
+      else if (e.key.toLowerCase() === 'x' && row) toggle(row.id, e.shiftKey);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

@@ -102,18 +102,22 @@ describe('bulk conversation changes', () => {
     for (const { bulk: b, single } of pairs) {
       expect(await timeline(b)).toEqual(await timeline(single));
     }
+    // A batch goes in id order, so only the set of events must match.
     const shape = (list: HelpdeskEvent[]) =>
-      list.map(e =>
-        e.kind === 'conversation.updated'
-          ? [
-              e.kind,
-              Object.keys(e.before).sort(),
-              e.before.status,
-              e.conversation.status,
-              e.agentId !== null,
-            ]
-          : [e.kind]
-      );
+      list
+        .map(e =>
+          e.kind === 'conversation.updated'
+            ? [
+                e.kind,
+                Object.keys(e.before).sort(),
+                e.before.status,
+                e.conversation.status,
+                e.agentId !== null,
+              ]
+            : [e.kind]
+        )
+        .map(e => JSON.stringify(e))
+        .sort();
     expect(bulkEvents).toHaveLength(2);
     expect(shape(bulkEvents)).toEqual(shape(events));
   });
@@ -160,10 +164,27 @@ describe('bulk conversation changes', () => {
     const res = await bulk({ ids: [a, missing], status: 'resolved' });
 
     expect(res.status).toBe(404);
-    expect(res.data.error).toContain(missing);
+    expect(res.data.ids).toEqual([missing]);
     expect((await state([a]))[0]?.status).toBe('open');
     expect(await timeline(a)).toEqual([]);
     expect(events).toEqual([]);
+  });
+
+  it('adds a tag to none when one conversation has no room for it, and names that one', async () => {
+    const full = await open();
+    const other = await open();
+    const fifty = Array.from({ length: 50 }, (_, i) => `t${i}`);
+    await h.call('PATCH', `agent/conversations/${full}`, {
+      user: 'agent',
+      body: { tags: fifty },
+    });
+
+    const res = await bulk({ ids: [other, full], addTag: 'outage' });
+
+    expect(res.status).toBe(400);
+    expect(res.data.ids).toEqual([full]);
+    expect((await state([other]))[0]?.tags).toEqual([]);
+    expect(await timeline(other)).toEqual([]);
   });
 
   it('refuses more than 100 ids, ids that are not uuids and an unknown assignee', async () => {

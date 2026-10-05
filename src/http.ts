@@ -4,12 +4,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
-import {
-  type Agent,
-  type Conversation,
-  createStore,
-  type HelpdeskStore,
-} from './db/store';
+import type { Agent, Conversation } from './db/store';
 import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
@@ -56,6 +51,7 @@ type ConfirmationSetting = Partial<Record<Locale, string>>;
 // Timestamps compared with message and job times come from the same clock:
 // the database's; the app host's may drift from it.
 const dbNow = () => sql`now()` as unknown as Date;
+const MAX_TAGS = 50;
 // A message is at most 20,000 characters; this leaves room for its context.
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_INBOUND_BYTES = 25 * 1024 * 1024;
@@ -460,7 +456,7 @@ export function createHandler(support: Helpdesk) {
     );
 
   const tag = z.string().trim().min(1).max(50);
-  const tags = z.array(tag).max(50).optional();
+  const tags = z.array(tag).max(MAX_TAGS).optional();
 
   const requireConversation = async (id: string) => {
     if (!uuid.safeParse(id).success) throw new HelpdeskError(404, 'Not found');
@@ -680,7 +676,7 @@ export function createHandler(support: Helpdesk) {
     companyId: uuid.nullable().optional(),
     tags: z
       .array(tag.toLowerCase())
-      .max(50)
+      .max(MAX_TAGS)
       .transform(list => [...new Set(list)])
       .optional(),
     snoozedUntil: z.iso
@@ -710,7 +706,6 @@ export function createHandler(support: Helpdesk) {
 
   /** The row update an agent's change makes to `conversation` as it stands, with whether it resolves it. */
   async function conversationPatch(
-    s: HelpdeskStore,
     conversation: Conversation,
     data: ConversationBody
   ) {
@@ -737,7 +732,7 @@ export function createHandler(support: Helpdesk) {
       patch.resolvedAt = null;
       // Reopened while the customer had the last word: they are waiting again.
       if (conversation.status === 'resolved') {
-        const last = (await s.lastMessages([conversation.id])).get(
+        const last = (await store.lastMessages([conversation.id])).get(
           conversation.id
         );
         if (last?.authorType === 'contact') patch.waitingSince = last.createdAt;
@@ -751,11 +746,7 @@ export function createHandler(support: Helpdesk) {
     const data = await checkConversationBody(
       conversationBody.parse(await body())
     );
-    const { patch, resolving } = await conversationPatch(
-      store,
-      conversation,
-      data
-    );
+    const { patch, resolving } = await conversationPatch(conversation, data);
     // A concurrent resolve that lands first keeps its resolvedAt and its timeline row.
     const updated = await store.updateConversation(conversation.id, patch, {
       unlessResolved: resolving,
@@ -768,51 +759,37 @@ export function createHandler(support: Helpdesk) {
   const bulkBody = conversationBody
     .omit({ subject: true, companyId: true, tags: true })
     .extend({
-      // Sorted, so overlapping batches lock their rows in the same order.
       ids: z
         .array(uuid)
         .min(1)
         .max(100)
-        .transform(list => [...new Set(list)].sort()),
+        .transform(list => [...new Set(list)]),
       addTag: tag.toLowerCase().optional(),
     });
 
   agentRoute('POST', 'conversations/bulk', async ({ body, agent }) => {
     const { ids, addTag, ...fields } = bulkBody.parse(await body());
     const data = await checkConversationBody(fields);
-    const changes = await store.db.transaction(async t => {
-      const tx = createStore(t);
-      const rows = await Promise.all(ids.map(id => tx.getConversation(id)));
-      const missing = ids.filter((_, i) => !rows[i]);
-      if (missing.length > 0) {
-        throw new HelpdeskError(404, `Not found: ${missing.join(', ')}`);
-      }
-      const changed = [];
-      for (const conversation of rows as Conversation[]) {
+    const { missing, changes } = await store.updateConversations(
+      ids,
+      async conversation => {
         const tags =
           addTag && !conversation.tags.includes(addTag)
             ? [...conversation.tags, addTag]
             : undefined;
-        if (tags && tags.length > 50) {
-          throw new HelpdeskError(
-            400,
-            `Too many tags: ${support.reference(conversation)}`
-          );
+        if (tags && tags.length > MAX_TAGS) {
+          throw new HelpdeskError(400, 'Too many tags', [conversation.id]);
         }
         const { patch, resolving } = await conversationPatch(
-          tx,
           conversation,
           tags ? { ...data, tags } : data
         );
-        const updated = await tx.updateConversation(conversation.id, patch, {
-          unlessResolved: resolving,
-        });
-        changed.push({ conversation, updated, patch });
+        return { patch, unlessResolved: resolving };
       }
-      return changed;
-    });
-    for (const { conversation, updated, patch } of changes) {
-      await emitUpdated(config, conversation, updated, patch, agent.id);
+    );
+    if (missing.length > 0) throw new HelpdeskError(404, 'Not found', missing);
+    for (const { before, updated, patch } of changes) {
+      await emitUpdated(config, before, updated, patch, agent.id);
     }
     return json({ ok: true });
   });
@@ -1402,7 +1379,11 @@ type RouteDefiner = (method: string, path: string, run: Route['run']) => void;
 
 function errorResponse(error: unknown, headers: HeadersInit) {
   if (error instanceof HelpdeskError) {
-    return json({ error: error.message }, error.status, headers);
+    return json(
+      { error: error.message, ...(error.ids && { ids: error.ids }) },
+      error.status,
+      headers
+    );
   }
   if (error instanceof z.ZodError) {
     return json(

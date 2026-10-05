@@ -189,6 +189,8 @@ const en = {
   'admin.addTag': 'Add tag',
   'admin.bulkError':
     'None of the selected conversations were changed. Try again.',
+  'admin.bulkFailedOn':
+    'None of the selected conversations were changed. It failed on {references}.',
   'admin.team': 'Team',
   'admin.orLinkExisting': 'Or link an existing company',
   'admin.rename': 'Rename conversation',
@@ -553,6 +555,8 @@ const de: Record<MessageKey, string> = {
   'admin.addTag': 'Tag hinzufügen',
   'admin.bulkError':
     'Keine der ausgewählten Unterhaltungen wurde geändert. Versuchen Sie es erneut.',
+  'admin.bulkFailedOn':
+    'Keine der ausgewählten Unterhaltungen wurde geändert. Es scheiterte an {references}.',
   'admin.team': 'Team',
   'admin.orLinkExisting': 'Oder bestehende Firma verknüpfen',
   'admin.rename': 'Unterhaltung umbenennen',

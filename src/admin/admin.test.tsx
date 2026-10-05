@@ -1078,9 +1078,10 @@ describe('bulk changes', () => {
         if (url.includes('agent/conversations/bulk')) {
           posts.push(JSON.parse(String(init?.body)));
           return fail
-            ? new Response(JSON.stringify({ error: 'Not found: c3' }), {
-                status: 404,
-              })
+            ? new Response(
+                JSON.stringify({ error: 'Not found', ids: ['c3'] }),
+                { status: 404 }
+              )
             : new Response(JSON.stringify({ ok: true }));
         }
         return respond(url);
@@ -1198,12 +1199,13 @@ describe('bulk changes', () => {
     expect(status().textContent).toBe('1 selected');
   });
 
-  it('says so when the change fails and keeps the selection', async () => {
+  it('names the conversation a change failed on and keeps the selection', async () => {
     fail = true;
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     fireEvent.click(
       await screen.findByRole('checkbox', { name: 'Select DG-1000' })
     );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select DG-1002' }));
     const bar = screen.getByRole('toolbar', { name: 'Change selected' });
 
     fireEvent.change(within(bar).getByRole('combobox', { name: 'Status' }), {
@@ -1212,9 +1214,22 @@ describe('bulk changes', () => {
 
     expect(
       await screen.findByText(
-        'None of the selected conversations were changed. Try again.'
+        'None of the selected conversations were changed. It failed on DG-1002.'
       )
     ).toBeTruthy();
-    expect(status().textContent).toBe('1 selected');
+    expect(status().textContent).toBe('2 selected');
+  });
+
+  it('selects a range from the keyboard with shift and x', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('checkbox', { name: 'Select DG-1000' });
+
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: 'x' });
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: 'X', shiftKey: true });
+
+    expect(status().textContent).toBe('3 selected');
   });
 });

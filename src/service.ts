@@ -39,7 +39,9 @@ export type Customer = {
 export class HelpdeskError extends Error {
   constructor(
     readonly status: number,
-    message: string
+    message: string,
+    /** The conversations a bulk change failed on. */
+    readonly ids?: string[]
   ) {
     super(message);
   }
