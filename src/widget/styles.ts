@@ -166,7 +166,7 @@ img.avatar { object-fit: cover; padding: 0; }
 .field { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
 .field .hint { color: var(--s-muted); font-weight: 400; }
 .field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.format-toggle { min-height: 24px; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: var(--s-muted); font-size: 13px; cursor: pointer; }
+.format-toggle { min-height: 24px; padding: 0 4px; border: 0; border-radius: min(4px, var(--s-r-inner)); background: none; color: var(--s-muted); font-size: 13px; cursor: pointer; }
 .format-toggle:hover, .format-toggle[aria-pressed="true"] { color: var(--s-fg); }
 .format-toggle:focus-visible { outline: 2px solid var(--s-focus); outline-offset: 2px; }
 .choices { border: 0; margin: 0; padding: 0; min-width: 0; }
