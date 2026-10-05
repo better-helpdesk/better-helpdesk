@@ -45,7 +45,7 @@ const SOON_HOURS = 6;
 const LATE_HOURS = 24;
 
 export function Inbox() {
-  const { api, t, me, route, navigate, inboxName } = useAdmin();
+  const { api, t, me, route, navigate, inboxName, nav } = useAdmin();
   const [query, setQuery] = useState(route.q ?? '');
   const [tag, setTag] = useState(route.tag ?? '');
   const tagListId = useId();
@@ -213,7 +213,7 @@ export function Inbox() {
             {t('admin.sort')}: {t('admin.sortPriority')}
           </option>
         </select>
-        <AwayControl />
+        {!nav && <AwayControl />}
         {rows.length > 1 && (
           <span className="sa-kbd sa-hint">
             <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
@@ -413,7 +413,7 @@ function BulkBar({
 }
 
 /** Setting yourself away changes what the widget and receipts promise. */
-function AwayControl() {
+export function AwayControl() {
   const { api, t, me, refreshMe, locale } = useAdmin();
   const [open, setOpen] = useState(false);
   const until = me.agent.awayUntil ? new Date(me.agent.awayUntil) : null;

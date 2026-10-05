@@ -17,10 +17,10 @@ import {
 import { ConversationView } from './conversation';
 import { CompanyList, CompanyView, ContactList, ContactView } from './crm';
 import { DealsBoard } from './deals';
-import { Inbox } from './inbox';
+import { AwayControl, Inbox } from './inbox';
 import { Settings } from './settings';
 import { adminCss } from './styles';
-import { Dialog, LoadError, useShortcuts } from './ui';
+import { Avatar, Dialog, LoadError, useShortcuts } from './ui';
 
 /** The agent UI's sections, for a host that renders its own tabs. */
 export { HELPDESK_CHANGED };
@@ -151,23 +151,32 @@ export function HelpdeskAdmin({
             inboxName: key =>
               me.data?.inboxNames?.[key]?.[locale] ??
               key.charAt(0).toUpperCase() + key.slice(1),
+            nav,
           }}>
           <div className="sa">
             {nav && (
-              <nav
-                className="sa-nav"
-                ref={navRef}
-                aria-label={t('admin.sections')}>
-                {VIEWS.map(v => (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-current={section === v ? 'page' : undefined}
-                    onClick={() => navigate(v === 'inbox' ? {} : { view: v })}>
-                    {t(`admin.${v}`)}
-                  </button>
-                ))}
-              </nav>
+              <div className="sa-rail">
+                <nav
+                  className="sa-nav"
+                  ref={navRef}
+                  aria-label={t('admin.sections')}>
+                  {VIEWS.map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-current={section === v ? 'page' : undefined}
+                      onClick={() =>
+                        navigate(v === 'inbox' ? {} : { view: v })
+                      }>
+                      {t(`admin.${v}`)}
+                    </button>
+                  ))}
+                </nav>
+                <div className="sa-me">
+                  <Avatar name={me.data.agent.name} agent />
+                  <AwayControl />
+                </div>
+              </div>
             )}
             {view === 'inbox' && <Inbox />}
             {view === 'conversation' && route.conversation && (

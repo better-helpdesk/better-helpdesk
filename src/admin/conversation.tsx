@@ -692,6 +692,22 @@ export function ConversationView({ id }: { id: string }) {
               e.preventDefault();
               void send(false);
             }}>
+            <fieldset className="sa-seg">
+              <button
+                type="button"
+                aria-pressed={!internal}
+                aria-keyshortcuts="R"
+                onClick={() => setInternal(false)}>
+                {t('admin.reply')}
+              </button>
+              <button
+                type="button"
+                aria-pressed={internal}
+                aria-keyshortcuts="N"
+                onClick={() => setInternal(true)}>
+                {t('admin.note')}
+              </button>
+            </fieldset>
             {/* Mounted while empty, so screen readers announce the warning when it appears. */}
             <p className="sa-viewing-warning" role="status">
               {data.viewers.length > 0 && t('admin.viewingWarning')}
@@ -702,9 +718,7 @@ export function ConversationView({ id }: { id: string }) {
               t={t}
               label={internal ? t('admin.note') : t('admin.reply')}
               placeholder={
-                internal
-                  ? t('admin.noteHint')
-                  : `${t('admin.reply')} · ${t('admin.slashHint')}`
+                internal ? t('admin.noteHint') : t('admin.slashHint')
               }
               value={body}
               onChange={next => {
@@ -790,22 +804,6 @@ export function ConversationView({ id }: { id: string }) {
               </p>
             )}
             <div className="sa-composer-foot">
-              <fieldset className="sa-seg">
-                <button
-                  type="button"
-                  aria-pressed={!internal}
-                  aria-keyshortcuts="R"
-                  onClick={() => setInternal(false)}>
-                  {t('admin.reply')}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={internal}
-                  aria-keyshortcuts="N"
-                  onClick={() => setInternal(true)}>
-                  {t('admin.note')}
-                </button>
-              </fieldset>
               <CannedMenu
                 replies={replies}
                 onPick={text => insert(fill(text))}
@@ -853,6 +851,7 @@ export function ConversationView({ id }: { id: string }) {
               <button
                 type="submit"
                 className="sa-btn sa-primary"
+                title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
                 disabled={busy !== null || !body.trim()}>
                 {busy === 'send' ? t('admin.sending') : t('admin.send')}
               </button>

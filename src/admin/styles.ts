@@ -72,6 +72,10 @@ export const adminCss = `
 @media (max-width: 720px) {
   .sa-nav { mask-image: linear-gradient(90deg, var(--a-fg) 0 calc(100% - 20px), transparent); }
 }
+/* Who you are and whether you are away sit at the rail's end, apart from any one page. */
+.sa-rail { display: flex; }
+.sa-rail .sa-nav { flex: 1; min-width: 0; }
+.sa-me { flex: none; display: flex; align-items: center; gap: 8px; padding-left: 8px; border-bottom: 1px solid var(--a-border); }
 
 .sa-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .sa-toolbar .sa-grow { flex: 1; min-width: 200px; }
@@ -232,7 +236,7 @@ export const adminCss = `
 .sa-suggest .sa-grow { flex: 1; min-width: 200px; display: grid; gap: 2px; }
 .sa-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.sa-composer { position: sticky; bottom: 0; z-index: 1; background: var(--a-subtle); border: 1px solid var(--a-border); border-radius: var(--a-radius); padding: 10px; display: grid; gap: 8px; box-shadow: 0 -8px 24px color-mix(in srgb, var(--a-bg) 80%, transparent); }
+.sa-composer { position: sticky; bottom: 0; z-index: 1; background: var(--a-subtle); border: 1px solid var(--a-border); border-radius: var(--a-radius); padding: 10px; display: grid; gap: 8px; box-shadow: 0 -8px 24px color-mix(in srgb, var(--a-bg) 80%, transparent); container-type: inline-size; }
 .sa-composer[data-internal="true"] { background: var(--a-note); border-color: var(--a-note-border); }
 .sa .rt { display: grid; gap: 4px; min-width: 0; }
 .sa .rt-input { min-height: 90px; max-height: 400px; overflow-y: auto; padding: 6px 4px; line-height: 1.5; overflow-wrap: anywhere; cursor: text; outline: none; }
@@ -262,8 +266,11 @@ export const adminCss = `
 .sa-slash button { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; text-align: left; border: 0; background: transparent; padding: 8px 10px; border-radius: var(--a-r-inner); }
 .sa-slash button .sa-fine { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sa-slash button[aria-selected="true"] { background: var(--a-subtle); }
+.sa-composer > .sa-seg { justify-self: start; }
 .sa-composer-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sa-composer-foot .sa-grow { flex: 1; }
+.sa-composer-foot .sa-grow { flex: 1; min-width: 0; overflow: hidden; }
+/* Where the hint would squeeze the buttons, it gives up its place; the send buttons carry the shortcuts as titles. */
+@container (max-width: 520px) { .sa-composer-foot .sa-kbd { visibility: hidden; } }
 
 .sa-board { display: grid; grid-template-columns: repeat(var(--cols), minmax(180px, 1fr)); gap: 12px; }
 @media (max-width: 1100px) { .sa-board { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 220px; overflow-x: auto; } }

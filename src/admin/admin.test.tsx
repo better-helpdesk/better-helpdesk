@@ -786,6 +786,47 @@ describe('HelpdeskAdmin', () => {
     ).toBe('Deals');
   });
 
+  it('offers to set yourself away in the rail, and in the inbox toolbar when the host hides the rail', async () => {
+    const { unmount } = render(
+      <HelpdeskAdmin basePath="/support" locale="en" />
+    );
+    await screen.findByRole('link', { name: /DG-1000/ });
+    const away = screen.getByRole('button', { name: 'Set away…' });
+    expect(away.closest('.sa-rail')).toBeTruthy();
+    expect(away.closest('.sa-toolbar')).toBeNull();
+    unmount();
+
+    render(<HelpdeskAdmin basePath="/support" locale="en" nav={false} />);
+    await screen.findByRole('link', { name: /DG-1000/ });
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Set away…' }).closest('.sa-toolbar')
+    ).toBeTruthy();
+  });
+
+  it('asks reply or note before the text, and hints at canned replies in the empty reply', async () => {
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    const { container } = render(
+      <HelpdeskAdmin basePath="/support" locale="en" />
+    );
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    const composer = container.querySelector('.sa-composer') as HTMLElement;
+    const first = composer.querySelector(
+      'button, input, select, textarea, [contenteditable="true"]'
+    );
+    expect(first?.textContent).toBe('Reply');
+    expect(first?.getAttribute('aria-pressed')).toBe('true');
+    expect(reply.dataset.placeholder).toBe('Type / for canned replies');
+
+    fireEvent.click(
+      within(composer).getByRole('button', { name: 'Internal note' })
+    );
+    expect(
+      (await screen.findByRole('textbox', { name: 'Internal note' })).dataset
+        .placeholder
+    ).toContain('Only your team sees internal notes.');
+  });
+
   it('says so when saving the settings fails', async () => {
     vi.stubGlobal(
       'fetch',
