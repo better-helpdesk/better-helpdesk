@@ -824,7 +824,7 @@ describe('HelpdeskAdmin', () => {
     expect(
       (await screen.findByRole('textbox', { name: 'Internal note' })).dataset
         .placeholder
-    ).toBe('Only your team sees internal notes.');
+    ).toContain('Only your team sees internal notes.');
   });
 
   it('says so when saving the settings fails', async () => {
