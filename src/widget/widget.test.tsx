@@ -876,6 +876,61 @@ describe('Widget', () => {
     expect(screen.queryByText('This could not be loaded.')).toBeNull();
   });
 
+  it('asks the author to rate a resolved thread, once', async () => {
+    Element.prototype.scrollIntoView = () => {};
+    const summary = { ...ownThread, status: 'resolved' };
+    let rating: string | null = null;
+    const ratings: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('widget/session')) {
+          return new Response(
+            JSON.stringify({ ...session, conversations: [summary] })
+          );
+        }
+        if (url.endsWith('widget/conversations/c1/rating/')) {
+          const body = JSON.parse(String(init?.body));
+          ratings.push(body);
+          rating = body.rating;
+          return new Response(JSON.stringify({ ok: true }));
+        }
+        if (url.endsWith('widget/conversations/c1/')) {
+          return new Response(
+            JSON.stringify({
+              conversation: { ...summary, rating },
+              messages: [],
+              attachments: [],
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }));
+      })
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByText('Export broken'));
+
+    expect(await screen.findByText('How did we do?')).toBeTruthy();
+    fireEvent.change(
+      screen.getByRole('textbox', { name: 'Anything to add? (optional)' }),
+      { target: { value: 'Quick fix' } }
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Good' }));
+    await screen.findByText('Thanks for your feedback.');
+    expect(screen.queryByText('How did we do?')).toBe(null);
+    expect(ratings).toEqual([{ rating: 'good', comment: 'Quick fix' }]);
+  });
+
   it('offers no resolve button on a teammate’s shared thread', async () => {
     Element.prototype.scrollIntoView = () => {};
     const summary = {

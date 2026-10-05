@@ -192,6 +192,9 @@ export const conversations = helpdesk.table(
       (): AnyPgColumn => conversations.id,
       { onDelete: 'set null' }
     ),
+    rating: text('rating').$type<'good' | 'bad'>(),
+    ratingComment: text('rating_comment'),
+    ratedAt: ts('rated_at'),
     createdAt: createdAt(),
     search: tsvector('search').generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(subject, ''))`

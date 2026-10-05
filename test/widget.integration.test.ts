@@ -249,6 +249,68 @@ describe('visibility', () => {
     expect(thread.data.conversation.status).toBe('resolved');
   });
 
+  it('takes one rating from the author of a resolved conversation, and a bad one reopens it', async () => {
+    h.addUser('ada', { orgs: [orgA] });
+    h.addUser('bob', { orgs: [orgA] });
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada', {
+      orgId: orgA.id,
+      sharedWithCompany: true,
+    });
+    const rate = (user: string, body: Record<string, unknown>) =>
+      h.call('POST', `widget/conversations/${conversation.id}/rating`, {
+        user,
+        body,
+      });
+
+    expect((await rate('ada', { rating: 'good' })).status).toBe(409);
+    await h.call('PATCH', `widget/conversations/${conversation.id}`, {
+      user: 'ada',
+      body: { status: 'resolved' },
+    });
+    expect((await rate('bob', { rating: 'good' })).status).toBe(403);
+    expect((await rate('ada', { rating: 'meh' })).status).toBe(400);
+    const res = await rate('ada', { rating: 'bad', comment: ' Still broken ' });
+    expect(res.status).toBe(200);
+    expect(res.data.conversation).toMatchObject({
+      rating: 'bad',
+      status: 'open',
+    });
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'resolved' },
+    });
+    expect((await rate('ada', { rating: 'good' })).status).toBe(409);
+
+    const [row] = await rows<Record<string, unknown>>(
+      sql`SELECT rating, rating_comment, rated_at IS NOT NULL AS rated
+          FROM helpdesk.conversation WHERE id = ${conversation.id}`
+    );
+    expect(row).toEqual({
+      rating: 'bad',
+      rating_comment: 'Still broken',
+      rated: true,
+    });
+    expect(
+      await rows(
+        sql`SELECT kind, data->>'to' AS to, data->>'by' AS by FROM helpdesk.conversation_event
+            WHERE conversation_id = ${conversation.id} AND kind IN ('rating', 'status')
+            ORDER BY created_at, kind`
+      )
+    ).toEqual([
+      { kind: 'status', to: 'resolved', by: 'customer' },
+      { kind: 'rating', to: 'bad', by: 'customer' },
+      { kind: 'status', to: 'open', by: 'customer' },
+      { kind: 'status', to: 'resolved', by: null },
+    ]);
+    const bad = await h.call('GET', 'agent/conversations?status=rated-bad', {
+      user: 'agent',
+    });
+    expect(bad.data.conversations.map((c: { id: string }) => c.id)).toEqual([
+      conversation.id,
+    ]);
+  });
+
   it('never exposes internal notes to the customer', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });

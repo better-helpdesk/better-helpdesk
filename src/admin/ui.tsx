@@ -471,3 +471,22 @@ export function Select({
     </select>
   );
 }
+
+export function RatingChip({
+  t,
+  rating,
+  comment,
+}: {
+  t: Translate;
+  rating: 'good' | 'bad';
+  comment?: string | null;
+}) {
+  return (
+    <span
+      className="sa-pill sa-rating"
+      data-rating={rating}
+      title={comment ?? undefined}>
+      {t(`admin.rated.${rating}`)}
+    </span>
+  );
+}

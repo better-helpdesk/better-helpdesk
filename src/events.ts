@@ -39,6 +39,7 @@ const TRACKED = [
   'title',
   'tags',
   'snoozedUntil',
+  'rating',
 ] as const;
 
 /** Records and reports the `patch` keys whose stored value changed; the patch itself may hold SQL such as `now()`. */

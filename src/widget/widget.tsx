@@ -62,6 +62,8 @@ type Summary = {
   sharedWithCompany: boolean;
   lastMessageAt: string;
   preview: string | null;
+  rating?: 'good' | 'bad' | null;
+  merged?: boolean;
 };
 
 type Session = {
@@ -1491,6 +1493,23 @@ function Thread({
           {t('thread.resolveFailed')}
         </p>
       )}
+      {data.conversation.own &&
+        (data.conversation.rating ? (
+          <p className="fine rating-thanks" role="status">
+            {t('rating.thanks')}
+          </p>
+        ) : (
+          data.conversation.status === 'resolved' &&
+          !data.conversation.merged && (
+            <RatingPrompt
+              t={t}
+              onRate={async body => {
+                await api(`widget/conversations/${id}/rating`, { body });
+                await thread.refresh();
+              }}
+            />
+          )
+        ))}
     </>
   );
 }
@@ -1505,5 +1524,52 @@ function LoadFailed({ t, onRetry }: { t: Translate; onRetry: () => void }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function RatingPrompt({
+  t,
+  onRate,
+}: {
+  t: Translate;
+  onRate: (body: { rating: 'good' | 'bad'; comment: string }) => Promise<void>;
+}) {
+  const [comment, setComment] = useState('');
+  const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const rate = async (rating: 'good' | 'bad') => {
+    setSending(true);
+    setFailed(false);
+    try {
+      await onRate({ rating, comment });
+    } catch {
+      setFailed(true);
+      setSending(false);
+    }
+  };
+  return (
+    <fieldset className="rating" disabled={sending}>
+      <legend>{t('rating.question')}</legend>
+      <textarea
+        aria-label={t('rating.comment')}
+        placeholder={t('rating.comment')}
+        maxLength={2000}
+        value={comment}
+        onChange={e => setComment(e.target.value)}
+      />
+      <div className="rating-buttons">
+        <button type="button" onClick={() => void rate('good')}>
+          {t('rating.good')}
+        </button>
+        <button type="button" onClick={() => void rate('bad')}>
+          {t('rating.bad')}
+        </button>
+      </div>
+      {failed && (
+        <p className="error" role="alert">
+          {t('rating.failed')}
+        </p>
+      )}
+    </fieldset>
   );
 }

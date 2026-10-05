@@ -752,9 +752,11 @@ export function createStore(db: Db) {
               eq(conversations.status, 'pending'),
               isNotNull(conversations.snoozedUntil)
             )
-          : filter.status
-            ? eq(conversations.status, filter.status)
-            : undefined,
+          : filter.status === 'rated-bad'
+            ? eq(conversations.rating, 'bad')
+            : filter.status
+              ? eq(conversations.status, filter.status)
+              : undefined,
         filter.assigneeId === null
           ? isNull(conversations.assigneeId)
           : filter.assigneeId
@@ -940,6 +942,26 @@ export function createStore(db: Db) {
           and(
             eq(conversations.id, id),
             unlessResolved ? ne(conversations.status, 'resolved') : undefined
+          )
+        )
+        .returning();
+      return row ?? null;
+    },
+
+    /** Rates a resolved conversation once; null when it is not resolved, merged away or already rated. */
+    async rateConversation(
+      id: string,
+      patch: Partial<typeof conversations.$inferInsert>
+    ) {
+      const [row] = await db
+        .update(conversations)
+        .set(patch)
+        .where(
+          and(
+            eq(conversations.id, id),
+            eq(conversations.status, 'resolved'),
+            isNull(conversations.mergedIntoId),
+            isNull(conversations.rating)
           )
         )
         .returning();

@@ -71,6 +71,13 @@
       "when": 1791213519093,
       "tag": "0009_tan_stone_men",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791238067231,
+      "tag": "0010_good_lifeguard",
+      "breakpoints": true
     }
   ]
 }
