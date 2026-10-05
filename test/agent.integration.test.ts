@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 
 import type { InboundMessage } from '../src';
@@ -1358,6 +1358,7 @@ describe('event timeline', () => {
       user: 'ada',
       body: { body: 'still broken' },
     });
+    await h.runDueJobs();
     await h.support.store.updateConversation(conversation.id, {
       aiSuggestion: { type: 'bug' },
     });
@@ -1388,6 +1389,11 @@ describe('event timeline', () => {
         agentName: null,
       },
       { kind: 'reopened', data: {}, agentName: null },
+      {
+        kind: 'email.sent',
+        data: { kind: 'agent-reopened', to: ['agent@devguard.test'] },
+        agentName: null,
+      },
       { kind: 'suggestion.dismissed', data: {}, agentName: 'agent' },
       {
         kind: 'participant.added',
@@ -1417,6 +1423,81 @@ describe('event timeline', () => {
       },
       { kind: 'suggestion.accepted', data: {}, agentName: 'agent' },
     ]);
+  });
+
+  it('records the unassignment when an assignee is removed from the team', async () => {
+    h.addUser('grace', { isAgent: true, email: 'grace@devguard.test' });
+    const grace = (await h.call('GET', 'agent/me', { user: 'grace' })).data
+      .agent.id;
+    const conversation = await open('ada');
+    await patch(conversation.id, { assigneeId: grace });
+    const res = await h.call('DELETE', `agent/agents/${grace}`, {
+      user: 'agent',
+    });
+    expect(res.status).toBe(200);
+
+    expect(
+      await rows(
+        sql`SELECT c.assignee_id, e.data, e.agent_id FROM helpdesk.conversation_event e
+          JOIN helpdesk.conversation c ON c.id = e.conversation_id
+          WHERE e.kind = 'assigneeId' ORDER BY e.created_at`
+      )
+    ).toEqual([
+      {
+        assignee_id: null,
+        data: { from: null, to: grace },
+        agent_id: expect.any(String),
+      },
+      { assignee_id: null, data: { from: grace, to: null }, agent_id: null },
+    ]);
+  });
+
+  it('moves a participant event to the contact a merge keeps', async () => {
+    const conversation = await open('ada');
+    const bob = await h.support.store.createContact({ name: 'Bob' });
+    const robert = await h.support.store.createContact({ name: 'Robert' });
+    await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/participants`,
+      {
+        user: 'agent',
+        body: { contactId: bob.id },
+      }
+    );
+    await h.call('POST', `agent/contacts/${robert.id}/merge`, {
+      user: 'agent',
+      body: { sourceId: bob.id },
+    });
+
+    expect(
+      await rows(
+        sql`SELECT data FROM helpdesk.conversation_event WHERE kind = 'participant.added'`
+      )
+    ).toEqual([{ data: { contactId: robert.id } }]);
+    expect(
+      (await timeline(conversation.id)).find(
+        (e: Event) => e.kind === 'participant.added'
+      )
+    ).toMatchObject({ data: { contactId: robert.id } });
+  });
+
+  it('sends a notification once when recording it fails', async () => {
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    await open('ada');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const record = vi
+      .spyOn(h.support.store, 'recordEvents')
+      .mockRejectedValue(new Error('db down'));
+    try {
+      await h.runDueJobs();
+      await h.runDueJobs();
+    } finally {
+      record.mockRestore();
+      error.mockRestore();
+    }
+    expect(h.emails.filter(e => e.kind === 'agent-new').map(e => e.to)).toEqual(
+      ['agent@devguard.test']
+    );
   });
 
   it('is deleted with its conversation by retention', async () => {

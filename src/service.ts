@@ -532,17 +532,22 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
   async function recordEmails(
     conversation: Conversation,
-    kind: HelpdeskEmail['kind'],
+    kind: HelpdeskEmail['kind'] | 'agent-reopened',
     to: string[]
   ) {
     if (!config.email || to.length === 0) return;
-    await store.recordEvents([
-      {
-        conversationId: conversation.id,
-        kind: 'email.sent',
-        data: { kind, to },
-      },
-    ]);
+    // The email is out; a throw here would make the job retry and send it again.
+    try {
+      await store.recordEvents([
+        {
+          conversationId: conversation.id,
+          kind: 'email.sent',
+          data: { kind, to },
+        },
+      ]);
+    } catch (error) {
+      console.error('[helpdesk] recording email.sent failed', error);
+    }
   }
 
   async function agentRecipients(conversation: Conversation) {
@@ -593,7 +598,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       }
       await recordEmails(
         conversation,
-        'agent-new',
+        reopened ? 'agent-reopened' : 'agent-new',
         recipients.map(a => a.email as string)
       );
     },

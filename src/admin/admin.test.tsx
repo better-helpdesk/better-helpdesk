@@ -583,8 +583,7 @@ describe('HelpdeskAdmin', () => {
     const { container } = render(
       <HelpdeskAdmin basePath="/support" locale="en" />
     );
-    await screen.findByText('Looking into it');
-    await act(async () => {});
+    await screen.findByText('Grace assigned this to Grace');
 
     const thread = [
       ...container.querySelectorAll('.sa-thread > article, .sa-thread > p'),

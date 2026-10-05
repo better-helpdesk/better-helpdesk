@@ -227,14 +227,15 @@ export function ConversationView({ id }: { id: string }) {
   const domain = data.contact?.email?.split('@')[1];
   const context = c.context;
   const agentLabel = (agentId: unknown) => {
+    if (!agents.data && !agents.error) return '…';
     const agent = agents.data?.agents.find(a => a.id === agentId);
     return agent?.name ?? agent?.email ?? t('event.formerAgent');
   };
-  const contactLabel = (contactId: unknown) => {
+  const contactName = (contactId: unknown) => {
     const contact = [data.contact, ...data.participants].find(
       p => p?.id === contactId
     );
-    return contact?.name ?? contact?.email ?? t('event.unknownContact');
+    return contact?.name ?? contact?.email;
   };
   const eventText = (e: TimelineEvent) => {
     const name = e.agentId
@@ -290,15 +291,18 @@ export function ConversationView({ id }: { id: string }) {
         return t('event.suggestionAccepted', { name });
       case 'suggestion.dismissed':
         return t('event.suggestionDismissed', { name });
-      case 'participant.added':
-        return e.agentId
-          ? t('event.participant', {
-              name,
-              contact: contactLabel(e.data.contactId),
-            })
-          : t('event.participantAuto', {
-              contact: contactLabel(e.data.contactId),
-            });
+      case 'participant.added': {
+        const contact = contactName(e.data.contactId);
+        if (e.agentId) {
+          return t('event.participant', {
+            name,
+            contact: contact ?? t('event.unknownContact'),
+          });
+        }
+        return contact
+          ? t('event.participantAuto', { contact })
+          : t('event.participantAutoUnknown');
+      }
       case 'email.sent':
         return t(`event.email.${e.data.kind}`, {
           to: ((to ?? []) as string[]).join(', '),

@@ -271,6 +271,10 @@ export function createStore(db: Db) {
           SELECT conversation_id, ${targetId}::uuid FROM helpdesk.participant
           WHERE contact_id = ${sourceId}::uuid
           ON CONFLICT DO NOTHING`);
+        await tx.execute(sql`
+          UPDATE helpdesk.conversation_event
+          SET data = jsonb_set(data, '{contactId}', to_jsonb(${targetId}::text))
+          WHERE kind = 'participant.added' AND data->>'contactId' = ${sourceId}`);
         // Identities move rather than copy: a copied verified row would collide
         // with its own original and be skipped. No visitor token survives a
         // merge on either side: it proves nothing about the merged person.
@@ -472,16 +476,21 @@ export function createStore(db: Db) {
             )
           )
           .returning({ id: agents.id });
-        if (removed.length === 0) return;
-        await tx
+        const [agent] = removed;
+        if (!agent) return;
+        const unassigned = await tx
           .update(conversations)
           .set({ assigneeId: null })
-          .where(
-            inArray(
-              conversations.assigneeId,
-              removed.map(r => r.id)
-            )
-          );
+          .where(eq(conversations.assigneeId, agent.id))
+          .returning({ id: conversations.id });
+        if (unassigned.length === 0) return;
+        await tx.insert(conversationEvents).values(
+          unassigned.map(c => ({
+            conversationId: c.id,
+            kind: 'assigneeId',
+            data: { from: agent.id, to: null },
+          }))
+        );
       });
     },
 
