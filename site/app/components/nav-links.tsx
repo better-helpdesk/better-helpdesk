@@ -17,11 +17,16 @@ export function NavLinks({ base = '' }: { base?: string }) {
     const sections = LINKS.map(([id]) => document.getElementById(id)).filter(
       (el): el is HTMLElement => el !== null
     );
+    // Nothing is marked while the middle of the viewport is outside every
+    // linked section, as over the hero.
+    const visible = new Set<string>();
     const io = new IntersectionObserver(
       entries => {
         for (const e of entries) {
-          if (e.isIntersecting) setHere(e.target.id);
+          if (e.isIntersecting) visible.add(e.target.id);
+          else visible.delete(e.target.id);
         }
+        setHere(LINKS.find(([id]) => visible.has(id))?.[0] ?? '');
       },
       { rootMargin: '-45% 0px -50% 0px' }
     );

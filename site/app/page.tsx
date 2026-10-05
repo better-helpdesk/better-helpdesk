@@ -251,10 +251,11 @@ export default function Home() {
           </div>
           <Cost />
           <p className="caveat">
-            List prices, billed annually, as published by each vendor in October
-            2026. Excludes add-ons, usage-based AI fees and discounts. Better
-            Helpdesk costs nothing to license; you pay for hosting you already
-            run and the engineering time to integrate and maintain it.
+            List prices per agent per month on monthly billing, not annual, as
+            published by each vendor in October 2026. Excludes add-ons,
+            usage-based AI fees and discounts. Better Helpdesk costs nothing to
+            license; you pay for hosting you already run and the engineering
+            time to integrate and maintain it.
           </p>
           <div className="row-cta">
             <Install />
@@ -403,7 +404,9 @@ export default function Home() {
               <details className="rv">
                 <summary>
                   <span>What if the project stops?</span>
-                  <PiPlusBold className="qa-i" aria-hidden="true" />
+                  <span className="qa-i" aria-hidden="true">
+                    <PiPlusBold />
+                  </span>
                 </summary>
                 <p>
                   It's MIT and lives in your repository and your Postgres, so
@@ -414,7 +417,9 @@ export default function Home() {
               <details className="rv">
                 <summary>
                   <span>Can we move over from Intercom or Zendesk?</span>
-                  <PiPlusBold className="qa-i" aria-hidden="true" />
+                  <span className="qa-i" aria-hidden="true">
+                    <PiPlusBold />
+                  </span>
                 </summary>
                 <p>
                   There is no importer yet. Today it fits teams starting fresh
@@ -425,7 +430,9 @@ export default function Home() {
               <details className="rv">
                 <summary>
                   <span>Does it work outside Next.js?</span>
-                  <PiPlusBold className="qa-i" aria-hidden="true" />
+                  <span className="qa-i" aria-hidden="true">
+                    <PiPlusBold />
+                  </span>
                 </summary>
                 <p>
                   The handler is a plain function from <code>Request</code> to{' '}
@@ -436,7 +443,9 @@ export default function Home() {
               <details className="rv">
                 <summary>
                   <span>Is the AI an agent?</span>
-                  <PiPlusBold className="qa-i" aria-hidden="true" />
+                  <span className="qa-i" aria-hidden="true">
+                    <PiPlusBold />
+                  </span>
                 </summary>
                 <p>
                   No. Here an agent is a person on your support team. AI only
@@ -447,7 +456,9 @@ export default function Home() {
               <details className="rv">
                 <summary>
                   <span>What does the licence allow?</span>
-                  <PiPlusBold className="qa-i" aria-hidden="true" />
+                  <span className="qa-i" aria-hidden="true">
+                    <PiPlusBold />
+                  </span>
                 </summary>
                 <p>
                   MIT. Use it commercially, change it, ship it inside your
@@ -457,7 +468,9 @@ export default function Home() {
               <details className="rv">
                 <summary>
                   <span>Is this site running it?</span>
-                  <PiPlusBold className="qa-i" aria-hidden="true" />
+                  <span className="qa-i" aria-hidden="true">
+                    <PiPlusBold />
+                  </span>
                 </summary>
                 <p>
                   Yes. The launcher in the corner and the supporter form both

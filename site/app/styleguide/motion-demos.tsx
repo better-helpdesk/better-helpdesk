@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 
+import { PLANS } from '../../lib/content';
 import { Cells } from '../components/cost';
 import { dither } from '../components/dither';
 import { LiveMark, MarkFrame } from '../components/live-mark';
@@ -138,7 +139,7 @@ export function MotionDemos() {
         use="Every bar on the site: cells switch one by one between the old and the new value."
         spec="40 cells · 12ms apart · on or off, never scaled">
         <div className="sg-cells">
-          <Cells year={seats * 55 * 12} />
+          <Cells year={seats * (PLANS[0]?.[1] ?? 0) * 12} />
         </div>
         <input
           type="range"

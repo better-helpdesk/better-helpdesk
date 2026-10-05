@@ -98,11 +98,12 @@ export const BOARD: [string, [string, string, number, string][]][] = [
 
 export const usd = (value: number) => `$${value.toLocaleString('en-US')}`;
 
+// Per agent per month, billed monthly.
 export const PLANS: [string, number][] = [
   ['Intercom Essential', 29],
-  ['Intercom Advanced', 85],
-  ['Zendesk Suite Team', 55],
-  ['Zendesk Suite Professional + Copilot', 165],
+  ['Zendesk Support Team', 25],
+  ['Freshdesk Growth', 20],
+  ['HubSpot', 20],
 ];
 
 export const WALL = [

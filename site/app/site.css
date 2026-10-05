@@ -2534,6 +2534,11 @@ dd.err {
   grid-template-columns: repeat(7, 72px);
   justify-content: end;
 }
+@media (max-width: 1240px) {
+  .wall {
+    grid-template-columns: repeat(7, 48px);
+  }
+}
 @media (max-width: 900px) {
   .wall {
     grid-template-columns: repeat(5, 60px);
@@ -2681,10 +2686,9 @@ kbd.on {
 /* Cost: cells, never a stretched bar. */
 .c-bar {
   display: grid;
-  /* Cells the size of the display face's dots. */
-  grid-template-columns: repeat(56, 4px);
+  grid-template-columns: repeat(42, 6px);
   gap: 2px;
-  height: 4px;
+  height: 6px;
 }
 .c-bar i {
   background: var(--s3);
@@ -3169,18 +3173,6 @@ kbd.on {
 .qa summary::after {
   content: none;
 }
-.qa summary .qa-i {
-  width: 28px;
-  height: 28px;
-  padding: 6px;
-  flex: none;
-  background: var(--s3);
-  color: var(--mint);
-  transition: transform 0.15s steps(2);
-}
-.qa details[open] summary .qa-i {
-  transform: rotate(45deg);
-}
 
 /* Supporter form, sponsor, continuity list */
 .opt {
@@ -3417,4 +3409,77 @@ kbd.on {
 .sg-index a:hover {
   color: var(--fg);
   background: var(--s3);
+}
+
+/* FAQ: the toggle keeps its square at the right; only the plus turns into a cross. */
+.qa summary {
+  align-items: center;
+}
+.qa summary::after,
+.qa details[open] summary::after {
+  content: none;
+}
+.qa-i {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: var(--s3);
+  color: var(--mint);
+}
+.qa-i svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.16s steps(2);
+}
+.qa details[open] .qa-i {
+  background: var(--mint);
+  color: var(--bg);
+}
+.qa details[open] .qa-i svg {
+  transform: rotate(45deg);
+}
+/* Opening and closing step the height where the browser can animate it; the answer arrives line by line. */
+.qa details {
+  interpolate-size: allow-keywords;
+}
+.qa details::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition:
+    block-size 0.24s steps(4),
+    content-visibility 0.24s allow-discrete;
+}
+.qa details[open]::details-content {
+  block-size: auto;
+}
+.qa details[open] p {
+  animation: answer 0.32s steps(4) both;
+}
+@keyframes answer {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+    clip-path: inset(0 0 100% 0);
+  }
+}
+.c-v {
+  white-space: nowrap;
+}
+.c-v small {
+  margin-left: 4px;
+  font: 400 11px / 1 var(--f-m);
+  color: var(--fg-3);
+}
+.c-row {
+  grid-template-columns: minmax(0, 250px) minmax(0, 1fr) auto;
+}
+@media (max-width: 860px) {
+  .c-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+.c-v small span {
+  padding: 0 2px 0 1px;
 }

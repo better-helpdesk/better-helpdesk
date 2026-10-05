@@ -6,7 +6,7 @@ import { PLANS, usd } from '../../lib/content';
 
 const MAX_SEATS = 25;
 const MAX = Math.max(...PLANS.map(([, price]) => price)) * MAX_SEATS * 12;
-const CELLS = 56;
+const CELLS = 42;
 
 const lit = (year: number) =>
   year > 0 ? Math.max(1, Math.round((year / MAX) * CELLS)) : 0;
@@ -64,17 +64,27 @@ export function Cost() {
                 <small>${price} per agent per month</small>
               </span>
               <Cells year={year} />
-              <b className="c-v">{usd(year)}</b>
+              <b className="c-v">
+                {usd(year)}
+                <small>
+                  <span>/</span>year
+                </small>
+              </b>
             </div>
           );
         })}
         <div className="c-row us">
           <span className="c-n">
             Better Helpdesk
-            <small>$0 licence, plus your integration time</small>
+            <small>$0 per agent per month</small>
           </span>
           <Cells year={0} />
-          <b className="c-v">$0</b>
+          <b className="c-v">
+            $0
+            <small>
+              <span>/</span>year
+            </small>
+          </b>
         </div>
       </div>
     </div>

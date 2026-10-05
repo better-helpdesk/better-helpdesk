@@ -52,9 +52,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
+    // Browser extensions write styles onto <html> before React hydrates.
     <html
       lang="en"
-      className={`${doto.variable} ${rethink.variable} ${martian.variable}`}>
+      className={`${doto.variable} ${rethink.variable} ${martian.variable}`}
+      suppressHydrationWarning>
       <body>
         {children}
         <HelpdeskWidget api={API} inbox="support" locale="en" />
