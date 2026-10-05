@@ -11,7 +11,12 @@ const from =
   process.env.MAIL_FROM ?? 'Better Helpdesk <hello@better-helpdesk.test>';
 const transport = url ? nodemailer.createTransport(url) : null;
 
-function render(message: HelpdeskEmail) {
+function render(message: HelpdeskEmail): {
+  subject: string;
+  text: string;
+  replyTo?: string;
+  inReplyTo?: string;
+} {
   switch (message.kind) {
     case 'customer-reply':
       return {
@@ -28,6 +33,7 @@ function render(message: HelpdeskEmail) {
       };
     case 'agent-new':
     case 'agent-reminder':
+    case 'agent-mention':
       return {
         subject: message.subject,
         text: `${message.body}\n\n${message.url}`,

@@ -54,8 +54,8 @@ password if the account exists. `http://localhost:3000`; the inbox is at
 
 ## Divio Cloud
 
-The `Dockerfile` at the repository root builds this directory only; Divio
-expects it there. In the Control Panel:
+`site/Dockerfile` builds this directory only, with the repository root as
+the build context, so `.dockerignore` sits at the root. In the Control Panel:
 
 1. Add a Postgres database service. Divio provides it as `DATABASE_URL`.
 2. Under Settings, add the release command
@@ -75,5 +75,6 @@ expects it there. In the Control Panel:
 from any other origin, so a mismatch turns each widget message into a 403.
 
 The build stage has no access to these variables, and nothing in `next build`
-needs them. Metadata and the robots and sitemap routes read `SITE_URL` per
-request.
+needs them. The robots and sitemap routes read `SITE_URL` per request. Page
+metadata uses the fixed production origin in `app/layout.tsx` instead, so the
+pages stay static and a CDN can cache them.

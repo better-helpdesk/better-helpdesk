@@ -9,6 +9,7 @@ import { MotionDemos } from './motion-demos';
 export const metadata: Metadata = {
   title: 'Styleguide',
   description: 'The Better Helpdesk mark, motion, tokens and components.',
+  robots: { index: false },
 };
 
 const COLOURS: [string, string, string][] = [
@@ -19,7 +20,7 @@ const COLOURS: [string, string, string][] = [
   ['--s4', '#2a312d', 'Raised control'],
   ['--fg', '#eef3f0', 'Paper'],
   ['--fg-2', '#a7b1ab', 'Body'],
-  ['--fg-3', '#6d7771', 'Labels'],
+  ['--fg-3', '#8b948f', 'Labels'],
   ['--mint', '#9ad9b8', 'Mint: who to look at next'],
   ['--wait', '#f1d27a', 'Butter: waiting'],
   ['--late', '#f0907f', 'Coral: urgent, late'],

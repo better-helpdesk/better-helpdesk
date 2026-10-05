@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  PiArrowsMergeBold,
+  PiAtBold,
   PiBellRingingBold,
   PiChatTextBold,
   PiUserCircleBold,
@@ -37,7 +37,7 @@ const WAIT: Record<string, number> = {
 const EVENTS: [typeof PiBellRingingBold, string][] = [
   [PiBellRingingBold, 'Reminder sent to Jonas · ACME-1036 has waited 26 hours'],
   [PiChatTextBold, 'Canned reply “Corrected invoice” used on ACME-1042'],
-  [PiArrowsMergeBold, 'ACME-1040 merged into ACME-1039'],
+  [PiAtBold, 'Jonas mentioned Lea on ACME-1039'],
   [PiUserCircleBold, 'ACME-1041 assigned to Ana with the a key'],
 ];
 

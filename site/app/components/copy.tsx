@@ -1,5 +1,6 @@
 'use client';
 
+import posthog from 'posthog-js';
 import { useEffect, useState } from 'react';
 import { PiCheckBold, PiCopyBold } from 'react-icons/pi';
 
@@ -18,7 +19,10 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       data-state={done ? 'ok' : undefined}
       onClick={() => {
         navigator.clipboard.writeText(text).then(
-          () => setDone(true),
+          () => {
+            setDone(true);
+            posthog.capture('install_copied');
+          },
           () => setDone(false)
         );
       }}>

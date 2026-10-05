@@ -1,5 +1,6 @@
 'use client';
 
+import posthog from 'posthog-js';
 import { type FormEvent, useState } from 'react';
 
 import { isEmail, sendToInbox } from '../../lib/submit';
@@ -29,6 +30,7 @@ export function ContinuityForm({ api }: { api: string }) {
         host: { pay: pay ? 'yes' : 'no' },
         website: String(form.get('website') ?? ''),
       });
+      posthog.capture('continuity_joined', { would_pay: pay });
       setState('sent');
     } catch (error) {
       setState({

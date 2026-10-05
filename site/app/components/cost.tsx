@@ -54,7 +54,7 @@ export function Cost() {
           onChange={e => setSeats(Number(e.target.value))}
         />
       </div>
-      <div className="cost-list" aria-live="polite">
+      <div className="cost-list">
         {PLANS.map(([name, price]) => {
           const year = price * seats * 12;
           return (

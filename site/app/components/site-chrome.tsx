@@ -93,6 +93,9 @@ export function SiteFooter() {
           <a href={`${REPO}/security/advisories/new`}>Report a vulnerability</a>
         </li>
         <li>
+          <a href="/privacy/">Privacy</a>
+        </li>
+        <li>
           <a href="/styleguide/">Styleguide</a>
         </li>
         <li>

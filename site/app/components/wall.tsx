@@ -35,7 +35,7 @@ export function Wall() {
         <span>
           <b>■</b> Mira Okafor is waiting · ACME-1042
         </span>
-        <span>hover a face</span>
+        <span className="wall-hint">hover a face</span>
       </div>
     </div>
   );

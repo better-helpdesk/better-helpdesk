@@ -1,3 +1,4 @@
+import helpdeskPackage from 'better-helpdesk/package.json';
 import {
   PiArrowRightBold,
   PiArrowUpRightBold,
@@ -27,31 +28,34 @@ const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 export default function Home() {
   return (
     <>
-      <a className="skip" href="#product">
-        Skip to the product
+      <a className="skip" href="#top">
+        Skip to content
       </a>
       <SiteHeader home />
 
       <main id="top">
         <section className="hero" aria-labelledby="hero-h">
           <div className="hero-l">
-            <span className="eyebrow">Every customer gets a face</span>
+            <span className="eyebrow">Open source · MIT · npm</span>
             <h1 id="hero-h">
-              Your customers, <em>inside</em> your app.
+              Your helpdesk, <em>inside</em> your app.
             </h1>
-            <p className="sub">
-              An open-source support inbox, ticketing and CRM you install from
-              npm. It runs in your Next.js app, on your Postgres.
-            </p>
             <div className="hero-cta">
               <a className="btn btn-p" href="/quickstart/">
-                Read the quickstart
+                Quickstart
                 <ButtonIcon />
               </a>
               <Install />
             </div>
           </div>
-          <Wall />
+          <div className="hero-r">
+            <p className="sub">
+              An open-source support inbox, ticketing and lightweight CRM you
+              install from npm. It runs in your Next.js app, on your Postgres,
+              behind your login.
+            </p>
+            <Wall />
+          </div>
         </section>
 
         <section className="facts" aria-label="At a glance">
@@ -103,9 +107,9 @@ export default function Home() {
           <div className="sh rv">
             <h2 id="w-h">A widget your customers already understand.</h2>
             <p className="sub">
-              One web component, themed with your CSS variables. It knows the
-              page, the browser and the last error, and asks before sending any
-              of it. The real one is in the corner of this page.
+              One web component, themed with your CSS variables. The customer
+              sees the page, browser and last error it attaches, and can untick
+              any of it.
             </p>
           </div>
           <WidgetDemo />
@@ -115,8 +119,8 @@ export default function Home() {
           <div className="sh split rv">
             <h2 id="b-h">Everything a small support team needs.</h2>
             <p className="sub">
-              Sized for one to ten people answering customers. Every colleague
-              can be an agent at no extra cost.
+              Sized for any team answering customers. Every colleague can be an
+              agent at no extra cost.
             </p>
           </div>
           <div className="bento">
@@ -124,7 +128,7 @@ export default function Home() {
               <h3>Shared inboxes</h3>
               <p>
                 Support and sales side by side, priorities, tags, canned
-                replies, merge, keyboard navigation and a reminder email before
+                replies, snooze, keyboard navigation and a reminder email before
                 anyone waits too long.
               </p>
               <MiniInbox />
@@ -234,10 +238,10 @@ export default function Home() {
           </div>
           <p className="sec-line">
             Stores no passwords and no sessions. Mutations are refused from any
-            origin but yours. Inbound mail is DKIM-verified, identity tokens are
-            signed and expire. Four runtime dependencies:{' '}
-            <code>drizzle-orm</code>, <code>zod</code>, <code>mailparser</code>,{' '}
-            <code>mailauth</code>.
+            origin you haven't allowed. Inbound mail is checked against DKIM and
+            marked verified or not. Identity tokens are signed and expire. Four
+            runtime dependencies: <code>drizzle-orm</code>, <code>zod</code>,{' '}
+            <code>mailparser</code>, <code>mailauth</code>.
           </p>
         </section>
 
@@ -246,8 +250,7 @@ export default function Home() {
             <h2 id="c-h">No seats. The next agent costs nothing.</h2>
             <p className="sub">
               The engineer who reads one thread a week and the founder who
-              checks in on Mondays are agents too. Move the slider for a year at
-              list price.
+              checks in on Mondays are agents too.
             </p>
           </div>
           <Cost />
@@ -268,7 +271,7 @@ export default function Home() {
         </section>
 
         <section className="sec compare" id="compare" aria-labelledby="cm-h">
-          <div className="sh split rv">
+          <div className="sh rv">
             <h2 id="cm-h">A library, not another app.</h2>
             <p className="sub">
               Hosted helpdesks keep your data and charge per seat. Self-hosted
@@ -349,9 +352,9 @@ export default function Home() {
           <div className="st-l">
             <h2 id="st-h">Young code, grown-up CI.</h2>
             <p className="sub">
-              v0.2.2, first published on 28 September 2026. Nothing merges until
-              it passes every check below, and the design partners about to run
-              it in production decide what ships next.
+              v{helpdeskPackage.version}, first published on 28 September 2026.
+              Nothing merges until it passes every check below, and the design
+              partners about to run it in production decide what ships next.
             </p>
             <ul className="checks" aria-label="Every pull request passes">
               <li>
@@ -361,8 +364,8 @@ export default function Home() {
               <li>Integration tests on real Postgres</li>
               <li>Packed tarball installed and imported</li>
               <li>Demo app built on two Next.js majors</li>
-              <li>npm publish with provenance</li>
             </ul>
+            <p className="caveat">Releases publish to npm with provenance.</p>
             <TextLink href={`${REPO}/releases`}>
               Read the changelog
               <PiArrowUpRightBold className="ti" aria-hidden="true" />
@@ -373,7 +376,7 @@ export default function Home() {
             <PartnerForm api={API} />
             <p className="f-note">
               This form runs on Better Helpdesk: your story goes straight into
-              our inbox.
+              our inbox. <a href="/privacy/">How we handle it</a>.
             </p>
           </div>
         </section>
@@ -395,7 +398,7 @@ export default function Home() {
           <ContinuityForm api={API} />
           <p className="f-note cont-note">
             Not built yet. The open-source package will never depend on it. No
-            newsletter, only news about this.
+            newsletter, only news about this. <a href="/privacy/">Privacy</a>.
           </p>
         </section>
 

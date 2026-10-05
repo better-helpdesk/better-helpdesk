@@ -19,7 +19,7 @@ const LAYERS: [string, string, string][] = [
 ];
 const STEP_MS = 1400;
 
-/** One message's path through the three pieces, played once when it scrolls in. */
+/** One message's path through the four pieces, played once when it scrolls in. */
 export function Pieces() {
   const [step, setStep] = useState(-1);
   const [run, setRun] = useState(0);
@@ -69,7 +69,7 @@ export function Pieces() {
         <div className="host-label">your Next.js app</div>
         <ol
           className="path"
-          aria-label="How a message moves through the three pieces">
+          aria-label="How a message moves through the four pieces">
           {LAYERS.map(([id, name, routes], i) => (
             <li
               key={id}

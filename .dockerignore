@@ -1,0 +1,20 @@
+# site/Dockerfile builds from the repository root and keeps only the site.
+# Docker reads this file from the root of the build context, so it lives here.
+**/node_modules
+**/.next
+**/.env*
+!site/.env.example
+.git
+.github
+.claude
+bin
+coverage
+dist
+docs
+examples
+migrations
+relays
+scripts
+src
+test
+*.tgz

@@ -27,11 +27,11 @@ Sacra's April 2026 note describes the customer base as SMB and mid-market, B2B o
 
 ### Pricing (intercom.com/pricing and fin.ai/pricing, October 2026)
 
-Per-seat helpdesk plans (annual billing; monthly in brackets, from third-party pricing round-ups):
+Per-seat helpdesk plans (annual billing; monthly in brackets). Essential was checked on intercom.com/pricing on 5 October 2026; Advanced and Expert are still from third-party pricing round-ups:
 
 | Plan | Price | What it adds (pricing page wording) |
 |---|---|---|
-| Essential | $29/seat/mo ($39 monthly) | "Fin for service, sales & ecommerce, Messenger, Shared inbox and ticketing system, Pre-built reports, Public help center"; simple automations; Slack |
+| Essential | $19/seat/mo ($29 monthly) | "Fin for service, sales & ecommerce, Messenger, Shared inbox and ticketing system, Pre-built reports, Public help center"; simple automations; Slack |
 | Advanced | $85/seat/mo ($99 monthly) | "Multiple team Inboxes, Workflows automation builder, Round robin assignment, Private and multilingual Help Center, Includes 20 free Lite seats" |
 | Expert | $132/seat/mo ($139 monthly) | "SSO & identity management, HIPAA support, Service level agreements (SLAs), Multibrand Messenger / Help Center, Includes 50 free Lite seats"; balanced assignment and Messenger queue position are also Expert-only |
 

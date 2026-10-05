@@ -7,7 +7,7 @@ const LINKS: [string, string][] = [
   ['product', 'Product'],
   ['pieces', 'How it works'],
   ['widget', 'Customers'],
-  ['cost', 'Compare'],
+  ['compare', 'Compare'],
   ['faq', 'FAQ'],
 ];
 

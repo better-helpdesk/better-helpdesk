@@ -1,10 +1,8 @@
 import { HelpdeskWidget } from 'better-helpdesk/widget';
 import type { Metadata, Viewport } from 'next';
 import { Doto, Martian_Mono, Rethink_Sans } from 'next/font/google';
-import { connection } from 'next/server';
 
 import { API } from '../lib/helpdesk';
-import { siteUrl } from '../lib/site';
 import { LauncherSkin } from './components/launcher-skin';
 import './site.css';
 
@@ -23,24 +21,28 @@ const martian = Martian_Mono({
 });
 
 const description =
-  'An open-source support inbox, ticketing and CRM you install from npm. It runs in your Next.js app, on your Postgres, behind your login.';
+  'An open-source support inbox, ticketing and lightweight CRM you install from npm. It runs in your Next.js app, on your Postgres, behind your login.';
 
-// SITE_URL is only known at runtime on Divio, so metadata is built per request.
-export async function generateMetadata(): Promise<Metadata> {
-  await connection();
-  return {
-    metadataBase: new URL(siteUrl()),
-    title: { default: 'Better Helpdesk', template: '%s · Better Helpdesk' },
+// Fixed rather than SITE_URL: the build has no environment, and reading it per
+// request would make every page dynamic and uncacheable.
+export const metadata: Metadata = {
+  metadataBase: new URL('https://better-helpdesk.com'),
+  title: {
+    default: 'Better Helpdesk: the open-source helpdesk for Next.js',
+    template: '%s · Better Helpdesk',
+  },
+  description,
+  openGraph: {
+    title: 'Better Helpdesk: the open-source helpdesk for Next.js',
     description,
-    openGraph: {
-      title: 'Better Helpdesk',
-      description,
-      type: 'website',
-      siteName: 'Better Helpdesk',
-    },
-    twitter: { card: 'summary_large_image' },
-  };
-}
+    type: 'website',
+    siteName: 'Better Helpdesk',
+  },
+  twitter: { card: 'summary_large_image' },
+};
+
+// Static pages would otherwise tell a CDN to keep them for a year, past any deploy.
+export const revalidate = 300;
 
 export const viewport: Viewport = {
   themeColor: '#0b0d0c',
