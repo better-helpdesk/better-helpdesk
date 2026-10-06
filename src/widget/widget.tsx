@@ -110,6 +110,19 @@ const visitorKey = (api: string) => `${VISITOR_KEY}:${api.replace(/\/$/, '')}`;
 const LANDING_KEY = 'helpdesk-landing';
 const REFERRER_KEY = 'helpdesk-referrer';
 
+// Who a token names, read without verifying it: the server verifies every
+// token. A refresh for the same person must not reload or remount anything.
+function tokenSubject(token: string | undefined) {
+  if (!token) return '';
+  try {
+    const body = token.split('.')[1] ?? '';
+    const claims = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof claims.sub === 'string' ? claims.sub : token;
+  } catch {
+    return token;
+  }
+}
+
 function storage(kind: 'local' | 'session') {
   try {
     return kind === 'local' ? localStorage : sessionStorage;
@@ -274,6 +287,7 @@ export function Widget(props: WidgetProps) {
       null
   );
   const identityToken = useRef(props.identityToken);
+  const subject = tokenSubject(props.identityToken);
   identityToken.current = props.identityToken;
   const api = useMemo(
     () =>
@@ -301,7 +315,7 @@ export function Widget(props: WidgetProps) {
       api<Session>(
         `widget/session?inbox=${encodeURIComponent(inbox)}&locale=${locale}`
       ),
-    `session:${inbox}:${locale}`,
+    `session:${inbox}:${locale}:${subject}`,
     open || isAgent ? 60_000 : awaitingTeam ? 300_000 : undefined
   );
   useEffect(() => {
@@ -579,6 +593,7 @@ export function Widget(props: WidgetProps) {
           )}
           {view.name === 'thread' && (
             <Thread
+              key={subject}
               api={api}
               apiBase={props.api.replace(/\/$/, '')}
               linkFiles={Boolean(data?.identified)}
