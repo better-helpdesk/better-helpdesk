@@ -27,3 +27,15 @@ it.each([
     expect(element.context).toEqual({ plan: 'pro' });
   }
 );
+
+it.each([
+  ['helpdesk-widget', HelpdeskWidget],
+  ['helpdesk-conversations', HelpdeskConversations],
+] as const)('sets the theme attribute on <%s>', (tag, Wrapper) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('{}', { status: 500 }))
+  );
+  const { container } = render(<Wrapper theme="auto" />);
+  expect(container.querySelector(tag)?.getAttribute('theme')).toBe('auto');
+});

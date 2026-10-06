@@ -264,9 +264,10 @@ has it wired up end to end.
 ### The widget
 
 `HelpdeskWidget` takes `api`, `inbox`, `locale`, `types`, `orgId`,
-`identityToken`, `appVersion`, `context` and `label`. `context` is a map of
-strings that is attached to every conversation the widget opens, alongside
-what it captures itself.
+`identityToken`, `appVersion`, `context`, `label` and `theme`. `context` is a
+map of strings that is attached to every conversation the widget opens,
+alongside what it captures itself. `theme="auto"` follows the operating
+system's dark mode.
 
 On a page that is not React, serve `widget.js` from the published package
 (for instance by copying `node_modules/better-helpdesk/dist/widget.js` into
