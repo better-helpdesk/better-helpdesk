@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import { and, eq, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -810,6 +810,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   }
 
   async function handleInbound(mail: InboundMessage) {
+    // ponytail: a database failure between the message and its follow-ups still loses them on retry; one transaction across the store calls if that bites.
     if (await store.findMessageByEmailId([mail.messageId])) return;
     // Unsigned, an out-of-office could be anyone's text.
     if (mail.automated && !mail.verified) return;
@@ -902,6 +903,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
             },
           ]);
         }
+        const files = await uploadInbound(conversation.id, mail);
         const message = await store.appendMessage({
           conversationId: conversation.id,
           authorType: 'contact',
@@ -910,12 +912,14 @@ export function createHelpdesk(input: HelpdeskConfig) {
           verified: true,
           emailMessageId: mail.messageId,
         });
-        await storeInboundAttachments(conversation.id, message.id, mail);
+        await recordAttachments(message.id, files);
         await afterCustomerMessage(conversation, message);
         return;
       }
     }
 
+    const conversationId = randomUUID();
+    const files = await uploadInbound(conversationId, mail);
     let contact = mail.verified
       ? await store.findContactByIdentity('email', from, { verifiedOnly: true })
       : null;
@@ -930,6 +934,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     if (!inbox || !type) throw new Error('No inbox or type configured');
     const created = await store.createConversation(
       {
+        id: conversationId,
         inbox,
         type,
         subject: mail.subject || deriveSubject(mail.text),
@@ -944,11 +949,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         emailMessageId: mail.messageId,
       }
     );
-    await storeInboundAttachments(
-      created.conversation.id,
-      created.message.id,
-      mail
-    );
+    await recordAttachments(created.message.id, files);
     await afterNewConversation(created, 'other');
   }
 
@@ -961,12 +962,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
     );
   }
 
-  async function storeInboundAttachments(
-    conversationId: string,
-    messageId: string,
-    mail: InboundMessage
-  ) {
-    if (!config.storage) return;
+  /**
+   * Uploads before anything is written: the relay retries a failed delivery,
+   * and a retry skips a message already stored, so a write that came first
+   * would lose the files and the follow-ups for good.
+   */
+  async function uploadInbound(conversationId: string, mail: InboundMessage) {
+    const files: Omit<typeof schema.attachments.$inferInsert, 'messageId'>[] =
+      [];
+    if (!config.storage) return files;
     for (const file of mail.attachments.slice(0, MAX_ATTACHMENTS)) {
       if (file.content.byteLength > config.maxAttachmentBytes) continue;
       // Kept, but never served as a type the widget would refuse.
@@ -975,9 +979,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
         : 'application/octet-stream';
       const key = attachmentKey(conversationId, file.filename);
       await config.storage.put(key, file.content, contentType);
-      await store.createAttachment({
+      files.push({
         conversationId,
-        messageId,
         key,
         filename: file.filename,
         contentType,
@@ -985,6 +988,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
         uploaded: true,
       });
     }
+    return files;
+  }
+
+  async function recordAttachments(
+    messageId: string,
+    files: Awaited<ReturnType<typeof uploadInbound>>
+  ) {
+    for (const file of files)
+      await store.createAttachment({ ...file, messageId });
   }
 
   function attachmentKey(conversationId: string, filename: string) {

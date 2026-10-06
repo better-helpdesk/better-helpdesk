@@ -547,6 +547,63 @@ describe('bounded input', () => {
   });
 });
 
+describe('a retried inbound mail', () => {
+  const pdf = {
+    filename: 'invoice.pdf',
+    contentType: 'application/pdf',
+    content: new Uint8Array([1, 2, 3]),
+  };
+
+  // The first delivery fails on storage; the relay sends the same mail again.
+  async function deliverTwice(message: InboundMessage) {
+    const put = h.storage.put;
+    h.storage.put = async () => {
+      h.storage.put = put;
+      throw new Error('storage unavailable');
+    };
+    await expect(h.support.handleInbound(message)).rejects.toThrow(
+      'storage unavailable'
+    );
+    await h.support.handleInbound(message);
+  }
+
+  it('opens the conversation with its attachment and notifies agents', async () => {
+    await deliverTwice(mail({ attachments: [pdf] }));
+    expect(await rows(sql`SELECT id FROM helpdesk.conversation`)).toHaveLength(
+      1
+    );
+    expect(await rows(sql`SELECT filename FROM helpdesk.attachment`)).toEqual([
+      { filename: 'invoice.pdf' },
+    ]);
+    expect(
+      await rows(
+        sql`SELECT kind FROM helpdesk.job WHERE kind = 'notify-agents'`
+      )
+    ).toHaveLength(1);
+  });
+
+  it('adds a reply with its attachment and reopens the resolved thread', async () => {
+    const first = mail();
+    await h.support.handleInbound(first);
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.conversation SET status = 'resolved'`
+    );
+    await h.support.store.db.execute(sql`DELETE FROM helpdesk.job`);
+    await deliverTwice(
+      mail({ references: [first.messageId], attachments: [pdf] })
+    );
+    expect(await rows(sql`SELECT id FROM helpdesk.message`)).toHaveLength(2);
+    expect(await rows(sql`SELECT filename FROM helpdesk.attachment`)).toEqual([
+      { filename: 'invoice.pdf' },
+    ]);
+    expect(
+      await rows<{ reopened: boolean }>(
+        sql`SELECT payload->'reopened' AS reopened FROM helpdesk.job WHERE kind = 'notify-agents'`
+      )
+    ).toEqual([{ reopened: true }]);
+  });
+});
+
 describe('smaller hardening', () => {
   it('stops honouring a visitor token left unused for a month', async () => {
     const { visitorToken } = await lead();
