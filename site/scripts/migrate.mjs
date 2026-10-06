@@ -26,7 +26,9 @@ for (const url of [
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl:
-    process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    process.env.DATABASE_SSL === 'no-verify'
+      ? { rejectUnauthorized: false }
+      : process.env.DATABASE_SSL === 'true',
 });
 const { runMigrations } = await getMigrations(authSchema(pool));
 await runMigrations();
