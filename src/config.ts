@@ -282,6 +282,16 @@ export type ResolvedConfig = HelpdeskConfig & {
 };
 
 export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
+  // Every signed-in user holds a token signed with it, so a short one can be
+  // guessed offline and used to sign in as anyone.
+  if (
+    config.identityTokenSecret !== undefined &&
+    Buffer.byteLength(config.identityTokenSecret) < 32
+  ) {
+    throw new Error(
+      'identityTokenSecret needs 32 bytes or more; generate one with `openssl rand -base64 32`'
+    );
+  }
   for (const [key, inbox] of Object.entries(config.inboxes)) {
     if (!inbox.hours) continue;
     const parsed = businessHours.safeParse(inbox.hours);

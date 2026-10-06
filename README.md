@@ -299,7 +299,9 @@ listen without touching the package.
 
 When the widget runs where `identify` cannot see your session, your backend
 signs an HS256 JWT with `identityTokenSecret` and the page passes it as
-`identity-token` (`identityToken` in React):
+`identity-token` (`identityToken` in React). Every signed-in user holds such a
+token, so the secret must resist offline guessing: the helpdesk refuses one
+shorter than 32 bytes. `openssl rand -base64 32` makes one.
 
 ```ts
 import { signIdentityToken } from 'better-helpdesk';
@@ -665,7 +667,7 @@ full documentation.
 | `basePath`                                                            |          | Mount path of the handler. Default `/api/helpdesk`.                                                     |
 | `types`                                                               |          | Conversation types. Default `question`, `bug`, `feature`, `lead`.                                       |
 | `teamName`, `agentTitles`                                             |          | How the team and individual agents are named where they sign, per locale.                               |
-| `identityTokenSecret`                                                 |          | Verifies identity tokens from other origins. Consulted only when `identify` returns `null`.             |
+| `identityTokenSecret`                                                 |          | Verifies identity tokens from other origins, 32 bytes or more. Consulted only when `identify` returns `null`. |
 | `resolveContext(externalOrgId)`, `orgNames(externalOrgIds)`           |          | Extra context and display names for your organisations.                                                 |
 | `storage`, `maxAttachmentBytes`                                       |          | Attachments. Without `storage` there are none.                                                          |
 | `email.send(message)`                                                 |          | Outbound mail.                                                                                          |
