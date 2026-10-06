@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
+import type { HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
 import { relativeTime } from '../ui/i18n';
@@ -12,6 +13,7 @@ import { formatSnooze, SnoozeControl } from './snooze';
 import {
   Avatar,
   browserLabel,
+  HostLinks,
   humanizeKey,
   LoadError,
   Property,
@@ -82,6 +84,7 @@ type Detail = {
   } | null;
   company: { id: string; name: string } | null;
   suggestedCompany: { id: string; name: string } | null;
+  links: HostLink[];
   customerContext: Record<string, string>;
   participants: { id: string; name: string | null; email: string | null }[];
   viewers: Viewer[];
@@ -218,7 +221,7 @@ export function ConversationView({ id }: { id: string }) {
   const [mentioned, setMentioned] = useState<{ id: string; label: string }[]>(
     []
   );
-  const [busy, setBusy] = useState<'send' | 'draft' | null>(null);
+  const [busy, setBusy] = useState<'send' | 'draft' | 'rewrite' | null>(null);
   const [error, setError] = useState<'send' | 'resolve' | 'action' | null>(
     null
   );
@@ -957,6 +960,35 @@ export function ConversationView({ id }: { id: string }) {
                   {busy === 'draft' ? t('admin.drafting') : t('admin.draft')}
                 </button>
               )}
+              {me.ai &&
+                body.trim() !== '' &&
+                (['shorten', 'formal', 'translate'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className="sa-btn sa-ghost"
+                    disabled={busy !== null}
+                    onClick={async () => {
+                      setBusy('rewrite');
+                      try {
+                        const sent = body;
+                        const rewritten = await api<{ text: string }>(
+                          `agent/conversations/${id}/draft`,
+                          { body: { mode, text: sent } }
+                        );
+                        // Typing in the meantime wins over the rewrite.
+                        setBody(current =>
+                          current === sent ? rewritten.text : current
+                        );
+                      } catch {
+                        setError('send');
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}>
+                    {t(`admin.rewrite.${mode}`)}
+                  </button>
+                ))}
               <span className="sa-grow sa-kbd">
                 <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
               </span>
@@ -1019,6 +1051,7 @@ export function ConversationView({ id }: { id: string }) {
                   {me.segments[tag]?.badge[locale]}
                 </span>
               ))}
+            <HostLinks links={data.links} locale={locale} />
           </div>
 
           <div className="sa-card">

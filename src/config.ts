@@ -18,6 +18,23 @@ export type HelpdeskUser = {
 
 export type HelpdeskOrg = { id: string; name?: string };
 
+/** A link into the host's own tools, labelled per locale. */
+export type HostLink = { label: Partial<Record<Locale, string>>; url: string };
+/** `userId` is the host's own id for a customer it signed in; `null` for one who only emailed or wrote in. */
+export type LinkContact = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  userId: string | null;
+};
+/** `orgId` is the host's own id for the organization; `null` for a company an agent made. */
+export type LinkCompany = {
+  id: string;
+  name: string;
+  domain: string | null;
+  orgId: string | null;
+};
+
 /** Who is calling. `orgs` must list only organizations the user is an active member of. */
 export type Identity = {
   user: HelpdeskUser;
@@ -218,6 +235,11 @@ export type HelpdeskConfig = {
    */
   identityTokenSecret?: string;
   resolveContext?(externalOrgId: string): Promise<Record<string, string>>;
+  /** Links into the host's own tools for a customer (its admin, Stripe, a CRM), shown with the contact and company. */
+  links?(
+    contact: LinkContact | null,
+    company: LinkCompany | null
+  ): HostLink[] | Promise<HostLink[]>;
   /** Names for orgs `identify` returned without one; asked only when shown or stored. */
   orgNames?(externalOrgIds: string[]): Promise<Record<string, string>>;
   storage?: StorageAdapter;

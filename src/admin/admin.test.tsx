@@ -172,6 +172,31 @@ describe('HelpdeskAdmin', () => {
     expect(window.location.search).toBe('?q=DG-1001&status=any');
   });
 
+  it('offers the host’s links for the customer beside the conversation', async () => {
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      links: [
+        {
+          label: { en: 'Open in Acme admin', de: 'In Acme öffnen' },
+          url: 'https://app.test/users/7',
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    // sessionStorage is cleared before each test, so the open panel stays in this one.
+    vi.stubGlobal('localStorage', sessionStorage);
+    localStorage.setItem('helpdesk.aside', 'open');
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const link = await screen.findByRole('link', {
+      name: /Open in Acme admin/,
+    });
+    expect(link.getAttribute('href')).toBe('https://app.test/users/7');
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+
   it('lists waiting conversations and opens one as a deep link', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     const row = await screen.findByRole('link', { name: /DG-1000/ });
@@ -756,6 +781,44 @@ describe('HelpdeskAdmin', () => {
     expect(
       screen.getByRole('textbox', { name: 'Internal note' }).textContent
     ).toBe('Ask billing first');
+  });
+
+  it('shortens, formalises or translates what the agent wrote, in place', async () => {
+    routes['agent/me/'] = { ...me, ai: true };
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (String(input).endsWith('agent/conversations/c1/draft/')) {
+          posts.push(JSON.parse(String(init?.body)));
+          return new Response(JSON.stringify({ text: 'Bitte lesen Sie das.' }));
+        }
+        return respond(String(input));
+      })
+    );
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    expect(screen.queryByRole('button', { name: 'Shorten' })).toBeNull();
+    reply.innerHTML = 'Please read this.';
+    fireEvent.input(reply);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Into the customer’s language',
+      })
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Reply' }).textContent).toBe(
+        'Bitte lesen Sie das.'
+      )
+    );
+    expect(posts).toEqual([{ mode: 'translate', text: 'Please read this.' }]);
+    expect(screen.getByRole('button', { name: 'Shorten' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'More formal' })).toBeTruthy();
   });
 
   it('never shows a draft to another agent signed in to the same browser', async () => {

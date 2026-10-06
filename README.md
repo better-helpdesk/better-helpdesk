@@ -548,6 +548,28 @@ For reads, `helpdesk.store` holds the queries the agent UI runs, such as
 `onEvent`. Both recipes are type-checked in
 [`examples/demo/lib/recipes.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/demo/lib/recipes.ts).
 
+### Links to your own tools
+
+`links` gives agents one click from a customer to the pages you already have
+for them. It gets the contact and the company with your own ids, `userId`
+for someone your app signed in and `orgId` for their organisation, and
+returns labelled URLs:
+
+```ts
+links: (contact, company) => [
+  ...(contact?.userId
+    ? [{ label: { en: 'Open in admin', de: 'In der Verwaltung öffnen' }, url: `https://app.example.com/admin/users/${contact.userId}` }]
+    : []),
+  ...(company?.orgId
+    ? [{ label: { en: 'Billing' }, url: `https://billing.example.com/orgs/${company.orgId}` }]
+    : []),
+],
+```
+
+They show under the contact in a conversation, and on the contact and
+company pages, and open in a new tab. Only `http` and `https` URLs are
+shown; if the hook throws, the page shows none and the error is logged.
+
 ### Storage, AI and help search
 
 - `storage` presigns uploads and downloads and stores attachments, so an
@@ -693,6 +715,7 @@ full documentation.
 | `teamName`, `agentTitles`                                             |          | How the team and individual agents are named where they sign, per locale.                               |
 | `identityTokenSecret`                                                 |          | Verifies identity tokens from other origins, 32 bytes or more. Consulted only when `identify` returns `null`. |
 | `resolveContext(externalOrgId)`, `orgNames(externalOrgIds)`           |          | Extra context and display names for your organisations.                                                 |
+| `links(contact, company)`                                             |          | Links into your own tools (your admin, Stripe, a CRM), shown with the contact and company. `http(s)` only. |
 | `storage`, `maxAttachmentBytes`                                       |          | Attachments. Without `storage` there are none.                                                          |
 | `email.send(message)`                                                 |          | Outbound mail.                                                                                          |
 | `inboundWebhookSecret`, `inboundInbox`, `replyToAddress`, `dnsResolver` |        | Inbound mail.                                                                                           |

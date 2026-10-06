@@ -4,7 +4,13 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
-import type { Agent, Conversation, Message } from './db/store';
+import type {
+  Agent,
+  Company,
+  Contact,
+  Conversation,
+  Message,
+} from './db/store';
 import { formatReference } from './domain';
 import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
@@ -782,6 +788,42 @@ export function createHandler(support: Helpdesk) {
     return json({ ok: true });
   });
 
+  /** The host's links for a contact and company; a failing hook or a non-web URL shows nothing rather than an error. */
+  async function hostLinks(
+    contact: Contact | null,
+    company: Company | null,
+    identities: { channel: string; externalId: string }[] = []
+  ) {
+    if (!config.links || (!contact && !company)) return [];
+    try {
+      const links = await config.links(
+        contact && {
+          id: contact.id,
+          name: contact.name,
+          email: contact.email,
+          userId:
+            identities.find(i => i.channel === 'host')?.externalId ?? null,
+        },
+        company && {
+          id: company.id,
+          name: company.name,
+          domain: company.domain,
+          orgId: company.externalOrgId,
+        }
+      );
+      return links.filter(link => {
+        try {
+          return ['http:', 'https:'].includes(new URL(link.url).protocol);
+        } catch {
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('[helpdesk] links failed', error);
+      return [];
+    }
+  }
+
   agentRoute('GET', 'conversations/:id', async ({ params, agent }) => {
     const conversation = await requireConversation(params.id);
     const [
@@ -822,6 +864,7 @@ export function createHandler(support: Helpdesk) {
       },
       company,
       suggestedCompany,
+      links: await hostLinks(contact, company, identities),
       customerContext: conversation.companyId
         ? await support.companyContext(conversation.companyId)
         : {},
@@ -1058,9 +1101,26 @@ export function createHandler(support: Helpdesk) {
     }
   );
 
-  agentRoute('POST', 'conversations/:id/draft', async ({ params }) => {
+  agentRoute('POST', 'conversations/:id/draft', async ({ params, body }) => {
     const conversation = await requireConversation(params.id);
-    return json({ text: await support.draftReply(conversation) });
+    // Asking for a draft took no body before rewrites existed, so none still means a draft.
+    const raw = await body().catch(error => {
+      if (error instanceof SyntaxError) return {};
+      throw error;
+    });
+    const data = z
+      .object({
+        mode: z.enum(['shorten', 'formal', 'translate']).optional(),
+        text: z.string().trim().min(1).max(20_000).optional(),
+      })
+      .refine(d => !d.mode || d.text, { message: 'A mode needs the text' })
+      .parse(raw ?? {});
+    return json({
+      text:
+        data.mode && data.text
+          ? await support.rewriteDraft(conversation, data.mode, data.text)
+          : await support.draftReply(conversation),
+    });
   });
 
   agentRoute('POST', 'conversations/:id/triage', async ({ params }) => {
@@ -1234,6 +1294,7 @@ export function createHandler(support: Helpdesk) {
         externalId: i.channel === 'visitor' ? null : i.externalId,
       })),
       company,
+      links: await hostLinks(contact, company, identities),
       conversations: conversations.map(r => agentView(r.conversation)),
       timeline: await timeline(
         conversations.map(r => r.conversation),
@@ -1302,6 +1363,7 @@ export function createHandler(support: Helpdesk) {
     return json({
       company,
       context: await support.companyContext(company.id),
+      links: await hostLinks(null, company),
       contacts: contactList.map(contactRow),
       conversations: conversations.map(r => agentView(r.conversation)),
       timeline: await timeline(

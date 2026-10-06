@@ -7,6 +7,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
+import type { HostLink, Locale } from '../config';
 import type { Translate } from '../ui/i18n';
 
 export const paths = {
@@ -18,6 +19,8 @@ export const paths = {
   x: 'M18 6 6 18M6 6l12 12',
   text: 'M4 6h16M4 12h10M4 18h7',
   panel: 'M4 5h16v14H4zM15 5v14',
+  external:
+    'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
 };
 
@@ -525,5 +528,34 @@ export function RatingChip({
       title={comment ?? undefined}>
       {t(`admin.rated.${rating}`)}
     </span>
+  );
+}
+
+/** The host's links for a customer, from its `links` hook; each opens in a new tab. */
+export function HostLinks({
+  links,
+  locale,
+}: {
+  links: HostLink[] | undefined;
+  locale: Locale;
+}) {
+  if (!links?.length) return null;
+  return (
+    <div className="sa-links">
+      {links.map(link => (
+        <a
+          key={link.url}
+          className="sa-btn sa-ghost"
+          href={link.url}
+          target="_blank"
+          rel="noreferrer">
+          {link.label[locale] ??
+            link.label.en ??
+            Object.values(link.label)[0] ??
+            link.url}
+          <Svg d={paths.external} />
+        </a>
+      ))}
+    </div>
   );
 }
