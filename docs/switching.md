@@ -20,44 +20,41 @@ messages are in the old tool.
 
 ## Import contacts, companies and saved replies
 
-The agent routes that the agent UI uses also take imports. Open the agent
-UI, signed in as an agent, and run a loop over your export in the browser
-console. With the default `basePath`:
+Export what you have as CSV and run the import CLI against the same database
+as the migrations:
 
-```js
-const post = (path, body) =>
-  fetch(`/api/helpdesk/agent/${path}/`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then(async r => {
-    if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
-    return r.json();
-  });
-
-// rows parsed from your export
-for (const row of companies) {
-  const { company } = await post('companies', { name: row.name, domain: row.domain });
-  row.id = company.id;
-}
-for (const row of contacts) {
-  await post('contacts', {
-    name: row.name || row.email,
-    email: row.email || undefined,
-    companyId: companies.find(c => c.name === row.company)?.id,
-  });
-}
-for (const row of macros) {
-  await post('canned', { title: row.title, body: row.body });
-}
+```sh
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import contacts people.csv
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import canned replies.csv
 ```
 
-A contact needs a `name`; `email`, `companyId` and `leadStage` are optional.
-The loop stops at the first row the server refuses, with the reason, so fix
-that row and rerun from there.
-A saved reply takes a `title`, a `body` and an optional `locale` (`en` or
-`de`). In a saved reply, `{firstName}` and `{reference}` are filled in when
-an agent inserts it, so rewrite the old tool's placeholders to those two.
+It prints how many rows it created, updated and left alone, and a line for
+each value it had to leave out. Column names are read without regard to
+case, and a header row is required. A quote that is never closed stops the
+import with its line number, before anything is written.
+
+- **Contacts** need an `email`; `name`, `tags` (separated by `;` or `|`) and
+  `lead_stage` are optional. A lead stage must be one of the stages the
+  agent UI knows, in any case: the defaults (`lead`, `qualified`,
+  `customer`, `churned`), or, if you set `leadStages`, the same list as
+  `--lead-stages Lead,Trial,Customer`; it is stored as the list spells it. Tags longer than 50 characters and
+  names longer than 200 are left out, as the agent UI would refuse them.
+- **Companies** come from the same file: a row with a `domain` joins the
+  company with that domain, and a row with only a `company` joins the
+  company with that name. A missing company is created; an existing one is
+  never renamed, and only gains a domain it did not have. A name or domain
+  longer than 200 characters is left out.
+- **Saved replies** need a `title` of at most 200 characters and a `body` of
+  at most 20,000; `locale` (`en` or `de`) is optional. In a saved reply, `{firstName}` and `{reference}` are filled in
+  when an agent inserts it, so rewrite the old tool's placeholders to those
+  two.
+
+Running it again is safe, also after agents have started working. A contact
+whose email is already known, from an earlier import or because the person
+already wrote in, only gains what it lacks: empty fields are filled and
+tags are added, and nothing an agent changed is undone. A saved reply whose
+title and locale exist is left alone. So fix the export and run the whole
+file again.
 
 An imported contact is not linked to anyone's login. When the same person
 later writes in or signs in, they may arrive as a second contact; open the

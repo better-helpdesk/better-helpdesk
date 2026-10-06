@@ -27,7 +27,8 @@ const library = {
 await build({
   ...library,
   platform: 'node',
-  entryPoints: ['src/index.ts', 'src/ui/rich.tsx'],
+  // import.ts is for bin/import.mjs only and stays out of the exports map.
+  entryPoints: ['src/index.ts', 'src/ui/rich.tsx', 'src/import.ts'],
   chunkNames: 'chunks/server-[hash]',
 });
 
