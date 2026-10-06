@@ -463,8 +463,33 @@ describe('saved views', () => {
     expect(await views('agent')).toEqual([]);
   });
 
-  it('refuses a view without a name, and views to anyone but an agent', async () => {
+  it('refuses a view without a name or with a filter the inbox cannot apply, and views to anyone but an agent', async () => {
     expect((await save('agent', { name: ' ', query: '' })).status).toBe(400);
+    expect(
+      (
+        await save('agent', {
+          name: 'Jane',
+          query: 'assignee=jane',
+          shared: true,
+        })
+      ).status
+    ).toBe(400);
+    // One stored before filters were checked still leaves the rest listed.
+    await h.support.store.setSetting('views:shared', [
+      { id: 'old', name: 'Old link', query: 'assignee=jane' },
+    ]);
+    await save('agent', { name: 'Mine', query: 'assignee=me' });
+    const listed = await h.call('GET', 'agent/views', { user: 'agent' });
+    expect(listed.status).toBe(200);
+    expect(
+      listed.data.views.map((v: { name: string; count: number | null }) => [
+        v.name,
+        v.count,
+      ])
+    ).toEqual([
+      ['Mine', 0],
+      ['Old link', null],
+    ]);
     h.addUser('ada');
     expect((await h.call('GET', 'agent/views', { user: 'ada' })).status).toBe(
       403

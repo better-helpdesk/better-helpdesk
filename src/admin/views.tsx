@@ -9,7 +9,8 @@ type SavedView = {
   name: string;
   query: string;
   shared: boolean;
-  count: number;
+  /** `null` when the server cannot apply the view's filters. */
+  count: number | null;
 };
 
 const sameFilters = (query: string, current: Record<string, string>) => {
@@ -59,7 +60,7 @@ export function SavedViews({
             navigate(Object.fromEntries(new URLSearchParams(v.query)))
           }>
           {v.name}
-          <span className="sa-count num"> {v.count}</span>
+          {v.count !== null && <span className="sa-count num"> {v.count}</span>}
         </button>
       ))}
       {active ? (

@@ -693,10 +693,17 @@ export function createHandler(support: Helpdesk) {
       ...own.map(v => ({ ...v, shared: false })),
       ...shared.map(v => ({ ...v, shared: true })),
     ];
+    // A view stored before its filters were checked must not hide the others.
     const counts = await Promise.all(
-      views.map(v =>
-        store.countInbox(inboxFilter(new URLSearchParams(v.query), agent.id))
-      )
+      views.map(v => {
+        try {
+          return store.countInbox(
+            inboxFilter(new URLSearchParams(v.query), agent.id)
+          );
+        } catch {
+          return null;
+        }
+      })
     );
     return json({ views: views.map((v, i) => ({ ...v, count: counts[i] })) });
   });
@@ -716,6 +723,8 @@ export function createHandler(support: Helpdesk) {
         return value ? [[k, value]] : [];
       })
     ).toString();
+    // Refuses what the inbox could not filter by, such as an unknown assignee.
+    inboxFilter(new URLSearchParams(query), agent.id);
     const key = viewsKey(data.shared ? null : agent.id);
     const views = await readViews(key);
     if (views.length >= MAX_VIEWS) {
