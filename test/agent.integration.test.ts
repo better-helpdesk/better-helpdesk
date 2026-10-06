@@ -305,6 +305,75 @@ describe('jobs and email', () => {
     await h.runDueJobs();
     expect(h.emails.filter(e => e.kind === 'agent-reminder')).toHaveLength(1);
   });
+
+  it('still reminds agents about every waiting customer after a send fails', async () => {
+    const sent: string[] = [];
+    let failed = false;
+    const flaky = createHarness({
+      email: {
+        async send(message) {
+          if (message.kind === 'agent-reminder' && !failed) {
+            failed = true;
+            throw new Error('mail provider down');
+          }
+          if (message.kind === 'agent-reminder') sent.push(message.reference);
+        },
+      },
+    });
+    try {
+      flaky.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+      await flaky.call('GET', 'agent/me', { user: 'agent' });
+      for (const user of ['ada', 'bob', 'cleo']) {
+        flaky.addUser(user);
+        const res = await flaky.call('POST', 'widget/conversations', {
+          user,
+          body: { inbox: 'support', type: 'question', body: 'Waiting' },
+        });
+        expect(res.status).toBe(201);
+      }
+      await flaky.support.store.db.execute(
+        sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
+      );
+      await flaky.runDueJobs();
+      await flaky.runDueJobs();
+      expect(new Set(sent).size).toBe(3);
+    } finally {
+      await flaky.close();
+    }
+  });
+
+  it('drops a retried reminder once the customer has been answered', async () => {
+    let sends = 0;
+    const flaky = createHarness({
+      email: {
+        async send(message) {
+          if (message.kind !== 'agent-reminder') return;
+          sends++;
+          if (sends === 1) throw new Error('mail provider down');
+        },
+      },
+    });
+    try {
+      flaky.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+      await flaky.call('GET', 'agent/me', { user: 'agent' });
+      flaky.addUser('ada');
+      await flaky.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Waiting' },
+      });
+      await flaky.support.store.db.execute(
+        sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
+      );
+      await flaky.runDueJobs();
+      await flaky.support.store.db.execute(
+        sql`UPDATE helpdesk.conversation SET waiting_since = NULL`
+      );
+      await flaky.runDueJobs();
+      expect(sends).toBe(1);
+    } finally {
+      await flaky.close();
+    }
+  });
 });
 
 describe('deletion', () => {
