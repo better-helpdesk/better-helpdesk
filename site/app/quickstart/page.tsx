@@ -106,8 +106,8 @@ export default function Quickstart() {
           <span className="eyebrow">Quickstart</span>
           <h1>From install to your first answer.</h1>
           <p className="sub">
-            Seven steps in an existing Next.js app. You need Node 20, PostgreSQL
-            14, React 19 and Next.js 15 or newer.
+            Seven steps in an existing Next.js app. You need Node 22.19,
+            PostgreSQL 14, React 19 and Next.js 15 or newer.
           </p>
         </section>
         <ol className="qs-steps">

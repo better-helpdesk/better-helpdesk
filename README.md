@@ -136,7 +136,7 @@ AI; AI only ever produces a suggestion or a draft that a person reviews.
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 22.19 or newer
 - PostgreSQL 14 or newer
 - React 19 and `pg`, as peer dependencies
 - Next.js 15 or newer for the examples below. The handler is a plain

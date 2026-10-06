@@ -52,7 +52,7 @@ package.
 - Adapters for storage, AI (schema-typed prompts), help search and scheduled
   jobs. Data retention and anonymous rate limits are configurable.
 - English and German. Theming through CSS custom properties. Peer
-  dependencies are `pg` and React 19 on Node 20 or newer. A migrations CLI
+  dependencies are `pg` and React 19 on Node 22.19 or newer. A migrations CLI
   runs in your release step.
 
 ## Stage (October 2026)

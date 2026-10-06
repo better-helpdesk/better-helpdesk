@@ -75,7 +75,7 @@ export default function Home() {
           </div>
           <div>
             <b>Next.js 15+</b>
-            <span>React 19, Node 20</span>
+            <span>React 19, Node 22.19</span>
           </div>
         </section>
 
