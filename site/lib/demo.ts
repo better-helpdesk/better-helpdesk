@@ -1,6 +1,7 @@
 import { buildHelpdesk, type Identity, postgresAdapter } from 'better-helpdesk';
 import pg from 'pg';
 
+import { sameDatabase } from './database-url';
 import { siteUrl } from './site';
 
 /**
@@ -136,15 +137,6 @@ export const demo = buildHelpdesk({
     return role === 'visitor' ? null : IDENTITIES[role];
   },
 });
-
-/** The same server and database as the site's own inbox would be wiped with it. */
-function sameDatabase(a: string, b: string) {
-  const key = (url: string) => {
-    const u = new URL(url);
-    return `${u.hostname}:${u.port || '5432'}${u.pathname}`;
-  };
-  return key(a) === key(b);
-}
 
 /**
  * Empties the demo's helpdesk schema and seeds it again. Containers that fire at

@@ -7,11 +7,19 @@ on:
   # Monday morning, to find out what next@canary broke while nobody looked.
   schedule:
     - cron: '0 6 * * 1'
+  # release.yml runs all of this before it publishes.
+  workflow_call:
 
 jobs:
   check:
+    name: check (node ${{ matrix.node }})
     if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor package.json's engines promises, and the current release.
+        node: ['22.19', '24']
     services:
       postgres:
         image: postgres:18-alpine
@@ -28,11 +36,17 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: pnpm
       # The example app is a workspace package now; it has no part in this job
       # and its Next.js install is not worth downloading here.
       - run: pnpm install --filter better-helpdesk --frozen-lockfile
+      # A schema change without its generated migration passes every test.
+      - name: Migrations match the schema
+        run: |
+          pnpm db:generate
+          git diff --exit-code -- migrations
+          test -z "$(git status --porcelain migrations)"
       - run: pnpm run lint
       - run: pnpm run test
       - run: pnpm run test:integration
@@ -51,6 +65,21 @@ jobs:
           "
           test -s node_modules/better-helpdesk/dist/widget.js
           HELPDESK_DATABASE_URL="$TEST_DATABASE_URL" npx better-helpdesk-migrate
+
+  # Divio deploys site/ from main, and nothing else here compiles it.
+  site:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --filter better-helpdesk-site --frozen-lockfile
+      - run: pnpm --filter better-helpdesk-site exec tsc --noEmit
+      - run: pnpm --filter better-helpdesk-site run build
 
   # Builds and runs examples/demo against the packed tarball, which resolves
   # the published dist exports rather than the workspace link the app uses in
