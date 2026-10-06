@@ -22,7 +22,7 @@ export const helpdesk = buildHelpdesk({
 Choose keys you mean to keep. Each conversation stores its inbox's key, and the widget names the inbox by it. Two keys behave differently from the rest:
 
 - The widget writes to `support` unless you tell it otherwise.
-- An anonymous visitor who writes to `sales` gets a contact whose lead stage is `lead`.
+- An anonymous visitor who writes to `sales` gets a contact in the first of your [lead stages](/docs/guides/crm#set-the-lead-stages).
 
 Email that arrives through the [inbound webhook](/docs/guides/inbound-email) lands in the inbox named by `inboundInbox`, or in the first inbox when that is unset ([configuration reference](/docs/reference/configuration#email)).
 
