@@ -18,29 +18,37 @@ type Props = {
 
 /** React wrapper around `<helpdesk-widget>`. */
 export function HelpdeskWidget(props: Props) {
-  useEffect(() => defineHelpdeskWidget(), []);
-  return createElement(HostElement, { tag: 'helpdesk-widget', ...props });
+  return createElement(HostElement, {
+    tag: 'helpdesk-widget',
+    define: defineHelpdeskWidget,
+    ...props,
+  });
 }
 
 /** React wrapper around `<helpdesk-conversations>`, for an in-app Support page. */
 export function HelpdeskConversations(props: Omit<Props, 'label'>) {
-  useEffect(() => defineHelpdeskConversations(), []);
   return createElement(HostElement, {
     tag: 'helpdesk-conversations',
+    define: defineHelpdeskConversations,
     ...props,
   });
 }
 
 function HostElement({
   tag,
+  define,
   context,
   types,
   orgId,
   identityToken,
   appVersion,
   ...rest
-}: Props & { tag: string }) {
+}: Props & { tag: string; define: () => void }) {
   const ref = useRef<HTMLElement & { context: Record<string, string> }>(null);
+
+  // Before the context effect: set on an element not yet defined, `context`
+  // would become a plain property that hides the element's own setter.
+  useEffect(() => define(), [define]);
 
   useEffect(() => {
     if (ref.current) ref.current.context = context ?? {};
