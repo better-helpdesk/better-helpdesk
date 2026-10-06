@@ -11,9 +11,9 @@ The adapter receives a `HelpdeskEmail`, one of five kinds, and turns it into a c
 
 ```ts title="lib/helpdesk-email.ts"
 import type { HelpdeskEmail } from 'better-helpdesk';
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 
-const transport = nodemailer.createTransport(process.env.SMTP_URL);
+let transport: Transporter | undefined;
 const from = 'Acme Support <support@example.com>';
 
 function render(message: HelpdeskEmail) {
@@ -61,10 +61,13 @@ function render(message: HelpdeskEmail) {
 
 export const email = {
   async send(message: HelpdeskEmail) {
+    transport ??= nodemailer.createTransport(process.env.SMTP_URL);
     await transport.sendMail({ from, to: message.to, ...render(message) });
   },
 };
 ```
+
+The transport is created on the first send rather than when the module loads, so `next build`, which loads the module without your production secrets, does not need `SMTP_URL`.
 
 Then pass it to `buildHelpdesk` as [`email`](/docs/reference/configuration#email):
 
@@ -113,10 +116,28 @@ Message bodies are plain text with a small Markdown subset, written to read well
 ```ts title="lib/helpdesk-email.ts"
 import { RichText } from 'better-helpdesk/rich';
 import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 
-const html = renderToStaticMarkup(createElement(RichText, { text: message.body }));
+async function render(message: HelpdeskEmail) {
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  switch (message.kind) {
+    case 'customer-reply':
+      return {
+        // subject, text and the headers as above
+        html: renderToStaticMarkup(createElement(RichText, { text: message.body })),
+      };
+    // the other cases as above
+  }
+}
+
+export const email = {
+  async send(message: HelpdeskEmail) {
+    transport ??= nodemailer.createTransport(process.env.SMTP_URL);
+    await transport.sendMail({ from, to: message.to, ...(await render(message)) });
+  },
+};
 ```
+
+`react-dom/server` is loaded inside the function on purpose: with Turbopack, `next build` fails on a static import of it in a module that a route handler imports. Loading it there makes `render` async, so `send` awaits it.
 
 Pass `compact: true` as well when the body sits inside a paragraph of your own template: it renders inline only, with lists as lines.
 

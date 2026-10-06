@@ -41,8 +41,10 @@ export function SiteHeader({
               <SiGithub aria-hidden="true" />
               <span>Source</span>
             </a>
-            <a className="btn btn-p btn-sm nav-cta" href="/quickstart/">
-              Quickstart
+            <a
+              className="btn btn-p btn-sm nav-cta"
+              href="/docs/guides/install/">
+              Get started
               <ButtonIcon />
             </a>
             <NavMenu base={home ? '' : '/'} repo={REPO} />
@@ -81,7 +83,7 @@ export function SiteFooter() {
           </a>
         </li>
         <li>
-          <a href="/quickstart/">Quickstart</a>
+          <a href="/docs/quickstart/">Quickstart</a>
         </li>
         <li>
           <a href="/docs/">Docs</a>
@@ -95,7 +97,7 @@ export function SiteFooter() {
       </ul>
       <ul>
         <li>
-          <a href={`${REPO}/blob/main/LICENSE`}>MIT licence</a>
+          <a href={`${REPO}/blob/main/LICENSE`}>MIT license</a>
         </li>
         <li>
           <a href={`${REPO}/security/advisories/new`}>Report a vulnerability</a>

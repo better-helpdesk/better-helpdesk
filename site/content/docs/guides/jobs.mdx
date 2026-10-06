@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 { "crons": [{ "path": "/api/cron/helpdesk", "schedule": "*/5 * * * *" }] }
 ```
 
-Keep `maxDuration` above the budget: a run checks the budget before each batch of jobs, so the last batch can finish after it.
+Keep `maxDuration` above the budget: a run checks the budget before each batch of jobs, so the last batch can finish after it. A schedule of every five minutes needs a Vercel plan that allows it; the Hobby plan runs cron jobs at most once a day.
 
 </Tab>
 <Tab value="Any other scheduler">

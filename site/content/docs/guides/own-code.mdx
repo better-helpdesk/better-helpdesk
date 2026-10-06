@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const { user, invoice } = event;
 
   const token = signIdentityToken(
-    { sub: user.id, email: user.email, email_verified: true, name: user.name },
+    { sub: user.id, email: user.email, email_verified: user.emailVerified, name: user.name },
     process.env.HELPDESK_IDENTITY_SECRET!,
     { expiresInSeconds: 60 }
   );
@@ -60,16 +60,24 @@ await helpdesk.track({
 
 ## Delete a customer's data
 
-When someone deletes their account, delete what the helpdesk holds about them. `deleteContact` takes the helpdesk's own contact id, so look it up by your user id first:
+When someone deletes their account, delete what the helpdesk holds about them. `deleteContact` takes the helpdesk's own contact id, so look it up by your user id first. Then look up their address as well: what they wrote as a visitor or by email before the address was proven sits on a [separate contact](/docs/concepts/identity#verified-and-unverified), which carries the address but not your user id.
 
 ```ts
 const contact = await helpdesk.store.findContactByIdentity('host', user.id, {
   verifiedOnly: true,
 });
 if (contact) await helpdesk.deleteContact(contact.id);
+
+// Addresses are stored trimmed and in lowercase.
+const email = user.email.trim().toLowerCase();
+for (;;) {
+  const other = await helpdesk.store.findContactByEmail(email);
+  if (!other) break;
+  await helpdesk.deleteContact(other.id);
+}
 ```
 
-That deletes their conversations with the files in your storage, what they wrote in conversations they were added to, and the contact itself. For an organization, `deleteCompany` takes your own org id and deletes the company, its conversations and the contacts who have nothing left outside it:
+`findContactByEmail` returns the oldest contact with the address, so the loop runs until none is left. Each call deletes the contact's conversations with the files in your storage, what they wrote in conversations they were added to, and the contact itself. For an organization, `deleteCompany` takes your own org id and deletes the company, its conversations and the contacts who have nothing left outside it:
 
 ```ts
 await helpdesk.deleteCompany(org.id);

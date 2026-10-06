@@ -3,7 +3,7 @@ title: Introduction
 description: What Better Helpdesk is, the four pieces it is made of, and where to start reading.
 ---
 
-Better Helpdesk is a support inbox, ticketing and a lightweight CRM that you install into your own Next.js app as an npm package, `better-helpdesk`. It is a library, not a service: nothing runs beside your app, and there is no second login, database or deploy to look after. Your customers write in through a widget on your site, your support team answers them from a page inside your app, and every conversation is stored in the Postgres database you already run.
+Better Helpdesk is an open-source (MIT) support inbox, ticketing system and lightweight CRM that you install into your own Next.js app as an npm package, `better-helpdesk`. It is a library, not a service: nothing runs beside your app, and there is no second login, database or deploy to look after. Your customers write in through a widget on your site, your support team answers them from a page inside your app, and every conversation is stored in the Postgres database you already run.
 
 In these docs an **agent** is a member of your support team. It is never an AI. AI is an optional adapter, and what it produces is a suggestion or a draft that an agent reviews.
 
@@ -24,7 +24,7 @@ Everything else is optional and arrives as an adapter you pass in: sending email
 
 ## Who it is for
 
-Better Helpdesk suits a team that already has a Next.js app with its own login and a Postgres database, and wants support to live inside that product rather than next to it. It needs Next.js 15 or newer, Node.js 22.19 or newer, PostgreSQL 14 or newer and React 19. Both interfaces ship in English and German.
+Better Helpdesk suits a team that already has a Next.js app with its own login and a Postgres database, and wants support to live inside that product rather than next to it. It needs Next.js 15 or newer, Node.js 22.19 or newer, PostgreSQL 14 or newer and React 19. Both interfaces ship in English and German. It is not built for support by phone or on social channels, or for a team that wants a hosted tool with its own logins.
 
 ## Where to go next
 
@@ -32,7 +32,10 @@ Better Helpdesk suits a team that already has a Next.js app with its own login a
   <Card title="Quickstart" href="/docs/quickstart">
     Start from an empty Next.js app and answer your first conversation.
   </Card>
-  <Card title="Guides" href="/docs/guides/widget">
+  <Card title="Install in an existing app" href="/docs/guides/install">
+    Add the handler, the agent UI and the widget to the app you already have.
+  </Card>
+  <Card title="Guides" href="/docs/guides/sign-in">
     Add email, attachments, AI, events and the rest to a working installation.
   </Card>
   <Card title="Concepts" href="/docs/concepts/how-it-works">

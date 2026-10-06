@@ -66,7 +66,7 @@ export default withHelpdesk({
 });
 ```
 
-`withHelpdesk` lets Next.js compile the package. `trailingSlash: true` matters because the widget and the agent UI request every path with a trailing slash.
+`withHelpdesk` lets Next.js compile the package. `trailingSlash: true` matters because the widget and the agent UI request every path with a trailing slash. It gives every other URL of the app a trailing slash too, which is harmless in a new app; [Install in an existing app](/docs/guides/install) shows the alternative for an app whose URLs must stay as they are.
 
 ## 6. Build the helpdesk
 
@@ -76,7 +76,12 @@ Create `lib/helpdesk.ts`:
 import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
 import pg from 'pg';
 
-const pool = new pg.Pool({ connectionString: process.env.HELPDESK_DATABASE_URL });
+const cache = globalThis as typeof globalThis & { helpdeskPool?: pg.Pool };
+if (!cache.helpdeskPool) {
+  cache.helpdeskPool = new pg.Pool({ connectionString: process.env.HELPDESK_DATABASE_URL });
+  cache.helpdeskPool.on('error', error => console.error('helpdesk database:', error));
+}
+const pool = cache.helpdeskPool;
 
 export const helpdesk = buildHelpdesk({
   db: postgresAdapter({ pool }),
@@ -100,6 +105,10 @@ export const helpdesk = buildHelpdesk({
 ```
 
 This is the whole configuration for now: one inbox called `support` that visitors may write to without signing in, and an `identify` function that turns a request into a person. In a real app `identify` reads your session; here a cookie stands in for it.
+
+The pool is kept on `globalThis` because `next dev` runs this file again after every edit, and a new pool each time would use up the database's connections. The `error` listener keeps a dropped connection from stopping the server.
+
+`adminUrl` must name the address you will open the app on, port included. The helpdesk refuses changes from any other origin, so if `npm run dev` reports a port other than 3000, put that port here; otherwise every change, from the visitor's first message to your reply, fails with 403.
 
 <Callout type="warn">
   The stand-in `identify` makes anyone with the cookie an agent. It refuses to do so in production, and it belongs to this tutorial only.
@@ -149,6 +158,8 @@ export default function Page() {
   return <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale="en" />;
 }
 ```
+
+Anyone can load this page, but its data comes from the handler, which answers only an agent. A real app also puts the page behind its own agent check; [Install in an existing app](/docs/guides/install) shows one.
 
 ## 10. Add the widget
 
@@ -220,4 +231,4 @@ You have the full loop of Better Helpdesk: a widget that takes a message, a hand
 - An email adapter, so customers hear about replies when they are not looking at the widget. See [Send email](/docs/guides/email).
 - A schedule for background work such as reminders and outgoing mail. See [Run jobs and retention](/docs/guides/jobs).
 
-[How it works](/docs/concepts/how-it-works) describes what each piece you added does, and [Configuration](/docs/reference/configuration) lists every option `buildHelpdesk` accepts.
+To do that in your own app, follow [Install in an existing app](/docs/guides/install), then [Connect your sign-in](/docs/guides/sign-in), and [Go to production](/docs/guides/production) before customers see it. [How it works](/docs/concepts/how-it-works) describes what each piece you added does, and [Configuration](/docs/reference/configuration) lists every option `buildHelpdesk` accepts.

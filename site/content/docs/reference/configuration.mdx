@@ -7,9 +7,7 @@ description: Every field of HelpdeskConfig, the object buildHelpdesk takes, with
 
 ```ts title="lib/helpdesk.ts"
 import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
-import pg from 'pg';
-
-const pool = new pg.Pool({ connectionString: process.env.HELPDESK_DATABASE_URL });
+import { pool } from './db'; // a pg.Pool
 
 export const helpdesk = buildHelpdesk({
   db: postgresAdapter({ pool }),

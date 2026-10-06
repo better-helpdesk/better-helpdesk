@@ -5,6 +5,10 @@ description: The tables of the helpdesk schema, every column with its type and d
 
 Better Helpdesk keeps everything in one Postgres schema, `helpdesk`, in the host's database. [`better-helpdesk-migrate`](/docs/reference/cli#better-helpdesk-migrate) creates and updates it. Ids are `uuid` with a random default, and every timestamp is `timestamptz`. The TypeScript types (`Conversation`, `Message`) use the column names in camel case: `contact_id` is `contactId`. Related guide: [Report from your own database](/docs/guides/reporting).
 
+<Callout>
+  Until version 1.0, a minor release can change, rename or drop columns. The release notes say when one does.
+</Callout>
+
 | Table | Holds |
 | --- | --- |
 | [`company`](#company) | Organizations, mapped to the host's by `external_org_id` |

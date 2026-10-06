@@ -15,6 +15,15 @@ export default withMDX(
     poweredByHeader: false,
     // The site and the docs have their own root layouts, so no layout can hold a 404 for both.
     experimental: { globalNotFound: true },
+    async redirects() {
+      return [
+        {
+          source: '/quickstart',
+          destination: '/docs/guides/install/',
+          permanent: true,
+        },
+      ];
+    },
     async headers() {
       return [
         {

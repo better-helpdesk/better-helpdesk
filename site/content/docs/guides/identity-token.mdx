@@ -99,12 +99,73 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
 With the script tag, add `data-identity-token="…"`. On the element itself, the attribute is `identity-token`.
 
+<Callout type="warn">
+  The token belongs to one customer, so a page that carries it must be rendered for each request and never cached. Reading the session makes Next.js render this layout, and every page under it, per request; make sure no CDN in front of the app caches those pages either, or one customer's token reaches the next visitor. A page that must stay cached leaves the token out of its HTML and fetches one, as in the next section.
+</Callout>
+
 ## Refresh it before it expires
 
-The helpdesk refuses an expired or forged token with 401, and every request the widget makes with it fails. The widget reads the token afresh for each request, so replacing it is enough: render `HelpdeskWidget` with a new `identityToken`, or set the attribute on the element:
+The helpdesk refuses an expired or forged token with 401, and every request the widget makes with it fails. The widget reads the token afresh for each request, so replacing it is enough. Give the page a route on the signing site that returns a fresh token for whoever is signed in:
+
+```ts title="app/api/helpdesk-token/route.ts"
+import { identityTokenFor } from '@/lib/identity-token';
+
+export async function GET() {
+  const user = await getCurrentUser(); // however your app does it
+  if (!user) return new Response(null, { status: 401 });
+  return Response.json(
+    { token: identityTokenFor(user) },
+    { headers: { 'cache-control': 'private, no-store' } }
+  );
+}
+```
+
+The route is on the page's own origin, so the browser sends your session cookie with it. In React, fetch from it in a client component and pass the result as `identityToken`. This one refreshes every ten minutes and whenever the tab comes back into view, which covers a laptop that slept past the hour:
+
+```tsx title="app/support-widget.tsx"
+'use client';
+
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+import { useEffect, useState } from 'react';
+
+export function SupportWidget({ initialToken }: { initialToken?: string }) {
+  const [token, setToken] = useState(initialToken);
+
+  useEffect(() => {
+    const refresh = async () => {
+      const response = await fetch('/api/helpdesk-token', { cache: 'no-store' });
+      setToken(response.ok ? (await response.json()).token : undefined);
+    };
+    if (!initialToken) refresh();
+    const onVisible = () => document.visibilityState === 'visible' && refresh();
+    const timer = setInterval(refresh, 10 * 60 * 1000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [initialToken]);
+
+  return (
+    <HelpdeskWidget
+      api="https://app.example.com/api/helpdesk"
+      inbox="support"
+      identityToken={token}
+    />
+  );
+}
+```
+
+Render `<SupportWidget initialToken={…} />` where the layout above rendered `HelpdeskWidget`, or leave `initialToken` out on a cached page, and the component fetches the first token itself. Once the customer signs out, the route answers 401 and the widget stops sending a token.
+
+With the script tag, fetch from the same route and set the attribute on the element:
 
 ```ts
-document.querySelector('helpdesk-widget')?.setAttribute('identity-token', freshToken);
+fetch('/api/helpdesk-token', { cache: 'no-store' })
+  .then(response => response.json())
+  .then(({ token }) => {
+    document.querySelector('helpdesk-widget')?.setAttribute('identity-token', token);
+  });
 ```
 
 ## What the token does not do

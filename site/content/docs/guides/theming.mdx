@@ -69,3 +69,9 @@ Set the same properties again under your own dark-mode selector:
 Set the panel header in a dark theme too. A light accent reads well on buttons and links, but not as the background of the widget's header.
 
 A widget you load with the script tag can follow the operating system without any of this: `data-theme="auto"` switches it to a built-in dark palette when the system is dark. Properties you have set still win over that palette.
+
+`theme` is an attribute of the `<helpdesk-widget>` element only; `HelpdeskWidget` in React has no prop for it. In a React app, set the dark properties under your own selector as above. To use the built-in palette instead, set the attribute on the element once it is on the page. The palette's styles key on the attribute alone, so this works on the element React rendered:
+
+```ts
+document.querySelector('helpdesk-widget')?.setAttribute('theme', 'auto');
+```

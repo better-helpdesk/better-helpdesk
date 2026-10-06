@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/better-helpdesk/better-helpdesk/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/better-helpdesk/better-helpdesk/ci.yml?branch=main&label=CI"></a>
   <a href="https://www.npmjs.com/package/better-helpdesk"><img alt="npm version" src="https://img.shields.io/npm/v/better-helpdesk"></a>
-  <a href="https://github.com/better-helpdesk/better-helpdesk/blob/main/LICENSE"><img alt="MIT licence" src="https://img.shields.io/github/license/better-helpdesk/better-helpdesk"></a>
+  <a href="https://github.com/better-helpdesk/better-helpdesk/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/better-helpdesk/better-helpdesk"></a>
   <a href="https://nodejs.org/"><img alt="Node.js version" src="https://img.shields.io/node/v/better-helpdesk"></a>
 </p>
 
@@ -69,7 +69,7 @@ database, its deploy and its design tokens.
 - **Email.** Outbound through your own sender. Inbound through a webhook from
   any relay, verified against DKIM and threaded back into the conversation.
 - **Everything optional is an adapter.** File storage, AI suggestions and
-  draft replies, help-centre search and scheduled jobs are small interfaces
+  draft replies, help center search and scheduled jobs are small interfaces
   you implement, or leave out.
 - **Your identity, your data.** No passwords and no sessions are stored.
   Your `identify(request)`, or a signed identity token from another origin,
@@ -92,7 +92,7 @@ deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk
 | Runs as                 | a library in your Next.js app                     | a Rails app you host, or Chatwoot Cloud  | a Go binary you host         | hosted                                 | hosted                                  |
 | Database                | your Postgres, `helpdesk` schema                  | its own Postgres and Redis               | its own Postgres and Redis   | the vendor's                           | the vendor's                            |
 | Identity                | your session or a signed token                    | own logins; SAML on Enterprise           | own logins, OIDC             | own logins; SSO on Expert              | own logins                              |
-| Licence                 | MIT                                               | MIT core, proprietary Enterprise         | AGPL-3.0                     | proprietary                             | proprietary                              |
+| License                 | MIT                                               | MIT core, proprietary Enterprise         | AGPL-3.0                     | proprietary                             | proprietary                              |
 | Pricing                 | free                                              | free to $99, Cloud and self-hosted       | free                         | $29 / $85 / $132                       | $19 / $55 / $115                        |
 | Install                 | npm, one route, one component, one migrate        | Docker, Helm or a VM script              | binary, Docker Compose       | a script tag or mobile SDK             | a script tag                            |
 | Upgrade                 | `pnpm up` plus migrate in your release            | new image, then a database task          | `--upgrade`, after a backup  | the vendor's                            | the vendor's                             |
@@ -107,13 +107,13 @@ deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk
 | Automation              | `onEvent` in your code                            | yes                                     | yes                         | Advanced and up                        | yes                                    |
 | Reporting               | SQL over your database                            | yes                                     | an overview page            | yes                                   | yes                                    |
 | CSAT                    | good or bad, from the widget or the reply email   | yes                                     | yes                         | yes                                   | yes                                    |
-| Help centre             | search over your own docs, by design              | Startups and up                          | yes                         | yes                                    | yes                                     |
+| Help center             | search over your own docs, by design              | Startups and up                          | yes                         | yes                                    | yes                                     |
 | AI                      | suggestions and drafts for the agent, by design   | Captain, paid tier                      | your OpenAI-compatible key  | Fin, $0.99 per outcome                | Copilot, +$50                           |
 | Events out              | `onEvent` in your code                            | webhooks                                | webhooks                    | webhooks                              | webhooks                               |
 | API                     | in-process functions, by design                   | REST                                    | REST with API keys          | REST                                   | REST                                    |
 | Roles                   | `isAgent`, by design                              | custom roles, paid tier                 | custom roles                 | custom roles                          | custom roles on Enterprise             |
 | Languages               | English and German                                | many, community-translated               | 13                          | many                                   | many                                    |
-| Theming                 | CSS custom properties                             | widget settings                         | widget settings             | brand colour, logo, launcher          | widget presets and options             |
+| Theming                 | CSS custom properties                             | widget settings                         | widget settings             | brand color,  logo, launcher          | widget presets and options             |
 
 Intercom hosts in the EU only on Advanced or Expert annual contracts.
 
@@ -177,6 +177,10 @@ export default withHelpdesk({
 });
 ```
 
+`trailingSlash` also adds a slash to every other URL of your app. The
+[install guide](https://better-helpdesk.com/docs/guides/install) shows how to
+keep your own URLs as they are.
+
 ### 4. Build the helpdesk and mount the handler
 
 ```ts
@@ -217,7 +221,7 @@ export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle a
 Two things to get right here:
 
 - `isAgent` is the only thing that grants the agent UI, and `orgs` must list
-  only the organisations the user is an active member of.
+  only the organizations the user is an active member of.
 - `adminUrl` must be the URL your team actually opens in the browser. The
   handler refuses mutations from any other origin, so a mismatch turns every
   reply into a 403.
@@ -256,24 +260,20 @@ export function Layout({ children }) {
 ```
 
 Send a message from the widget, open `/helpdesk` as an agent and answer it.
-That is the whole loop. [`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
+That is the whole loop, and the
+[docs](https://better-helpdesk.com/docs/guides/production) take it from
+there: sign-in, production, email, jobs, attachments, AI and theming.
+[`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
 has it wired up end to end.
 
 ## Documentation
 
-The full documentation is at
-[better-helpdesk.com/docs](https://better-helpdesk.com/docs). Its sources are
-the MDX pages in [`site/content/docs`](site/content/docs).
-
-- [Quickstart](https://better-helpdesk.com/docs/quickstart): from an empty
-  Next.js app to a first answered conversation.
-- [Guides](https://better-helpdesk.com/docs/guides/widget): the widget, a
-  Support page, email in and out, jobs, events, attachments, AI, theming,
-  languages and switching from another helpdesk.
-- [Concepts](https://better-helpdesk.com/docs/concepts/how-it-works): how the
-  package fits into your app, identity and trust, the security model.
-- [Reference](https://better-helpdesk.com/docs/reference/configuration):
-  every option, adapter, event, route, prop and table.
+[better-helpdesk.com/docs](https://better-helpdesk.com/docs):
+[Quickstart](https://better-helpdesk.com/docs/quickstart) ·
+[Guides](https://better-helpdesk.com/docs/guides/install) ·
+[Concepts](https://better-helpdesk.com/docs/concepts/how-it-works) ·
+[Reference](https://better-helpdesk.com/docs/reference/configuration).
+The pages are MDX in [`site/content/docs`](site/content/docs).
 
 ## Demo
 

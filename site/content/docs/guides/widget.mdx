@@ -31,16 +31,16 @@ A few props change what the widget sends or shows:
 
 ```tsx
 <HelpdeskWidget
-  inbox="sales"
+  inbox="support"
   locale="de"
-  types={['lead']}
+  types={['question', 'bug']}
   label="Questions? Write to us"
   appVersion="4.12.0"
   context={{ plan: 'team', region: 'eu' }}
 />
 ```
 
-`types` limits the kinds of conversation offered. `label` puts text beside the launcher icon. `appVersion` and `context` are attached to every conversation the widget opens, next to what it captures itself (the page URL, the viewport, the locale and recent errors). `context` is a map of strings, at most 20 entries. The [widget reference](/docs/reference/widget) lists every prop.
+`types` limits the kinds of conversation offered. `label` puts text beside the launcher icon. `appVersion` and `context` are attached to each `bug`, `feature` or `question` conversation the widget opens, next to what it captures itself (the page URL, the viewport, the locale and recent errors), and the customer can leave any of them out. Other types, such as `lead`, carry neither. `context` is a map of strings, at most 20 entries. The [widget reference](/docs/reference/widget) lists every prop.
 
 ## On a page that is not React
 
@@ -98,7 +98,7 @@ A widget on `www.example.com` that calls a handler on `app.example.com` is cross
 
    The origins of every inbox form one list, as [Inboxes](/docs/reference/inboxes#inboxconfig) describes.
 
-2. Keep `trailingSlash: true` in the Next config from the quickstart. The widget requests paths with a trailing slash; a host that redirects them fails the CORS preflight.
+2. Keep `trailingSlash: true` in the Next config from the quickstart. The widget requests paths with a trailing slash; a host that redirects them fails the CORS preflight. The option also moves every other URL of your app to its slashed form; [Install in an existing app](/docs/guides/install) shows how to keep your own URLs as they are.
 
 3. Point `api` (or `data-api`) at the absolute URL of the handler.
 

@@ -58,8 +58,10 @@ package.
 ## Stage (October 2026)
 
 Pre-launch. First public commit and first npm publish on 28 September 2026,
-followed by a few 0.1.x releases. There is no website and no docs site; the
-README is the documentation. No production deployments yet. Two companies
+followed by releases up to 0.3.0. The website at better-helpdesk.com runs
+the package for its own widget and inbox, and the documentation lives at
+better-helpdesk.com/docs (sources in `site/content/docs/`). No production
+deployments yet. Two companies
 are about to deploy it as design partners, and their feedback drives the
 roadmap. They are not named in this repository, and nothing of theirs goes
 into tests, fixtures, issues or pull requests.

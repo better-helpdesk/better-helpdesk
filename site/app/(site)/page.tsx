@@ -41,8 +41,8 @@ export default function Home() {
               Your helpdesk, <em>inside</em> your app.
             </h1>
             <div className="hero-cta">
-              <a className="btn btn-p" href="/quickstart/">
-                Quickstart
+              <a className="btn btn-p" href="/docs/guides/install/">
+                Get started
                 <ButtonIcon />
               </a>
               <Install />
@@ -241,6 +241,12 @@ export default function Home() {
             runtime dependencies: <code>drizzle-orm</code>, <code>zod</code>,{' '}
             <code>mailparser</code>, <code>mailauth</code>.
           </p>
+          <div className="row-cta">
+            <TextLink href="/docs/concepts/how-it-works/">
+              How it works, in the docs
+              <PiArrowRightBold className="ti" aria-hidden="true" />
+            </TextLink>
+          </div>
         </section>
 
         <section className="sec cost" id="cost" aria-labelledby="c-h">
@@ -427,8 +433,11 @@ export default function Home() {
                   </span>
                 </summary>
                 <p>
-                  There is no importer yet. Today it fits teams starting fresh
-                  or willing to open a new inbox.
+                  Contacts, companies and canned replies come over from a CSV
+                  export with <code>better-helpdesk-import</code>. Conversation
+                  history stays readable in the old tool. The{' '}
+                  <a href="/docs/guides/switching/">switching guide</a> covers
+                  Intercom, Zendesk, Gmail and Chatwoot.
                 </p>
               </details>
               <details className="rv">
@@ -459,7 +468,7 @@ export default function Home() {
               </details>
               <details className="rv">
                 <summary>
-                  <span>What does the licence allow?</span>
+                  <span>What does the license allow?</span>
                   <span className="qa-i" aria-hidden="true">
                     <PiPlusBold />
                   </span>
@@ -496,8 +505,8 @@ export default function Home() {
           </h2>
           <div className="row-cta center">
             <Install />
-            <a className="btn btn-p" href="/quickstart/">
-              Quickstart
+            <a className="btn btn-p" href="/docs/guides/install/">
+              Get started
               <ButtonIcon />
             </a>
           </div>
