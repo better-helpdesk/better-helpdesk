@@ -1307,4 +1307,35 @@ describe('Widget', () => {
     rerender(widget());
     expect(await screen.findByLabelText('Work email')).toBeTruthy();
   });
+
+  it('keeps what the customer typed when the host refreshes the token for the same person', async () => {
+    const tokenFor = (sub: string, exp: number) =>
+      `h.${btoa(JSON.stringify({ sub, exp })).replace(/=+$/, '')}.s`;
+    const fetch = vi.fn(
+      async () => new Response(JSON.stringify(session), { status: 200 })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const widget = (identityToken: string) => (
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['bug']}
+        identityToken={identityToken}
+        errors={() => []}
+      />
+    );
+    const { rerender } = render(widget(tokenFor('u1', 1)));
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    const body = await screen.findByRole('textbox', { name: 'What happened?' });
+    body.innerHTML = 'The export hangs';
+    fireEvent.input(body);
+    const calls = fetch.mock.calls.length;
+
+    rerender(widget(tokenFor('u1', 2)));
+    expect(
+      screen.getByRole('textbox', { name: 'What happened?' }).textContent
+    ).toBe('The export hangs');
+    expect(fetch.mock.calls.length).toBe(calls);
+  });
 });
