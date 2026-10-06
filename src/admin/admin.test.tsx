@@ -162,9 +162,11 @@ describe('HelpdeskAdmin', () => {
     onTestFinished(() => {
       routes['agent/conversations/c1/'] = original;
     });
+    // sessionStorage is cleared before each test, so the open panel stays in this one.
+    vi.stubGlobal('localStorage', sessionStorage);
+    localStorage.setItem('helpdesk.aside', 'open');
     window.history.replaceState(null, '', '/support/conversations/c1/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
     const link = await screen.findByRole('link', {
       name: /Open in Acme admin/,
     });
