@@ -14,6 +14,8 @@ type Props = {
   appVersion?: string;
   context?: Record<string, string>;
   label?: string;
+  /** `auto` follows the operating system's dark mode. */
+  theme?: 'auto';
 };
 
 /** React wrapper around `<helpdesk-widget>`. */
