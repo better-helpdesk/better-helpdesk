@@ -113,6 +113,54 @@ describe('merging conversations', () => {
     ).toEqual([{ conversation_id: target.id }]);
   });
 
+  it('follows a chain of merges for a reply to the first source', async () => {
+    const first = await open('carol', 'First');
+    const second = await open('carol', 'Second');
+    const third = await open('carol', 'Third');
+    await merge(first.id, second.id);
+    await merge(second.id, third.id);
+
+    await h.support.handleInbound({
+      messageId: '<chain@mail.test>',
+      from: { address: 'carol@example.test', name: 'Carol' },
+      to: [`support+${first.reference}@devguard.test`],
+      subject: 'Re: Export',
+      text: 'Still there?',
+      references: [],
+      verified: true,
+      automated: false,
+      attachments: [],
+    });
+
+    expect(
+      await rows(
+        sql`SELECT conversation_id FROM helpdesk.message WHERE body = 'Still there?'`
+      )
+    ).toEqual([{ conversation_id: third.id }]);
+  });
+
+  it('refuses a widget reply to a merged-away conversation and leaves it resolved', async () => {
+    const source = await open('carol', 'First');
+    const target = await open('carol', 'Second');
+    await merge(source.id, target.id);
+
+    const res = await h.call(
+      'POST',
+      `widget/conversations/${source.id}/messages`,
+      { user: 'carol', body: { body: 'Late reply' } }
+    );
+
+    expect(res.status).toBe(409);
+    expect(
+      await rows(sql`SELECT 1 FROM helpdesk.message WHERE body = 'Late reply'`)
+    ).toEqual([]);
+    expect(
+      await rows(
+        sql`SELECT status FROM helpdesk.conversation WHERE id = ${source.id}::uuid`
+      )
+    ).toEqual([{ status: 'resolved' }]);
+  });
+
   it('keeps an unanswered customer message in the queue when the target was resolved', async () => {
     const source = await open('carol', 'Still broken');
     const target = await open('carol', 'Export');

@@ -422,6 +422,10 @@ export function createHelpdesk(input: HelpdeskConfig) {
     body: string
   ) {
     if (!customer.contact) throw new HelpdeskError(401, 'Unauthenticated');
+    // Appending would reopen it in the inbox, apart from the thread agents work in.
+    if (conversation.mergedIntoId) {
+      throw new HelpdeskError(409, 'Conversation merged');
+    }
     await limitCustomer(request, customer);
     const message = await store.appendMessage({
       conversationId: conversation.id,
@@ -841,18 +845,17 @@ export function createHelpdesk(input: HelpdeskConfig) {
       )
     );
     if (threaded) {
-      conversation = await store.getConversation(threaded.conversationId);
+      conversation = await followMerges(
+        await store.getConversation(threaded.conversationId)
+      );
     } else {
       for (const to of mail.to) {
         const tag = /\+([^@]+)@/.exec(to)?.[1];
         const number = tag && parseReference(config.referencePrefix, tag);
         if (number) {
-          conversation = await store.getConversationByNumber(number);
-          if (conversation?.mergedIntoId) {
-            conversation = await store.getConversation(
-              conversation.mergedIntoId
-            );
-          }
+          conversation = await followMerges(
+            await store.getConversationByNumber(number)
+          );
           if (conversation) break;
         }
       }
@@ -969,6 +972,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
     );
     await recordAttachments(created.message.id, files);
     await afterNewConversation(created, 'other');
+  }
+
+  /** A merge refuses a side that was merged away, so the chain cannot loop. */
+  async function followMerges(conversation: Conversation | null) {
+    let current = conversation;
+    while (current?.mergedIntoId) {
+      current = await store.getConversation(current.mergedIntoId);
+    }
+    return current;
   }
 
   async function onConversation(conversation: Conversation, email: string) {
