@@ -47,6 +47,8 @@ export type WidgetProps = {
   appVersion?: string;
   /** Text beside the launcher icon, e.g. "Questions? Write to us". */
   label?: string;
+  /** In the page itself: always open, no launcher, the conversations first. */
+  inline?: boolean;
   errors: () => string[];
   onEvent?: (event: WidgetEvent) => void;
 };
@@ -285,7 +287,8 @@ export function Widget(props: WidgetProps) {
       ),
     [props.api]
   );
-  const [open, setOpen] = useState(false);
+  const inline = Boolean(props.inline);
+  const [open, setOpen] = useState(inline);
   const [view, setView] = useState<View>({ name: 'home' });
   const [menuOpen, setMenuOpen] = useState(false);
   // Closed, it only needs to notice a reply to a thread the team still holds,
@@ -303,6 +306,13 @@ export function Widget(props: WidgetProps) {
     );
     setIsAgent(Boolean(session.data?.agent));
   }, [session.data]);
+  // A support page opens on the customer's conversations once there are any.
+  const listed = useRef(false);
+  useEffect(() => {
+    if (!inline || listed.current || !session.data) return;
+    listed.current = true;
+    if (session.data.conversations.length > 0) setView({ name: 'list' });
+  }, [inline, session.data]);
   const launcher = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const data = session.data;
@@ -317,20 +327,22 @@ export function Widget(props: WidgetProps) {
   const home: View = single ? { name: 'form', type: single } : { name: 'home' };
 
   const close = useCallback(() => {
+    if (inline) return;
     setOpen(false);
     setMenuOpen(false);
     launcher.current?.focus();
-  }, []);
+  }, [inline]);
 
   useEffect(() => {
-    if (!open) return;
+    // On a page it is not opened, so it neither announces that nor takes focus.
+    if (!open || inline) return;
     onEvent?.({ name: 'helpdesk:open' });
     panel.current
       ?.querySelector<HTMLElement>(
         '.rt-input, textarea, input, button.type, button.item'
       )
       ?.focus();
-  }, [open, onEvent]);
+  }, [open, inline, onEvent]);
 
   const title =
     view.name === 'form' && !single
@@ -357,13 +369,13 @@ export function Widget(props: WidgetProps) {
   }, []);
 
   useEffect(() => {
-    if (!open || !mobile) return;
+    if (!open || !mobile || inline) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [open, mobile]);
+  }, [open, mobile, inline]);
   const agentWaiting = data?.agent?.waiting ?? 0;
   const hasConversations = (data?.conversations.length ?? 0) > 0;
   const showBack = view.name === 'thread' || (view.name === 'form' && !single);
@@ -377,16 +389,19 @@ export function Widget(props: WidgetProps) {
   return (
     <>
       {open && (
+        // biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-modal is set only when the role is dialog.
+        // biome-ignore lint/a11y/noStaticElementInteractions: as a dialog it takes Escape and Tab; as a page region the handler does nothing.
         <div
           ref={panel}
           className="panel"
           data-fit={view.name === 'home' || view.name === 'form' || undefined}
-          role="dialog"
-          aria-modal={mobile || undefined}
+          data-inline={inline || undefined}
+          role={inline ? 'region' : 'dialog'}
+          aria-modal={(!inline && mobile) || undefined}
           aria-label={title}
           onKeyDown={e => {
             if (e.key === 'Escape' && !e.defaultPrevented) close();
-            if (e.key === 'Tab' && mobile) trapFocus(e);
+            if (e.key === 'Tab' && mobile && !inline) trapFocus(e);
           }}>
           <div className="head">
             <div className="head-row">
@@ -414,13 +429,15 @@ export function Widget(props: WidgetProps) {
                   conversation={data?.conversations.find(c => c.id === view.id)}
                 />
               )}
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label={t('widget.close')}
-                onClick={close}>
-                <Svg d={Icon.close} />
-              </button>
+              {!inline && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={t('widget.close')}
+                  onClick={close}>
+                  <Svg d={Icon.close} />
+                </button>
+              )}
             </div>
             <div className="presence">
               {data && data.team.length > 0 && (
@@ -578,36 +595,38 @@ export function Widget(props: WidgetProps) {
           )}
         </div>
       )}
-      <button
-        ref={launcher}
-        type="button"
-        className="launcher"
-        aria-label={
-          open
-            ? t('widget.close')
-            : `${props.label ?? t('widget.open')}${
-                agentWaiting > 0
-                  ? ` · ${t('widget.agentWaiting', { count: String(agentWaiting) })}`
-                  : ''
-              }`
-        }
-        aria-expanded={open}
-        onClick={() => {
-          if (open) {
-            close();
-          } else {
-            setView(home);
-            setOpen(true);
+      {!inline && (
+        <button
+          ref={launcher}
+          type="button"
+          className="launcher"
+          aria-label={
+            open
+              ? t('widget.close')
+              : `${props.label ?? t('widget.open')}${
+                  agentWaiting > 0
+                    ? ` · ${t('widget.agentWaiting', { count: String(agentWaiting) })}`
+                    : ''
+                }`
           }
-        }}>
-        <Svg d={open ? Icon.close : Icon.chat} />
-        {!open && props.label && <span>{props.label}</span>}
-        {unread > 0 && <span className="badge">{unread}</span>}
-        {!open && agentWaiting > 0 && (
-          // Quiet on purpose: noticeable to the agent, not to a room watching a demo.
-          <span className="agent-dot on-launcher" aria-hidden="true" />
-        )}
-      </button>
+          aria-expanded={open}
+          onClick={() => {
+            if (open) {
+              close();
+            } else {
+              setView(home);
+              setOpen(true);
+            }
+          }}>
+          <Svg d={open ? Icon.close : Icon.chat} />
+          {!open && props.label && <span>{props.label}</span>}
+          {unread > 0 && <span className="badge">{unread}</span>}
+          {!open && agentWaiting > 0 && (
+            // Quiet on purpose: noticeable to the agent, not to a room watching a demo.
+            <span className="agent-dot on-launcher" aria-hidden="true" />
+          )}
+        </button>
+      )}
     </>
   );
 }

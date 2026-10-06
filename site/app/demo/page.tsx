@@ -1,7 +1,13 @@
 import { HelpdeskWidget } from 'better-helpdesk/widget';
 import type { Metadata } from 'next';
 
-import { DEMO_API, demoEnabled, RESET_MINUTES } from '../../lib/demo';
+import {
+  DEMO_API,
+  demoEnabled,
+  NEWEST_ROWS_SQL,
+  newestRows,
+  RESET_MINUTES,
+} from '../../lib/demo';
 import { ButtonIcon } from '../components/icons';
 import { SiteFooter, SiteHeader } from '../components/site-chrome';
 import { currentRole, RoleSwitcher } from './chrome';
@@ -16,6 +22,8 @@ export const metadata: Metadata = {
 export default async function Demo() {
   const role = await currentRole();
   const enabled = demoEnabled();
+  // The page renders per request (it reads the role cookie), so these are current.
+  const rows = enabled ? await newestRows().catch(() => null) : null;
   return (
     <>
       <SiteHeader />
@@ -79,6 +87,56 @@ export default async function Demo() {
                       <ButtonIcon />
                     </a>
                   </div>
+                </div>
+              </li>
+              <li className="qs-step">
+                <span className="qs-n" aria-hidden="true">
+                  04
+                </span>
+                <div className="qs-body">
+                  <h2>Look at the rows</h2>
+                  <p>
+                    It all lives in a <code>helpdesk</code> schema in the host's
+                    own Postgres, as plain tables. These are the newest
+                    messages, read with this query when the page loaded:
+                  </p>
+                  <pre>
+                    <code>{NEWEST_ROWS_SQL}</code>
+                  </pre>
+                  {rows === null ? (
+                    <p>The database did not answer just now.</p>
+                  ) : rows.length === 0 ? (
+                    <p>No messages yet: send the first one.</p>
+                  ) : (
+                    <div className="qs-rows">
+                      <table className="sg-table">
+                        <thead>
+                          <tr>
+                            <th>number</th>
+                            <th>author_type</th>
+                            <th>body</th>
+                            <th>created_at</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(row => (
+                            <tr
+                              key={`${row.number}-${row.created_at.toISOString()}`}>
+                              <td>{row.number}</td>
+                              <td>{row.author_type}</td>
+                              <td>{row.body}</td>
+                              <td>
+                                {row.created_at
+                                  .toISOString()
+                                  .slice(0, 19)
+                                  .replace('T', ' ')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </li>
             </ol>

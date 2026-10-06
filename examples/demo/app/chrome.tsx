@@ -3,7 +3,7 @@ import { type DemoRole, ROLES } from '../lib/role';
 const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 
 /** The host product's own chrome, so the widget has something to sit in. */
-export function Bar({ here }: { here: 'site' | 'helpdesk' }) {
+export function Bar({ here }: { here: 'site' | 'support' | 'helpdesk' }) {
   return (
     <header className="bar">
       <a className="brand" href="/">
@@ -16,6 +16,11 @@ export function Bar({ here }: { here: 'site' | 'helpdesk' }) {
       <nav>
         <a href="/" aria-current={here === 'site' ? 'page' : undefined}>
           Overview
+        </a>
+        <a
+          href="/support/"
+          aria-current={here === 'support' ? 'page' : undefined}>
+          Support
         </a>
         <a
           href="/helpdesk/"

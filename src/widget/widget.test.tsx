@@ -393,6 +393,32 @@ describe('Widget', () => {
     expect(await screen.findByText('Seen')).toBeTruthy();
   });
 
+  it('opens inline on the customer’s conversations, with no launcher and nothing to close', async () => {
+    mockApi({
+      'widget/session': { ...session, conversations: [ownThread] },
+      ...posted,
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+        inline
+      />
+    );
+    const page = await screen.findByRole('region');
+    expect(await within(page).findByText('Export broken')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open support' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Close support' })).toBeNull();
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.click(within(page).getByText('Export broken'));
+    await within(page).findByText('Broken');
+    fireEvent.click(within(page).getByRole('button', { name: 'Back' }));
+    expect(await within(page).findByText('Export broken')).toBeTruthy();
+  });
+
   it('shows where a labelled link goes in a colleague’s message, not in one’s own', async () => {
     mockApi({
       'widget/session': {

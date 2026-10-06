@@ -28,6 +28,22 @@ cache.demoPool ??= new pg.Pool({
 });
 const pool = cache.demoPool;
 
+export const NEWEST_ROWS_SQL = `select c.number, m.author_type, left(m.body, 80) as body, m.created_at
+from helpdesk.message m join helpdesk.conversation c on c.id = m.conversation_id
+where not m.internal
+order by m.created_at desc limit 5`;
+
+/** The demo's five newest customer-visible messages, read straight from its tables. */
+export async function newestRows() {
+  const { rows } = await pool.query<{
+    number: number;
+    author_type: string;
+    body: string;
+    created_at: Date;
+  }>(NEWEST_ROWS_SQL);
+  return rows;
+}
+
 const IDENTITIES = {
   customer: {
     user: {
