@@ -24,7 +24,9 @@ export function NotificationBell() {
         'agent/notifications'
       ),
     'notifications',
-    30_000
+    30_000,
+    // The count in the tab title is for when this tab is in the background.
+    { whenHidden: true }
   );
   useEffect(() => {
     const refresh = () => void feed.refresh();
