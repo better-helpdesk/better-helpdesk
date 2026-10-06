@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { signIdentityToken } from '../src';
 import { createHarness, IDENTITY_SECRET, WWW_ORIGIN } from './harness';
@@ -928,6 +928,24 @@ describe('rating from the email', () => {
     const forged = new URL(links.good);
     forged.searchParams.set('r', 'bad');
     expect((await open(forged.toString(), 'POST')).status).toBe(404);
+  });
+
+  it('refuses an expired link, and offers no button once the conversation is open again', async () => {
+    const { conversation, links } = await resolvedReply('dora');
+    if (!links) throw new Error('no rating links');
+    vi.useFakeTimers({ now: Date.now() + 31 * 86_400_000, toFake: ['Date'] });
+    try {
+      expect((await open(links.good)).status).toBe(404);
+    } finally {
+      vi.useRealTimers();
+    }
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'open' },
+    });
+    const reopened = await open(links.good);
+    expect(reopened.status).toBe(409);
+    expect(await reopened.text()).not.toContain('<form');
   });
 
   it('opens the conversation again for a bad rating', async () => {

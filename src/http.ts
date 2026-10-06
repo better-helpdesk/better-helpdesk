@@ -62,6 +62,8 @@ function page(locale: Locale, status: number, text: string, button?: string) {
         'cache-control': 'no-store',
         // The URL carries the signature.
         'referrer-policy': 'no-referrer',
+        'content-security-policy': "frame-ancestors 'none'",
+        'x-frame-options': 'DENY',
       },
     }
   );
@@ -1556,6 +1558,9 @@ export function createHandler(support: Helpdesk) {
     const reference = support.reference(conversation);
     if (conversation.rating) {
       return page(locale, 200, t('rate.done', { reference }));
+    }
+    if (conversation.status !== 'resolved' || conversation.mergedIntoId) {
+      return page(locale, 409, t('rate.closed', { reference }));
     }
     if (!submit) {
       return page(

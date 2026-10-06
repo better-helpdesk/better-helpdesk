@@ -1324,6 +1324,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
   // A key of the package's own, kept in its settings, so hosts configure nothing.
   async function ratingSecret() {
     const key = 'rating-link-secret';
+    const stored = await store.getSetting<string>(key);
+    if (stored) return stored;
+    // Two first requests at once both read back the one that was stored.
     await store.addSetting(key, randomBytes(32).toString('base64url'));
     return (await store.getSetting<string>(key)) as string;
   }
