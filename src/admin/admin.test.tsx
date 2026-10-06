@@ -150,6 +150,28 @@ afterEach(() => {
 });
 
 describe('HelpdeskAdmin', () => {
+  it('links a conversation reference in a message to the inbox search for it', async () => {
+    const base = original as { messages: { body: string }[] };
+    routes['agent/conversations/c1/'] = {
+      ...base,
+      messages: [
+        { ...base.messages[0], body: 'Same as DG-1001, please check' },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const link = await screen.findByRole('link', { name: 'DG-1001' });
+    expect(link.getAttribute('href')).toBe(
+      '/support/conversations/?q=DG-1001&status=any'
+    );
+
+    fireEvent.click(link);
+    expect(window.location.search).toBe('?q=DG-1001&status=any');
+  });
+
   it('offers the host’s links for the customer beside the conversation', async () => {
     routes['agent/conversations/c1/'] = {
       ...(original as object),

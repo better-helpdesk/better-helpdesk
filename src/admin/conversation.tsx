@@ -739,6 +739,16 @@ export function ConversationView({ id }: { id: string }) {
                         text={m.body}
                         hosts={m.authorType !== 'agent'}
                         code={text => <CodeBlock text={text} t={t} />}
+                        reference={reference => (
+                          <a
+                            href={href({ q: reference, status: 'any' })}
+                            onClick={e => {
+                              e.preventDefault();
+                              navigate({ q: reference, status: 'any' });
+                            }}>
+                            {reference}
+                          </a>
+                        )}
                       />
                     </div>
                   </div>
