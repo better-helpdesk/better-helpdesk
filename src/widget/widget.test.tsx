@@ -1343,4 +1343,31 @@ describe('Widget', () => {
     ).toBe('The export hangs');
     expect(fetch.mock.calls.length).toBe(calls);
   });
+
+  it('leaves an open thread for the list when the host switches to another person', async () => {
+    const tokenFor = (sub: string) =>
+      `h.${btoa(JSON.stringify({ sub, exp: 1 })).replace(/=+$/, '')}.s`;
+    mockApi({
+      'widget/session': { ...session, conversations: [ownThread] },
+      ...posted,
+    });
+    const widget = (identityToken: string) => (
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        identityToken={identityToken}
+        errors={() => []}
+        inline
+      />
+    );
+    const { rerender } = render(widget(tokenFor('u1')));
+    const page = await screen.findByRole('region');
+    fireEvent.click(await within(page).findByText('Export broken'));
+    await within(page).findByText('Broken');
+
+    rerender(widget(tokenFor('u2')));
+    expect(await within(page).findByText('Export broken')).toBeTruthy();
+    expect(within(page).queryByText('Broken')).toBeNull();
+  });
 });
