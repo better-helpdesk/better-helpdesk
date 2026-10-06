@@ -24,6 +24,7 @@ import {
   type Viewer,
   ViewerStack,
 } from './ui';
+import { SavedViews } from './views';
 
 export type ConversationRow = {
   id: string;
@@ -269,6 +270,7 @@ export function Inbox() {
           )
         )}
       </div>
+      <SavedViews filters={filters} canSave={filtered} />
       <p className="sa-sr-only" role="status">
         {visibleSelected.length > 0
           ? t('admin.selected', { count: String(visibleSelected.length) })

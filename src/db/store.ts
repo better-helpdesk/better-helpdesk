@@ -65,12 +65,61 @@ export type InboxFilter = {
   companyId?: string;
   tag?: string;
   query?: string;
+  /** `high` keeps high and urgent conversations only. */
+  priority?: 'high';
   /** Longest waiting first by default; `priority` puts urgent and high on top. */
   sort?: 'waiting' | 'priority';
   limit?: number;
 };
 
 const MAX_ATTEMPTS = 5;
+
+/** The filters of the agent inbox, shared by its list and its counts. */
+function inboxConditions(filter: InboxFilter) {
+  const q = filter.query?.trim();
+  const conditions: (SQL | undefined)[] = [
+    filter.inbox ? eq(conversations.inbox, filter.inbox) : undefined,
+    filter.status === 'snoozed'
+      ? and(
+          eq(conversations.status, 'pending'),
+          isNotNull(conversations.snoozedUntil)
+        )
+      : filter.status === 'rated-bad'
+        ? eq(conversations.rating, 'bad')
+        : filter.status
+          ? eq(conversations.status, filter.status)
+          : undefined,
+    filter.assigneeId === null
+      ? isNull(conversations.assigneeId)
+      : filter.assigneeId
+        ? eq(conversations.assigneeId, filter.assigneeId)
+        : undefined,
+    filter.contactId
+      ? eq(conversations.contactId, filter.contactId)
+      : undefined,
+    filter.companyId
+      ? eq(conversations.companyId, filter.companyId)
+      : undefined,
+    filter.tag ? arrayContains(conversations.tags, [filter.tag]) : undefined,
+    filter.priority === 'high'
+      ? inArray(conversations.priority, ['high', 'urgent'])
+      : undefined,
+  ];
+  if (q) {
+    const number = Number(q.replace(/^\D+-/, ''));
+    conditions.push(
+      or(
+        sql`${conversations.search} @@ websearch_to_tsquery('simple', ${q})`,
+        sql`${conversations.id} IN (SELECT conversation_id FROM helpdesk.message WHERE search @@ websearch_to_tsquery('simple', ${q}))`,
+        // `number` is an int4; a longer digit run is text, not a reference.
+        Number.isSafeInteger(number) && number <= 2_147_483_647
+          ? eq(conversations.number, number)
+          : undefined
+      )
+    );
+  }
+  return conditions;
+}
 
 /** The Postgres adapter. It shares the host's pool and never opens its own. */
 export function postgresAdapter({ pool }: { pool: Pool }) {
@@ -744,47 +793,7 @@ export function createStore(db: Db) {
     },
 
     async listInbox(filter: InboxFilter) {
-      const q = filter.query?.trim();
-      const conditions: (SQL | undefined)[] = [
-        filter.inbox ? eq(conversations.inbox, filter.inbox) : undefined,
-        filter.status === 'snoozed'
-          ? and(
-              eq(conversations.status, 'pending'),
-              isNotNull(conversations.snoozedUntil)
-            )
-          : filter.status === 'rated-bad'
-            ? eq(conversations.rating, 'bad')
-            : filter.status
-              ? eq(conversations.status, filter.status)
-              : undefined,
-        filter.assigneeId === null
-          ? isNull(conversations.assigneeId)
-          : filter.assigneeId
-            ? eq(conversations.assigneeId, filter.assigneeId)
-            : undefined,
-        filter.contactId
-          ? eq(conversations.contactId, filter.contactId)
-          : undefined,
-        filter.companyId
-          ? eq(conversations.companyId, filter.companyId)
-          : undefined,
-        filter.tag
-          ? arrayContains(conversations.tags, [filter.tag])
-          : undefined,
-      ];
-      if (q) {
-        const number = Number(q.replace(/^\D+-/, ''));
-        conditions.push(
-          or(
-            sql`${conversations.search} @@ websearch_to_tsquery('simple', ${q})`,
-            sql`${conversations.id} IN (SELECT conversation_id FROM helpdesk.message WHERE search @@ websearch_to_tsquery('simple', ${q}))`,
-            // `number` is an int4; a longer digit run is text, not a reference.
-            Number.isSafeInteger(number) && number <= 2_147_483_647
-              ? eq(conversations.number, number)
-              : undefined
-          )
-        );
-      }
+      const conditions = inboxConditions(filter);
       return db
         .select({ conversation: conversations, contact: contacts })
         .from(conversations)
@@ -803,6 +812,14 @@ export function createStore(db: Db) {
           desc(conversations.lastMessageAt)
         )
         .limit(filter.limit ?? 200);
+    },
+
+    async countInbox(filter: InboxFilter) {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversations)
+        .where(and(...inboxConditions(filter)));
+      return row?.count ?? 0;
     },
 
     /** The newest public message of each conversation, for list previews. */
