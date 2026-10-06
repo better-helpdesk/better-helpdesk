@@ -687,12 +687,38 @@ Each inbox is configured on its own:
 | `public`                         | Anonymous visitors may open conversations here.                                     |
 | `allowedOrigins`                 | Origins allowed to call the widget API cross-origin.                                |
 | `reminderAfterHours`             | Email the agents when a customer has waited this long.                              |
+| `hours`                          | Opening hours. Reminders and waiting colours then count only these.                 |
 | `defaultPriority`                | Priority new conversations start with, for example `high` for sales.                |
 | `title`, `replyPromise`          | The widget's header and what it promises about replies, per locale.                 |
 | `qualify`                        | One qualifying question with options, asked before the first message.               |
 | `privacyUrl`                     | Linked under the first-message form, per locale.                                    |
 | `receipt`                        | Email a receipt to people who write in.                                             |
 | `bookingUrl`, `bookingLink(ref)` | A meeting link offered once someone has written, in the widget and in the receipt.  |
+
+`hours` takes an IANA time zone and spans per weekday, `mon` to `sun`. A day
+left out is closed, `24:00` ends a span at midnight, and a span whose end is
+not after its start runs into the next day:
+
+```ts
+support: {
+  reminderAfterHours: 4,
+  hours: {
+    timeZone: 'Europe/Zurich',
+    weekly: {
+      mon: [['08:00', '12:00'], ['13:00', '17:00']],
+      tue: [['08:00', '17:00']],
+      wed: [['08:00', '17:00']],
+      thu: [['08:00', '17:00']],
+      fri: [['08:00', '15:00']],
+    },
+  },
+},
+```
+
+Four hours there are four open hours: a message at 14:00 on Friday reminds
+the agents at 11:00 on Monday. While the inbox is closed, the receipt and the
+widget say when the team is back. Without `hours`, every hour counts and the
+team is back on the next weekday.
 
 Statuses are `open`, `pending` and `resolved`, read from the customer's
 side. Priorities are `low`, `normal`, `high` and `urgent`. The default lead
