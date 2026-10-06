@@ -28,23 +28,32 @@ HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import contacts people.
 HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import canned replies.csv
 ```
 
-It prints how many rows it created, updated and skipped. Column names are
-read without regard to case, and a header row is required.
+It prints how many rows it created, updated and left alone, and a line for
+each value it had to leave out. Column names are read without regard to
+case, and a header row is required. A quote that is never closed stops the
+import with its line number, before anything is written.
 
 - **Contacts** need an `email`; `name`, `tags` (separated by `;` or `|`) and
-  `lead_stage` are optional. A row joins the company with its `domain`, or,
-  when it has a `company` but no `domain`, the company with the email's
-  domain; a missing company is created and named after `company`. A row
-  without a usable email is skipped.
+  `lead_stage` are optional. A lead stage must be one of the stages the
+  agent UI knows: the defaults (`lead`, `qualified`, `customer`, `churned`),
+  or, if you set `leadStages`, the same list as
+  `--lead-stages lead,trial,customer`. Tags longer than 50 characters and
+  names longer than 200 are left out, as the agent UI would refuse them.
+- **Companies** come from the same file: a row with a `domain` joins the
+  company with that domain, and a row with only a `company` joins the
+  company with that name. A missing company is created; an existing one is
+  never renamed.
 - **Saved replies** need a `title` and a `body`; `locale` (`en` or `de`) is
   optional. In a saved reply, `{firstName}` and `{reference}` are filled in
   when an agent inserts it, so rewrite the old tool's placeholders to those
   two.
 
-Running it again is safe. A contact whose email is already known, from an
-earlier import or because the person already wrote in, is updated and keeps
-its tags; a saved reply whose title and locale exist is left alone. So fix
-the export and run the whole file again.
+Running it again is safe, also after agents have started working. A contact
+whose email is already known, from an earlier import or because the person
+already wrote in, only gains what it lacks: empty fields are filled and
+tags are added, and nothing an agent changed is undone. A saved reply whose
+title and locale exist is left alone. So fix the export and run the whole
+file again.
 
 An imported contact is not linked to anyone's login. When the same person
 later writes in or signs in, they may arrive as a second contact; open the

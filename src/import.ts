@@ -1,11 +1,20 @@
+import { DEFAULT_LEAD_STAGES } from './config';
 import type { HelpdeskStore } from './db/store';
 
-/** Rows of an RFC 4180 file as objects keyed by its header, which is trimmed and lower-cased. */
+/**
+ * Rows of an RFC 4180 file as objects keyed by its header, which is trimmed
+ * and lower-cased. A quote opens a quoted field only at the field's start;
+ * elsewhere it is a character. An unterminated quote, or text after a closing
+ * one, throws with its line, rather than swallowing the rows after it.
+ */
 export function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
   let quoted = false;
+  let closed = false;
+  let line = 1;
+  let quoteLine = 1;
   const input = text.replace(/^﻿/, '');
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
@@ -13,19 +22,32 @@ export function parseCsv(text: string): Record<string, string>[] {
       if (ch === '"' && input[i + 1] === '"') {
         field += '"';
         i++;
-      } else if (ch === '"') quoted = false;
-      else field += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ',') {
+      } else if (ch === '"') {
+        quoted = false;
+        closed = true;
+      } else {
+        if (ch === '\n') line++;
+        field += ch;
+      }
+    } else if (ch === ',' || ch === '\n' || ch === '\r') {
       row.push(field);
       field = '';
-    } else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && input[i + 1] === '\n') i++;
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = '';
+      closed = false;
+      if (ch !== ',') {
+        if (ch === '\r' && input[i + 1] === '\n') i++;
+        rows.push(row);
+        row = [];
+        line++;
+      }
+    } else if (closed) {
+      throw new Error(`CSV line ${line}: text after a closing quote`);
+    } else if (ch === '"' && field === '') {
+      quoted = true;
+      quoteLine = line;
     } else field += ch;
+  }
+  if (quoted) {
+    throw new Error(`CSV line ${quoteLine}: a quote is never closed`);
   }
   if (field !== '' || row.length > 0) {
     row.push(field);
@@ -42,72 +64,119 @@ export type ImportReport = {
   created: number;
   updated: number;
   skipped: number;
+  /** Values left out, one line each, for the person running the import. */
+  notes: string[];
 };
 
-const list = (value: string | undefined) =>
-  (value ?? '')
-    .split(/[;|]/)
-    .map(v => v.trim().toLowerCase())
-    .filter(Boolean);
+// The agent API's limits, so an import stores nothing an agent could not.
+const MAX_TAGS = 50;
+const MAX_TAG = 50;
+const MAX_NAME = 200;
 
 /**
  * Contacts by `email` (required), with `name`, `tags` (split on `;` or `|`),
- * `lead_stage`, and a company: the one with the row's `domain`, or with the
- * email's domain when only `company` is given, made when missing. A contact
- * whose email is already known is updated, so the import can run again.
+ * `lead_stage`, and a company: by `domain` when the row has one, otherwise
+ * by its `company` name; one is made when missing, and an existing one is
+ * never renamed. A known contact only gains what it lacks: empty fields are
+ * filled and tags are added, so a rerun never undoes an agent's edit.
  */
 export async function importContacts(
   store: HelpdeskStore,
-  rows: Record<string, string>[]
+  rows: Record<string, string>[],
+  { leadStages = DEFAULT_LEAD_STAGES }: { leadStages?: string[] } = {}
 ): Promise<ImportReport> {
-  const report = { created: 0, updated: 0, skipped: 0 };
-  for (const row of rows) {
+  const report: ImportReport = {
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    notes: [],
+  };
+  for (const [index, row] of rows.entries()) {
+    const at = `row ${index + 2}`;
     const email = row.email?.toLowerCase();
-    if (!email?.includes('@')) {
+    if (!email || !/^[^@\s]+@[^@\s]+$/.test(email)) {
       report.skipped++;
+      report.notes.push(`${at}: no usable email, skipped`);
       continue;
     }
-    const domain =
-      row.domain?.toLowerCase() ||
-      (row.company ? email.split('@')[1] : undefined);
-    let companyId: string | undefined;
-    if (domain) {
-      const company =
-        (await store.findCompanyByDomain(domain)) ??
-        (await store.createCompany({ name: row.company || domain, domain }));
-      if (row.company && company.name !== row.company) {
-        await store.updateCompany(company.id, { name: row.company });
-      }
-      companyId = company.id;
+    let name: string | undefined = row.name || undefined;
+    if (name && name.length > MAX_NAME) {
+      report.notes.push(`${at}: name longer than ${MAX_NAME}, left out`);
+      name = undefined;
     }
-    const values = {
-      email,
-      ...(row.name && { name: row.name }),
-      ...(row.lead_stage && { leadStage: row.lead_stage }),
-      ...(companyId && { companyId }),
-    };
-    const tags = list(row.tags);
+    let stage: string | undefined = row.lead_stage?.toLowerCase() || undefined;
+    if (stage && !leadStages.includes(stage)) {
+      report.notes.push(
+        `${at}: lead stage "${row.lead_stage}" is not one of ${leadStages.join(', ')}, left out`
+      );
+      stage = undefined;
+    }
+    const given = [
+      ...new Set(
+        (row.tags ?? '')
+          .split(/[;|]/)
+          .map(v => v.trim().toLowerCase())
+          .filter(Boolean)
+      ),
+    ];
+    const tags = given.filter(tag => tag.length <= MAX_TAG);
+    if (tags.length < given.length) {
+      report.notes.push(`${at}: tags longer than ${MAX_TAG} left out`);
+    }
+    const companyId = await companyFor(store, row);
+
     const known =
       (await store.findContactByIdentity('email', email, {
         verifiedOnly: false,
       })) ?? (await store.findContactByEmail(email));
-    if (known) {
-      await store.updateContact(known.id, {
-        ...values,
-        ...(tags.length > 0 && {
-          tags: [...new Set([...known.tags, ...tags])],
-        }),
-      });
-      report.updated++;
-    } else {
+    if (!known) {
       await store.createContact(
-        { ...values, tags },
+        {
+          email,
+          name: name ?? null,
+          leadStage: stage ?? null,
+          companyId: companyId ?? null,
+          tags: tags.slice(0, MAX_TAGS),
+        },
         { channel: 'email', externalId: email, verified: false }
       );
       report.created++;
+      continue;
     }
+    const merged = [...new Set([...known.tags, ...tags])].slice(0, MAX_TAGS);
+    const patch = {
+      ...(!known.email && { email }),
+      ...(!known.name && name && { name }),
+      ...(!known.leadStage && stage && { leadStage: stage }),
+      ...(!known.companyId && companyId && { companyId }),
+      ...(merged.length !== known.tags.length && { tags: merged }),
+    };
+    if (Object.keys(patch).length === 0) {
+      report.skipped++;
+      continue;
+    }
+    await store.updateContact(known.id, patch);
+    report.updated++;
   }
   return report;
+}
+
+async function companyFor(store: HelpdeskStore, row: Record<string, string>) {
+  const domain = row.domain?.toLowerCase();
+  const name = row.company?.slice(0, MAX_NAME);
+  if (domain) {
+    const company =
+      (await store.findCompanyByDomain(domain)) ??
+      (await store.createCompany({ name: name || domain, domain }));
+    return company.id;
+  }
+  if (name) {
+    const company =
+      (await store.findCompanyByName(name)) ??
+      (await store.createCompany({ name }));
+    return company.id;
+  }
+  return undefined;
 }
 
 /** Canned replies by `title` and `body`, with an optional `locale`; one with the same title and locale is left alone. */
@@ -115,15 +184,30 @@ export async function importCannedReplies(
   store: HelpdeskStore,
   rows: Record<string, string>[]
 ): Promise<ImportReport> {
-  const report = { created: 0, updated: 0, skipped: 0 };
+  const report: ImportReport = {
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    notes: [],
+  };
   const existing = new Set(
     (await store.listCannedReplies()).map(r => `${r.title}\n${r.locale ?? ''}`)
   );
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     const locale =
       row.locale === 'en' || row.locale === 'de' ? row.locale : null;
+    if (row.locale && !locale) {
+      report.notes.push(
+        `row ${index + 2}: locale "${row.locale}" is not en or de, saved for any language`
+      );
+    }
     const key = `${row.title}\n${locale ?? ''}`;
-    if (!row.title || !row.body || existing.has(key)) {
+    if (!row.title || !row.body) {
+      report.skipped++;
+      report.notes.push(`row ${index + 2}: needs a title and a body, skipped`);
+      continue;
+    }
+    if (existing.has(key)) {
       report.skipped++;
       continue;
     }

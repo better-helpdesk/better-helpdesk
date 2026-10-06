@@ -421,6 +421,17 @@ export function createStore(db: Db) {
       return row ?? null;
     },
 
+    /** The oldest company with this name, ignoring case. */
+    async findCompanyByName(name: string) {
+      const [row] = await db
+        .select()
+        .from(companies)
+        .where(sql`lower(${companies.name}) = lower(${name})`)
+        .orderBy(asc(companies.createdAt))
+        .limit(1);
+      return row ?? null;
+    },
+
     async findCompanyByDomain(domain: string) {
       const [row] = await db
         .select()

@@ -641,8 +641,8 @@ Zendesk, a shared Gmail inbox and Chatwoot. In short:
 - **Import contacts, companies and saved replies** from CSV with
   `npx better-helpdesk-import contacts people.csv` and
   `npx better-helpdesk-import canned replies.csv`, against the same
-  `HELPDESK_DATABASE_URL` as the migrations. Running it again updates
-  instead of duplicating.
+  `HELPDESK_DATABASE_URL` as the migrations. Running it again adds what is
+  new and undoes nothing an agent changed.
 
 - **Pick a cutover date.** New conversations start here from that date;
   history is not imported. Keep the old tool read-only for 60 to 90 days so
