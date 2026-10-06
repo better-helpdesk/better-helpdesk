@@ -134,6 +134,21 @@ const respond = (url: string) => {
   return new Response('{}', { status: 404 });
 };
 
+// jsdom has no modal dialogs.
+const stubDialogs = () => {
+  const { showModal, close } = HTMLDialogElement.prototype;
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+    this.dispatchEvent(new Event('close'));
+  };
+  onTestFinished(() => {
+    Object.assign(HTMLDialogElement.prototype, { showModal, close });
+  });
+};
+
 beforeEach(() => {
   sessionStorage.clear();
   window.history.replaceState(null, '', '/support/conversations/');
@@ -279,6 +294,66 @@ describe('HelpdeskAdmin', () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
 
     expect(await screen.findByText('Last seen 3 hours ago')).toBeTruthy();
+  });
+
+  it('keeps a lead stage the host removed when saving other changes to a contact', async () => {
+    stubDialogs();
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/contacts/p1/')) {
+          if (init?.method === 'PATCH') {
+            patches.push(JSON.parse(String(init.body)));
+            return new Response(JSON.stringify({ contact: {} }));
+          }
+          return new Response(
+            JSON.stringify({
+              contact: {
+                id: 'p1',
+                name: 'Ada',
+                email: 'ada@example.test',
+                companyId: null,
+                leadStage: 'trial',
+                tags: [],
+                custom: { gone: 'kept' },
+                createdAt: new Date().toISOString(),
+              },
+              identities: [],
+              company: null,
+              conversations: [],
+              timeline: [],
+              deals: [],
+            })
+          );
+        }
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/contacts/p1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog');
+    const stage = within(dialog).getByRole('combobox', {
+      name: 'Lead stage',
+    }) as HTMLSelectElement;
+    expect(stage.selectedOptions[0]?.textContent).toBe('trial');
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Ada Lovelace' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patches).toEqual([
+        {
+          name: 'Ada Lovelace',
+          leadStage: 'trial',
+          tags: [],
+          custom: { gone: 'kept' },
+        },
+      ])
+    );
   });
 
   it('lists waiting conversations and opens one as a deep link', async () => {

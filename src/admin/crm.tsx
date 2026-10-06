@@ -908,7 +908,13 @@ function EntityForm({
             value={leadStage}
             onChange={e => setLeadStage(e.target.value)}>
             <option value="">{t('admin.none')}</option>
-            {me.leadStages.map(s => (
+            {[
+              ...me.leadStages,
+              ...(initial.leadStage &&
+              !me.leadStages.includes(initial.leadStage)
+                ? [initial.leadStage]
+                : []),
+            ].map(s => (
               <option key={s} value={s}>
                 {t(`stage.${s}`)}
               </option>

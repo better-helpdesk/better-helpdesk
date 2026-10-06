@@ -893,6 +893,84 @@ describe('CRM', () => {
     ).toBe(200);
   });
 
+  it('saves a record whose field, select option or stage the host removed, and keeps refusing new unknown values', async () => {
+    h.addUser('agent', { isAgent: true });
+    const contact = (
+      await h.call('POST', 'agent/contacts', {
+        user: 'agent',
+        body: { name: 'Dana', leadStage: 'customer' },
+      })
+    ).data.contact;
+    await h.call('PATCH', `agent/contacts/${contact.id}`, {
+      user: 'agent',
+      body: { custom: { tier: 'gold' } },
+    });
+    const deal = (
+      await h.call('POST', 'agent/deals', {
+        user: 'agent',
+        body: { title: 'Pilot', stage: 'proposal' },
+      })
+    ).data.deal;
+    const later = createHarness({
+      leadStages: ['lead'],
+      dealStages: ['new', 'won'],
+      customFields: {
+        contact: [
+          {
+            key: 'tier',
+            label: { en: 'Tier', de: 'Stufe' },
+            type: 'select',
+            options: ['silver'],
+          },
+        ],
+      },
+    });
+    later.addUser('agent', { isAgent: true });
+    try {
+      const patch = (path: string, body: unknown) =>
+        later.call('PATCH', path, { user: 'agent', body });
+      expect(
+        (
+          await patch(`agent/contacts/${contact.id}`, {
+            name: 'Dana Rossi',
+            leadStage: 'customer',
+            custom: { tier: 'gold' },
+          })
+        ).status
+      ).toBe(200);
+      expect(
+        (
+          await patch(`agent/deals/${deal.id}`, {
+            title: 'Pilot 2',
+            stage: 'proposal',
+          })
+        ).status
+      ).toBe(200);
+      for (const [path, body] of [
+        [`agent/contacts/${contact.id}`, { leadStage: 'churned' }],
+        [`agent/contacts/${contact.id}`, { custom: { tier: 'bronze' } }],
+        [`agent/contacts/${contact.id}`, { custom: { tier: 'gold', size: 3 } }],
+        [`agent/deals/${deal.id}`, { stage: 'qualified' }],
+      ] as const) {
+        expect((await patch(path, body)).status).toBe(400);
+      }
+      expect(
+        await rows(sql`SELECT name, lead_stage, custom FROM helpdesk.contact`)
+      ).toEqual([
+        {
+          name: 'Dana Rossi',
+          lead_stage: 'customer',
+          custom: { tier: 'gold' },
+        },
+      ]);
+      expect(await rows(sql`SELECT title, stage FROM helpdesk.deal`)).toEqual([
+        { title: 'Pilot 2', stage: 'proposal' },
+      ]);
+    } finally {
+      await later.close();
+    }
+  });
+
   it('moves a deal between stages', async () => {
     h.addUser('agent', { isAgent: true });
     const deal = await h.call('POST', 'agent/deals', {
