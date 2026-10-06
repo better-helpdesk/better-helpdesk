@@ -76,6 +76,7 @@ type Session = {
   orgs: { id: string; name: string }[];
   types: string[];
   help: boolean;
+  uploads: boolean;
   team: { name: string; initials: string; avatarUrl: string | null }[];
   teamName?: string | null;
   awayUntil?: string | null;
@@ -896,7 +897,7 @@ function NewMessage({
       className="form"
       onSubmit={submit}
       onPaste={event => {
-        if (!technical) return;
+        if (!technical || !session.uploads) return;
         for (const item of event.clipboardData.items) {
           const file = item.getAsFile();
           if (file?.type.startsWith('image/')) {
@@ -1038,36 +1039,38 @@ function NewMessage({
         </fieldset>
         {technical && (
           <>
-            <div className="row">
-              <button
-                type="button"
-                className="secondary"
-                onClick={async () => {
-                  try {
-                    setRedacting(await captureScreen());
-                  } catch {
-                    // The user declined the browser's capture prompt.
-                  }
-                }}>
-                <Svg d={Icon.camera} />
-                {t('form.screenshot')}
-              </button>
-              <label className="secondary">
-                <Svg d={Icon.clip} />
-                {t('form.attach')}
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain"
-                  hidden
-                  onChange={e => {
-                    for (const file of e.target.files ?? []) {
-                      addFile(file, file.name);
+            {session.uploads && (
+              <div className="row">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={async () => {
+                    try {
+                      setRedacting(await captureScreen());
+                    } catch {
+                      // The user declined the browser's capture prompt.
                     }
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            </div>
+                  }}>
+                  <Svg d={Icon.camera} />
+                  {t('form.screenshot')}
+                </button>
+                <label className="secondary">
+                  <Svg d={Icon.clip} />
+                  {t('form.attach')}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain"
+                    hidden
+                    onChange={e => {
+                      for (const file of e.target.files ?? []) {
+                        addFile(file, file.name);
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            )}
             {files.length > 0 && (
               <div className="thumbs">
                 {files.map(file => (

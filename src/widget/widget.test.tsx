@@ -47,6 +47,7 @@ const session = {
   orgs: [{ id: 'org-a', name: 'Org A' }],
   types: ['question', 'bug', 'feature', 'lead'],
   help: false,
+  uploads: true,
   team: [{ name: 'Angelo', initials: 'AD' }],
   inbox: null,
   conversations: [],
@@ -861,6 +862,30 @@ describe('Widget', () => {
       await screen.findByText(/^Das Team antwortet Ihnen persönlich/)
     ).toBeTruthy();
   });
+
+  it.each([
+    [true, 2],
+    [false, 0],
+  ])(
+    'with uploads %s, a bug report offers %i upload controls',
+    async (uploads, count) => {
+      mockApi({ 'widget/session': { ...session, uploads } });
+      render(
+        <Widget
+          api="/api/support"
+          inbox="support"
+          locale="en"
+          types={['bug']}
+          errors={() => []}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+      await screen.findByRole('textbox', { name: 'What happened?' });
+      expect(
+        screen.queryAllByText(/^(Capture screenshot|Attach file)$/)
+      ).toHaveLength(count);
+    }
+  );
 
   it('says when the team is back while everyone is away', async () => {
     mockApi({
