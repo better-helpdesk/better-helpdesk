@@ -18,7 +18,6 @@ export type HelpdeskUser = {
 
 export type HelpdeskOrg = { id: string; name?: string };
 
-/** Who is calling. `orgs` must list only organizations the user is an active member of. */
 /** A link into the host's own tools, labelled per locale. */
 export type HostLink = { label: Partial<Record<Locale, string>>; url: string };
 /** `userId` is the host's own id for a customer it signed in; `null` for one who only emailed or wrote in. */
@@ -36,6 +35,7 @@ export type LinkCompany = {
   orgId: string | null;
 };
 
+/** Who is calling. `orgs` must list only organizations the user is an active member of. */
 export type Identity = {
   user: HelpdeskUser;
   orgs: HelpdeskOrg[];
