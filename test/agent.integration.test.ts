@@ -376,6 +376,102 @@ describe('jobs and email', () => {
   });
 });
 
+describe('saved views', () => {
+  beforeEach(async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('lead', { isAgent: true });
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    await h.call('GET', 'agent/me', { user: 'lead' });
+  });
+
+  const save = (user: string, body: Record<string, unknown>) =>
+    h.call('POST', 'agent/views', { user, body });
+  const views = async (user: string) =>
+    (await h.call('GET', 'agent/views', { user })).data.views as {
+      id: string;
+      name: string;
+      query: string;
+      shared: boolean;
+      count: number;
+    }[];
+
+  it('keeps a personal view to its agent and shows a shared one to everyone, with counts', async () => {
+    h.addUser('ada');
+    h.addUser('bob');
+    const urgent = await open('ada');
+    await open('bob');
+    await h.call('PATCH', `agent/conversations/${urgent.id}`, {
+      user: 'agent',
+      body: { priority: 'urgent' },
+    });
+
+    expect(
+      (
+        await save('agent', {
+          name: 'Unassigned',
+          query: 'assignee=none&status=open&page=2',
+        })
+      ).status
+    ).toBe(201);
+    expect(
+      (
+        await save('lead', {
+          name: 'Urgent and high',
+          query: 'status=any&priority=high',
+          shared: true,
+        })
+      ).status
+    ).toBe(201);
+
+    expect(await views('agent')).toMatchObject([
+      {
+        name: 'Unassigned',
+        query: 'status=open&assignee=none',
+        shared: false,
+        count: 2,
+      },
+      {
+        name: 'Urgent and high',
+        query: 'status=any&priority=high',
+        shared: true,
+        count: 1,
+      },
+    ]);
+    expect((await views('lead')).map(v => v.name)).toEqual(['Urgent and high']);
+  });
+
+  it('renames and deletes a view, and finds no view of another agent', async () => {
+    const mine = (await save('agent', { name: 'Mine', query: 'assignee=me' }))
+      .data.view;
+    expect(
+      (
+        await h.call('PATCH', `agent/views/${mine.id}`, {
+          user: 'lead',
+          body: { name: 'Taken' },
+        })
+      ).status
+    ).toBe(404);
+    await h.call('PATCH', `agent/views/${mine.id}`, {
+      user: 'agent',
+      body: { name: 'My queue' },
+    });
+    expect((await views('agent')).map(v => v.name)).toEqual(['My queue']);
+    expect(
+      (await h.call('DELETE', `agent/views/${mine.id}`, { user: 'agent' }))
+        .status
+    ).toBe(200);
+    expect(await views('agent')).toEqual([]);
+  });
+
+  it('refuses a view without a name, and views to anyone but an agent', async () => {
+    expect((await save('agent', { name: ' ', query: '' })).status).toBe(400);
+    h.addUser('ada');
+    expect((await h.call('GET', 'agent/views', { user: 'ada' })).status).toBe(
+      403
+    );
+  });
+});
+
 describe('deletion', () => {
   it('hard-deletes an organization and its files, and keeps the same person’s other organization', async () => {
     h.addUser('ada', { orgs: [orgA, orgB] });

@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -52,6 +52,17 @@ type ConfirmationSetting = Partial<Record<Locale, string>>;
 // the database's; the app host's may drift from it.
 const dbNow = () => sql`now()` as unknown as Date;
 const MAX_TAGS = 50;
+const MAX_VIEWS = 50;
+/** The inbox filters a saved view keeps, in the order it stores them. */
+const VIEW_FILTERS = [
+  'inbox',
+  'status',
+  'assignee',
+  'q',
+  'tag',
+  'sort',
+  'priority',
+];
 // A message is at most 20,000 characters; this leaves room for its context.
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_INBOUND_BYTES = 25 * 1024 * 1024;
@@ -608,26 +619,35 @@ export function createHandler(support: Helpdesk) {
     return json({ ok: true });
   });
 
-  agentRoute('GET', 'conversations', async ({ url, agent }) => {
-    const p = url.searchParams;
+  /** The agent inbox's query parameters as a filter, for its list and for saved views. */
+  function inboxFilter(p: URLSearchParams, agentId: string) {
     const id = (key: string) => uuid.optional().parse(p.get(key) || undefined);
     const assignee = p.get('assignee');
+    const status = p.get('status');
+    return {
+      inbox: p.get('inbox') || undefined,
+      status: status && status !== 'any' ? status : undefined,
+      assigneeId:
+        assignee === 'me'
+          ? agentId
+          : assignee === 'none'
+            ? null
+            : id('assignee'),
+      contactId: id('contactId'),
+      companyId: id('companyId'),
+      tag: p.get('tag')?.trim().toLowerCase() || undefined,
+      query: p.get('q') || undefined,
+      priority: p.get('priority') === 'high' ? ('high' as const) : undefined,
+      sort:
+        p.get('sort') === 'priority'
+          ? ('priority' as const)
+          : ('waiting' as const),
+    };
+  }
+
+  agentRoute('GET', 'conversations', async ({ url, agent }) => {
     const [rows, counts] = await Promise.all([
-      store.listInbox({
-        inbox: p.get('inbox') || undefined,
-        status: p.get('status') || undefined,
-        assigneeId:
-          assignee === 'me'
-            ? agent.id
-            : assignee === 'none'
-              ? null
-              : id('assignee'),
-        contactId: id('contactId'),
-        companyId: id('companyId'),
-        tag: p.get('tag')?.trim().toLowerCase() || undefined,
-        query: p.get('q') || undefined,
-        sort: p.get('sort') === 'priority' ? 'priority' : 'waiting',
-      }),
+      store.listInbox(inboxFilter(url.searchParams, agent.id)),
       store.countOpen(agent.id),
     ]);
     const ids = rows.map(r => r.conversation.id);
@@ -648,6 +668,83 @@ export function createHandler(support: Helpdesk) {
         },
       })),
     });
+  });
+
+  type SavedView = { id: string; name: string; query: string };
+  const viewsKey = (agentId: string | null) =>
+    agentId ? `views:agent:${agentId}` : 'views:shared';
+  const readViews = async (key: string) =>
+    (await store.getSetting<SavedView[]>(key)) ?? [];
+  // ponytail: read-modify-write on one setting row; two agents saving shared views in the same instant can drop one.
+  async function findView(agentId: string, id: string) {
+    for (const key of [viewsKey(agentId), viewsKey(null)]) {
+      const views = await readViews(key);
+      if (views.some(v => v.id === id)) return { key, views };
+    }
+    throw new HelpdeskError(404, 'Not found');
+  }
+
+  agentRoute('GET', 'views', async ({ agent }) => {
+    const [own, shared] = await Promise.all([
+      readViews(viewsKey(agent.id)),
+      readViews(viewsKey(null)),
+    ]);
+    const views = [
+      ...own.map(v => ({ ...v, shared: false })),
+      ...shared.map(v => ({ ...v, shared: true })),
+    ];
+    const counts = await Promise.all(
+      views.map(v =>
+        store.countInbox(inboxFilter(new URLSearchParams(v.query), agent.id))
+      )
+    );
+    return json({ views: views.map((v, i) => ({ ...v, count: counts[i] })) });
+  });
+
+  agentRoute('POST', 'views', async ({ agent, body }) => {
+    const data = z
+      .object({
+        name: z.string().trim().min(1).max(80),
+        query: z.string().max(2000),
+        shared: z.boolean().default(false),
+      })
+      .parse(await body());
+    const given = new URLSearchParams(data.query);
+    const query = new URLSearchParams(
+      VIEW_FILTERS.flatMap(k => {
+        const value = given.get(k)?.trim();
+        return value ? [[k, value]] : [];
+      })
+    ).toString();
+    const key = viewsKey(data.shared ? null : agent.id);
+    const views = await readViews(key);
+    if (views.length >= MAX_VIEWS) {
+      throw new HelpdeskError(409, 'Too many views');
+    }
+    const view = { id: randomUUID(), name: data.name, query };
+    await store.setSetting(key, [...views, view]);
+    return json({ view: { ...view, shared: data.shared } }, 201);
+  });
+
+  agentRoute('PATCH', 'views/:id', async ({ agent, params, body }) => {
+    const { name } = z
+      .object({ name: z.string().trim().min(1).max(80) })
+      .parse(await body());
+    const { key, views } = await findView(agent.id, params.id);
+    await store.setSetting(
+      key,
+      views.map(v => (v.id === params.id ? { ...v, name } : v))
+    );
+    return json({ ok: true });
+  });
+
+  agentRoute('DELETE', 'views/:id', async ({ agent, params }) => {
+    const { key, views } = await findView(agent.id, params.id);
+    await store.setSetting(
+      key,
+      views.filter(v => v.id !== params.id)
+    );
+    return json({ ok: true });
   });
 
   agentRoute('GET', 'conversations/:id', async ({ params, agent }) => {

@@ -57,8 +57,8 @@ database, its deploy and its design tokens.
 
 - **Shared inbox.** Several inboxes (say, support and sales), priorities,
   human-readable references like `ACME-1042`, internal notes, canned replies,
-  keyboard navigation, and reminder emails when a customer has waited too
-  long.
+  keyboard navigation, saved views of the inbox filters for one agent or the
+  whole team, and reminder emails when a customer has waited too long.
 - **Lightweight CRM.** Contacts and companies taken from your app's identity,
   lead stages, deals with stages and values, logged activities, tags and
   custom fields.

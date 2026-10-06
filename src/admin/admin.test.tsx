@@ -90,6 +90,7 @@ const routes: Record<string, unknown> = {
   'agent/agents/': { agents: [] },
   'agent/canned/': { replies: [] },
   'agent/tags/': { tags: ['billing', 'vip'] },
+  'agent/views/': { views: [] },
   'agent/settings/': { confirmation: {} },
   'agent/deals/': { deals: [] },
   'agent/overview/?days=30': {
@@ -156,6 +157,77 @@ describe('HelpdeskAdmin', () => {
     fireEvent.click(row);
     expect(window.location.pathname).toBe('/support/conversations/c1/');
     expect(await screen.findByText('The CSV export fails')).toBeTruthy();
+  });
+
+  it('opens a saved view with its count, and saves the current filters as a new one', async () => {
+    routes['agent/views/'] = {
+      views: [
+        {
+          id: 'v1',
+          name: 'Urgent anywhere',
+          query: 'status=any&priority=high',
+          shared: true,
+          count: 3,
+        },
+      ],
+    };
+    const { showModal, close } = HTMLDialogElement.prototype;
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+    onTestFinished(() => {
+      routes['agent/views/'] = { views: [] };
+      Object.assign(HTMLDialogElement.prototype, { showModal, close });
+    });
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posts.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ view: {} }), { status: 201 });
+        }
+        return respond(String(input));
+      })
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const views = await screen.findByRole('group', { name: 'Views' });
+    const view = await within(views).findByRole('button', {
+      name: /Urgent anywhere/,
+    });
+    expect(view.textContent).toBe('Urgent anywhere 3');
+
+    fireEvent.click(view);
+    expect(window.location.search).toBe('?status=any&priority=high');
+    await waitFor(() => expect(view.ariaPressed).toBe('true'));
+    expect(
+      within(views).getByRole('button', { name: 'Delete view' })
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unassigned' }));
+    fireEvent.click(
+      await within(views).findByRole('button', { name: 'Save as view' })
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Up for grabs' },
+    });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Share with the team' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(posts).toEqual([
+        {
+          name: 'Up for grabs',
+          query: 'status=any&assignee=none&priority=high',
+          shared: true,
+        },
+      ])
+    );
   });
 
   it('shows the open count on each assignee tab and keeps it while another tab loads', async () => {

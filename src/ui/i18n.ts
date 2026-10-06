@@ -311,6 +311,12 @@ const en = {
     'No conversations yet. The first message from the widget or by email shows up here.',
   'admin.emptyFiltered': 'Nothing matches these filters.',
   'admin.clearFilters': 'Clear filters',
+  'admin.views': 'Views',
+  'admin.saveView': 'Save as view',
+  'admin.renameView': 'Rename view',
+  'admin.deleteView': 'Delete view',
+  'admin.shareView': 'Share with the team',
+  'admin.sharedView': 'Shared with the team',
   'admin.emptyContacts':
     "No contacts yet. A contact is created with a person's first message, or add one by hand.",
   'admin.emptyCompanies':
@@ -755,6 +761,12 @@ const de: Record<MessageKey, string> = {
     'Noch keine Unterhaltungen. Die erste Nachricht aus dem Widget oder per E-Mail erscheint hier.',
   'admin.emptyFiltered': 'Nichts passt zu diesen Filtern.',
   'admin.clearFilters': 'Filter zurücksetzen',
+  'admin.views': 'Ansichten',
+  'admin.saveView': 'Als Ansicht speichern',
+  'admin.renameView': 'Ansicht umbenennen',
+  'admin.deleteView': 'Ansicht löschen',
+  'admin.shareView': 'Mit dem Team teilen',
+  'admin.sharedView': 'Mit dem Team geteilt',
   'admin.emptyContacts':
     'Noch keine Kontakte. Ein Kontakt entsteht mit der ersten Nachricht einer Person, oder Sie legen ihn von Hand an.',
   'admin.emptyCompanies':
