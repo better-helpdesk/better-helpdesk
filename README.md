@@ -295,6 +295,25 @@ The widget dispatches DOM events such as `helpdesk:open`,
 `helpdesk:message-sent` and `helpdesk:booking-clicked`, so analytics can
 listen without touching the package.
 
+### A Support page in your app
+
+`HelpdeskConversations` is the widget's conversation list and threads in the
+page itself, for a Support page: no launcher and nothing to close, and a
+signed-in customer sees their own conversations and the ones their company
+shares, as in the widget. It takes the same props as `HelpdeskWidget` except
+`label`, uses the same routes and `--helpdesk-*` tokens, and
+`--helpdesk-page-height` sets its height (640px by default).
+
+```tsx
+import { HelpdeskConversations } from 'better-helpdesk/widget';
+
+<HelpdeskConversations inbox="support" locale="de" />
+```
+
+Like the widget it renders into its own shadow root, so your page's styles
+and its styles never meet; outside React, `defineHelpdeskConversations()`
+registers `<helpdesk-conversations>` with the same attributes.
+
 ### Signed-in users on another origin
 
 When the widget runs where `identify` cannot see your session, your backend

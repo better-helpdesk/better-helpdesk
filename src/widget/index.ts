@@ -1,4 +1,4 @@
 'use client';
 
-export { defineHelpdeskWidget } from './element';
-export { HelpdeskWidget } from './react';
+export { defineHelpdeskConversations, defineHelpdeskWidget } from './element';
+export { HelpdeskConversations, HelpdeskWidget } from './react';

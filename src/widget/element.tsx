@@ -1,7 +1,7 @@
 import { createRoot, type Root } from 'react-dom/client';
 
 import { toLocale } from '../ui/i18n';
-import { widgetCss } from './styles';
+import { inlineCss, widgetCss } from './styles';
 import { Widget, type WidgetEvent } from './widget';
 
 const MAX_ERRORS = 10;
@@ -17,7 +17,10 @@ const MAX_ERRORS = 10;
  */
 export function defineHelpdeskWidget(
   tag = 'helpdesk-widget',
-  { owns }: { owns?: (element: HTMLElement) => boolean } = {}
+  {
+    owns,
+    inline = false,
+  }: { owns?: (element: HTMLElement) => boolean; inline?: boolean } = {}
 ) {
   if (typeof window === 'undefined' || customElements.get(tag)) return;
 
@@ -90,7 +93,7 @@ export function defineHelpdeskWidget(
       const shadow = this.shadowRoot ?? this.attachShadow({ mode: 'open' });
       shadow.innerHTML = '';
       const style = document.createElement('style');
-      style.textContent = widgetCss;
+      style.textContent = inline ? widgetCss + inlineCss : widgetCss;
       const container = document.createElement('div');
       shadow.append(style, container);
       this.#root = createRoot(container);
@@ -134,6 +137,7 @@ export function defineHelpdeskWidget(
           appVersion={this.getAttribute('app-version') ?? undefined}
           hostContext={this.#context}
           label={this.getAttribute('label') ?? undefined}
+          inline={inline}
           errors={() => this.#errors}
           onEvent={this.#emit}
         />
@@ -142,4 +146,14 @@ export function defineHelpdeskWidget(
   }
 
   customElements.define(tag, HelpdeskWidgetElement);
+}
+
+/**
+ * Registers `<helpdesk-conversations>`: the widget's conversations and threads
+ * in the page itself, for a Support page in the host app. Same attributes,
+ * routes and `--helpdesk-*` tokens as `<helpdesk-widget>`, in its own shadow
+ * root, without the launcher. `--helpdesk-page-height` sets its height.
+ */
+export function defineHelpdeskConversations(tag = 'helpdesk-conversations') {
+  defineHelpdeskWidget(tag, { inline: true });
 }

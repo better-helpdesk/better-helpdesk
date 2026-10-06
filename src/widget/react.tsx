@@ -2,7 +2,7 @@
 
 import { createElement, useEffect, useRef } from 'react';
 
-import { defineHelpdeskWidget } from './element';
+import { defineHelpdeskConversations, defineHelpdeskWidget } from './element';
 
 type Props = {
   api?: string;
@@ -17,23 +17,36 @@ type Props = {
 };
 
 /** React wrapper around `<helpdesk-widget>`. */
-export function HelpdeskWidget({
+export function HelpdeskWidget(props: Props) {
+  useEffect(() => defineHelpdeskWidget(), []);
+  return createElement(HostElement, { tag: 'helpdesk-widget', ...props });
+}
+
+/** React wrapper around `<helpdesk-conversations>`, for an in-app Support page. */
+export function HelpdeskConversations(props: Omit<Props, 'label'>) {
+  useEffect(() => defineHelpdeskConversations(), []);
+  return createElement(HostElement, {
+    tag: 'helpdesk-conversations',
+    ...props,
+  });
+}
+
+function HostElement({
+  tag,
   context,
   types,
   orgId,
   identityToken,
   appVersion,
   ...rest
-}: Props) {
+}: Props & { tag: string }) {
   const ref = useRef<HTMLElement & { context: Record<string, string> }>(null);
-
-  useEffect(() => defineHelpdeskWidget(), []);
 
   useEffect(() => {
     if (ref.current) ref.current.context = context ?? {};
   }, [context]);
 
-  return createElement('helpdesk-widget', {
+  return createElement(tag, {
     ref,
     ...rest,
     types: types?.join(','),
