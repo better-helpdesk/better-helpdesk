@@ -211,6 +211,17 @@ describe('HelpdeskAdmin', () => {
     expect(warning()?.textContent).toBe('');
   });
 
+  it('labels the conversation\u2019s properties above their values, unlike the inbox filters', async () => {
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const props = await screen.findByRole('group', { name: 'Properties' });
+    const status = within(props).getByRole('combobox', { name: 'Status' });
+    expect((status as HTMLSelectElement).selectedOptions[0]?.textContent).toBe(
+      'Open'
+    );
+    expect(within(props).getByText('Status')).toBeTruthy();
+  });
+
   it('never renders a non-http context URL as a link', async () => {
     window.history.replaceState(null, '', '/support/conversations/c1/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
@@ -445,7 +456,11 @@ describe('HelpdeskAdmin', () => {
       expect(screen.queryByRole('listbox')).toBeNull();
       note.innerHTML = 'Ask @Bea and @c';
       fireEvent.input(note);
-      fireEvent.mouseDown(await screen.findByRole('option', { name: 'Cy' }));
+      fireEvent.mouseDown(
+        await within(await screen.findByRole('listbox')).findByRole('option', {
+          name: 'Cy',
+        })
+      );
       await waitFor(() => expect(note.textContent).toBe('Ask @Bea and @Cy '));
       note.innerHTML = 'Ask @Cy';
       fireEvent.input(note);

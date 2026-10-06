@@ -135,7 +135,7 @@ export function Skeleton({
       <div className="sa-split" aria-hidden="true">
         {kind === 'thread' ? (
           <div className="sa">
-            <div className="sa-toolbar sa-fields">
+            <div className="sa-toolbar sa-fields sa-props">
               {rows.slice(1).map(i => (
                 <span key={i}>{bone('100%', 36)}</span>
               ))}
@@ -441,6 +441,24 @@ export function money(value: string | null, currency: string, locale: string) {
   }).format(Number(value));
 }
 
+/** A property of the open record, labelled above its control so it never reads as a filter. */
+export function Property({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="sa-prop">
+      <span className="sa-eyebrow" aria-hidden="true">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 export function Select({
   label,
   value,
@@ -449,6 +467,7 @@ export function Select({
   onChange,
   placeholder = false,
   disabled = false,
+  labelled = false,
 }: {
   label: string;
   value: string;
@@ -458,6 +477,8 @@ export function Select({
   /** Adds an empty `''` option that shows the label alone; no option may then be `''`. */
   placeholder?: boolean;
   disabled?: boolean;
+  /** A visible label already names the field, so the options leave it out. */
+  labelled?: boolean;
 }) {
   return (
     <select
@@ -475,7 +496,7 @@ export function Select({
       {options.map(o => (
         // The closed select shows only this text, so it names its field.
         <option key={o} value={o}>
-          {label}: {render(o)}
+          {labelled ? render(o) : `${label}: ${render(o)}`}
         </option>
       ))}
     </select>

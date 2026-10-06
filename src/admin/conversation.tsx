@@ -14,6 +14,7 @@ import {
   browserLabel,
   humanizeKey,
   LoadError,
+  Property,
   paths,
   RatingChip,
   Select,
@@ -616,29 +617,35 @@ export function ConversationView({ id }: { id: string }) {
       </div>
       <div className="sa-split">
         <div className="sa">
-          <div className="sa-toolbar sa-fields">
-            <Select
-              label={t('admin.assignee')}
-              value={c.assigneeId ?? ''}
-              options={['', ...(agents.data?.agents.map(a => a.id) ?? [])]}
-              render={id => {
-                const agent = agents.data?.agents.find(a => a.id === id);
-                return agent
-                  ? (agent.name ?? agent.email ?? id)
-                  : t('admin.unassigned');
-              }}
-              onChange={v => patch({ assigneeId: v || null })}
-            />
-            <Select
-              label={t('admin.status')}
-              value={c.status}
-              options={me.statuses}
-              render={s => t(`agentStatus.${s}`)}
-              onChange={v => patch({ status: v })}
-            />
-            {c.rating && (
-              <RatingChip t={t} rating={c.rating} comment={c.ratingComment} />
-            )}
+          <fieldset
+            className="sa-toolbar sa-fields sa-props"
+            aria-label={t('admin.properties')}>
+            <Property label={t('admin.assignee')}>
+              <Select
+                labelled
+                label={t('admin.assignee')}
+                value={c.assigneeId ?? ''}
+                options={['', ...(agents.data?.agents.map(a => a.id) ?? [])]}
+                render={id => {
+                  const agent = agents.data?.agents.find(a => a.id === id);
+                  return agent
+                    ? (agent.name ?? agent.email ?? id)
+                    : t('admin.unassigned');
+                }}
+                onChange={v => patch({ assigneeId: v || null })}
+              />
+            </Property>
+            <Property label={t('admin.status')}>
+              <Select
+                labelled
+                label={t('admin.status')}
+                value={c.status}
+                options={me.statuses}
+                render={s => t(`agentStatus.${s}`)}
+                onChange={v => patch({ status: v })}
+              />
+            </Property>
+            {/* An action more than a property: its own text says what it is. */}
             <SnoozeControl
               until={c.snoozedUntil ?? null}
               onSave={async snoozedUntil => {
@@ -649,28 +656,40 @@ export function ConversationView({ id }: { id: string }) {
                 await detail.refresh();
               }}
             />
-            <Select
-              label={t('admin.priority')}
-              value={c.priority}
-              options={me.priorities}
-              render={p => t(`priority.${p}`)}
-              onChange={v => patch({ priority: v })}
-            />
-            <Select
-              label={t('admin.type')}
-              value={c.type}
-              options={me.types}
-              render={v => t(`agentType.${v}`)}
-              onChange={v => patch({ type: v })}
-            />
-            <Select
-              label={t('admin.inboxLabel')}
-              value={c.inbox}
-              options={me.inboxes}
-              render={inboxName}
-              onChange={v => patch({ inbox: v })}
-            />
-          </div>
+            <Property label={t('admin.priority')}>
+              <Select
+                labelled
+                label={t('admin.priority')}
+                value={c.priority}
+                options={me.priorities}
+                render={p => t(`priority.${p}`)}
+                onChange={v => patch({ priority: v })}
+              />
+            </Property>
+            <Property label={t('admin.type')}>
+              <Select
+                labelled
+                label={t('admin.type')}
+                value={c.type}
+                options={me.types}
+                render={v => t(`agentType.${v}`)}
+                onChange={v => patch({ type: v })}
+              />
+            </Property>
+            <Property label={t('admin.inboxLabel')}>
+              <Select
+                labelled
+                label={t('admin.inboxLabel')}
+                value={c.inbox}
+                options={me.inboxes}
+                render={inboxName}
+                onChange={v => patch({ inbox: v })}
+              />
+            </Property>
+            {c.rating && (
+              <RatingChip t={t} rating={c.rating} comment={c.ratingComment} />
+            )}
+          </fieldset>
 
           <div className="sa-thread">
             {timeline.map(item => {

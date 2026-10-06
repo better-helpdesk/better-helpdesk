@@ -84,6 +84,11 @@ export const adminCss = `
 .sa-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .sa-fields .sa-select { width: 100%; min-width: 0; text-overflow: ellipsis; }
 .sa-snooze-pick { display: flex; gap: 6px; align-items: center; grid-column: 1 / -1; }
+.sa-props { margin: 0; min-width: 0; gap: 4px 12px; align-items: end; padding: 8px 12px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-subtle); }
+.sa-prop { display: grid; gap: 2px; min-width: 0; }
+.sa-eyebrow { font-size: 11px; font-weight: 600; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.sa-prop .sa-select { height: 32px; padding-left: 8px; margin-left: -8px; width: calc(100% + 8px); border-color: transparent; background-color: transparent; }
+.sa-prop .sa-select:hover { border-color: var(--a-border); background-color: var(--a-bg); }
 .sa-input, .sa-select, .sa-textarea {
   height: 36px; padding: 0 12px; border: 1px solid var(--a-border); border-radius: var(--a-r-control);
   background: var(--a-bg); width: 100%; font-size: 14px;
