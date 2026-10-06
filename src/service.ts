@@ -744,6 +744,34 @@ export function createHelpdesk(input: HelpdeskConfig) {
       await recordEmails(conversation, 'customer-receipt', [contact.email]);
     },
 
+    async 'agent-reminder'(payload) {
+      const conversation = await store.getConversation(
+        String(payload.conversationId)
+      );
+      if (!conversation) return;
+      const body = await firstCustomerText(conversation);
+      const recipients = await agentRecipients(conversation);
+      for (const agent of recipients) {
+        await sendEmail({
+          kind: 'agent-reminder',
+          to: agent.email as string,
+          locale: 'en',
+          reference: reference(conversation),
+          subject:
+            conversation.title ??
+            conversation.subject ??
+            truncate(plainText(body.slice(0, 2000)), 80),
+          body: truncate(body, 1000),
+          url: agentUrl(conversation),
+        });
+      }
+      await recordEmails(
+        conversation,
+        'agent-reminder',
+        recipients.map(a => a.email as string)
+      );
+    },
+
     async 'ai-triage'(payload) {
       const conversation = await store.getConversation(
         String(payload.conversationId)
@@ -771,8 +799,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return woken.length;
   }
 
+  // Claimed conversations become jobs, so a failed send is retried rather than lost.
   async function sendReminders() {
-    let sent = 0;
+    let queued = 0;
     for (const [inbox, settings] of Object.entries(config.inboxes)) {
       if (!settings.reminderAfterHours) continue;
       const due = await store.claimReminders(
@@ -782,31 +811,13 @@ export function createHelpdesk(input: HelpdeskConfig) {
           openCutoff(new Date(), settings.reminderAfterHours, settings.hours)
       );
       for (const conversation of due) {
-        const body = await firstCustomerText(conversation);
-        const recipients = await agentRecipients(conversation);
-        for (const agent of recipients) {
-          await sendEmail({
-            kind: 'agent-reminder',
-            to: agent.email as string,
-            locale: 'en',
-            reference: reference(conversation),
-            subject:
-              conversation.title ??
-              conversation.subject ??
-              truncate(plainText(body.slice(0, 2000)), 80),
-            body: truncate(body, 1000),
-            url: agentUrl(conversation),
-          });
-          sent++;
-        }
-        await recordEmails(
-          conversation,
-          'agent-reminder',
-          recipients.map(a => a.email as string)
-        );
+        await store.enqueueJob('agent-reminder', {
+          conversationId: conversation.id,
+        });
+        queued++;
       }
     }
-    return sent;
+    return queued;
   }
 
   async function handleInbound(mail: InboundMessage) {
