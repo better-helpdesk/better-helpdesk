@@ -32,7 +32,7 @@ const SECTIONS: { title: string; text: string[] }[] = [
   {
     title: 'Analytics and cookies',
     text: [
-      'We count visits and clicks with PostHog, hosted in the EU, in its cookieless mode: it stores nothing in your browser, drops your IP address, and tells visitors apart only by a hash that changes every day. We do not record sessions, show ads or follow you to other sites. After you write, the widget keeps a token in your browser’s local storage so you can find your conversation again, and it remembers the first page of your visit until you close the tab. Our team’s sign-in uses a session cookie that visitors never receive, and nothing from the team’s pages goes to PostHog.',
+      'We count visits and clicks with PostHog, hosted in the EU, in its cookieless mode: it stores nothing in your browser, drops your IP address, and tells visitors apart only by a hash that changes every day. We do not record sessions, show ads or follow you to other sites. After you write, the widget keeps a token in your browser’s local storage so you can find your conversation again, and it remembers the first page of your visit until you close the tab. The live demo sets a cookie with the role you pick there and nothing else. Our team’s sign-in uses a session cookie that visitors never receive, and nothing from the team’s pages goes to PostHog.',
     ],
   },
   {
@@ -44,7 +44,7 @@ const SECTIONS: { title: string; text: string[] }[] = [
   {
     title: 'How long',
     text: [
-      'Until the conversation is no longer needed, or until you ask us to delete it. Ask through the widget and we delete your conversations and contact record.',
+      'Until the conversation is no longer needed, or until you ask us to delete it. What you write in the live demo is deleted within fifteen minutes, when the demo starts over. Ask through the widget and we delete your conversations and contact record.',
     ],
   },
   {

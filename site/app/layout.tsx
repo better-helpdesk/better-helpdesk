@@ -1,9 +1,8 @@
-import { HelpdeskWidget } from 'better-helpdesk/widget';
 import type { Metadata, Viewport } from 'next';
 import { Doto, Martian_Mono, Rethink_Sans } from 'next/font/google';
 
 import { API } from '../lib/helpdesk';
-import { LauncherSkin } from './components/launcher-skin';
+import { SiteWidget } from './components/site-widget';
 import './site.css';
 
 const doto = Doto({
@@ -62,8 +61,7 @@ export default function RootLayout({
       suppressHydrationWarning>
       <body>
         {children}
-        <HelpdeskWidget api={API} inbox="support" locale="en" />
-        <LauncherSkin />
+        <SiteWidget api={API} />
       </body>
     </html>
   );

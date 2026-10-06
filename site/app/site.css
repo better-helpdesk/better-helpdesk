@@ -3849,3 +3849,44 @@ kbd.on {
     display: none;
   }
 }
+
+/* Demo */
+.demo-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.demo-role {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  text-align: left;
+  font: inherit;
+  color: var(--fg-2);
+  background: var(--s2);
+  border: 1px solid var(--line-2);
+  cursor: pointer;
+}
+.demo-role b {
+  color: var(--fg);
+  font-weight: 600;
+}
+.demo-role:hover {
+  background: var(--s3);
+}
+.demo-role[aria-pressed="true"] {
+  border-color: var(--mint);
+  background: var(--mint-dim);
+}
+.demo-role:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+.demo-quiet {
+  background: var(--s3);
+  color: var(--fg);
+  padding-right: 22px;
+}
+.demo-quiet:hover {
+  background: var(--s4);
+}

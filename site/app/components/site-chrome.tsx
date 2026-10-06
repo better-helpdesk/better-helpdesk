@@ -82,7 +82,7 @@ export function SiteFooter() {
           <a href={`${REPO}/releases`}>Changelog</a>
         </li>
         <li>
-          <a href={`${REPO}/tree/main/examples/demo`}>Demo app</a>
+          <a href="/demo/">Live demo</a>
         </li>
       </ul>
       <ul>

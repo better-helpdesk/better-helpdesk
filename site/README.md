@@ -52,12 +52,28 @@ password if the account exists. `http://localhost:3000`; the inbox is at
 - `lib/mail.ts` sends plain text through `SMTP_URL`. Unset, it logs that a
   message was not sent and the reply only exists in the inbox.
 
+## The live demo
+
+`/demo` is Harbor, a pretend freight product, with a second helpdesk
+(`lib/demo.ts`, handler at `/demo/api/`, inbox at `/demo/inbox/`). Visitors
+pick a role with a cookie, so anyone can be the agent. It needs a database
+of its own in `DEMO_DATABASE_URL`: the helpdesk schema is fixed, and
+`instrumentation.ts` truncates it and seeds invented conversations at start
+and on every quarter hour. The reset refuses to run against the site's
+database. It has no email adapter, so nothing typed into it is ever mailed.
+Without `DEMO_DATABASE_URL`, `/demo` says it is not set up.
+
+It runs the same published version as the rest of the site, so bumping
+`better-helpdesk` after a release updates the demo too.
+
 ## Divio Cloud
 
 `site/Dockerfile` builds this directory only, with the repository root as
 the build context, so `.dockerignore` sits at the root. In the Control Panel:
 
 1. Add a Postgres database service. Divio provides it as `DATABASE_URL`.
+   For the live demo, add a second one and make its URL available as
+   `DEMO_DATABASE_URL`.
 2. Under Settings, add the release command
    `node scripts/migrate.mjs`. It applies the package's migrations and the
    auth tables before each deployment goes live.
