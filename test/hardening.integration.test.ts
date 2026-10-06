@@ -623,6 +623,13 @@ describe('blocked senders', () => {
 
     expect((await inbox()).conversations).toEqual([]);
     expect((await inbox()).counts.all).toBe(0);
+    expect(
+      (await h.call('GET', 'agent/unread', { user: 'agent' })).data.waiting
+    ).toBe(0);
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
+    );
+    expect(await h.support.store.claimReminders('sales', 1)).toEqual([]);
     const page = await h.call('GET', `agent/contacts/${contact?.id}`, {
       user: 'agent',
     });
@@ -663,6 +670,63 @@ describe('blocked senders', () => {
     });
     expect((await lead('spam@bot.test')).conversation.id).toBeTruthy();
     expect((await inbox()).conversations).toHaveLength(2);
+  });
+});
+
+describe('blocked senders, by every address they hold', () => {
+  const block = async (email: string) => {
+    const [contact] = await rows<{ id: string }>(
+      sql`SELECT id FROM helpdesk.contact WHERE email = ${email}`
+    );
+    await h.call('PATCH', `agent/contacts/${contact?.id}`, {
+      user: 'agent',
+      body: { blocked: true },
+    });
+    return contact?.id as string;
+  };
+
+  it('refuses an address merged into a blocked contact, by widget and by mail', async () => {
+    h.addUser('agent', { isAgent: true });
+    await lead('a@spam.test');
+    await lead('b@spam.test');
+    const [a, b] = await rows<{ id: string }>(
+      sql`SELECT id FROM helpdesk.contact ORDER BY email`
+    );
+    await h.call('POST', `agent/contacts/${a?.id}/merge`, {
+      user: 'agent',
+      body: { sourceId: b?.id },
+    });
+    await block('a@spam.test');
+
+    const res = await h.call('POST', 'widget/conversations', {
+      body: {
+        inbox: 'sales',
+        type: 'lead',
+        body: 'Again',
+        email: 'b@spam.test',
+      },
+    });
+    expect(res.status).toBe(404);
+    await h.support.handleInbound(
+      mail({ from: { address: 'b@spam.test', name: 'B' }, text: 'By mail' })
+    );
+    expect(
+      await rows(
+        sql`SELECT 1 FROM helpdesk.message WHERE body IN ('Again', 'By mail')`
+      )
+    ).toEqual([]);
+  });
+
+  it('refuses a signed-in customer whose address was blocked', async () => {
+    h.addUser('agent', { isAgent: true });
+    await lead('spam@spam.test');
+    await block('spam@spam.test');
+    h.addUser('spammer', { email: 'spam@spam.test' });
+    const res = await h.call('POST', 'widget/conversations', {
+      user: 'spammer',
+      body: { inbox: 'support', type: 'question', body: 'Signed up now' },
+    });
+    expect(res.status).toBe(404);
   });
 });
 

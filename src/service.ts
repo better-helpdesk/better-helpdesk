@@ -348,7 +348,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
     const contact = customer.contact;
     if (!contact) throw new HelpdeskError(401, 'Unauthenticated');
-    if (contact.blocked) throw new HelpdeskError(404, 'Not found');
+    await refuseBlocked(contact);
     if (customer.identity) await limitContact(contact.id);
 
     let companyId: string | null = null;
@@ -419,6 +419,16 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
   }
 
+  /** A blocked contact, or one who writes from a blocked address, as when a blocked visitor signs up. */
+  async function refuseBlocked(contact: Contact) {
+    if (
+      contact.blocked ||
+      (contact.email && (await store.isEmailBlocked(contact.email)))
+    ) {
+      throw new HelpdeskError(404, 'Not found');
+    }
+  }
+
   async function addCustomerMessage(
     request: Request,
     customer: Customer,
@@ -426,7 +436,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     body: string
   ) {
     if (!customer.contact) throw new HelpdeskError(401, 'Unauthenticated');
-    if (customer.contact.blocked) throw new HelpdeskError(404, 'Not found');
+    await refuseBlocked(customer.contact);
     // Appending would reopen it in the inbox, apart from the thread agents work in.
     if (conversation.mergedIntoId) {
       throw new HelpdeskError(409, 'Conversation merged');

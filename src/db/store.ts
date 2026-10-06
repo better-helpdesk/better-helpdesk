@@ -208,14 +208,19 @@ export function createStore(db: Db) {
       });
     },
 
-    /** Whether any contact with this address was blocked. */
+    /** Whether a blocked contact holds this address, as its email or as one merged into it. */
     async isEmailBlocked(email: string) {
-      const [row] = await db
-        .select({ id: contacts.id })
-        .from(contacts)
-        .where(and(eq(contacts.email, email), eq(contacts.blocked, true)))
-        .limit(1);
-      return Boolean(row);
+      const result = await db.execute(sql`
+        SELECT 1 FROM helpdesk.contact c
+        WHERE c.blocked AND (
+          c.email = ${email}
+          OR EXISTS (
+            SELECT 1 FROM helpdesk.identity i
+            WHERE i.contact_id = c.id AND i.channel = 'email' AND i.external_id = ${email}
+          )
+        )
+        LIMIT 1`);
+      return result.rows.length > 0;
     },
 
     /** The oldest contact with this address, however it was proven. */
@@ -1072,7 +1077,8 @@ export function createStore(db: Db) {
           and(
             isNotNull(conversations.waitingSince),
             ne(conversations.status, 'resolved'),
-            isNull(conversations.snoozedUntil)
+            isNull(conversations.snoozedUntil),
+            notBlocked
           )
         );
       return row?.count ?? 0;
@@ -1483,6 +1489,7 @@ export function createStore(db: Db) {
       const result = await db.execute<{ id: string }>(sql`
         UPDATE helpdesk.conversation SET reminded_at = now()
         WHERE inbox = ${inbox}
+          AND contact_id NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)
           AND status <> 'resolved'
           AND snoozed_until IS NULL
           AND waiting_since IS NOT NULL
