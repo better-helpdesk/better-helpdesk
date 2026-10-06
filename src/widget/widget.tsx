@@ -351,6 +351,13 @@ export function Widget(props: WidgetProps) {
   );
   const single = offered.length === 1 ? offered[0] : undefined;
   const home: View = single ? { name: 'form', type: single } : { name: 'home' };
+  // An empty list has no tabs and no back button, so it would be a dead end.
+  const emptyList =
+    view.name === 'list' && data !== null && data.conversations.length === 0;
+  useEffect(() => {
+    if (emptyList)
+      setView(single ? { name: 'form', type: single } : { name: 'home' });
+  }, [emptyList, single]);
 
   const close = useCallback(() => {
     if (inline) return;
