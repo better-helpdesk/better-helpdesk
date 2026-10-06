@@ -594,6 +594,11 @@ export function createStore(db: Db) {
       return (row?.value as T | undefined) ?? null;
     },
 
+    /** Stores the value unless the key already has one. */
+    async addSetting(key: string, value: unknown) {
+      await db.insert(settings).values({ key, value }).onConflictDoNothing();
+    },
+
     async setSetting(key: string, value: unknown) {
       await db
         .insert(settings)

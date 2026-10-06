@@ -107,7 +107,7 @@ deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk
 | SLA                     | business hours and a reminder per inbox, by design | paid tier                               | yes                         | Expert                                | yes                                    |
 | Automation              | `onEvent` in your code                            | yes                                     | yes                         | Advanced and up                        | yes                                    |
 | Reporting               | SQL over your database                            | yes                                     | an overview page            | yes                                   | yes                                    |
-| CSAT                    | no                                                | yes                                     | yes                         | yes                                   | yes                                    |
+| CSAT                    | good or bad, from the widget or the reply email   | yes                                     | yes                         | yes                                   | yes                                    |
 | Help centre             | search over your own docs, by design              | Startups and up                          | yes                         | yes                                    | yes                                     |
 | AI                      | suggestions and drafts for the agent, by design   | Captain, paid tier                      | your OpenAI-compatible key  | Fin, $0.99 per outcome                | Copilot, +$50                           |
 | Events out              | `onEvent` in your code                            | webhooks                                | webhooks                    | webhooks                              | webhooks                               |
@@ -354,7 +354,9 @@ email: {
         return mailer.send({
           to: message.to,
           subject: `Re: ${message.subject ?? message.reference}`,
-          text: message.body,
+          text: message.ratingLinks
+            ? `${message.body}\n\nSolved? ${message.ratingLinks.good}\nNot solved? ${message.ratingLinks.bad}`
+            : message.body,
           replyTo: message.replyTo,
           inReplyTo: message.inReplyTo,
         });
@@ -377,6 +379,13 @@ email: {
   },
 },
 ```
+
+A `customer-reply` to a resolved conversation carries `ratingLinks`, one
+link for solved and one for not solved. Each opens a small page under your
+`basePath` whose button records the rating, so a mail scanner that follows
+every link rates nothing; "not solved" opens the conversation again. The
+links are signed with a key the package keeps in its own settings and work
+for 30 days.
 
 `mailer` and `receiptText` stand for whatever you send mail with;
 [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts) is the same adapter on Resend. A receipt

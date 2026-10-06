@@ -1,4 +1,10 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
 
 import { and, eq, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -92,6 +98,8 @@ export function ipBucket(ip: string) {
     .map(g => g.replace(/^0+(?=.)/, ''))
     .join(':')}::/64`;
 }
+
+const RATING_LINK_DAYS = 30;
 
 export function createHelpdesk(input: HelpdeskConfig) {
   const config: ResolvedConfig = resolveConfig(input);
@@ -723,6 +731,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         agentName: agent?.name ?? '',
         replyTo: config.replyToAddress?.(ref),
         inReplyTo: inbound?.emailMessageId ?? undefined,
+        ratingLinks: await ratingLinks(conversation),
       });
       await recordEmails(conversation, 'customer-reply', [contact.email]);
     },
@@ -1307,6 +1316,96 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return unlabelLinks(result.reply);
   }
 
+  /** Ratings come from the customer: a bad one hands the conversation back to the team. */
+  async function rateAsCustomer(
+    conversation: Conversation,
+    rating: 'good' | 'bad',
+    comment?: string
+  ) {
+    const now = sql`now()` as unknown as Date;
+    const patch: Partial<Conversation> = {
+      rating,
+      ratingComment: comment || null,
+      ratedAt: now,
+      ...(rating === 'bad' && {
+        status: 'open',
+        waitingSince: now,
+        resolvedAt: null,
+      }),
+    };
+    const updated = await store.rateConversation(conversation.id, patch);
+    if (updated) {
+      await emitUpdated(config, conversation, updated, patch, null, 'customer');
+    }
+    return updated;
+  }
+
+  // A key of the package's own, kept in its settings, so hosts configure nothing.
+  async function ratingSecret() {
+    const key = 'rating-link-secret';
+    const stored = await store.getSetting<string>(key);
+    if (stored) return stored;
+    // Two first requests at once both read back the one that was stored.
+    await store.addSetting(key, randomBytes(32).toString('base64url'));
+    return (await store.getSetting<string>(key)) as string;
+  }
+
+  const ratingSignature = (
+    secret: string,
+    id: string,
+    rating: string,
+    expires: number
+  ) =>
+    createHmac('sha256', secret)
+      .update(`${id}.${rating}.${expires}`)
+      .digest('base64url');
+
+  /** Signed links a customer can rate a resolved conversation with from an email. */
+  async function ratingLinks(conversation: Conversation) {
+    if (
+      conversation.status !== 'resolved' ||
+      conversation.rating ||
+      conversation.mergedIntoId
+    ) {
+      return undefined;
+    }
+    const secret = await ratingSecret();
+    const expires = Math.floor(Date.now() / 1000) + RATING_LINK_DAYS * 86_400;
+    const link = (rating: 'good' | 'bad') => {
+      const url = new URL(`${config.basePath}/rate/`, config.adminUrl);
+      url.search = new URLSearchParams({
+        c: conversation.id,
+        r: rating,
+        e: String(expires),
+        s: ratingSignature(secret, conversation.id, rating, expires),
+      }).toString();
+      return url.toString();
+    };
+    return { good: link('good'), bad: link('bad') };
+  }
+
+  /** The conversation and rating a link names, or null when it is forged or expired. */
+  async function verifyRatingLink(params: URLSearchParams) {
+    const id = params.get('c') ?? '';
+    const rating = params.get('r');
+    const expires = Number(params.get('e'));
+    if (
+      (rating !== 'good' && rating !== 'bad') ||
+      !Number.isSafeInteger(expires) ||
+      expires < Date.now() / 1000
+    ) {
+      return null;
+    }
+    const expected = Buffer.from(
+      ratingSignature(await ratingSecret(), id, rating, expires)
+    );
+    const given = Buffer.from(params.get('s') ?? '');
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+      return null;
+    }
+    return { conversationId: id, rating } as const;
+  }
+
   async function companyContext(companyId: string) {
     const company = await store.getCompany(companyId);
     if (!company?.externalOrgId || !config.resolveContext) return {};
@@ -1454,6 +1553,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
     track,
     triage,
     draftReply,
+    rateAsCustomer,
+    verifyRatingLink,
     rewriteDraft,
     companyContext,
     linkVerified,

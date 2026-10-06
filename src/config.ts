@@ -131,6 +131,11 @@ export type HelpdeskEmail =
       agentName: string;
       replyTo?: string;
       inReplyTo?: string;
+      /**
+       * When the conversation is resolved: links that let the customer rate it
+       * from the email, each opening a page under `basePath` to confirm.
+       */
+      ratingLinks?: { good: string; bad: string };
     }
   | {
       kind: 'customer-receipt';

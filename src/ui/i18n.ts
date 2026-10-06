@@ -323,6 +323,17 @@ const en = {
   'admin.rewrite.shorten': 'Shorten',
   'admin.rewrite.formal': 'More formal',
   'admin.rewrite.translate': 'Into the customer’s language',
+  'rate.confirm.good': 'Rate {reference} as solved well?',
+  'rate.confirm.bad':
+    'Tell us {reference} is not solved? It opens the conversation again.',
+  'rate.button.good': 'Yes, it is solved',
+  'rate.button.bad': 'Yes, open it again',
+  'rate.thanks.good': 'Thank you for rating {reference}.',
+  'rate.thanks.bad':
+    'Thank you. {reference} is open again, and we will get back to you.',
+  'rate.done': '{reference} has been rated already. Thank you.',
+  'rate.closed': '{reference} can no longer be rated here.',
+  'rate.invalid': 'This link is no longer valid.',
   'admin.block': 'Block sender',
   'admin.unblock': 'Unblock sender',
   'admin.blockHint':
@@ -790,6 +801,17 @@ const de: Record<MessageKey, string> = {
   'admin.rewrite.shorten': 'Kürzen',
   'admin.rewrite.formal': 'Förmlicher',
   'admin.rewrite.translate': 'In die Sprache der Kundschaft',
+  'rate.confirm.good': '{reference} als gut gelöst bewerten?',
+  'rate.confirm.bad':
+    'Melden, dass {reference} nicht gelöst ist? Die Unterhaltung wird wieder geöffnet.',
+  'rate.button.good': 'Ja, es ist gelöst',
+  'rate.button.bad': 'Ja, wieder öffnen',
+  'rate.thanks.good': 'Vielen Dank für Ihre Bewertung von {reference}.',
+  'rate.thanks.bad':
+    'Vielen Dank. {reference} ist wieder offen, und wir melden uns bei Ihnen.',
+  'rate.done': '{reference} wurde bereits bewertet. Vielen Dank.',
+  'rate.closed': '{reference} kann hier nicht mehr bewertet werden.',
+  'rate.invalid': 'Dieser Link ist nicht mehr gültig.',
   'admin.block': 'Absender sperren',
   'admin.unblock': 'Sperre aufheben',
   'admin.blockHint':

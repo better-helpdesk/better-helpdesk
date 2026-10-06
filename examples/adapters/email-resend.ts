@@ -9,7 +9,11 @@ function render(m: HelpdeskEmail) {
     case 'customer-reply':
       return {
         subject: `Re: ${m.subject ?? m.reference}`,
-        text: `${m.body}\n\n${m.agentName}`,
+        text: `${m.body}\n\n${m.agentName}${
+          m.ratingLinks
+            ? `\n\nSolved? ${m.ratingLinks.good}\nNot solved? ${m.ratingLinks.bad}`
+            : ''
+        }`,
         replyTo: m.replyTo,
         headers: m.inReplyTo ? { 'In-Reply-To': m.inReplyTo } : undefined,
       };
