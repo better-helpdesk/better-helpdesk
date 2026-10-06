@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { CustomFieldDef } from '../config';
+import type { CustomFieldDef, HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { relativeTime } from '../ui/i18n';
 import { useAdmin } from './context';
@@ -12,6 +12,7 @@ import {
   Avatar,
   Dialog,
   Empty,
+  HostLinks,
   LoadError,
   money,
   paths,
@@ -313,6 +314,7 @@ export function ContactView({ id }: { id: string }) {
           externalId: string | null;
         }[];
         company: Company | null;
+        links: HostLink[];
         conversations: ConversationRow[];
         timeline: TimelineEntry[];
         deals: Deal[];
@@ -435,6 +437,7 @@ export function ContactView({ id }: { id: string }) {
           )}
         </div>
         <aside className="sa">
+          <HostLinks links={data.links} locale={locale} />
           <div className="sa-card">
             <h3>{t('admin.company')}</h3>
             {data.company ? (
@@ -685,12 +688,13 @@ export function CompanyList() {
 }
 
 export function CompanyView({ id }: { id: string }) {
-  const { api, t, me, navigate, href } = useAdmin();
+  const { api, t, me, navigate, href, locale } = useAdmin();
   const detail = useResource(
     () =>
       api<{
         company: Company;
         context: Record<string, string>;
+        links: HostLink[];
         contacts: Contact[];
         conversations: ConversationRow[];
         timeline: TimelineEntry[];
@@ -754,6 +758,7 @@ export function CompanyView({ id }: { id: string }) {
           )}
         </div>
         <aside className="sa">
+          <HostLinks links={data.links} locale={locale} />
           {Object.keys(data.context).length > 0 && (
             <div className="sa-card">
               <h3>{t('admin.customerContext')}</h3>

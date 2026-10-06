@@ -356,6 +356,8 @@ export const adminCss = `
 .sa .sa-tags-input:focus { color: var(--a-fg); }
 .sa-tags-input:hover { border-color: var(--a-border); }
 .sa-tag-filter { width: 160px; }
+.sa-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.sa-links .sa-btn svg { width: 12px; height: 12px; }
 .sa-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
 .sa-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .sa .sa-tag { height: 20px; padding: 0 7px; font-weight: 500; color: var(--a-muted); }

@@ -376,6 +376,96 @@ describe('jobs and email', () => {
   });
 });
 
+describe('host links', () => {
+  it('asks the host for links with its own ids, and passes only web links on', async () => {
+    const asked: unknown[] = [];
+    const linked = createHarness({
+      links: (contact, company) => {
+        asked.push({ contact, company });
+        return [
+          {
+            label: { en: 'Admin', de: 'Verwaltung' },
+            url: `https://app.test/users/${contact?.userId ?? company?.orgId}`,
+          },
+          { label: { en: 'Bad' }, url: 'javascript:alert(1)' },
+          { label: { en: 'Broken' }, url: 'not a url' },
+        ];
+      },
+    });
+    try {
+      linked.addUser('ada', { orgs: [orgA] });
+      linked.addUser('agent', { isAgent: true });
+      const res = await linked.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: {
+          inbox: 'support',
+          type: 'question',
+          body: 'Hi',
+          orgId: orgA.id,
+        },
+      });
+      const id = res.data.conversation.id as string;
+      const detail = (
+        await linked.call('GET', `agent/conversations/${id}`, { user: 'agent' })
+      ).data;
+      expect(detail.links).toEqual([
+        {
+          label: { en: 'Admin', de: 'Verwaltung' },
+          url: 'https://app.test/users/user-ada',
+        },
+      ]);
+      expect(asked[0]).toMatchObject({
+        contact: { email: 'ada@example.test', userId: 'user-ada' },
+        company: { orgId: orgA.id, name: orgA.name },
+      });
+
+      const company = (
+        await linked.call('GET', `agent/companies/${detail.company.id}`, {
+          user: 'agent',
+        })
+      ).data;
+      expect(company.links.map((l: { url: string }) => l.url)).toEqual([
+        `https://app.test/users/${orgA.id}`,
+      ]);
+      const contact = (
+        await linked.call('GET', `agent/contacts/${detail.contact.id}`, {
+          user: 'agent',
+        })
+      ).data;
+      expect(contact.links).toHaveLength(1);
+    } finally {
+      await linked.close();
+    }
+  });
+
+  it('shows no links rather than an error when the hook throws', async () => {
+    const broken = createHarness({
+      links: () => {
+        throw new Error('CRM down');
+      },
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      broken.addUser('ada');
+      broken.addUser('agent', { isAgent: true });
+      const res = await broken.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Hi' },
+      });
+      const detail = await broken.call(
+        'GET',
+        `agent/conversations/${res.data.conversation.id}`,
+        { user: 'agent' }
+      );
+      expect(detail.status).toBe(200);
+      expect(detail.data.links).toEqual([]);
+    } finally {
+      error.mockRestore();
+      await broken.close();
+    }
+  });
+});
+
 describe('notifications', () => {
   it('tells an agent what colleagues and their customers did, and counts what is new since they last looked', async () => {
     h.addUser('agent', { isAgent: true });
