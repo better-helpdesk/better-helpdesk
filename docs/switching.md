@@ -35,16 +35,17 @@ import with its line number, before anything is written.
 
 - **Contacts** need an `email`; `name`, `tags` (separated by `;` or `|`) and
   `lead_stage` are optional. A lead stage must be one of the stages the
-  agent UI knows: the defaults (`lead`, `qualified`, `customer`, `churned`),
-  or, if you set `leadStages`, the same list as
-  `--lead-stages lead,trial,customer`. Tags longer than 50 characters and
+  agent UI knows, in any case: the defaults (`lead`, `qualified`,
+  `customer`, `churned`), or, if you set `leadStages`, the same list as
+  `--lead-stages Lead,Trial,Customer`; it is stored as the list spells it. Tags longer than 50 characters and
   names longer than 200 are left out, as the agent UI would refuse them.
 - **Companies** come from the same file: a row with a `domain` joins the
   company with that domain, and a row with only a `company` joins the
   company with that name. A missing company is created; an existing one is
-  never renamed.
-- **Saved replies** need a `title` and a `body`; `locale` (`en` or `de`) is
-  optional. In a saved reply, `{firstName}` and `{reference}` are filled in
+  never renamed, and only gains a domain it did not have. A name or domain
+  longer than 200 characters is left out.
+- **Saved replies** need a `title` of at most 200 characters and a `body` of
+  at most 20,000; `locale` (`en` or `de`) is optional. In a saved reply, `{firstName}` and `{reference}` are filled in
   when an agent inserts it, so rewrite the old tool's placeholders to those
   two.
 

@@ -72,6 +72,7 @@ export type ImportReport = {
 const MAX_TAGS = 50;
 const MAX_TAG = 50;
 const MAX_NAME = 200;
+const MAX_BODY = 20_000;
 
 /**
  * Contacts by `email` (required), with `name`, `tags` (split on `;` or `|`),
@@ -104,12 +105,14 @@ export async function importContacts(
       report.notes.push(`${at}: name longer than ${MAX_NAME}, left out`);
       name = undefined;
     }
-    let stage: string | undefined = row.lead_stage?.toLowerCase() || undefined;
-    if (stage && !leadStages.includes(stage)) {
+    // Matched without regard to case, stored as the stage list spells it.
+    const stage = row.lead_stage
+      ? leadStages.find(s => s.toLowerCase() === row.lead_stage?.toLowerCase())
+      : undefined;
+    if (row.lead_stage && !stage) {
       report.notes.push(
         `${at}: lead stage "${row.lead_stage}" is not one of ${leadStages.join(', ')}, left out`
       );
-      stage = undefined;
     }
     const given = [
       ...new Set(
@@ -123,7 +126,9 @@ export async function importContacts(
     if (tags.length < given.length) {
       report.notes.push(`${at}: tags longer than ${MAX_TAG} left out`);
     }
-    const companyId = await companyFor(store, row);
+    const companyId = await companyFor(store, row, note =>
+      report.notes.push(`${at}: ${note}`)
+    );
 
     const known =
       (await store.findContactByIdentity('email', email, {
@@ -161,14 +166,31 @@ export async function importContacts(
   return report;
 }
 
-async function companyFor(store: HelpdeskStore, row: Record<string, string>) {
-  const domain = row.domain?.toLowerCase();
-  const name = row.company?.slice(0, MAX_NAME);
+async function companyFor(
+  store: HelpdeskStore,
+  row: Record<string, string>,
+  note: (text: string) => void
+) {
+  let domain = row.domain?.toLowerCase() || undefined;
+  let name = row.company || undefined;
+  if (domain && domain.length > MAX_NAME) {
+    note(`domain longer than ${MAX_NAME}, left out`);
+    domain = undefined;
+  }
+  if (name && name.length > MAX_NAME) {
+    note(`company longer than ${MAX_NAME}, left out`);
+    name = undefined;
+  }
   if (domain) {
-    const company =
-      (await store.findCompanyByDomain(domain)) ??
-      (await store.createCompany({ name: name || domain, domain }));
-    return company.id;
+    const byDomain = await store.findCompanyByDomain(domain);
+    if (byDomain) return byDomain.id;
+    // One named alike but still without a domain is the same company.
+    const byName = name ? await store.findCompanyByName(name) : null;
+    if (byName && !byName.domain) {
+      await store.updateCompany(byName.id, { domain });
+      return byName.id;
+    }
+    return (await store.createCompany({ name: name ?? domain, domain })).id;
   }
   if (name) {
     const company =
@@ -205,6 +227,13 @@ export async function importCannedReplies(
     if (!row.title || !row.body) {
       report.skipped++;
       report.notes.push(`row ${index + 2}: needs a title and a body, skipped`);
+      continue;
+    }
+    if (row.title.length > MAX_NAME || row.body.length > MAX_BODY) {
+      report.skipped++;
+      report.notes.push(
+        `row ${index + 2}: title over ${MAX_NAME} or body over ${MAX_BODY} characters, skipped`
+      );
       continue;
     }
     if (existing.has(key)) {

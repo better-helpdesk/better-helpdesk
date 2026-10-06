@@ -117,6 +117,51 @@ ada@acme.test,${'x'.repeat(201)},ok;${'t'.repeat(51)},prospect
     ]);
   });
 
+  it('matches a lead stage without regard to case and stores the configured spelling', async () => {
+    const report = await importContacts(
+      h.support.store,
+      parseCsv('email,lead_stage\nt@a.test,trial\nu@a.test,Churned\n'),
+      { leadStages: ['Lead', 'Trial'] }
+    );
+    expect(report.notes).toEqual([
+      'row 3: lead stage "Churned" is not one of Lead, Trial, left out',
+    ]);
+    expect(
+      await rows(
+        sql`SELECT email, lead_stage FROM helpdesk.contact ORDER BY email`
+      )
+    ).toEqual([
+      { email: 't@a.test', lead_stage: 'Trial' },
+      { email: 'u@a.test', lead_stage: null },
+    ]);
+  });
+
+  it('gives a company that an earlier row named its domain instead of making a second one', async () => {
+    await importContacts(
+      h.support.store,
+      parseCsv(
+        'email,company,domain\nann@gmail.test,Alpha,\nbob@alpha.test,Alpha,alpha.test\n'
+      )
+    );
+    expect(await rows(sql`SELECT name, domain FROM helpdesk.company`)).toEqual([
+      { name: 'Alpha', domain: 'alpha.test' },
+    ]);
+  });
+
+  it('leaves out a company name or domain longer than the agent UI takes', async () => {
+    const report = await importContacts(
+      h.support.store,
+      parseCsv(
+        `email,company,domain\nann@a.test,${'c'.repeat(201)},${'d'.repeat(201)}.test\n`
+      )
+    );
+    expect(report.notes).toEqual([
+      'row 2: domain longer than 200, left out',
+      'row 2: company longer than 200, left out',
+    ]);
+    expect(await rows(sql`SELECT 1 FROM helpdesk.company`)).toEqual([]);
+  });
+
   it('fills in a contact the host already identified instead of adding a second one', async () => {
     h.addUser('ada', { email: 'ada@acme.test' });
     await h.call('POST', 'widget/conversations', {
@@ -136,6 +181,17 @@ ada@acme.test,${'x'.repeat(201)},ok;${'t'.repeat(51)},prospect
 });
 
 describe('importCannedReplies', () => {
+  it('skips a saved reply the agent UI could not save', async () => {
+    const report = await importCannedReplies(
+      h.support.store,
+      parseCsv(
+        `title,body\n${'t'.repeat(201)},Body\nOk,${'b'.repeat(20_001)}\n`
+      )
+    );
+    expect(report).toMatchObject({ created: 0, skipped: 2 });
+    expect(await rows(sql`SELECT 1 FROM helpdesk.canned_reply`)).toEqual([]);
+  });
+
   it('adds each title and locale once', async () => {
     const csv = `title,body,locale
 Refund,"We have refunded you, **today**.",en
