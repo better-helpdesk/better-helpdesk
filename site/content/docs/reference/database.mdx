@@ -56,7 +56,7 @@ The schema also holds the sequence `reference_seq`, which numbers conversations 
 | `locale` | `text` | yes | | Decides the language of the customer's emails. |
 | `blocked` | `boolean` | no | `false` | Refused as a sender, and their conversations left out of the inbox. Partially indexed. |
 | `created_at` | `timestamptz` | no | `now()` | |
-| `last_seen_at` | `timestamptz` | yes | | Not written by the package. |
+| `last_seen_at` | `timestamptz` | yes | | The last time the contact used the widget, signed in or as a visitor. Written at most once every 5 minutes. A merge keeps the later of the two values. |
 
 ## identity
 

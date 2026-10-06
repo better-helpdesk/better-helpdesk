@@ -9,6 +9,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY site/package.json site/
 RUN pnpm install --frozen-lockfile --filter better-helpdesk-site
 COPY site/ site/
+# The docs' UI strings page reads its table from the package source at build time.
+COPY src/ui/i18n.ts src/ui/
 RUN pnpm --filter better-helpdesk-site build \
  && pnpm --filter better-helpdesk-site deploy --prod --legacy /out \
  && rm -rf /out/.next/cache

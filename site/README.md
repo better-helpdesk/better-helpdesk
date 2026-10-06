@@ -81,7 +81,9 @@ the build context, so `.dockerignore` sits at the root. In the Control Panel:
    for example `https://better-helpdesk.com`), `BETTER_AUTH_SECRET`
    (sensitive, `openssl rand -base64 32`), and optionally `SMTP_URL`
    (sensitive) and `MAIL_FROM`. Set `DATABASE_SSL=true` if the database
-   requires TLS.
+   requires TLS and its certificate is signed by a CA Node trusts, or
+   `DATABASE_SSL=no-verify` for a self-signed one. Releases up to 0.3.0
+   accepted any certificate for `true`.
 4. Deploy. Test and Live build from `main` unless the environment says
    otherwise.
 5. Create your account once from a shell in the running container:

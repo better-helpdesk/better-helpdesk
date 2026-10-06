@@ -13,7 +13,7 @@ Both commands read the same variables.
 | --- | --- |
 | `HELPDESK_DATABASE_URL` | Postgres connection string. Read first. |
 | `APP_DATABASE_URL` | Used when `HELPDESK_DATABASE_URL` is unset. |
-| `DATABASE_SSL` | `true` turns on TLS, without verifying the server's certificate. |
+| `DATABASE_SSL` | `true` turns on TLS and verifies the server's certificate. `no-verify` turns on TLS without verifying it, for a self-signed certificate. A `sslmode` in the connection string takes precedence over both. |
 
 Without a connection string, the command prints `HELPDESK_DATABASE_URL or APP_DATABASE_URL must be set` and exits with status 1.
 

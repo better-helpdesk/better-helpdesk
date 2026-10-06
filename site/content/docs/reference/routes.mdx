@@ -32,19 +32,19 @@ A customer **can see** a conversation they opened, one they were added to as a p
 
 ## Widget
 
-| Method | Path | Caller | What it does |
+| Method | Path | Who | What it does |
 | --- | --- | --- | --- |
-| `GET` | `widget/session` | Anyone | The caller's state: whether they are identified, name, email, organizations, conversations with previews, the configured types, whether help search is on, recent agents, team name, away and opening times, and the settings' confirmation text. With `?inbox=`, that inbox's title, reply promise, privacy URL, qualifying question and booking URL. `?locale=` picks the language. For an agent, the count of waiting conversations and a link to the agent UI. |
-| `POST` | `widget/conversations` | Customer, or an anonymous visitor on a `public` inbox | Opens a conversation. Answers 201 with `{ conversation: { id, reference }, visitorToken? }`. See [the body](#opening-a-conversation). |
-| `GET` | `widget/conversations/{id}` | Can see | The conversation in the customer's terms, its public messages and its attachments. |
-| `POST` | `widget/conversations/{id}/messages` | Can see | Adds `{ body }`, 1 to 20,000 characters. Answers 201 with `{ id }`; 404 when the contact is blocked, 409 when the conversation was merged, 429 over the rate limit. |
-| `PATCH` | `widget/conversations/{id}` | Author | `{ sharedWithCompany?: boolean, status?: 'resolved' }`, at least one. Sharing needs the conversation's company to be one the caller belongs to: 400 when it has none, 403 otherwise, 409 when an agent moved it meanwhile. Answers `{ ok: true }`. |
-| `POST` | `widget/conversations/{id}/rating` | Author | `{ rating: 'good' \| 'bad', comment?: string }`, comment up to 2,000 characters. 409 when the conversation is not open for a rating. |
-| `POST` | `widget/conversations/{id}/seen` | Can see | Marks the conversation read by its author. |
-| `POST` | `widget/conversations/{id}/attachments` | Author | Starts an upload: `{ filename, contentType, size }`, with `filename` 1 to 200 characters, `contentType` one of the [allowed types](/docs/reference/adapters#storage) and `size` a positive integer in bytes. Answers 201 with `{ id, upload: { url, fields } }`. 400 without `storage`, 413 over `maxAttachmentBytes`, 429 past 20 attachments or over the rate limit. |
-| `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done; 409 when the object is not in storage. |
-| `GET` | `widget/conversations/{id}/attachments/{attachmentId}` | Can see | 302 to a presigned download URL. |
-| `GET` | `widget/help` | Anyone | `?q=` (first 200 characters) and `?locale=`. Answers `{ results }`, at most five `HelpResult`s; empty without `help`. |
+| `GET` | `widget/session` | Anyone | The caller, their conversations and what the widget shows; `?inbox=` and `?locale=`. |
+| `POST` | `widget/conversations` | Customer, or a visitor on a `public` inbox | Opens a conversation; see [the body](#opening-a-conversation). |
+| `GET` | `widget/conversations/{id}` | Can see | The conversation, its public messages and its attachments. |
+| `POST` | `widget/conversations/{id}/messages` | Can see | Adds a message. |
+| `PATCH` | `widget/conversations/{id}` | Author | Shares it with the company, or marks it resolved. |
+| `POST` | `widget/conversations/{id}/rating` | Author | Rates it `good` or `bad`, with an optional comment. |
+| `POST` | `widget/conversations/{id}/seen` | Can see | Marks it read by its author. |
+| `POST` | `widget/conversations/{id}/attachments` | Author | Starts an upload and answers a presigned form. |
+| `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done. |
+| `GET` | `widget/conversations/{id}/attachments/{attachmentId}` | Can see | Redirects to a presigned download URL. |
+| `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
 
 ### Opening a conversation
 
@@ -92,52 +92,50 @@ Every route here requires an agent.
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| `GET` | `agent/me` | The agent, and the configuration the agent UI needs: reference prefix, types, statuses, priorities, inbox keys, names and hours, lead and deal stages, custom fields, qualifying answers, whether AI is set. |
-| `PATCH` | `agent/me` | `{ awayUntil: string \| null }`, an ISO timestamp with offset. |
-| `GET` | `agent/settings` | `{ confirmation }`: what the widget says after a first message, per locale. |
-| `PUT` | `agent/settings` | `{ confirmation: { en?, de? } }`, each up to 1,000 characters. `{email}` and `{reference}` are filled in. |
-| `GET` | `agent/overview` | New and resolved counts and the median first response and resolution times, in total, per inbox and per agent; ratings and the 10 most used tags in total. Times count open hours for inboxes with `hours`. `?days=7`, `30` (default) or `90`. |
-| `GET` | `agent/unread` | `{ waiting }`: the count of waiting conversations. |
-| `GET` | `agent/tags` | The 15 most used tags. |
-| `GET` | `agent/agents` | The team, without removed agents. |
-| `DELETE` | `agent/agents/{id}` | Removes an agent from the team and unassigns their conversations. They get no agent mail until they next open the agent UI as an agent. Answers `{ ok: true }`. |
-| `GET` | `agent/conversations` | The inbox list with counts, previews and who is viewing each. Filters: `inbox`, `status` (`open`, `pending`, `resolved`, `snoozed`, `rated-bad`, or `any` for all), `assignee` (`me`, `none` or an agent id), `contactId`, `companyId`, `tag`, `q`, `priority=high`, `sort` (`waiting` or `priority`). |
-| `POST` | `agent/conversations/bulk` | `{ ids, status?, priority?, type?, inbox?, assigneeId?, snoozedUntil?, addTag? }`, up to 100 ids. 404 with the missing `ids`; 400 with `ids` when `addTag` would take a conversation past 50 tags. |
-| `GET` | `agent/conversations/{id}` | The conversation with contact, company, suggested company, host links, customer context, participants, viewers, every message including internal notes, attachments and timeline. Marks it seen by the team. |
-| `PATCH` | `agent/conversations/{id}` | `{ status?, priority?, type?, inbox?, subject?, assigneeId?, companyId?, tags?, snoozedUntil? }`. `subject` sets the team's title. `snoozedUntil` must be in the future and makes it `pending`; with another `status`, 400. An unknown `assigneeId` or `companyId` is 400. A new `companyId` ends sharing with the old company. Answers `{ conversation }`. |
-| `POST` | `agent/conversations/{id}/messages` | `{ body, internal?, notify? }`: a reply, or an internal note when `internal`. `notify` lists up to 20 agent ids to mention. Answers 201 with `{ id }`. |
-| `POST` | `agent/conversations/{id}/participants` | `{ contactId }`: adds a contact to the conversation. |
-| `POST` | `agent/conversations/{id}/merge` | `{ targetId }`: merges this conversation into the target. 400 when the target is this conversation or unknown, 409 when already merged. |
-| `POST` | `agent/conversations/{id}/draft` | No body: an AI draft reply. `{ mode: 'shorten' \| 'formal' \| 'translate', text }`: a rewrite of the agent's text. Answers `{ text }`; nothing is sent. 400 without `ai`. |
-| `POST` | `agent/conversations/{id}/triage` | Runs AI triage now. 400 without `ai`. |
-| `POST` | `agent/conversations/{id}/suggestion` | `{ action: 'accept' \| 'dismiss' }` on the stored AI suggestion. 404 when there is none. |
-| `GET` | `agent/conversations/{id}/attachments/{attachmentId}` | 302 to a presigned download URL. |
-| `GET` | `agent/notifications` | The agent's notifications (assigned, mentioned, replies) and the unread count. |
+| `GET` | `agent/me` | The agent, and the configuration the agent UI needs. |
+| `PATCH` | `agent/me` | Sets the agent's away time. |
+| `GET` | `agent/settings` | The settings agents change. |
+| `PUT` | `agent/settings` | Changes them. |
+| `GET` | `agent/overview` | Volume, response and resolution times, ratings and tags. |
+| `GET` | `agent/unread` | The count of waiting conversations. |
+| `GET` | `agent/tags` | The most used conversation tags. |
+| `GET` | `agent/agents` | The team. |
+| `DELETE` | `agent/agents/{id}` | Removes an agent from the team. |
+| `GET` | `agent/conversations` | The inbox list, filtered by the query string. |
+| `POST` | `agent/conversations/bulk` | Changes several conversations at once. |
+| `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
+| `PATCH` | `agent/conversations/{id}` | Changes its status, priority, type, inbox, title, assignee, company, tags or snooze. |
+| `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. |
+| `POST` | `agent/conversations/{id}/participants` | Adds a contact to it. |
+| `POST` | `agent/conversations/{id}/merge` | Merges it into another. |
+| `POST` | `agent/conversations/{id}/draft` | An AI draft reply, or a rewrite of the agent's text. |
+| `POST` | `agent/conversations/{id}/triage` | Runs AI triage now. |
+| `POST` | `agent/conversations/{id}/suggestion` | Accepts or dismisses the AI suggestion. |
+| `GET` | `agent/conversations/{id}/attachments/{attachmentId}` | Redirects to a presigned download URL. |
+| `GET` | `agent/notifications` | The agent's notifications. |
 | `POST` | `agent/notifications/seen` | Marks them read. |
-| `GET` | `agent/views` | The agent's saved views and the shared ones, with counts. |
-| `POST` | `agent/views` | `{ name, query, shared? }`, `name` 1 to 80 characters, `query` up to 2,000. `query` keeps only `inbox`, `status`, `assignee`, `q`, `tag`, `sort` and `priority`. 409 past 50 views. |
-| `PATCH` | `agent/views/{id}` | `{ name }`, 1 to 80 characters. |
-| `DELETE` | `agent/views/{id}` | Deletes the view. |
-| `GET` | `agent/canned` | The canned replies. |
-| `POST` | `agent/canned` | `{ title, body, locale?: 'en' \| 'de' \| null }`. |
+| `GET` | `agent/views` | Saved views. |
+| `POST` | `agent/views` | Saves a view. |
+| `PATCH` | `agent/views/{id}` | Renames a view. |
+| `DELETE` | `agent/views/{id}` | Deletes a view. |
+| `GET` | `agent/canned` | Canned replies. |
+| `POST` | `agent/canned` | Adds a canned reply. |
 | `DELETE` | `agent/canned/{id}` | Deletes a canned reply. |
-| `GET` | `agent/contacts` | Contacts. Filters: `q`, `leadStage`, `companyId`. |
-| `POST` | `agent/contacts` | `{ name, email?, companyId?, leadStage? }`. |
-| `GET` | `agent/contacts/{id}` | The contact with identities, company, host links, conversations, timeline and deals. |
-| `PATCH` | `agent/contacts/{id}` | `{ name?, companyId?, leadStage?, tags?, custom?, blocked? }`. |
-| `POST` | `agent/contacts/{id}/merge` | `{ sourceId }`: merges that contact into this one. |
-| `DELETE` | `agent/contacts/{id}` | Deletes the contact, their conversations, what they wrote elsewhere, and their files. Answers `{ conversations }`, the count deleted. |
-| `GET` | `agent/companies` | Companies. Filters: `q`, `leadStage`. |
-| `POST` | `agent/companies` | `{ name, domain?, leadStage? }`. |
-| `GET` | `agent/companies/{id}` | The company with context, host links, contacts, conversations, timeline and deals. |
-| `PATCH` | `agent/companies/{id}` | `{ name?, domain?, leadStage?, tags?, custom? }`. |
-| `GET` | `agent/deals` | Every deal with its company and contact names. |
-| `POST` | `agent/deals` | `{ title, companyId?, contactId?, stage?, value?, currency?, expectedCloseAt? }`. The caller owns it. |
-| `PATCH` | `agent/deals/{id}` | `{ title?, stage?, value?, currency?, expectedCloseAt?, ownerId?, custom? }`. |
-| `DELETE` | `agent/deals/{id}` | Deletes the deal. |
-| `POST` | `agent/activities` | `{ kind: 'note' \| 'call' \| 'meeting', body, contactId?, companyId?, dealId?, occurredAt? }`, with at least one of the three ids. |
-
-Tags are lower-cased, up to 50 characters each and 50 per record. `custom` values are checked against [`customFields`](/docs/reference/configuration#customfielddef).
+| `GET` | `agent/contacts` | Contacts. |
+| `POST` | `agent/contacts` | Adds a contact. |
+| `GET` | `agent/contacts/{id}` | One contact with its timeline. |
+| `PATCH` | `agent/contacts/{id}` | Changes a contact, or blocks it. |
+| `POST` | `agent/contacts/{id}/merge` | Merges another contact into this one. |
+| `DELETE` | `agent/contacts/{id}` | Deletes a contact and what they wrote. |
+| `GET` | `agent/companies` | Companies. |
+| `POST` | `agent/companies` | Adds a company. |
+| `GET` | `agent/companies/{id}` | One company with its timeline. |
+| `PATCH` | `agent/companies/{id}` | Changes a company. |
+| `GET` | `agent/deals` | Deals. |
+| `POST` | `agent/deals` | Adds a deal. |
+| `PATCH` | `agent/deals/{id}` | Changes a deal. |
+| `DELETE` | `agent/deals/{id}` | Deletes a deal. |
+| `POST` | `agent/activities` | Logs a note, call or meeting. |
 
 ## Rate
 

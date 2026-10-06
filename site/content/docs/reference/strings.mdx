@@ -1,0 +1,12 @@
+---
+title: UI strings
+description: Every string key of the widget and the agent UI, with its English and German text.
+---
+
+The widget, `HelpdeskConversations`, the agent UI and the rating page under `basePath` share one table of strings per language. The table below is read from the package's source when this site is built.
+
+`HelpdeskAdmin` takes [`messages`](/docs/reference/admin#props), which replaces the text of any key the agent UI shows. Nothing else takes overrides: the widget, `HelpdeskConversations` and the rating page always show the text below. [Change and translate the wording](/docs/guides/languages) covers the copy your config gives instead.
+
+`{name}`, `{count}` and the other words in braces are placeholders, filled in when the string is shown. A key that is not in the table shows its last segment: `stage.trial` shows as `trial`. The agent UI looks up a conversation type under `agentType.` and a lead or deal stage under `stage.`, so `messages` can name the ones you add; the widget looks up a type under `type.`, and shows a type of your own by its key.
+
+<StringTable />

@@ -94,7 +94,7 @@ The helpdesk calls `exists` after each `delete`, and it must then return `false`
 
 ## What customers and agents see
 
-The widget offers **Attach file** and a screenshot on the first message of a question, bug report or feature request, and inbound email brings its attachments along. Agents see a conversation's files in its sidebar. Only the person who opened a conversation can attach files to it, so erasing a person erases their files.
+The widget offers **Attach file** and a screenshot on the first message of a question, bug report or feature request, and inbound email brings its attachments along. Without `storage`, the widget hides both. Agents see a conversation's files in its sidebar. Only the person who opened a conversation can attach files to it, so erasing a person erases their files.
 
 The widget accepts PNG, JPEG, GIF, WebP, PDF and plain text, up to `maxAttachmentBytes` each and 20 per conversation. An email attachment of any other type is kept, but served as `application/octet-stream`, and a larger one is skipped. The limits are listed under [Storage](/docs/reference/adapters#storage).
 

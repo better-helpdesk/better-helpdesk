@@ -21,7 +21,7 @@ The order matters: migrate first, then deploy. The new version's queries expect 
 
 The migration command and your app open their connections separately, and each has its own setting.
 
-For the command, `DATABASE_SSL=true` turns on TLS. It encrypts the connection but does not check the server's certificate. To check it as well, put `sslmode=verify-full` in the connection string instead; a `sslmode` in the URL replaces what `DATABASE_SSL` sets.
+For the command, `DATABASE_SSL=true` turns on TLS and checks the server's certificate. `DATABASE_SSL=no-verify` encrypts without checking it, for a database with a self-signed certificate. A `sslmode` in the connection string replaces what `DATABASE_SSL` sets.
 
 For your app, add `sslmode=verify-full` to `HELPDESK_DATABASE_URL`:
 
@@ -110,7 +110,7 @@ Generate each one with `openssl rand -base64 32`. Here is every variable a produ
 | --- | --- | --- |
 | `HELPDESK_DATABASE_URL` | The migration command and `lib/helpdesk.ts` | The connection string. |
 | `APP_DATABASE_URL` | The migration command | Used when `HELPDESK_DATABASE_URL` is unset. |
-| `DATABASE_SSL` | The migration command | `true` turns on TLS without checking the certificate. |
+| `DATABASE_SSL` | The migration and import commands | `true` turns on TLS and checks the certificate; `no-verify` skips the check. |
 | `HELPDESK_ADMIN_URL` | `adminUrl` | The URL your team opens the agent UI at. |
 | `HELPDESK_IDENTITY_SECRET` | `identityTokenSecret` | Signs identity tokens for a widget on another origin. `buildHelpdesk` throws on a secret shorter than 32 bytes. See [Sign customers in from another origin](/docs/guides/identity-token). |
 | `HELPDESK_INBOUND_SECRET` | `inboundWebhookSecret` | The bearer token your mail relay sends to the inbound route. See [Receive email](/docs/guides/inbound-email). |

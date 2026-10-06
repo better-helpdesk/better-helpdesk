@@ -9,6 +9,7 @@
     "routes",
     "widget",
     "admin",
+    "strings",
     "cli",
     "database",
     "exports"
