@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { outFile, uiStrings } from '../site/scripts/ui-strings.mjs';
+
 const root = join(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
 
@@ -42,5 +44,11 @@ describe('the reference documents every field', () => {
       missing,
       `${type} fields missing from site/content/docs/reference/${page}: ${missing.join(', ')}`
     ).toEqual([]);
+  });
+});
+
+describe('the UI strings page', () => {
+  it('matches src/ui/i18n.ts; run node site/scripts/ui-strings.mjs', () => {
+    expect(readFileSync(outFile, 'utf8')).toBe(uiStrings());
   });
 });

@@ -16,6 +16,5 @@ migrations
 relays
 scripts
 src
-!src/ui/i18n.ts
 test
 *.tgz

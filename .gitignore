@@ -11,8 +11,6 @@ examples/*/AGENTS.md
 examples/*/CLAUDE.md
 site/AGENTS.md
 site/CLAUDE.md
-# Generated from src/ui/i18n.ts by site/scripts/ui-strings.mjs.
-site/app/docs/ui-strings.json
 
 # Per-person Claude Code settings; the shared ones are settings.json.
 .claude/settings.local.json
