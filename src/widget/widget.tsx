@@ -331,6 +331,14 @@ export function Widget(props: WidgetProps) {
     listed.current = true;
     if (session.data.conversations.length > 0) setView({ name: 'list' });
   }, [inline, session.data]);
+  // Another person's thread is not theirs to read, so a sign-in, sign-out or
+  // switch of user leaves it for the list.
+  const shownSubject = useRef(subject);
+  useEffect(() => {
+    if (shownSubject.current === subject) return;
+    shownSubject.current = subject;
+    setView(v => (v.name === 'thread' ? { name: 'list' } : v));
+  }, [subject]);
   const launcher = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const data = session.data;
@@ -343,6 +351,13 @@ export function Widget(props: WidgetProps) {
   );
   const single = offered.length === 1 ? offered[0] : undefined;
   const home: View = single ? { name: 'form', type: single } : { name: 'home' };
+  // An empty list has no tabs and no back button, so it would be a dead end.
+  const emptyList =
+    view.name === 'list' && data !== null && data.conversations.length === 0;
+  useEffect(() => {
+    if (emptyList)
+      setView(single ? { name: 'form', type: single } : { name: 'home' });
+  }, [emptyList, single]);
 
   const close = useCallback(() => {
     if (inline) return;
