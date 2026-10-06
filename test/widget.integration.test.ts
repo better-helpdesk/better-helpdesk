@@ -577,6 +577,23 @@ describe('attachments', () => {
       { user: 'bob' }
     );
     expect(other.status).toBe(404);
+    // Through a conversation Bob can see, the file is still not his.
+    const bobs = await openBug('bob');
+    const borrowed = await h.call(
+      'GET',
+      `widget/conversations/${bobs.id}/attachments/${id}`,
+      { user: 'bob' }
+    );
+    expect(borrowed.status).toBe(404);
+
+    h.addUser('agent', { isAgent: true });
+    const agent = (conversationId: string, user = 'agent') =>
+      h.call('GET', `agent/conversations/${conversationId}/attachments/${id}`, {
+        user,
+      });
+    expect((await agent(conversation.id)).status).toBe(302);
+    expect((await agent(bobs.id)).status).toBe(404);
+    expect((await agent(conversation.id, 'ada')).status).toBe(403);
   });
 
   it('refuses an executable content type', async () => {
