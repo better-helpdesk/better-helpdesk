@@ -1101,9 +1101,26 @@ export function createHandler(support: Helpdesk) {
     }
   );
 
-  agentRoute('POST', 'conversations/:id/draft', async ({ params }) => {
+  agentRoute('POST', 'conversations/:id/draft', async ({ params, body }) => {
     const conversation = await requireConversation(params.id);
-    return json({ text: await support.draftReply(conversation) });
+    // Asking for a draft took no body before rewrites existed, so none still means a draft.
+    const raw = await body().catch(error => {
+      if (error instanceof SyntaxError) return {};
+      throw error;
+    });
+    const data = z
+      .object({
+        mode: z.enum(['shorten', 'formal', 'translate']).optional(),
+        text: z.string().trim().min(1).max(20_000).optional(),
+      })
+      .refine(d => !d.mode || d.text, { message: 'A mode needs the text' })
+      .parse(raw ?? {});
+    return json({
+      text:
+        data.mode && data.text
+          ? await support.rewriteDraft(conversation, data.mode, data.text)
+          : await support.draftReply(conversation),
+    });
   });
 
   agentRoute('POST', 'conversations/:id/triage', async ({ params }) => {
