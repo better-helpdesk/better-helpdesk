@@ -1264,6 +1264,11 @@ describe('Widget', () => {
     expect(document.activeElement).toBe(last);
   });
 
+  it('keeps the form fields from shrinking, through the display: contents fieldset', () => {
+    expect(widgetCss).toMatch(/\.sent-fields \{ display: contents; \}/);
+    expect(widgetCss).toMatch(/\.sent-fields > \*[^{]*\{ flex-shrink: 0; \}/);
+  });
+
   it('uses the focus colour for focus rings only', () => {
     const rules = widgetCss.match(/[^{};]+\{[^{}]*var\(--s-focus\)[^{}]*\}/g);
     expect(rules?.length).toBeGreaterThan(0);
