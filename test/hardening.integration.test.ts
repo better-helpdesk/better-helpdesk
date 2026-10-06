@@ -604,6 +604,68 @@ describe('a retried inbound mail', () => {
   });
 });
 
+describe('blocked senders', () => {
+  it('refuses a blocked address in the widget and by email, and keeps their conversations out of the inbox', async () => {
+    h.addUser('agent', { isAgent: true });
+    const first = await lead('spam@bot.test');
+    const [contact] = await rows<{ id: string }>(
+      sql`SELECT contact_id AS id FROM helpdesk.conversation`
+    );
+    const inbox = async () =>
+      (await h.call('GET', 'agent/conversations?status=any', { user: 'agent' }))
+        .data as { conversations: { id: string }[]; counts: { all: number } };
+    expect((await inbox()).conversations).toHaveLength(1);
+
+    await h.call('PATCH', `agent/contacts/${contact?.id}`, {
+      user: 'agent',
+      body: { blocked: true },
+    });
+
+    expect((await inbox()).conversations).toEqual([]);
+    expect((await inbox()).counts.all).toBe(0);
+    const page = await h.call('GET', `agent/contacts/${contact?.id}`, {
+      user: 'agent',
+    });
+    expect(page.data.conversations.map((c: { id: string }) => c.id)).toEqual([
+      first.conversation.id,
+    ]);
+
+    // A new browser and a new contact, but the same address.
+    const again = await h.call('POST', 'widget/conversations', {
+      body: {
+        inbox: 'sales',
+        type: 'lead',
+        body: 'Buy now',
+        email: 'SPAM@bot.test',
+      },
+    });
+    expect(again.status).toBe(404);
+    // Their own browser cannot reply either.
+    const reply = await h.call(
+      'POST',
+      `widget/conversations/${first.conversation.id}/messages`,
+      {
+        body: { body: 'Still here' },
+        headers: { 'x-helpdesk-visitor': first.visitorToken },
+      }
+    );
+    expect(reply.status).toBe(404);
+    await h.support.handleInbound(
+      mail({ from: { address: 'spam@bot.test', name: 'Bot' }, text: 'By mail' })
+    );
+    expect(
+      await rows(sql`SELECT body FROM helpdesk.message ORDER BY created_at`)
+    ).toEqual([{ body: 'Words nobody proved' }]);
+
+    await h.call('PATCH', `agent/contacts/${contact?.id}`, {
+      user: 'agent',
+      body: { blocked: false },
+    });
+    expect((await lead('spam@bot.test')).conversation.id).toBeTruthy();
+    expect((await inbox()).conversations).toHaveLength(2);
+  });
+});
+
 describe('smaller hardening', () => {
   it('stops honouring a visitor token left unused for a month', async () => {
     const { visitorToken } = await lead();

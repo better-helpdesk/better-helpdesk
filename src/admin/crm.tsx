@@ -32,6 +32,7 @@ type Contact = {
   leadStage: string | null;
   tags: string[];
   custom: Record<string, string | number | null>;
+  blocked?: boolean;
   createdAt: string;
 };
 
@@ -381,6 +382,11 @@ export function ContactView({ id }: { id: string }) {
                 {tag}
               </span>
             ))}
+            {c.blocked && (
+              <span className="sa-pill sa-pill-danger">
+                {t('admin.blocked')}
+              </span>
+            )}
             {c.source && (
               <span className="sa-fine">
                 {t('admin.sourceLine', { source: c.source })}
@@ -404,6 +410,19 @@ export function ContactView({ id }: { id: string }) {
               className="sa-btn sa-ghost"
               onClick={() => setMerging(true)}>
               {t('admin.merge')}
+            </button>
+            <button
+              type="button"
+              className="sa-btn sa-ghost"
+              title={c.blocked ? undefined : t('admin.blockHint')}
+              onClick={async () => {
+                await api(`agent/contacts/${id}`, {
+                  method: 'PATCH',
+                  body: { blocked: !c.blocked },
+                });
+                await detail.refresh();
+              }}>
+              {t(c.blocked ? 'admin.unblock' : 'admin.block')}
             </button>
             <button
               type="button"

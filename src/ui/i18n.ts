@@ -323,6 +323,11 @@ const en = {
   'admin.rewrite.shorten': 'Shorten',
   'admin.rewrite.formal': 'More formal',
   'admin.rewrite.translate': 'Into the customer’s language',
+  'admin.block': 'Block sender',
+  'admin.unblock': 'Unblock sender',
+  'admin.blockHint':
+    'Refuse their messages and keep their conversations out of the inbox',
+  'admin.blocked': 'Blocked',
   'admin.views': 'Views',
   'admin.saveView': 'Save as view',
   'admin.renameView': 'Rename view',
@@ -785,6 +790,11 @@ const de: Record<MessageKey, string> = {
   'admin.rewrite.shorten': 'Kürzen',
   'admin.rewrite.formal': 'Förmlicher',
   'admin.rewrite.translate': 'In die Sprache der Kundschaft',
+  'admin.block': 'Absender sperren',
+  'admin.unblock': 'Sperre aufheben',
+  'admin.blockHint':
+    'Nachrichten ablehnen und Unterhaltungen aus dem Posteingang nehmen',
+  'admin.blocked': 'Gesperrt',
   'admin.views': 'Ansichten',
   'admin.saveView': 'Als Ansicht speichern',
   'admin.renameView': 'Ansicht umbenennen',

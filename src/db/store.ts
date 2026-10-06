@@ -74,6 +74,8 @@ export type InboxFilter = {
 
 const MAX_ATTEMPTS = 5;
 
+const notBlocked = sql`${conversations.contactId} NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)`;
+
 /** The filters of the agent inbox, shared by its list and its counts. */
 function inboxConditions(filter: InboxFilter) {
   const q = filter.query?.trim();
@@ -104,6 +106,8 @@ function inboxConditions(filter: InboxFilter) {
     filter.priority === 'high'
       ? inArray(conversations.priority, ['high', 'urgent'])
       : undefined,
+    // A blocked sender's conversations stay on their contact page only.
+    filter.contactId ? undefined : notBlocked,
   ];
   if (q) {
     const number = Number(q.replace(/^\D+-/, ''));
@@ -202,6 +206,16 @@ export function createStore(db: Db) {
         }
         return contact;
       });
+    },
+
+    /** Whether any contact with this address was blocked. */
+    async isEmailBlocked(email: string) {
+      const [row] = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(and(eq(contacts.email, email), eq(contacts.blocked, true)))
+        .limit(1);
+      return Boolean(row);
     },
 
     /** The oldest contact with this address, however it was proven. */
@@ -1046,7 +1060,7 @@ export function createStore(db: Db) {
           unassigned: sql<number>`(count(*) FILTER (WHERE ${conversations.assigneeId} IS NULL))::int`,
         })
         .from(conversations)
-        .where(eq(conversations.status, 'open'));
+        .where(and(eq(conversations.status, 'open'), notBlocked));
       return row ?? { all: 0, mine: 0, unassigned: 0 };
     },
 
