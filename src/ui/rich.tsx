@@ -180,12 +180,36 @@ function hostOf(node: Extract<Inline, { type: 'link' }>) {
   }
 }
 
-function inline(nodes: Inline[], hosts: boolean): ReactNode {
+type Options = {
+  hosts: boolean;
+  reference?: (reference: string) => ReactNode;
+  /** Inside a link, where another link cannot go. */
+  linked?: boolean;
+};
+
+// A conversation reference such as ACME-1042, wherever it is written.
+const REFERENCE = /\b[A-Z]{2,}-\d{4,}\b/g;
+
+function withReferences(value: string, o: Options): ReactNode {
+  if (!o.reference || o.linked) return value;
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const match of value.matchAll(REFERENCE)) {
+    if (match.index > last) parts.push(value.slice(last, match.index));
+    parts.push(o.reference(match[0]));
+    last = match.index + match[0].length;
+  }
+  if (last === 0) return value;
+  if (last < value.length) parts.push(value.slice(last));
+  return all(parts);
+}
+
+function inline(nodes: Inline[], o: Options): ReactNode {
   return all(
     nodes.map(node => {
-      if (node.type === 'text') return node.text;
+      if (node.type === 'text') return withReferences(node.text, o);
       if (node.type === 'link') {
-        const host = hosts && hostOf(node);
+        const host = o.hosts && hostOf(node);
         const link = createElement(
           'a',
           {
@@ -194,11 +218,11 @@ function inline(nodes: Inline[], hosts: boolean): ReactNode {
             target: '_blank',
             rel: 'noopener noreferrer',
           },
-          inline(node.children, hosts)
+          inline(node.children, { ...o, linked: true })
         );
         return host ? all([link, ` (${host})`]) : link;
       }
-      return createElement(node.type, null, inline(node.children, hosts));
+      return createElement(node.type, null, inline(node.children, o));
     })
   );
 }
@@ -213,13 +237,13 @@ function joined(parts: ReactNode[], breaks: number) {
   return all(out);
 }
 
-const lines = (rows: Inline[][], hosts: boolean) =>
+const lines = (rows: Inline[][], o: Options) =>
   joined(
-    rows.map(row => inline(row, hosts)),
+    rows.map(row => inline(row, o)),
     1
   );
 
-function compactBlock(block: Block, hosts: boolean) {
+function compactBlock(block: Block, o: Options) {
   if (block.type === 'pre') {
     return createElement(
       'code',
@@ -227,7 +251,7 @@ function compactBlock(block: Block, hosts: boolean) {
       block.text
     );
   }
-  if (block.type === 'p') return lines(block.lines, hosts);
+  if (block.type === 'p') return lines(block.lines, o);
   return lines(
     block.items.map((item, n) => [
       {
@@ -236,21 +260,21 @@ function compactBlock(block: Block, hosts: boolean) {
       },
       ...item,
     ]),
-    hosts
+    o
   );
 }
 
-function block(b: Block, hosts: boolean, code?: (text: string) => ReactNode) {
+function block(b: Block, o: Options, code?: (text: string) => ReactNode) {
   if (b.type === 'pre') {
     return code
       ? code(b.text)
       : createElement('pre', null, createElement('code', null, b.text));
   }
-  if (b.type === 'p') return createElement('p', null, lines(b.lines, hosts));
+  if (b.type === 'p') return createElement('p', null, lines(b.lines, o));
   return createElement(
     b.type,
     b.type === 'ol' && b.start !== 1 ? { start: b.start } : null,
-    ...b.items.map(item => createElement('li', null, inline(item, hosts)))
+    ...b.items.map(item => createElement('li', null, inline(item, o)))
   );
 }
 
@@ -260,27 +284,32 @@ function block(b: Block, hosts: boolean, code?: (text: string) => ReactNode) {
  * `hosts` shows where each labelled link goes, for text someone else wrote.
  * `code` renders a code block, so a client UI can add its copy button; this
  * module also loads on the server, where hooks do not exist.
+ * `reference` renders each conversation reference (ACME-1042) outside links
+ * and code, so the agent UI can link it to a search.
  */
 export function RichText({
   text,
   compact = false,
   hosts = false,
   code,
+  reference,
 }: {
   text: string;
   compact?: boolean;
   hosts?: boolean;
   code?: (text: string) => ReactNode;
+  reference?: (reference: string) => ReactNode;
 }) {
+  const o = { hosts, reference };
   const blocks = parseRich(text);
   if (compact)
     return joined(
-      blocks.map(b => compactBlock(b, hosts)),
+      blocks.map(b => compactBlock(b, o)),
       2
     );
   return createElement(
     'div',
     { className: 'rich' },
-    ...blocks.map(b => block(b, hosts, code))
+    ...blocks.map(b => block(b, o, code))
   );
 }

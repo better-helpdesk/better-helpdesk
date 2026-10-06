@@ -162,3 +162,33 @@ describe('RichText code blocks', () => {
     ).toBe('<div class="rich"><p>Hi</p><figure>a</figure></div>');
   });
 });
+
+describe('RichText references', () => {
+  const html = (text: string, compact = false) =>
+    renderToStaticMarkup(
+      createElement(RichText, {
+        text,
+        compact,
+        reference: ref => createElement('mark', null, ref),
+      })
+    );
+
+  it('renders each reference through `reference`, outside links and code', () => {
+    expect(
+      html('Same as ACME-1041 and **DG-12345**, not A-1234 or ACME-12.')
+    ).toBe(
+      '<div class="rich"><p>Same as <mark>ACME-1041</mark> and <strong><mark>DG-12345</mark></strong>, not A-1234 or ACME-12.</p></div>'
+    );
+    expect(html('[see ACME-1041](https://x.test/ACME-1041)')).not.toContain(
+      '<mark>'
+    );
+    expect(html('```\nACME-1041\n```')).not.toContain('<mark>');
+    expect(html('- ACME-1041', true)).toContain('<mark>ACME-1041</mark>');
+  });
+
+  it('leaves references as text without `reference`', () => {
+    expect(
+      renderToStaticMarkup(createElement(RichText, { text: 'ACME-1041' }))
+    ).toBe('<div class="rich"><p>ACME-1041</p></div>');
+  });
+});
