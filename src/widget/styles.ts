@@ -347,3 +347,13 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
   }
 }
 `;
+
+/** `<helpdesk-conversations>`: the same panel, in the page's flow instead of floating. */
+export const inlineCss = `
+:host { position: static; display: block; z-index: auto; }
+.panel[data-inline] {
+  position: static; width: 100%; height: var(--helpdesk-page-height, 640px); max-height: none;
+  border-radius: var(--s-radius); border: var(--helpdesk-panel-border, 1px solid var(--s-border));
+  box-shadow: none; animation: none;
+}
+`;
