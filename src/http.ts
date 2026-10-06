@@ -24,6 +24,7 @@ import {
   MAX_ATTACHMENTS,
 } from './service';
 import { sourceOf } from './source';
+import { translator } from './ui/i18n';
 
 type Params = { id: string; attachmentId: string };
 type Route = {
@@ -37,6 +38,34 @@ type Route = {
     body: () => Promise<unknown>;
   }) => Promise<Response>;
 };
+
+const escapeHtml = (text: string) =>
+  text.replace(
+    /[&<>"']/g,
+    c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        c
+      ] ?? c
+  );
+
+/** A small page of its own, for links opened from an email; with `button`, a form that posts back to the same URL. */
+function page(locale: Locale, status: number, text: string, button?: string) {
+  const form = button
+    ? `<form method="post"><button type="submit">${escapeHtml(button)}</button></form>`
+    : '';
+  return new Response(
+    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${escapeHtml(text)}</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;color:#0c2034}button{font:inherit;padding:.6rem 1.2rem;border:0;border-radius:8px;background:#0c2034;color:#f0f4f8;cursor:pointer}</style></head><body><p>${escapeHtml(text)}</p>${form}</body></html>`,
+    {
+      status,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        // The URL carries the signature.
+        'referrer-policy': 'no-referrer',
+      },
+    }
+  );
+}
 
 const json = (data: unknown, status = 200, headers?: HeadersInit) =>
   new Response(JSON.stringify(data), {
@@ -343,21 +372,14 @@ export function createHandler(support: Helpdesk) {
           comment: z.string().trim().max(2000).optional(),
         })
         .parse(await body());
-      const patch: Partial<Conversation> = {
-        rating: data.rating,
-        ratingComment: data.comment || null,
-        ratedAt: dbNow(),
-        ...(data.rating === 'bad' && {
-          status: 'open',
-          waitingSince: dbNow(),
-          resolvedAt: null,
-        }),
-      };
-      const updated = await store.rateConversation(conversation.id, patch);
+      const updated = await support.rateAsCustomer(
+        conversation,
+        data.rating,
+        data.comment
+      );
       if (!updated) {
         throw new HelpdeskError(409, 'Not open for a rating');
       }
-      await emitUpdated(config, conversation, updated, patch, null, 'customer');
       return json({ conversation: customerView(customer, updated) });
     }
   );
@@ -1517,6 +1539,41 @@ export function createHandler(support: Helpdesk) {
 
   // Inbound email -----------------------------------------------------------
 
+  // Rating from an email: the link opens a page whose button records it, as a
+  // mail scanner that follows every link must not cast a rating.
+  async function ratePage(url: URL, submit: boolean) {
+    const link = await support.verifyRatingLink(url.searchParams);
+    const conversation =
+      link && uuid.safeParse(link.conversationId).success
+        ? await store.getConversation(link.conversationId)
+        : null;
+    if (!link || !conversation) {
+      return page('en', 404, translator('en')('rate.invalid'));
+    }
+    const contact = await store.getContact(conversation.contactId);
+    const locale = support.toLocale(contact?.locale);
+    const t = translator(locale);
+    const reference = support.reference(conversation);
+    if (conversation.rating) {
+      return page(locale, 200, t('rate.done', { reference }));
+    }
+    if (!submit) {
+      return page(
+        locale,
+        200,
+        t(`rate.confirm.${link.rating}`, { reference }),
+        t(`rate.button.${link.rating}`)
+      );
+    }
+    const updated = await support.rateAsCustomer(conversation, link.rating);
+    return updated
+      ? page(locale, 200, t(`rate.thanks.${link.rating}`, { reference }))
+      : page(locale, 409, t('rate.closed', { reference }));
+  }
+
+  define('GET', 'rate', async ({ url }) => ratePage(url, false));
+  define('POST', 'rate', async ({ url }) => ratePage(url, true));
+
   define('POST', 'inbound', async ({ request }) => {
     const secret = config.inboundWebhookSecret;
     const given = request.headers.get('authorization')?.replace(/^Bearer /, '');
@@ -1579,7 +1636,13 @@ export function createHandler(support: Helpdesk) {
    * CORS preflight, so a cross-site form cannot ride an agent's cookie.
    */
   function checkMutation(request: Request, path: string) {
-    if (request.method === 'GET' || path === 'jobs' || path === 'inbound') {
+    // `rate` acts only on the signed link in its own URL, never on a session.
+    if (
+      request.method === 'GET' ||
+      path === 'jobs' ||
+      path === 'inbound' ||
+      path === 'rate'
+    ) {
       return;
     }
     // Only a POST can come from a plain form; PATCH and DELETE always preflight.
