@@ -34,6 +34,7 @@ type Contact = {
   custom: Record<string, string | number | null>;
   blocked?: boolean;
   createdAt: string;
+  lastSeenAt?: string | null;
 };
 
 type Company = {
@@ -390,6 +391,13 @@ export function ContactView({ id }: { id: string }) {
             {c.source && (
               <span className="sa-fine">
                 {t('admin.sourceLine', { source: c.source })}
+              </span>
+            )}
+            {c.lastSeenAt && (
+              <span className="sa-fine">
+                {t('admin.lastSeen', {
+                  when: relativeTime(c.lastSeenAt, locale),
+                })}
               </span>
             )}
           </div>

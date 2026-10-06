@@ -245,6 +245,42 @@ describe('HelpdeskAdmin', () => {
     expect(screen.getByRole('button', { name: 'Unblock sender' })).toBeTruthy();
   });
 
+  it('shows when the contact was last seen through the widget', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.endsWith('agent/contacts/p1/')) {
+          return new Response(
+            JSON.stringify({
+              contact: {
+                id: 'p1',
+                name: 'Mia Keller',
+                email: 'mia@harbor.test',
+                companyId: null,
+                leadStage: null,
+                tags: [],
+                custom: {},
+                createdAt: new Date(Date.now() - 864e5 * 9).toISOString(),
+                lastSeenAt: new Date(Date.now() - 3 * 36e5).toISOString(),
+              },
+              identities: [],
+              company: null,
+              conversations: [],
+              timeline: [],
+              deals: [],
+            })
+          );
+        }
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/contacts/p1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    expect(await screen.findByText('Last seen 3 hours ago')).toBeTruthy();
+  });
+
   it('lists waiting conversations and opens one as a deep link', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     const row = await screen.findByRole('link', { name: /DG-1000/ });
