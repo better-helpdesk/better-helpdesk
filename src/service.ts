@@ -748,7 +748,14 @@ export function createHelpdesk(input: HelpdeskConfig) {
       const conversation = await store.getConversation(
         String(payload.conversationId)
       );
-      if (!conversation) return;
+      // A retry can come hours later, after someone answered.
+      if (
+        !conversation?.waitingSince ||
+        conversation.status === 'resolved' ||
+        conversation.snoozedUntil
+      ) {
+        return;
+      }
       const body = await firstCustomerText(conversation);
       const recipients = await agentRecipients(conversation);
       for (const agent of recipients) {

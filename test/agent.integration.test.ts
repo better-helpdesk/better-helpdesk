@@ -341,6 +341,39 @@ describe('jobs and email', () => {
       await flaky.close();
     }
   });
+
+  it('drops a retried reminder once the customer has been answered', async () => {
+    let sends = 0;
+    const flaky = createHarness({
+      email: {
+        async send(message) {
+          if (message.kind !== 'agent-reminder') return;
+          sends++;
+          if (sends === 1) throw new Error('mail provider down');
+        },
+      },
+    });
+    try {
+      flaky.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
+      await flaky.call('GET', 'agent/me', { user: 'agent' });
+      flaky.addUser('ada');
+      await flaky.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Waiting' },
+      });
+      await flaky.support.store.db.execute(
+        sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
+      );
+      await flaky.runDueJobs();
+      await flaky.support.store.db.execute(
+        sql`UPDATE helpdesk.conversation SET waiting_since = NULL`
+      );
+      await flaky.runDueJobs();
+      expect(sends).toBe(1);
+    } finally {
+      await flaky.close();
+    }
+  });
 });
 
 describe('deletion', () => {
