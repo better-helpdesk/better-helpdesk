@@ -156,15 +156,17 @@ export function SupportWidget({ initialToken }: { initialToken?: string }) {
 }
 ```
 
-Render `<SupportWidget initialToken={…} />` where the layout above rendered `HelpdeskWidget`, or leave `initialToken` out on a cached page, and the component fetches the first token itself. Once the customer signs out, the route answers 401 and the widget stops sending a token.
+Render `<SupportWidget initialToken={…} />` where the layout above rendered `HelpdeskWidget`, or leave `initialToken` out on a cached page, and the component fetches the first token itself. Once the customer signs out, the next refresh gets 401 and the widget stops sending a token. A token already handed out stays valid until it expires, an hour by default, so keep `expiresInSeconds` short if a shared computer matters to you.
 
 With the script tag, fetch from the same route and set the attribute on the element:
 
 ```ts
 fetch('/api/helpdesk-token', { cache: 'no-store' })
-  .then(response => response.json())
+  .then(response => (response.ok ? response.json() : { token: null }))
   .then(({ token }) => {
-    document.querySelector('helpdesk-widget')?.setAttribute('identity-token', token);
+    const widget = document.querySelector('helpdesk-widget');
+    if (token) widget?.setAttribute('identity-token', token);
+    else widget?.removeAttribute('identity-token');
   });
 ```
 

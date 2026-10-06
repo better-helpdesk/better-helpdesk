@@ -50,7 +50,7 @@ The visitor form also carries a hidden field that people never see. A submission
 
 ## Inbound email
 
-Mail reaches the helpdesk through a relay, and relays differ in what they check. So the helpdesk checks for itself, on the raw message, whether the From domain signed it: a DKIM signature that passes, is aligned with the single From address, covers the From header and signs the whole body. It does not trust an `Authentication-Results` header written by a server along the way. A message that passes is **verified**.
+Mail reaches the helpdesk through a relay, and relays differ in what they check. So the helpdesk checks for itself, on the raw message, whether the From domain signed it: a DKIM signature that passes, is aligned with the single From address (relaxed alignment: the signing domain is the From domain or shares its organizational domain, so `news.example.com` can sign for `example.com`), covers the From header and signs the whole body. It does not trust an `Authentication-Results` header written by a server along the way. A message that passes is **verified**.
 
 What follows from that:
 
@@ -74,7 +74,7 @@ Better Helpdesk stores no passwords and no sessions. For each agent it keeps you
 
 Resolved conversations are deleted `retentionDays` after they were resolved, with their files, when your scheduled jobs run. Without `retentionDays` they are kept. For a request to erase someone, `helpdesk.deleteContact()` deletes one person, with their conversations, their files and what they wrote in other people's threads, and `helpdesk.deleteCompany()` deletes everything held for one of your organizations. Agents can delete a contact from the agent UI.
 
-The migration CLI's `DATABASE_SSL=true` encrypts its connection to the database, but does not verify the server's certificate.
+For the migrate and import commands, `DATABASE_SSL=true` encrypts the connection and verifies the server's certificate, and `DATABASE_SSL=no-verify` encrypts without verifying it, for a self-signed certificate. A `sslmode` in the connection string takes precedence over both.
 
 ## Blocked senders
 

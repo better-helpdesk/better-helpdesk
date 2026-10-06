@@ -7,7 +7,7 @@ The object `buildHelpdesk()` returns is the API. Your server code imports it and
 
 ## Open a conversation for a customer
 
-To open a conversation when a payment fails, sign an identity token for the customer and hand `createConversation` a request that carries it. This needs `identityTokenSecret` in the config, as in [Sign customers in from another origin](/docs/guides/identity-token). The request carries no session, so `identify` returns `null` for it and the token decides who the customer is:
+To open a conversation when a payment fails, sign an identity token for the customer and hand `createConversation` a request that carries it. This needs `identityTokenSecret` in the config, as in [Sign customers in from another origin](/docs/guides/identity-token). A webhook request carries no session, so `identify` returns `null` for it and the token decides who the customer is. If your `identify` reads the session from somewhere other than the request, such as Auth.js `auth()` inside a server action a signed-in user triggered, that user wins over the token, so call `createConversation` from a webhook or a job:
 
 ```ts title="app/api/billing/webhook/route.ts"
 import { signIdentityToken } from 'better-helpdesk';

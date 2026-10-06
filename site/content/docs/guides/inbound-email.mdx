@@ -90,7 +90,7 @@ Quoted history under a reply is cut off, and the text is capped at 20,000 charac
 
 ## When mail arrives unsigned
 
-A message counts as signed when it carries a valid DKIM signature from the domain in its From header, a signature that covers the From header and the whole body. If mail from a domain you know signs its mail arrives with an **Unverified** contact, or its replies open new conversations, a step on the way changed the message: a subject tag, a footer, a disclaimer. Exempt the relay copy from that step. [Security model](/docs/concepts/security#inbound-email) explains what the check requires and why the helpdesk makes it itself.
+A message counts as signed when it carries a valid DKIM signature from the domain in its From header or another domain under the same organizational domain (relaxed alignment), a signature that covers the From header and the whole body. If mail from a domain you know signs its mail arrives with an **Unverified** contact, or its replies open new conversations, a step on the way changed the message: a subject tag, a footer, a disclaimer. Exempt the relay copy from that step. [Security model](/docs/concepts/security#inbound-email) explains what the check requires and why the helpdesk makes it itself.
 
 DKIM keys are looked up through the system's DNS resolver. To use another one, pass `dnsResolver`:
 

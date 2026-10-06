@@ -89,7 +89,7 @@ Every table and column is described in [Database](/docs/reference/database). Wit
 
 ## Connect a dashboard
 
-For Metabase, a PostHog data warehouse source or any other tool that reads Postgres, give it a role that can read the `helpdesk` schema and nothing else. Run this as the role that runs your migrations, so the last line also covers tables a later migration adds:
+For Metabase, a PostHog data warehouse source or any other tool that reads Postgres, give it a role of its own that reads the `helpdesk` schema. Run this as the role that runs your migrations. The `ALTER DEFAULT PRIVILEGES` line grants every table a later migration adds as well, so when a release adds a table that holds secrets or personal data, add it to the `REVOKE` line:
 
 ```sql
 CREATE ROLE helpdesk_reports LOGIN PASSWORD 'change-me';

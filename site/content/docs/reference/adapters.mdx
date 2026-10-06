@@ -32,11 +32,11 @@ type StorageAdapter = {
   type={{
     presignUpload: {
       type: '(key, opts) => Promise<{ url, fields }>',
-      description: <>Called when a customer starts an upload. The browser sends a multipart <code>POST</code> to <code>url</code> with every entry of <code>fields</code>, then the file as <code>file</code>. <code>maxBytes</code> is <code>maxAttachmentBytes</code>. An S3 presigned POST has this shape.</>,
+      description: <>Called when a customer starts an upload. The browser sends a multipart <code>POST</code> to <code>url</code> with every entry of <code>fields</code>, then the file as <code>file</code>. <code>maxBytes</code> is <code>maxAttachmentBytes</code>. An S3 presigned POST has this shape. The package checks only the type and size the browser declares, so the signed upload must bind <code>contentType</code> and the length range up to <code>maxBytes</code>; a presigned POST does this with conditions.</>,
     },
     presignDownload: {
       type: '(key, filename) => Promise<string>',
-      description: 'Called on a download. The route answers 302 to the returned URL.',
+      description: <>Called on a download. The route answers 302 to the returned URL. Sign it with <code>Content-Disposition: attachment</code>, so a file is downloaded rather than shown in the agent's browser.</>,
     },
     put: {
       type: '(key, body, contentType) => Promise<void>',
