@@ -158,7 +158,7 @@ button { cursor: pointer; }
 .rating-thanks { padding: 0 12px 8px; }
 img.avatar { object-fit: cover; padding: 0; }
 .body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.body > * { flex-shrink: 0; }
+.body > *, .sent-fields > * { flex-shrink: 0; }
 .types { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .type {
   display: grid; align-content: start; gap: 4px;
