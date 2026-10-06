@@ -155,6 +155,10 @@ export async function resetDemo() {
       'DEMO_DATABASE_URL names the site database; the reset would wipe the real inbox.'
     );
   const client = await pool.connect();
+  // A held connection is not the pool's to watch; its loss mid-reset would crash the site.
+  client.on('error', error =>
+    console.error('[demo] reset connection lost', error)
+  );
   try {
     const { rows } = await client.query<{ ok: boolean }>(
       "select pg_try_advisory_lock(hashtext('better-helpdesk-demo')) as ok"
