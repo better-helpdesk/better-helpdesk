@@ -22,6 +22,7 @@
     "./rich": "./src/ui/rich.tsx"
   },
   "bin": {
+    "better-helpdesk-import": "bin/import.mjs",
     "better-helpdesk-migrate": "bin/migrate.mjs"
   },
   "files": [
