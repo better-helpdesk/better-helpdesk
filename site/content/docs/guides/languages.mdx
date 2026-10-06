@@ -1,0 +1,75 @@
+---
+title: Change and translate the wording
+description: Choose English or German for each UI, write your inboxes' copy in both, and replace the agent UI's own strings.
+---
+
+Both UIs ship in English and German. The package's own strings are fixed per language; the copy that belongs to your team, such as an inbox's title or the promise about replies, comes from your config, one entry per language.
+
+## Choose the language
+
+The agent UI takes `locale`, `'en'` or `'de'`. Pass the agent's own preference from your app:
+
+```tsx title="app/helpdesk/[[...slug]]/page.tsx"
+import { HelpdeskAdmin } from 'better-helpdesk/admin';
+
+export default async function Page() {
+  const locale = await agentLocale(); // 'en' or 'de', however your app stores it
+  return <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale={locale} />;
+}
+```
+
+The widget and `HelpdeskConversations` take `locale` as well. Leave it out and the widget follows the browser's language: German for any `de` variant, English for everything else.
+
+## Write your inboxes' copy in both languages
+
+The texts customers and agents read about an inbox are given per locale in its config:
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  inboxes: {
+    support: {
+      name: { en: 'Support', de: 'Kundendienst' },
+      title: { en: 'Help and support', de: 'Hilfe und Support' },
+      replyPromise: {
+        en: 'We answer within a working day.',
+        de: 'Wir antworten innerhalb eines Arbeitstags.',
+      },
+    },
+  },
+});
+```
+
+`title` and `replyPromise` are the widget's header and its promise about replies; `name` is what agents see instead of the inbox's key. A language you leave out counts as unset for that language: the widget shows its default title and promise, and the agent UI shows the key, capitalized. The qualifying question is stricter: its `label` and each option's `label` need both languages, and so does an option's `badge` when you give one. The [inboxes reference](/docs/reference/inboxes#inboxconfig) lists every field, and the [configuration reference](/docs/reference/configuration#names-shown-to-customers) covers `teamName` and `agentTitles`, which name your team and your agents per language.
+
+Agents can change one more text without a deploy: the confirmation the widget shows after a first message, under Settings in the agent UI.
+
+## Replace the agent UI's strings
+
+`HelpdeskAdmin` takes [`messages`](/docs/reference/admin#props), a map from the package's string keys to your text. It applies to whichever language is showing, so pick the map by locale:
+
+```tsx title="app/helpdesk/[[...slug]]/page.tsx"
+import { HelpdeskAdmin } from 'better-helpdesk/admin';
+
+const messages = {
+  en: { 'admin.inbox': 'Queue', 'agentType.billing': 'Billing' },
+  de: { 'admin.inbox': 'Warteschlange', 'agentType.billing': 'Abrechnung' },
+};
+
+export default async function Page() {
+  const locale = await agentLocale();
+  return (
+    <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale={locale} messages={messages[locale]} />
+  );
+}
+```
+
+[UI strings](/docs/reference/strings) lists every key with its English and German text. Strings with placeholders such as `{name}` or `{count}` keep them in your text, and the values fill in as before.
+
+The same map names your own conversation types and stages. A custom type `billing` reads as `agentType.billing`, and a custom lead or deal stage `trial` as `stage.trial`. Without an entry, the agent UI shows the key itself.
+
+The widget has no such map. Its strings stay the package's own, and a custom type shows in it under its key, so give your types keys that read well to customers.
+
+## Emails
+
+The package does not write your emails' wording; your email adapter does. Each message carries a `locale`. For a customer, it is the `locale` that `identify` or their identity token gave when they first wrote in, or, for a visitor, the language of the widget they wrote from; failing both, `en`. Agent emails always carry `en`. [Send email](/docs/guides/email) covers the adapter.

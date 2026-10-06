@@ -1,0 +1,13 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "quickstart",
+    "---Guides---",
+    "...guides",
+    "---Concepts---",
+    "...concepts",
+    "---Reference---",
+    "...reference"
+  ]
+}

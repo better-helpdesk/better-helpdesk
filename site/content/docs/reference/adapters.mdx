@@ -1,0 +1,141 @@
+---
+title: Adapters
+description: The interfaces the host implements for storage, email, AI, help search and DNS, with every method signature.
+---
+
+Adapters are the interfaces the host implements for what is optional: storage, email, AI, help search and DNS. Each is an optional field of the [configuration](/docs/reference/configuration); the package calls it. `StorageAdapter`, `AiAdapter`, `HelpResult` and `HelpdeskEmail` are exported as types from `better-helpdesk`. Worked implementations are in [`examples/adapters`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/adapters). Related guides: [Store attachments](/docs/guides/attachments), [Send email](/docs/guides/email), [Add AI suggestions and drafts](/docs/guides/ai), [Search your own docs from the widget](/docs/guides/help-search).
+
+| Field | Type | Unset |
+| --- | --- | --- |
+| `storage` | `StorageAdapter` | No attachments. |
+| `email` | `{ send(message: HelpdeskEmail): Promise<void> }` | No email. |
+| `ai` | `AiAdapter` | No triage, drafts or rewrites. |
+| `help` | `{ search(query: string, locale: Locale): Promise<HelpResult[]> }` | No help suggestions. |
+| `dnsResolver` | `DNSResolver` | The system resolver. |
+
+## Storage
+
+```ts
+type StorageAdapter = {
+  presignUpload(
+    key: string,
+    opts: { contentType: string; maxBytes: number }
+  ): Promise<{ url: string; fields: Record<string, string> }>;
+  presignDownload(key: string, filename: string): Promise<string>;
+  put(key: string, body: Uint8Array, contentType: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  delete(key: string): Promise<void>;
+};
+```
+
+<TypeTable
+  type={{
+    presignUpload: {
+      type: '(key, opts) => Promise<{ url, fields }>',
+      description: <>Called when a customer starts an upload. The browser sends a multipart <code>POST</code> to <code>url</code> with every entry of <code>fields</code>, then the file as <code>file</code>. <code>maxBytes</code> is <code>maxAttachmentBytes</code>. An S3 presigned POST has this shape. The package checks only the type and size the browser declares, so the signed upload must bind <code>contentType</code> and the length range up to <code>maxBytes</code>; a presigned POST does this with conditions.</>,
+    },
+    presignDownload: {
+      type: '(key, filename) => Promise<string>',
+      description: <>Called on a download. The route answers 302 to the returned URL. Sign it with <code>Content-Disposition: attachment</code>, so a file is downloaded rather than shown in the agent's browser.</>,
+    },
+    put: {
+      type: '(key, body, contentType) => Promise<void>',
+      description: 'Stores an attachment of an inbound email, before its message is written.',
+    },
+    exists: {
+      type: '(key) => Promise<boolean>',
+      description: <>Called when an upload is marked complete (409 when <code>false</code>), and after each <code>delete</code>.</>,
+    },
+    delete: {
+      type: '(key) => Promise<void>',
+      description: <>Called by retention, <code>deleteContact</code> and <code>deleteCompany</code>, before the rows go. When <code>exists</code> still returns <code>true</code> afterwards, the deletion throws.</>,
+    },
+  }}
+/>
+
+Keys have the form `support/{conversationId}/{16 hex characters}-{filename}`, where the filename keeps only `a-z`, `A-Z`, `0-9`, `.` and `-` (others become `_`) and at most its last 100 characters.
+
+| Limit | Value |
+| --- | --- |
+| Content types a customer may upload | `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `application/pdf`, `text/plain` |
+| Attachments per conversation | 20 |
+| Size | `maxAttachmentBytes`, 10 MiB by default |
+
+Of an inbound email's first 20 attachments, those within the size are stored. A content type outside the list is stored as `application/octet-stream`.
+
+Example: [`storage-s3.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/storage-s3.ts).
+
+## Email
+
+```ts
+email: { send(message: HelpdeskEmail): Promise<void> }
+```
+
+`send` receives one message at a time and renders and delivers it. It runs inside a job, so a throw makes the job retry. The five message kinds are on [Email messages](/docs/reference/emails).
+
+Example: [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts).
+
+## AI
+
+```ts
+type AiAdapter = {
+  generate<T>(input: {
+    system: string;
+    prompt: string;
+    schema: z.ZodType<T>;
+  }): Promise<T>;
+};
+```
+
+<TypeTable
+  type={{
+    system: { type: 'string', required: true, description: 'Instructions for the model.' },
+    prompt: { type: 'string', required: true, description: 'The material, such as the conversation transcript, which is cut at 12,000 characters.' },
+    schema: { type: 'z.ZodType<T>', required: true, description: 'A Zod schema the result must satisfy.' },
+  }}
+/>
+
+`generate` returns an object that satisfies `schema`. The package calls it for:
+
+| Use | When | Result schema |
+| --- | --- | --- |
+| Triage | The `ai-triage` job queued for each new conversation, or `POST agent/conversations/{id}/triage` | `{ type, priority, title, summary }` |
+| Duplicates | During triage, when similar conversations exist and the type is not `lead` | `{ duplicates: { number, reason }[] }` |
+| Draft reply | `POST agent/conversations/{id}/draft` without a body | `{ reply }` |
+| Rewrite | `POST agent/conversations/{id}/draft` with `mode` and `text` | `{ reply }` |
+
+The triage result is stored as the conversation's `ai_suggestion`, which an agent accepts or dismisses. For a `lead`, triage suggests no type or priority. Triage jobs are capped at 100 an hour, counted apart for conversations from the host's signed-in users and from everyone else.
+
+Example: [Add AI suggestions and drafts](/docs/guides/ai).
+
+## Help search
+
+```ts
+help: { search(query: string, locale: Locale): Promise<HelpResult[]> }
+
+type HelpResult = { title: string; url: string; excerpt?: string };
+```
+
+<TypeTable
+  type={{
+    title: { type: 'string', required: true },
+    url: { type: 'string', required: true },
+    excerpt: { type: 'string', description: 'A short passage shown under the title.' },
+  }}
+/>
+
+The widget searches while a customer writes a `bug`, `feature` or `question`, once the subject or message has four characters or more. The query is at most 200 characters, and `GET widget/help` returns the first five results. A draft reply also searches, by the conversation's subject or, without one, the first 200 characters of its transcript.
+
+Example: [`help-search.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/help-search.ts).
+
+## DNS resolver
+
+`dnsResolver` has the `DNSResolver` type from `mailauth` and looks up the DKIM keys of inbound mail. Unset, the system resolver is used.
+
+## Scheduled work
+
+Jobs have no adapter. The host calls `helpdesk.runJobs()` or posts to [`{basePath}/jobs`](/docs/reference/routes#jobs) on its own schedule. Examples: [`jobs-vercel-cron.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/jobs-vercel-cron.ts) and [`jobs-interval.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/jobs-interval.ts).
+
+## Host functions
+
+`identify`, `resolveContext`, `orgNames`, `links`, `replyToAddress`, `clientIp` and `onEvent` are functions the host passes as well. They are listed with their signatures on [Configuration](/docs/reference/configuration).

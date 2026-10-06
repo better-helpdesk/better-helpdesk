@@ -43,7 +43,9 @@
       "correctness": {
         "noUnusedVariables": {
           "level": "error",
-          "options": { "ignoreRestSiblings": true }
+          "options": {
+            "ignoreRestSiblings": true
+          }
         },
         "noUnusedImports": "error",
         "noUnusedFunctionParameters": "error",
@@ -101,6 +103,14 @@
           "correctness": {
             "noUndeclaredDependencies": "off"
           }
+        }
+      }
+    },
+    {
+      "includes": ["site/**/*.css"],
+      "css": {
+        "parser": {
+          "tailwindDirectives": true
         }
       }
     }

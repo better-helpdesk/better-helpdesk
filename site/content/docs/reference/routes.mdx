@@ -1,0 +1,212 @@
+---
+title: HTTP routes
+description: Every route the handler serves under basePath, with its method, who may call it, and what it does.
+---
+
+`helpdesk.handler(request: Request): Promise<Response>` serves every route below under `basePath` (`/api/helpdesk` by default). Paths match with or without a trailing slash; the widget and the agent UI request them with one. Ids are UUIDs. Request and response bodies are JSON unless a row says otherwise. Related guides: [Receive email](/docs/guides/inbound-email), [Run jobs and retention](/docs/guides/jobs).
+
+<Callout type="warn">
+  The `widget/*` and `agent/*` routes are the contract between the handler and the widget and agent UI that ship with it. They can change in any minor release and are not an API for other callers. Host code calls the helpdesk through the functions `buildHelpdesk` returns, as in [Call the helpdesk from your own code](/docs/guides/own-code). `inbound`, `jobs` and `rate` are the routes meant for callers outside the package.
+</Callout>
+
+```ts title="app/api/helpdesk/[...slug]/route.ts"
+import { helpdesk } from '@/lib/helpdesk';
+
+const handle = (request: Request) => helpdesk.handler(request);
+export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle as DELETE, handle as OPTIONS };
+```
+
+## Callers
+
+| Caller | How the handler knows them | Routes |
+| --- | --- | --- |
+| Customer | `identify(request)`; else, when `identityTokenSecret` is set, an `x-helpdesk-identity` token signed with it; else an `x-helpdesk-visitor` token | `widget/*` |
+| Agent | `identify(request)` returning `isAgent: true`. 401 without an identity, 403 when it is not an agent | `agent/*` |
+| Email link | The signature in the query string | `rate` |
+| Mail relay | `Authorization: Bearer {inboundWebhookSecret}` | `inbound` |
+| Scheduler | `Authorization: Bearer {jobsSecret}` | `jobs` |
+
+A visitor token is issued by `POST widget/conversations` to an anonymous visitor, and stops working after 30 days unused. An invalid identity token is refused with 401.
+
+A customer **can see** a conversation they opened, one they were added to as a participant, and one shared with a company the caller's identity lists in `orgs`. A conversation they cannot see answers 404. Routes marked **author** also require the caller to be the conversation's own contact, and answer 403 otherwise.
+
+## Widget
+
+| Method | Path | Who | What it does |
+| --- | --- | --- | --- |
+| `GET` | `widget/session` | Anyone | The caller, their conversations and what the widget shows; `?inbox=` and `?locale=`. |
+| `POST` | `widget/conversations` | Customer, or a visitor on a `public` inbox | Opens a conversation; see [the body](#opening-a-conversation). |
+| `GET` | `widget/conversations/{id}` | Can see | The conversation, its public messages and its attachments. |
+| `POST` | `widget/conversations/{id}/messages` | Can see | Adds a message. |
+| `PATCH` | `widget/conversations/{id}` | Author | Shares it with the company, or marks it resolved. |
+| `POST` | `widget/conversations/{id}/rating` | Author | Rates it `good` or `bad`, with an optional comment. |
+| `POST` | `widget/conversations/{id}/seen` | Can see | Marks it read by its author. |
+| `POST` | `widget/conversations/{id}/attachments` | Author | Starts an upload and answers a presigned form. |
+| `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done. |
+| `GET` | `widget/conversations/{id}/attachments/{attachmentId}` | Can see | Redirects to a presigned download URL. |
+| `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
+
+### Opening a conversation
+
+The body of `POST widget/conversations`, which `helpdesk.createConversation(request, input)` takes as well:
+
+<TypeTable
+  type={{
+    inbox: { type: 'string', required: true, description: <>A key of <code>inboxes</code>. 400 otherwise.</> },
+    type: { type: 'string', required: true, description: <>One of <code>types</code>. 400 otherwise.</> },
+    body: { type: 'string', required: true, description: '1 to 20,000 characters.' },
+    subject: { type: 'string', description: <>Up to 200 characters. Unset, taken from the first line of <code>body</code>.</> },
+    context: { type: 'object', description: <>What the widget captured. See <a href="#context">context</a>.</> },
+    segment: { type: 'string', description: <>A <code>value</code> of the inbox's <code>qualify</code> options. 400 otherwise.</> },
+    orgId: { type: 'string', description: <>One of the caller's <code>orgs</code>; files the conversation under that company. 403 otherwise.</> },
+    sharedWithCompany: { type: 'boolean', description: 'Shares it with that company.' },
+    name: { type: 'string', description: "An anonymous visitor's name, up to 200 characters." },
+    email: { type: 'string', description: "An anonymous visitor's address, up to 320 characters. Required for them (400 otherwise)." },
+    website: { type: 'string', description: <>A honeypot. When an anonymous visitor fills it, nothing is stored and <code>conversation</code> is <code>null</code>.</> },
+  }}
+/>
+
+An unidentified caller on an inbox that is not `public` gets 401. A blocked contact or address gets 404. Over the rate limit, 429.
+
+#### context
+
+<TypeTable
+  type={{
+    url: { type: 'string', description: 'http or https, up to 2,000 characters.' },
+    title: { type: 'string', description: 'Up to 500 characters.' },
+    userAgent: { type: 'string', description: 'Up to 500 characters.' },
+    viewport: { type: 'string', description: 'Up to 50 characters.' },
+    locale: { type: 'string', description: "Up to 20 characters. An anonymous visitor's contact takes it as its locale." },
+    appVersion: { type: 'string', description: 'Up to 100 characters.' },
+    host: { type: 'Record<string, string>', description: 'The host context: up to 20 keys of up to 100 characters, values up to 500.' },
+    utm: { type: 'Record<string, string>', description: 'Up to 20 keys of up to 100 characters, values up to 200.' },
+    errors: { type: 'string[]', description: 'Up to 20 strings of up to 2,000 characters.' },
+    referrer: { type: 'string', description: 'Up to 2,000 characters.' },
+    landingPage: { type: 'string', description: 'Up to 2,000 characters.' },
+  }}
+/>
+
+## Agent
+
+Every route here requires an agent.
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| `GET` | `agent/me` | The agent, and the configuration the agent UI needs. |
+| `PATCH` | `agent/me` | Sets the agent's away time. |
+| `GET` | `agent/settings` | The settings agents change. |
+| `PUT` | `agent/settings` | Changes them. |
+| `GET` | `agent/overview` | Volume, response and resolution times, ratings and tags. |
+| `GET` | `agent/unread` | The count of waiting conversations. |
+| `GET` | `agent/tags` | The most used conversation tags. |
+| `GET` | `agent/agents` | The team. |
+| `DELETE` | `agent/agents/{id}` | Removes an agent from the team. |
+| `GET` | `agent/conversations` | The inbox list, filtered by the query string. |
+| `POST` | `agent/conversations/bulk` | Changes several conversations at once. |
+| `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
+| `PATCH` | `agent/conversations/{id}` | Changes its status, priority, type, inbox, title, assignee, company, tags or snooze. |
+| `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. |
+| `POST` | `agent/conversations/{id}/participants` | Adds a contact to it. |
+| `POST` | `agent/conversations/{id}/merge` | Merges it into another. |
+| `POST` | `agent/conversations/{id}/draft` | An AI draft reply, or a rewrite of the agent's text. |
+| `POST` | `agent/conversations/{id}/triage` | Runs AI triage now. |
+| `POST` | `agent/conversations/{id}/suggestion` | Accepts or dismisses the AI suggestion. |
+| `GET` | `agent/conversations/{id}/attachments/{attachmentId}` | Redirects to a presigned download URL. |
+| `GET` | `agent/notifications` | The agent's notifications. |
+| `POST` | `agent/notifications/seen` | Marks them read. |
+| `GET` | `agent/views` | Saved views. |
+| `POST` | `agent/views` | Saves a view. |
+| `PATCH` | `agent/views/{id}` | Renames a view. |
+| `DELETE` | `agent/views/{id}` | Deletes a view. |
+| `GET` | `agent/canned` | Canned replies. |
+| `POST` | `agent/canned` | Adds a canned reply. |
+| `DELETE` | `agent/canned/{id}` | Deletes a canned reply. |
+| `GET` | `agent/contacts` | Contacts. |
+| `POST` | `agent/contacts` | Adds a contact. |
+| `GET` | `agent/contacts/{id}` | One contact with its timeline. |
+| `PATCH` | `agent/contacts/{id}` | Changes a contact, or blocks it. |
+| `POST` | `agent/contacts/{id}/merge` | Merges another contact into this one. |
+| `DELETE` | `agent/contacts/{id}` | Deletes a contact and what they wrote. |
+| `GET` | `agent/companies` | Companies. |
+| `POST` | `agent/companies` | Adds a company. |
+| `GET` | `agent/companies/{id}` | One company with its timeline. |
+| `PATCH` | `agent/companies/{id}` | Changes a company. |
+| `GET` | `agent/deals` | Deals. |
+| `POST` | `agent/deals` | Adds a deal. |
+| `PATCH` | `agent/deals/{id}` | Changes a deal. |
+| `DELETE` | `agent/deals/{id}` | Deletes a deal. |
+| `POST` | `agent/activities` | Logs a note, call or meeting. |
+
+## Rate
+
+| Method | Path | Caller | What it does |
+| --- | --- | --- | --- |
+| `GET` | `rate` | Email link | An HTML page that asks the customer to confirm the rating in the link, with a button. |
+| `POST` | `rate` | Email link | Records the rating and answers an HTML page. A `bad` rating opens the conversation again. |
+
+The links come in a [`customer-reply`](/docs/reference/emails#customer-reply). A forged or expired link answers 404. A conversation already rated answers 200 and records nothing; one that is no longer resolved, or was merged, answers 409.
+
+## Inbound
+
+| Method | Path | Caller | What it does |
+| --- | --- | --- | --- |
+| `POST` | `inbound` | Mail relay | Takes one raw message (`message/rfc822`) as the body and checks DKIM. Signed mail from the conversation's contact or a participant is added to the conversation that its `In-Reply-To` or `References`, or a `+{reference}` recipient address, points to. Any other mail opens a conversation in `inboundInbox`. Answers 202 with `{ ok: true }`. |
+
+Without `inboundWebhookSecret`, or with another bearer token, it answers 401. The message is refused with 400 when empty, and with 413 over 25 MiB or when its headers exceed 64 KiB. Mail from a blocked address, and unsigned automated mail (an out-of-office or a bounce), is accepted with 202 and not stored; signed automated mail that answers a conversation is stored there as an internal system note. A message already stored, by Message-ID, is accepted and ignored. Signed mail from a sender over their hourly budget answers 429; unsigned mail over budget is dropped quietly.
+
+## Jobs
+
+| Method | Path | Caller | What it does |
+| --- | --- | --- | --- |
+| `POST` | `jobs` | Scheduler | Runs `helpdesk.runJobs()` and answers its report. |
+
+Without `jobsSecret`, or with another bearer token, it answers 401.
+
+`runJobs({ budgetMs }: { budgetMs?: number } = {})`, with `budgetMs` 20,000 by default, wakes due snoozes, queues due reminders, applies `retentionDays`, then works through due jobs until the budget is spent. It returns:
+
+<TypeTable
+  type={{
+    woken: { type: 'number', required: true, description: 'Snoozed conversations reopened.' },
+    reminders: { type: 'number', required: true, description: 'Reminders queued.' },
+    retention: { type: 'number', required: true, description: 'Conversations deleted by retention.' },
+    jobs: { type: 'number', required: true, description: 'Jobs completed.' },
+    failed: { type: 'number', required: true, description: 'Jobs that threw.' },
+    errors: { type: 'string[]', required: true, description: <>The steps that failed: <code>wake</code>, <code>reminders</code>, <code>retention</code>.</> },
+  }}
+/>
+
+A failed job runs again after 2, 4, 8 and 16 minutes, and is kept with its last error after the fifth attempt. The job kinds are on [Database](/docs/reference/database#job).
+
+## Origins and CORS
+
+- A mutation is any method but `GET`, on any route but `rate`, `inbound` and `jobs`. A `POST` mutation must send `Content-Type: application/json` (415 otherwise).
+- A mutation that carries an `Origin` header must come from the origin of `adminUrl`, or, on a `widget/*` route, from an origin in an inbox's `allowedOrigins`. Otherwise it answers 403.
+- `widget/*` responses to an allowed origin carry CORS headers: methods `GET, POST, PATCH, OPTIONS`, headers `content-type, x-helpdesk-visitor, x-helpdesk-identity`, max age 600 seconds. Agent routes never do.
+- `OPTIONS` on any path answers 204.
+
+## Errors
+
+| Status | Body |
+| --- | --- |
+| 400 | `{ error: 'Invalid request', issues }` for a body that fails validation, where `issues` lists the paths of the invalid fields; `{ error: 'Invalid JSON' }` for a body that does not parse; otherwise `{ error }`. |
+| 404 | `{ error: 'Not found' }` for an unknown route or a record the caller may not see. |
+| 413 | `{ error: 'Too large' }` for a JSON body over 256 KiB or an inbound message over 25 MiB; `{ error: 'File too large' }` for an upload over `maxAttachmentBytes`; `{ error: 'Headers too large' }` for inbound headers over 64 KiB. |
+| 500 | `{ error: 'Internal error' }`; the error is logged. |
+| Other | `{ error, ids? }`, where `ids` lists the conversations a bulk change failed on. |
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Anonymous conversations, messages and uploads, per IP address (IPv6 per /64) | `anonymousRateLimit` an hour, 20 by default |
+| Signed-in customer's conversations, messages and uploads | `customerRateLimit` an hour, 60 by default |
+| Receipts | 200 an hour |
+| New-conversation notices to agents | 200 an hour, each for host users and for everyone else |
+| AI triage | 100 an hour, each for host users and for everyone else |
+| Inbound email per sender address | 30 an hour, signed and unsigned counted apart |
+| Inbound email per sender domain | 100 an hour, signed and unsigned counted apart; a signed reply from someone on the thread is not counted |
+| Message length | 20,000 characters |
+| JSON body | 256 KiB |
+| Inbound message | 25 MiB |
+
+Over a customer limit, the route answers 429. Over the receipt, notice and triage caps, the conversation is stored and the email or triage is skipped.

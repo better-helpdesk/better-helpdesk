@@ -1,0 +1,146 @@
+---
+title: Go to production
+description: The checklist between a helpdesk that works on your machine and one your customers can rely on, and what to do on every upgrade after that.
+---
+
+Work through this page once before the first deploy, with the app from [Install in an existing app](/docs/guides/install) in front of you. Every section is one thing to check or set.
+
+## Migrate before you deploy
+
+Run the migration command in your release step, against the production database, before the new version of your app starts:
+
+```sh
+npx better-helpdesk-migrate
+```
+
+It reads the connection string from `HELPDESK_DATABASE_URL`, or `APP_DATABASE_URL` when that is unset, opens a single connection, applies the migrations that have not run yet, and exits. It fits next to your own migrations in the same step.
+
+The order matters: migrate first, then deploy. The new version's queries expect the schema its migrations create, and a query that uses a new table or column fails until its migration has run.
+
+## Connect over TLS
+
+The migration command and your app open their connections separately, and each has its own setting.
+
+For the command, `DATABASE_SSL=true` turns on TLS and checks the server's certificate. `DATABASE_SSL=no-verify` encrypts without checking it, for a database with a self-signed certificate. A `sslmode` in the connection string replaces what `DATABASE_SSL` sets.
+
+For your app, add `sslmode=verify-full` to `HELPDESK_DATABASE_URL`:
+
+```sh
+HELPDESK_DATABASE_URL=postgres://user:password@db.example.com:5432/app?sslmode=verify-full
+```
+
+`pg` 8 treats `sslmode=require` the same way and prints a warning that its meaning changes in `pg` 9, so name `verify-full` and the behavior stays put. If your provider signs its certificates with a CA of its own, pass the CA to the pool and leave `sslmode` out of the URL, since a `sslmode` in the URL replaces the pool's `ssl` option:
+
+```ts title="lib/helpdesk.ts"
+new pg.Pool({
+  connectionString: process.env.HELPDESK_DATABASE_URL,
+  ssl: { ca: process.env.HELPDESK_DATABASE_CA },
+});
+```
+
+## Keep the pool alive
+
+Use the pool from [Build the helpdesk](/docs/guides/install#build-the-helpdesk): one pool kept on `globalThis`, with `error` listeners on the pool and on each connection. Without the listeners, the first restart or failover of your database ends a connection with an error nobody handles, and Node.js stops your app.
+
+## Set the production URLs
+
+`adminUrl` must be the URL your team opens in production, such as `https://app.example.com/helpdesk/`. The handler accepts changes only from its origin, so a value left at `localhost` refuses every reply with a 403. Set it per environment, and give each preview deployment its own if your team uses the agent UI there.
+
+If the widget runs on another origin, such as a marketing site, list that origin on the inbox in `allowedOrigins`, exactly as the browser sends it, with no trailing slash. [Add the widget](/docs/guides/widget#on-another-origin) has the details.
+
+## Tell the helpdesk the client's address
+
+Visitors who are not signed in share a budget of writes per hour per client address ([`anonymousRateLimit`](/docs/reference/configuration#rate-limits), 20 by default). The address comes from a header, and which header is right depends on what sits in front of your app.
+
+By default the helpdesk takes the last address in `X-Forwarded-For`, which is the one your own proxy appended, then `X-Real-IP`. That is right behind exactly one proxy that appends to `X-Forwarded-For`. In other setups it goes wrong in one of three ways:
+
+- Behind two proxies, such as a CDN in front of a load balancer, the last address is the CDN's. Every visitor who comes through the same CDN server shares one budget, and real people start getting 429s.
+- With no proxy, `next start` fills in `X-Forwarded-For` with the connecting address only when the request has none. A client that sends its own can put a different address in it on every request and never reach the limit.
+- With neither header, which happens on a server that sets neither, every visitor counts as `unknown` and they all share one budget.
+
+When your platform names the client in a header of its own, read that header with `clientIp`:
+
+<Tabs items={['Cloudflare', 'Vercel']}>
+<Tab value="Cloudflare">
+
+Cloudflare sends `CF-Connecting-IP`, the address of the client that connected to Cloudflare:
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  clientIp: request => request.headers.get('cf-connecting-ip'),
+});
+```
+
+The header is only as trustworthy as the route to your server. If your origin also accepts requests that do not come through Cloudflare, anyone can send it with any value, so let only Cloudflare reach the origin.
+
+</Tab>
+<Tab value="Vercel">
+
+On Vercel, `x-real-ip` is the public address of the client. Vercel overwrites `X-Forwarded-For` to prevent spoofing, and `x-real-ip` carries the same address:
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  clientIp: request => request.headers.get('x-real-ip'),
+});
+```
+
+</Tab>
+</Tabs>
+
+When `clientIp` returns `null`, the request counts as `unknown`. [Security model](/docs/concepts/security#rate-limits) lists every limit.
+
+## Set the secrets
+
+Each secret switches on one feature, so set only the ones you use, and keep them in your platform's secret store, never in the repository. Without `inboundWebhookSecret` or `jobsSecret`, their route refuses everyone; without `identityTokenSecret`, the helpdesk ignores identity tokens.
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  identityTokenSecret: process.env.HELPDESK_IDENTITY_SECRET,
+  inboundWebhookSecret: process.env.HELPDESK_INBOUND_SECRET,
+  jobsSecret: process.env.HELPDESK_JOBS_SECRET,
+});
+```
+
+Generate each one with `openssl rand -base64 32`. Here is every variable a production install reads:
+
+| Variable | Read by | What it is |
+| --- | --- | --- |
+| `HELPDESK_DATABASE_URL` | The migration command and `lib/helpdesk.ts` | The connection string. |
+| `APP_DATABASE_URL` | The migration command | Used when `HELPDESK_DATABASE_URL` is unset. |
+| `DATABASE_SSL` | The migration and import commands | `true` turns on TLS and checks the certificate; `no-verify` skips the check. |
+| `HELPDESK_ADMIN_URL` | `adminUrl` | The URL your team opens the agent UI at. |
+| `HELPDESK_IDENTITY_SECRET` | `identityTokenSecret` | Signs identity tokens for a widget on another origin. `buildHelpdesk` throws on a secret shorter than 32 bytes. See [Sign customers in from another origin](/docs/guides/identity-token). |
+| `HELPDESK_INBOUND_SECRET` | `inboundWebhookSecret` | The bearer token your mail relay sends to the inbound route. See [Receive email](/docs/guides/inbound-email). |
+| `HELPDESK_JOBS_SECRET` | `jobsSecret` | The bearer token your scheduler sends to the jobs route. See [Run jobs and retention](/docs/guides/jobs). |
+
+The migration command reads the first three names itself. The others are the names these guides use; your `lib/helpdesk.ts` passes them in, so you may call them what you like.
+
+Rating links in the resolution email need no secret from you. The helpdesk generates their key on first use and keeps it in the `helpdesk.setting` table, so it travels with your database.
+
+## Schedule the jobs
+
+Emails, reminders, snoozes and retention all wait for `runJobs`. Without a schedule, customers never hear about a reply. Run it every minute or every few minutes, as [Run jobs and retention](/docs/guides/jobs) describes.
+
+On Vercel's Hobby plan a cron job runs at most once a day, and a more frequent schedule fails the deploy. A daily run is too rare for email, so on Hobby use the jobs route with a scheduler of your own, or move to a plan with per-minute cron jobs.
+
+## Allow the helpdesk in your Content Security Policy
+
+If your app sends a `Content-Security-Policy`, the helpdesk needs these sources in it:
+
+- `style-src 'unsafe-inline'`: the widget puts a `<style>` element in its shadow root, and the agent UI renders one in the page. Neither takes a nonce.
+- `connect-src` with the origin of your storage bucket's upload URL, if you [store attachments](/docs/guides/attachments): the widget posts files straight to it.
+- `img-src blob:`: the widget previews an image the customer attaches from a local `blob:` URL before it is sent. Add the origin of your agents' avatars too, if `identify` returns an `image`.
+
+On a page of another origin that loads the widget, that page's policy needs the handler's origin in `connect-src`, and, for the script tag, the origin of `widget.js` in `script-src`.
+
+## Upgrading
+
+Before 1.0, a minor version may change the API and the schema. For every upgrade:
+
+1. Read the notes for each version between yours and the new one on the [GitHub releases page](https://github.com/better-helpdesk/better-helpdesk/releases). They list every pull request a release contains.
+2. Update the package with `npm install better-helpdesk@<version>`.
+3. Run `npx better-helpdesk-migrate` against production before the new version of your app is deployed, as in [Migrate before you deploy](#migrate-before-you-deploy).
+4. If you serve `widget.js` from a copy in `public/`, make sure your build copies the new one.

@@ -1,0 +1,31 @@
+{
+  "title": "Guides",
+  "pages": [
+    "---Go live---",
+    "install",
+    "sign-in",
+    "production",
+    "email",
+    "inbound-email",
+    "jobs",
+    "switching",
+    "---In front of customers---",
+    "widget",
+    "identity-token",
+    "support-page",
+    "help-search",
+    "theming",
+    "languages",
+    "---Shape the work---",
+    "inboxes",
+    "team",
+    "attachments",
+    "ai",
+    "blocking",
+    "---Wire it into your app---",
+    "own-code",
+    "events",
+    "crm",
+    "reporting"
+  ]
+}

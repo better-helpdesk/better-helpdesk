@@ -1,0 +1,113 @@
+---
+title: Receive email
+description: Turn mail to support@ into conversations, and customers' email replies into messages on the conversation they answer.
+---
+
+Better Helpdesk takes inbound mail on one route. A relay, anything that can forward a raw message to a URL, POSTs each message to `{basePath}/inbound/`, and the handler parses it, checks its DKIM signature and files it. Your mailbox stays where it is; it only hands a copy of each message to the relay.
+
+## Configure the route
+
+Generate a secret with `openssl rand -base64 32`, then add three fields to the config. They are described under [Email](/docs/reference/configuration#email) in the configuration reference.
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  inboundWebhookSecret: process.env.HELPDESK_INBOUND_SECRET,
+  inboundInbox: 'support',
+  replyToAddress: reference => `support+${reference}@example.com`,
+});
+```
+
+`inboundInbox` is where new conversations from email land; without it they go to the first inbox in `inboxes`. New conversations take the first of your `types`, `question` by default. `replyToAddress` puts the conversation's reference into the Reply-To of every email you send the customer, which is how an answer from a widget conversation finds its way back.
+
+Without `inboundWebhookSecret`, the route refuses every request with 401.
+
+## Check it with one message
+
+Save any email as a `.eml` file (most mail clients can export one) and post it:
+
+```sh
+curl -X POST \
+  -H "Authorization: Bearer $HELPDESK_INBOUND_SECRET" \
+  -H "Content-Type: message/rfc822" \
+  --data-binary @message.eml \
+  https://app.example.com/api/helpdesk/inbound/
+```
+
+A `202` means the message was taken. It shows up in the agent UI as a new conversation, its contact marked **Unverified** if the message's DKIM signature did not survive the export. Posting the same file again adds nothing, because a message whose `Message-ID` is already stored is skipped.
+
+## Set up a relay
+
+The repository has two relays in [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays). Both forward the message unmodified, which keeps its DKIM signature intact.
+
+<Tabs items={['Cloudflare Email Routing', 'Postmark']}>
+<Tab value="Cloudflare Email Routing">
+
+For a domain whose DNS is on Cloudflare.
+
+1. Enable Email Routing on a subdomain, for instance `in.example.com`, so the main domain's MX records stay as they are.
+2. Create a Worker from [`cloudflare-email-worker.js`](https://github.com/better-helpdesk/better-helpdesk/blob/main/relays/cloudflare-email-worker.js) and bind `HELPDESK_INBOUND_URL` (`https://app.example.com/api/helpdesk/inbound/`), `HELPDESK_INBOUND_SECRET` and, optionally, `FALLBACK_ADDRESS`: a verified address that gets the message when the app cannot take it.
+3. Add a routing rule that sends `support@in.example.com` to the Worker.
+4. Send a test to that address and check it lands in the agent UI.
+
+Without `FALLBACK_ADDRESS`, a message the app refuses is rejected back to its sender.
+
+</Tab>
+<Tab value="Postmark">
+
+[`postmark.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/relays/postmark.ts) receives Postmark's inbound webhook. It is a `fetch(request, env)` handler that deploys as a Cloudflare Worker and runs on Deno or Bun as it is.
+
+1. Deploy it with `HELPDESK_INBOUND_URL` (`https://app.example.com/api/helpdesk/inbound/`), `HELPDESK_INBOUND_SECRET` and `POSTMARK_WEBHOOK_SECRET`, a new random string.
+2. In Postmark, open the server's **Default Inbound Stream → Settings**. Set the webhook URL to `https://postmark:<POSTMARK_WEBHOOK_SECRET>@relay.example.com/` and tick **Include raw email content in JSON payload**.
+3. Use the inbound address Postmark shows there as the relay address, or set an inbound domain such as `in.example.com`.
+4. Send a test to the relay address and check it lands in the agent UI.
+
+Postmark retries while the app is down. A message the helpdesk can never take stays in Postmark's inbound activity, where it can be retried by hand.
+
+</Tab>
+</Tabs>
+
+Then forward support@ to the relay address. The [relay recipes](https://github.com/better-helpdesk/better-helpdesk/blob/main/relays/README.md) cover Google Workspace (a routing rule) and Microsoft 365 (a mail flow rule), with two weeks of dual delivery before the cutover. Whatever forwards the mail must match the plus-addressed form, `support+ACME-1042@example.com`, as well as the bare address.
+
+## How a message finds its conversation
+
+The handler looks for the conversation a message answers in this order:
+
+1. A stored message whose id appears in the message's `In-Reply-To` or `References` header.
+2. Otherwise, a `To` or `Cc` address with a reference after the plus, such as `support+ACME-1042@example.com`.
+
+A message is added to that conversation only when its DKIM signature verifies and it comes from the customer or another participant on it. Anything else opens a new conversation. A reference number can be guessed, so an unsigned message that quotes one never writes into someone else's thread.
+
+## What is dropped
+
+Automated mail, such as an out-of-office reply or a bounce, is kept as an internal note on its conversation when it is signed and answers the thread, and dropped otherwise. It never opens or reopens a conversation.
+
+Mail from a blocked sender is dropped without a reply. [Block a sender](/docs/guides/blocking) says how an agent blocks one.
+
+Each sender gets 30 messages an hour and each domain 100, counted apart for signed and unsigned mail. A signed reply from someone on the conversation counts only against its sender's budget. Unsigned mail over the budget is dropped; signed mail over it is refused with 429, so the relay tries again later.
+
+Quoted history under a reply is cut off, and the text is capped at 20,000 characters. Attachments are kept when you [store attachments](/docs/guides/attachments) and dropped otherwise.
+
+## When mail arrives unsigned
+
+A message counts as signed when it carries a valid DKIM signature from the domain in its From header or another domain under the same organizational domain (relaxed alignment), a signature that covers the From header and the whole body. If mail from a domain you know signs its mail arrives with an **Unverified** contact, or its replies open new conversations, a step on the way changed the message: a subject tag, a footer, a disclaimer. Exempt the relay copy from that step. [Security model](/docs/concepts/security#inbound-email) explains what the check requires and why the helpdesk makes it itself.
+
+DKIM keys are looked up through the system's DNS resolver. To use another one, pass `dnsResolver`:
+
+```ts title="lib/helpdesk.ts"
+import { Resolver } from 'node:dns/promises';
+
+const dns = new Resolver();
+dns.setServers(['10.0.0.53']);
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  dnsResolver: (name, type) => dns.resolve(name, type) as Promise<string[][] | string[]>,
+});
+```
+
+## What the relay sees
+
+The route answers `202` for every message it takes, and also for one it skips on purpose: a duplicate, automated mail, a blocked sender or an unsigned flood. It refuses an empty body with `400`, a missing or wrong secret with `401`, a message over 25 MiB or with headers over 64 KiB with `413`, and a signed sender over budget with `429`. [HTTP routes](/docs/reference/routes#inbound) describes the route.
+
+A relay should retry a `429` later, and any status not named here. Retrying is safe, because a message that was already stored is skipped.

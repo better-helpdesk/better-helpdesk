@@ -1,0 +1,172 @@
+---
+title: Install in an existing app
+description: Add Better Helpdesk to the Next.js app you already run, with its own schema in your database, one route handler, the agent UI and the widget.
+---
+
+This guide adds Better Helpdesk to a Next.js app that already has users and a session. You need Node.js 22.19 or newer, PostgreSQL 14 or newer, React 19 and Next.js 15 or newer. To try the package in a new app first, follow the [Quickstart](/docs/quickstart).
+
+## Install the package
+
+```sh
+npm install better-helpdesk pg
+npm install --save-dev @types/pg
+```
+
+`pg` is the Postgres driver the helpdesk uses. React and React DOM, its other peer dependencies, are already in your app.
+
+## Create the schema
+
+Point the migration command at the database your app uses:
+
+```sh
+HELPDESK_DATABASE_URL=postgres://user:password@db.example.com:5432/app npx better-helpdesk-migrate
+```
+
+It prints `helpdesk: migrations applied`. Everything the helpdesk stores lives in a `helpdesk` schema next to your own tables, and the command touches nothing outside it. It also reads `APP_DATABASE_URL` when `HELPDESK_DATABASE_URL` is not set. [Go to production](/docs/guides/production#migrate-before-you-deploy) shows where the command goes in a release.
+
+Give your app the same connection string in `HELPDESK_DATABASE_URL`.
+
+## Configure Next.js
+
+Wrap your Next.js config in `withHelpdesk`, which lets Next.js compile the package. The widget and the agent UI request every path with a trailing slash, and by default Next.js answers a slashed path with a redirect to the bare one. Choose one of two ways to stop that.
+
+<Tabs items={['trailingSlash', 'skipTrailingSlashRedirect']}>
+<Tab value="trailingSlash">
+
+```js title="next.config.mjs"
+import { withHelpdesk } from 'better-helpdesk/next';
+
+export default withHelpdesk({
+  // ...your existing options
+  trailingSlash: true,
+});
+```
+
+This is what the quickstart uses. It applies to your whole app, not only to the helpdesk: every URL of your own moves to its slashed form, and `/pricing` now answers with a 308 redirect to `/pricing/`. If your app already uses trailing slashes, this costs nothing. If it does not, links, canonical URLs and anything that calls your API without the slash take a redirect first.
+
+</Tab>
+<Tab value="skipTrailingSlashRedirect">
+
+```js title="next.config.mjs"
+import { withHelpdesk } from 'better-helpdesk/next';
+
+export default withHelpdesk({
+  // ...your existing options
+  skipTrailingSlashRedirect: true,
+});
+```
+
+This keeps your URLs as they are. Next.js stops redirecting between the slashed and the bare form of a path, and the helpdesk's routes answer either form. A widget on another origin passes its CORS preflight too. The redirect is off for your own pages as well, so `/pricing/` and `/pricing` both answer without a redirect.
+
+</Tab>
+</Tabs>
+
+## Connect your sign-in
+
+The helpdesk asks your app who is calling, through a function called `identify` that reads your session. Write it in `lib/identify.ts` as [Connect your sign-in](/docs/guides/sign-in) describes, for your own session, Better Auth or Auth.js, then come back here.
+
+## Build the helpdesk
+
+Create `lib/helpdesk.ts`:
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
+import pg from 'pg';
+
+import { identify } from '@/lib/identify';
+
+// next dev re-evaluates this module on every edit; one pool per edit would
+// use up the database's connections.
+const cache = globalThis as typeof globalThis & { helpdeskPool?: pg.Pool };
+if (!cache.helpdeskPool) {
+  cache.helpdeskPool = new pg.Pool({
+    connectionString: process.env.HELPDESK_DATABASE_URL,
+  });
+  // A connection the server ends would otherwise be an uncaught error that
+  // stops the process. Checked-out connections need a listener of their own.
+  cache.helpdeskPool.on('connect', client =>
+    client.on('error', error =>
+      console.error('[helpdesk] database connection lost', error)
+    )
+  );
+  cache.helpdeskPool.on('error', () => {});
+}
+const pool = cache.helpdeskPool;
+
+export const helpdesk = buildHelpdesk({
+  db: postgresAdapter({ pool }),
+  referencePrefix: 'ACME',
+  adminUrl: process.env.HELPDESK_ADMIN_URL ?? 'http://localhost:3000/helpdesk/',
+  inboxes: {
+    support: { public: true },
+  },
+  identify,
+});
+```
+
+The pool is kept on `globalThis` because `next dev` loads the module again after every edit, and each new pool would open connections of its own until the database refuses more. The `error` listeners matter in production: when the database ends a connection, during a restart or a failover, `pg` emits an error, and Node.js stops the process on an error nobody listens for. If your app already has a `pg.Pool`, pass that one instead.
+
+`referencePrefix` names your conversations: `ACME` gives `ACME-1000`, `ACME-1001` and so on. The inbox `support` is `public`, so visitors may write to it without signing in; leave `public` out to accept only signed-in customers. [Inboxes](/docs/reference/inboxes) lists what else an inbox takes.
+
+`adminUrl` is where your team opens the agent UI, and it must be exactly that URL. The handler accepts changes only from the origin of `adminUrl` (and, on widget routes, from an inbox's `allowedOrigins`). If your team opens the app on another port or host than the one `adminUrl` names, every reply and every message from the widget is refused with a 403.
+
+## Mount the handler
+
+Create `app/api/helpdesk/[...slug]/route.ts`:
+
+```ts title="app/api/helpdesk/[...slug]/route.ts"
+import { helpdesk } from '@/lib/helpdesk';
+
+const handle = (request: Request) => helpdesk.handler(request);
+export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle as DELETE, handle as OPTIONS };
+```
+
+Export all six methods. The agent UI saves its settings with `PUT`, deletes with `DELETE` and edits with `PATCH`, and a method you leave out answers 405 before the helpdesk sees the request. To mount it somewhere else, set [`basePath`](/docs/reference/configuration#routing-and-identity) to match.
+
+## Render the agent UI
+
+Create `app/helpdesk/[[...slug]]/page.tsx`:
+
+```tsx title="app/helpdesk/[[...slug]]/page.tsx"
+import { HelpdeskAdmin } from 'better-helpdesk/admin';
+import { headers } from 'next/headers';
+import { notFound } from 'next/navigation';
+
+import { identify } from '@/lib/identify';
+
+export default async function Page() {
+  const request = new Request('http://localhost/', { headers: await headers() });
+  const identity = await identify(request);
+  if (!identity?.isAgent) notFound();
+  return <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale="en" />;
+}
+```
+
+The handler already refuses every agent route to anyone `identify` does not call an agent, so the page holds nothing a customer could use. Checking here as well keeps the agent UI's shell out of their sight, and it asks the same `identify`, so there is one definition of who is an agent. The placeholder URL is fine as long as your `identify` reads only the request's headers, as the ones in [Connect your sign-in](/docs/guides/sign-in) do.
+
+## Add the widget
+
+Render the widget in your root layout, after the page:
+
+```tsx title="app/layout.tsx"
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <HelpdeskWidget inbox="support" locale="en" />
+      </body>
+    </html>
+  );
+}
+```
+
+Keep the rest of your layout as it is. [Add the widget](/docs/guides/widget) covers the script tag, other origins and the widget's events.
+
+## Check it
+
+Start your app and open it on the origin `adminUrl` names. Send a message from the widget, then open `/helpdesk/` signed in as someone your `identify` makes an agent. The conversation is in the inbox. Answer it, and the answer appears in the widget.
+
+Before your first deploy, work through [Go to production](/docs/guides/production). Customers hear about replies by email once you [send email](/docs/guides/email), and that email waits for [jobs](/docs/guides/jobs) to run.

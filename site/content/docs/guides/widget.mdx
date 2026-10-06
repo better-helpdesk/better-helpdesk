@@ -1,0 +1,118 @@
+---
+title: Add the widget
+description: Put the support launcher on your pages, in React or with a script tag, on your own origin or another one, and listen to what it does.
+---
+
+The widget is a launcher and a panel in the corner of the page. Customers open conversations from it and follow the replies. It talks to the `widget/*` routes of the handler you mounted in the [quickstart](/docs/quickstart).
+
+## In a React app
+
+Render `HelpdeskWidget` once, in the layout that wraps the pages where customers need it:
+
+```tsx title="app/layout.tsx"
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+import type { ReactNode } from 'react';
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <HelpdeskWidget inbox="support" locale="en" />
+      </body>
+    </html>
+  );
+}
+```
+
+The component is a client component, so a server layout can render it as it is. `inbox` is a key of `inboxes` in your config, and new conversations land there. Without `api`, the widget calls `/api/helpdesk`; pass `api` when you mounted the handler elsewhere.
+
+A few props change what the widget sends or shows:
+
+```tsx
+<HelpdeskWidget
+  inbox="support"
+  locale="de"
+  types={['question', 'bug']}
+  label="Questions? Write to us"
+  appVersion="4.12.0"
+  context={{ plan: 'team', region: 'eu' }}
+/>
+```
+
+`types` limits the kinds of conversation offered. `label` puts text beside the launcher icon. `appVersion` and `context` are attached to each `bug`, `feature` or `question` conversation the widget opens, next to what it captures itself (the page URL, the viewport, the locale and recent errors), and the customer can leave any of them out. Other types, such as `lead`, carry neither. `context` is a map of strings, at most 20 entries. The [widget reference](/docs/reference/widget) lists every prop.
+
+## On a page that is not React
+
+The package ships a standalone build, `dist/widget.js`, with React bundled in. Copy it into `public/` as part of your build:
+
+```json title="package.json"
+{
+  "scripts": {
+    "build": "cp node_modules/better-helpdesk/dist/widget.js public/widget.js && next build"
+  }
+}
+```
+
+Then load it from any page:
+
+```html
+<script
+  src="https://app.example.com/widget.js"
+  data-api="https://app.example.com/api/helpdesk"
+  data-inbox="sales"
+  data-locale="de"
+  async
+></script>
+```
+
+The script creates one `<helpdesk-widget>` and copies each `data-*` attribute onto it as an attribute: `data-types` (a comma list), `data-org`, `data-identity-token`, `data-app-version`, `data-label` and `data-theme`. Only the element the script creates comes alive. A `<helpdesk-widget>` already in the page's markup stays inert, because anyone who can inject HTML could have put it there.
+
+`context` is a property of the element, not an attribute. Set it once the page has loaded:
+
+```html
+<script>
+  window.addEventListener('load', () => {
+    const widget = document.querySelector('helpdesk-widget');
+    if (widget) widget.context = { plan: 'team' };
+  });
+</script>
+```
+
+`data-theme="auto"` lets the widget follow the operating system's dark mode. [Theme the widget and the agent UI](/docs/guides/theming) covers colors.
+
+## On another origin
+
+A widget on `www.example.com` that calls a handler on `app.example.com` is cross-origin, and three things have to be in place.
+
+1. List the origin on the inbox, exactly as the browser sends it, with no trailing slash:
+
+   ```ts title="lib/helpdesk.ts"
+   export const helpdesk = buildHelpdesk({
+     // ...
+     inboxes: {
+       sales: { public: true, allowedOrigins: ['https://www.example.com'] },
+     },
+   });
+   ```
+
+   The origins of every inbox form one list, as [Inboxes](/docs/reference/inboxes#inboxconfig) describes.
+
+2. Keep `trailingSlash: true` in the Next config from the quickstart. The widget requests paths with a trailing slash; a host that redirects them fails the CORS preflight. The option also moves every other URL of your app to its slashed form; [Install in an existing app](/docs/guides/install) shows how to keep your own URLs as they are.
+
+3. Point `api` (or `data-api`) at the absolute URL of the handler.
+
+The browser sends no cookies with the widget's requests to another origin, so `identify` sees no session there. Anonymous visitors can write in when the inbox is `public`. For signed-in customers, follow [Sign customers in from another origin](/docs/guides/identity-token). [Security model](/docs/concepts/security#requests-from-browsers) explains why the agent routes never answer another origin.
+
+## Listen to what the widget does
+
+The widget dispatches DOM events that bubble out of its shadow root, so analytics can listen on `document` without touching the package:
+
+```ts
+document.addEventListener('helpdesk:message-sent', event => {
+  const { inbox, type, reference } = (event as CustomEvent).detail;
+  analytics.track('Support message sent', { inbox, type, reference });
+});
+```
+
+`analytics` stands for whatever you record events with. `helpdesk:open` fires when the panel opens and carries no detail. `helpdesk:message-sent` fires when a new conversation is sent, with `inbox`, `type`, `reference` and, when the inbox asks a qualifying question, the answer as `segment`. `helpdesk:booking-clicked` fires when someone follows the booking link, with `reference`. The [widget reference](/docs/reference/widget#dom-events) lists the events and their `detail`.

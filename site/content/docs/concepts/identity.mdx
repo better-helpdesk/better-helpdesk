@@ -1,0 +1,87 @@
+---
+title: Identity and trust
+description: How Better Helpdesk learns who is asking, what it believes about them, and why it never keeps a login of its own.
+---
+
+A helpdesk has to know two things about everyone who reaches it: who they are, and what they may see. Most helpdesks answer both themselves, with their own accounts and their own passwords. Better Helpdesk answers neither on its own. Your app already knows who is signed in, so the helpdesk asks it, on every request where the answer matters, and stores no passwords and no sessions of its own.
+
+## Your app answers: `identify`
+
+The question is a function you write, `identify(request)`. It reads your session from the request and returns an identity, or `null` when nobody is signed in:
+
+```ts
+type Identity = {
+  user: {
+    id: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    name?: string | null;
+    locale?: string | null;
+    image?: string | null;
+  };
+  orgs: { id: string; name?: string }[];
+  isAgent: boolean;
+};
+```
+
+`user.id` is your id for the person, and the helpdesk keys everything about them to it. `orgs` are the organizations they belong to in your app. `isAgent` says whether they are on your support team.
+
+Because the helpdesk asks rather than remembers, a change in your app takes effect on the next request. Take someone out of an organization, or off the support team, and their next request is answered accordingly. Agent emails are the exception, since they go out without anyone making a request; the next section describes how they are stopped.
+
+## Agents: `isAgent` and nothing else
+
+The agent UI and every `agent/*` route are open to one kind of caller: a request for which your `identify` returns `isAgent: true`. There are no helpdesk roles, no invitations and no separate agent accounts. Whoever your app says is an agent is one, on that request.
+
+An agent's first request writes an agent row keyed to your user id, holding the name, email and avatar from the identity, so that conversations can be assigned to them and emails can reach them. When someone leaves the team, `helpdesk.removeAgent()` or the team list in the agent UI stops their agent emails; an agent request from them undoes it. As a backstop, an agent who has not opened the agent UI for 30 days gets no emails about new conversations or reminders until they do; mentions still reach them. [Remove someone from the team](/docs/guides/team) walks through it.
+
+Only `identify` can make an agent. An identity token, described below, never does.
+
+## Three ways to be a customer
+
+On the widget's side there are three kinds of caller, and the helpdesk trusts each of them differently.
+
+A **signed-in customer** is someone your `identify` returns without `isAgent`, or someone an identity token names. Their contact is found or created by your user id, so their conversations follow them from device to device.
+
+A **visitor** is someone nobody vouches for. A visitor may write only to an inbox marked `public`, and must give an email address to do so. The widget then receives a visitor token, 32 random bytes that it keeps in the browser's local storage; the helpdesk stores only a hash of it. The token is how the same browser finds the visitor's conversations again. It stops working after 30 days without use, and typing a different address in the same browser makes a different contact, never a way into the first one.
+
+An **email sender** is someone whose message arrived through the inbound route. Who they are depends on whether their domain signed the message, which [Security model](/docs/concepts/security#inbound-email) covers.
+
+## Verified and unverified
+
+The address a visitor types is a claim, not a fact. Anyone can type anyone's address into a public form. So the helpdesk keeps track, for each identity and each customer message, of whether it was **verified**: proven by your app or by the sender's mail domain, rather than only asserted.
+
+Your app proves an address with `emailVerified: true`. A mail domain proves one by signing the message. Nothing else does, and that distinction shows up in several places:
+
+- A signed-in customer's messages count as verified only when your identity says their email is verified.
+- An email reply joins an existing conversation only when it is signed and comes from someone already on it. Otherwise it opens a new one, because a reference number in an address can be guessed.
+- When the message that opened a conversation was not proven, the reply email leaves out the subject the customer gave it, so that a stranger's words never come back in a message your domain sends.
+- Proving an address later does not vouch for what was written before it was proven. A contact with unproven messages stays apart, and the proven person gets a contact of their own.
+- Once an address is proven, a visitor token that only typed it stops opening that contact.
+
+Where a proven identity already belongs to another contact, the two are merged into the contact that proved it first, provided the newer one has nothing unproven to carry along.
+
+## Another origin: identity tokens
+
+`identify` works when the widget runs on your app's own origin, because the browser sends your session cookie with the widget's requests. On another origin it cannot: the widget's requests carry no cookies there, and your session stays invisible.
+
+For that case your backend vouches for the user instead. It signs a short-lived identity token, an HS256 JWT with the user's id in `sub` and an expiry in `exp`, using `identityTokenSecret`, and the page hands it to the widget, which sends it in the `x-helpdesk-identity` header. The token can also carry `email`, `email_verified`, `name`, `locale` and `orgs`, and they mean what the fields of an identity mean.
+
+Three rules keep the token from becoming a second way in:
+
+- The helpdesk reads it only when `identify` returns `null`. Your session always wins.
+- A token that is forged, malformed or expired is refused with a 401. The request does not quietly continue as a visitor.
+- A token never makes an agent. Whatever it says, its `isAgent` is false.
+
+Every signed-in user holds a token signed with the same secret, so a weak secret could be guessed offline and used to sign in as anyone. The helpdesk refuses a secret shorter than 32 bytes. [Sign customers in from another origin](/docs/guides/identity-token) walks through setting it up.
+
+## Organizations, companies and shared conversations
+
+Each organization in `orgs` corresponds to a **company** in the helpdesk, matched by your organization id. A customer who writes in on behalf of one of their organizations attaches the conversation to that company, and the helpdesk refuses an organization the identity does not list.
+
+The author of a conversation may share it with their company. A shared conversation is visible to every customer whose identity lists that organization, and they can read it and reply. Agents can also add another contact to a conversation as a participant, who can then see it too.
+
+This is why `orgs` must list only the organizations a user is an active member of. Membership is not stored as a permission in the helpdesk; it is read from your identity on each request. If `orgs` lists an organization someone has left, they still see what its members share.
+
+## What stays with your app
+
+Your app decides who someone is, whether their address is proven, which organizations they belong to, and whether they are on the support team. The helpdesk decides what follows from those answers: which conversations a caller sees, whose words are trusted, and which contacts may be merged. Keeping that line where it is means there is one account per person, in one place, and nothing for the two systems to disagree about.

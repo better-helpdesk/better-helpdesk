@@ -1,0 +1,128 @@
+---
+title: Inboxes
+description: Every field of InboxConfig and BusinessHours, the per-inbox settings under the inboxes option.
+---
+
+`inboxes` in the [configuration](/docs/reference/configuration) maps a key to an `InboxConfig`. The key is what conversations store in their `inbox` column and what the widget's `inbox` prop names. Every field is optional, so `{}` is a valid inbox. Related guide: [Set up inboxes](/docs/guides/inboxes).
+
+```ts title="lib/helpdesk.ts"
+inboxes: {
+  support: { receipt: true, reminderAfterHours: 4 },
+  sales: {
+    public: true,
+    allowedOrigins: ['https://www.example.com'],
+    defaultPriority: 'high',
+  },
+},
+```
+
+## InboxConfig
+
+<TypeTable
+  type={{
+    name: {
+      type: 'Partial<Record<Locale, string>>',
+      description: 'What agents see instead of the key, per locale. Unset, the agent UI shows the key with its first letter capitalized.',
+    },
+    public: {
+      type: 'boolean',
+      default: 'false',
+      description: <>Anonymous visitors may open conversations here. They must give an email address. Without it, a caller <code>identify</code> and the identity token do not recognize gets 401.</>,
+    },
+    allowedOrigins: {
+      type: 'string[]',
+      description: <>Origins allowed to call the widget routes cross-origin, such as <code>https://www.example.com</code>. The origins of all inboxes form one list, which applies to every <code>widget/*</code> route.</>,
+    },
+    reminderAfterHours: {
+      type: 'number',
+      description: <>Email the agents an <code>agent-reminder</code> once a customer has waited this many hours, once per wait. Counts open hours only when <code>hours</code> is set. Unset, no reminders.</>,
+    },
+    hours: {
+      type: 'BusinessHours',
+      description: <>When the team answers. Reminders and the agent UI's waiting colors count only these hours, and while the inbox is closed the widget and the receipt say when it opens. Unset, every hour counts and the team is back on the next weekday. See <a href="#businesshours">BusinessHours</a>.</>,
+    },
+    defaultPriority: {
+      type: "'low' | 'normal' | 'high' | 'urgent'",
+      default: "'normal'",
+      description: 'Priority new conversations start with. Conversations opened by inbound email start at normal.',
+    },
+    title: {
+      type: 'Partial<Record<Locale, string>>',
+      description: "The widget's header for this inbox, per locale.",
+    },
+    replyPromise: {
+      type: 'Partial<Record<Locale, string>>',
+      description: 'What the widget promises about replies, per locale.',
+    },
+    qualify: {
+      type: '{ label, options }',
+      typeDescription: '{ label: Record<Locale, string>; options: { value: string; label: Record<Locale, string>; badge?: Record<Locale, string> }[] }',
+      description: <>One qualifying question asked before the first message. The chosen <code>value</code> is added to the contact's tags and stored as <code>segment</code> in the conversation's host context. A value not among the options is refused with 400. <code>badge</code> is a short form for badges in the agent UI, with <code>label</code> as its tooltip.</>,
+    },
+    privacyUrl: {
+      type: 'Partial<Record<Locale, string>>',
+      description: 'Linked under the first-message form, per locale.',
+    },
+    receipt: {
+      type: 'boolean',
+      default: 'false',
+      description: <>Send a <a href="/docs/reference/emails#customer-receipt"><code>customer-receipt</code></a> when a conversation opens here, for inboxes whose people are not signed in.</>,
+    },
+    bookingUrl: {
+      type: 'string',
+      description: 'A link, such as a meeting calendar, offered in the widget once someone has written, and in the receipt.',
+    },
+    bookingLink: {
+      type: '(reference: string) => string',
+      description: <>The booking link in the receipt, for example through a redirect that counts clicks. Unset, the receipt uses <code>bookingUrl</code>. The widget always uses <code>bookingUrl</code>.</>,
+    },
+  }}
+/>
+
+An anonymous visitor who writes to the inbox keyed `sales` gets a contact whose lead stage is `lead`.
+
+## BusinessHours
+
+Wall-clock spans per weekday in one time zone.
+
+<TypeTable
+  type={{
+    timeZone: {
+      type: 'string',
+      required: true,
+      description: <>An IANA time zone such as <code>Europe/Zurich</code>. Aliases such as <code>US/Eastern</code> are accepted when they resolve to a known zone.</>,
+    },
+    weekly: {
+      type: "Partial<Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', [string, string][]>>",
+      required: true,
+      description: 'Open spans per day as [start, end] pairs. A day left out is closed.',
+    },
+  }}
+/>
+
+`buildHelpdesk` throws when `hours` breaks any of these rules:
+
+- `timeZone` names a time zone the runtime knows.
+- A start is `HH:MM` from `00:00` to `23:59`. An end is the same or `24:00`, which ends the span at midnight.
+- At least one day has a span.
+- No key other than the seven day keys.
+
+A span whose end is not after its start runs into the next day.
+
+```ts title="lib/helpdesk.ts"
+support: {
+  reminderAfterHours: 4,
+  hours: {
+    timeZone: 'Europe/Zurich',
+    weekly: {
+      mon: [['08:00', '12:00'], ['13:00', '17:00']],
+      tue: [['08:00', '17:00']],
+      wed: [['08:00', '17:00']],
+      thu: [['08:00', '17:00']],
+      fri: [['08:00', '15:00']],
+    },
+  },
+},
+```
+
+With these hours a customer who writes at 14:00 on a Friday has waited four open hours at 11:00 on Monday.

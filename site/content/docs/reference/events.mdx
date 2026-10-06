@@ -1,0 +1,87 @@
+---
+title: Events
+description: Every HelpdeskEvent kind passed to onEvent, its payload, and what raises it.
+---
+
+`onEvent(event: HelpdeskEvent): Promise<void>` in the [configuration](/docs/reference/configuration) is called once a change is stored. `HelpdeskEvent` is a union told apart by `kind`, exported as a type from `better-helpdesk`. Related guide: [React to events](/docs/guides/events).
+
+The call is awaited inside the request that made the change, including the inbound email webhook and `runJobs`. What it throws is logged as `[helpdesk] onEvent {kind} failed` and does not change the response.
+
+`Conversation` and `Message` are the stored rows, exported as types. Their fields are the columns of [`conversation`](/docs/reference/database#conversation) and [`message`](/docs/reference/database#message) in camel case.
+
+## conversation.created
+
+<TypeTable
+  type={{
+    kind: { type: "'conversation.created'", required: true },
+    conversation: { type: 'Conversation', required: true, description: 'The new conversation.' },
+    message: { type: 'Message', required: true, description: "The customer's first message." },
+  }}
+/>
+
+Raised by:
+
+- `POST widget/conversations`
+- An inbound email that does not thread into an existing conversation
+- `helpdesk.createConversation(request, input)` called from host code
+
+## message.created
+
+<TypeTable
+  type={{
+    kind: { type: "'message.created'", required: true },
+    conversation: { type: 'Conversation', required: true, description: 'The conversation as it stands after the message.' },
+    message: { type: 'Message', required: true },
+    internal: { type: 'boolean', required: true, description: <><code>true</code> for an internal note, which only agents see.</> },
+  }}
+/>
+
+Raised by:
+
+- An agent's reply or internal note, `POST agent/conversations/{id}/messages`
+- A customer's message on an existing conversation, `POST widget/conversations/{id}/messages`
+- An inbound email that threads into an existing conversation
+
+A customer message on a resolved conversation reopens it and raises only `message.created`; its `conversation.status` is `open`. The first message of a new conversation raises `conversation.created` instead. An automated inbound email (an out-of-office or a bounce) raises nothing. When it is signed and answers a conversation, it is stored there as an internal system note; otherwise it is dropped.
+
+## conversation.updated
+
+<TypeTable
+  type={{
+    kind: { type: "'conversation.updated'", required: true },
+    conversation: { type: 'Conversation', required: true, description: 'The conversation after the change.' },
+    before: {
+      type: 'Partial<Conversation>',
+      required: true,
+      description: <>The fields the change wrote whose value differs, as they were. A change that alters nothing raises no event. Fields written alongside, such as <code>resolvedAt</code> or <code>waitingSince</code>, appear too.</>,
+    },
+    agentId: {
+      type: 'string | null',
+      required: true,
+      description: <>The agent who made the change, as the <code>agent</code> row's id; <code>null</code> when a customer or <code>runJobs</code> made it.</>,
+    },
+  }}
+/>
+
+Raised by:
+
+| Change | `agentId` |
+| --- | --- |
+| `PATCH agent/conversations/{id}` | The agent |
+| `POST agent/conversations/bulk`, once per conversation changed | The agent |
+| Accepting an AI suggestion, `POST agent/conversations/{id}/suggestion` | The agent |
+| The customer resolving it, `PATCH widget/conversations/{id}` | `null` |
+| The customer rating it, in the widget or from an email link | `null` |
+| `runJobs` waking a snoozed conversation | `null` |
+
+## Changes that raise no event
+
+- Writes through `helpdesk.store`, so a handler that writes there cannot set itself off.
+- Merging conversations, adding a participant, dismissing an AI suggestion, and the suggestion that triage stores.
+- A customer sharing a conversation with their company, or no longer sharing it.
+- Conversations unassigned because their agent was removed from the team.
+- Changes to contacts, companies, deals and activities.
+
+## Timeline rows
+
+A `conversation.updated` also writes rows to [`conversation_event`](/docs/reference/database#conversation_event) for each of these fields that changed: `status`, `priority`, `assigneeId`, `type`, `inbox`, `title`, `tags`, `snoozedUntil`, `rating`. The row's `data` is `{ from, to }`, with `by: 'customer'` added when the customer made the change.

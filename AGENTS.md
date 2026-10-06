@@ -31,9 +31,10 @@ code already does. Concretely:
 - **Four runtime dependencies**: `drizzle-orm`, `zod`, `mailparser`,
   `mailauth`. Adding one needs a stated reason in the PR and an
   MIT-compatible licence (MIT, BSD, Apache 2.0, ISC).
-- **Everything optional is an adapter.** Storage, email, inbound email, AI,
-  help search and jobs are interfaces in `src/config.ts` that the host
-  implements. A new capability takes the same shape: an optional field on
+- **Everything optional is an adapter.** Storage, email, AI and help search
+  are interfaces in `src/config.ts` that the host implements; inbound email
+  and jobs are routes the host's relay and scheduler call, each behind a
+  secret. A new capability takes the same shape: an optional field on
   `HelpdeskConfig`, nothing the package runs or hosts itself.
 - **The host owns identity.** Better Helpdesk stores no passwords and no
   sessions. It takes the host's `identify(request)` or a signed identity JWT
@@ -88,6 +89,10 @@ code already does. Concretely:
   the published package for its own widget and inbox. `site/Dockerfile`
   builds it and nothing else, from the repository root; its README covers
   the Divio setup.
+- `site/content/docs/`: the documentation at `/docs`, MDX pages rendered
+  with Fumadocs. Tailwind is allowed in `site/` (the docs use it) and never
+  in the package. A change to an option, route, event, prop or column
+  updates the matching page under `reference/` in the same PR.
 - `scripts/build.mjs`: the esbuild and `tsc` build that `pnpm pack` runs.
   The published entry points are `package.json`'s `publishConfig.exports`.
 

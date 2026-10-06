@@ -1,0 +1,333 @@
+---
+title: Configuration
+description: Every field of HelpdeskConfig, the object buildHelpdesk takes, with its type and default.
+---
+
+`HelpdeskConfig` is the one object that `buildHelpdesk(config)` from `better-helpdesk` takes. The fields below are grouped by what they serve; the order inside the type is different. Inboxes have [a page of their own](/docs/reference/inboxes), and the adapter interfaces are on [Adapters](/docs/reference/adapters).
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
+import { pool } from './db'; // a pg.Pool
+
+export const helpdesk = buildHelpdesk({
+  db: postgresAdapter({ pool }),
+  referencePrefix: 'ACME',
+  adminUrl: 'https://app.example.com/helpdesk/',
+  inboxes: { support: {} },
+  identify: async () => null,
+});
+```
+
+## Required
+
+<TypeTable
+  type={{
+    db: {
+      type: 'HelpdeskStore',
+      required: true,
+      description: <>The query layer. <code>postgresAdapter({'{ pool }'})</code> builds it over a <code>pg.Pool</code>.</>,
+    },
+    referencePrefix: {
+      type: 'string',
+      required: true,
+      description: <>Prefix of the human-readable reference, <code>PREFIX-number</code>. <code>ACME</code> gives <code>ACME-1042</code>. Numbers come from the <code>helpdesk.reference_seq</code> sequence, which starts at 1000.</>,
+    },
+    adminUrl: {
+      type: 'string',
+      required: true,
+      description: <>Absolute URL of the agent UI. Agent emails link to <code>{'{adminUrl}'}/conversations/{'{id}'}/</code>. Its origin is the only one, besides an inbox's <code>allowedOrigins</code> on widget routes, that mutations are accepted from. Rating links are built against it.</>,
+    },
+    inboxes: {
+      type: 'Record<string, InboxConfig>',
+      required: true,
+      description: <>The inboxes by key. See <a href="/docs/reference/inboxes">Inboxes</a>.</>,
+    },
+    identify: {
+      type: '(request: Request) => Promise<Identity | null>',
+      required: true,
+      description: <>Turns a request into the host's signed-in user, or <code>null</code> for an anonymous visitor. Called by every route that needs the caller, which is every <code>widget/*</code> route but <code>widget/help</code>, and every <code>agent/*</code> route. On agent routes it is the only source of identity, and <code>isAgent: true</code> is required. See <a href="#identity">Identity</a>.</>,
+    },
+  }}
+/>
+
+## Routing and identity
+
+<TypeTable
+  type={{
+    basePath: {
+      type: 'string',
+      default: "'/api/helpdesk'",
+      description: 'Mount path of the route handler. A trailing slash is removed.',
+    },
+    identityTokenSecret: {
+      type: 'string',
+      description: <>Secret for the HS256 JWTs a host on another origin passes in <code>x-helpdesk-identity</code>. Consulted only when <code>identify</code> returns <code>null</code>. Shorter than 32 bytes, <code>buildHelpdesk</code> throws. A token never grants the agent UI.</>,
+    },
+    clientIp: {
+      type: '(request: Request) => string | null',
+      description: <>The caller's address as the host's proxy reports it, for rate limits. Unset, the last <code>X-Forwarded-For</code> hop is used, then <code>X-Real-IP</code>. <code>null</code> or no address counts as <code>unknown</code>. IPv6 addresses count per <code>/64</code>.</>,
+    },
+  }}
+/>
+
+## Names shown to customers
+
+<TypeTable
+  type={{
+    teamName: {
+      type: 'Partial<Record<Locale, string>>',
+      description: <>Who answers when more than one person does, per locale, for example <code>{"{ en: 'The Acme team' }"}</code>. The widget names the one person otherwise.</>,
+    },
+    agentTitles: {
+      type: 'Record<string, Partial<Record<Locale, string>>>',
+      description: <>Role shown under an agent's name where they sign an email, keyed by the agent's email address. Sent as <code>responderTitle</code> in <a href="/docs/reference/emails#customer-receipt"><code>customer-receipt</code></a>.</>,
+    },
+  }}
+/>
+
+## Conversations
+
+<TypeTable
+  type={{
+    types: {
+      type: 'string[]',
+      default: "['question', 'bug', 'feature', 'lead']",
+      description: 'Conversation types. A conversation opened by inbound email takes the first one.',
+    },
+    retentionDays: {
+      type: 'number',
+      description: <>Resolved conversations are deleted, with their attachments, this many days after <code>resolved_at</code>, by <code>runJobs</code>. Unset, nothing is deleted.</>,
+    },
+    onEvent: {
+      type: '(event: HelpdeskEvent) => Promise<void>',
+      description: <>Told about new conversations, new messages and conversation changes once they are stored. Awaited inside the request; what it throws is logged and never returned. See <a href="/docs/reference/events">Events</a>.</>,
+    },
+    jobsSecret: {
+      type: 'string',
+      description: <>Bearer secret for <code>POST {'{basePath}'}/jobs</code>. Unset, that route answers 401.</>,
+    },
+  }}
+/>
+
+## Email
+
+<TypeTable
+  type={{
+    email: {
+      type: '{ send(message: HelpdeskEmail): Promise<void> }',
+      description: <>Outbound mail. Unset, no email is sent. See <a href="/docs/reference/emails">Email messages</a>.</>,
+    },
+    replyToAddress: {
+      type: '(reference: string) => string',
+      description: <>The Reply-To of customer emails, for example <code>{'reference => `support+${reference}@example.com`'}</code>. Inbound mail to a plus-addressed reference threads into that conversation.</>,
+    },
+    inboundWebhookSecret: {
+      type: 'string',
+      description: <>Bearer secret for <code>POST {'{basePath}'}/inbound</code>, where a relay posts raw messages. Unset, that route answers 401.</>,
+    },
+    inboundInbox: {
+      type: 'string',
+      default: 'the first key of inboxes',
+      description: 'Inbox that conversations opened by inbound email land in.',
+    },
+    dnsResolver: {
+      type: 'DNSResolver',
+      default: 'the system resolver',
+      description: <>DNS lookups for DKIM keys, as <code>mailauth</code> defines the type.</>,
+    },
+  }}
+/>
+
+## Adapters and host hooks
+
+<TypeTable
+  type={{
+    storage: {
+      type: 'StorageAdapter',
+      description: <>Attachments. Unset, uploads answer 400 and attachments on inbound email are dropped. See <a href="/docs/reference/adapters#storage">Storage</a>.</>,
+    },
+    maxAttachmentBytes: {
+      type: 'number',
+      default: '10485760 (10 MiB)',
+      description: 'Largest attachment accepted, from the widget or by email.',
+    },
+    ai: {
+      type: 'AiAdapter',
+      description: <>Triage suggestions, duplicate detection, draft replies and rewrites. See <a href="/docs/reference/adapters#ai">AI</a>.</>,
+    },
+    help: {
+      type: '{ search(query: string, locale: Locale): Promise<HelpResult[]> }',
+      description: <>Searches the host's documentation for the widget and for AI drafts. See <a href="/docs/reference/adapters#help-search">Help search</a>.</>,
+    },
+    resolveContext: {
+      type: '(externalOrgId: string) => Promise<Record<string, string>>',
+      description: 'Key-value context about a host organization, shown with its conversations and on its company page, and given to AI drafts. A throw shows nothing.',
+    },
+    orgNames: {
+      type: '(externalOrgIds: string[]) => Promise<Record<string, string>>',
+      description: <>Names for organizations <code>identify</code> returned without one, asked only when a name is shown or stored.</>,
+    },
+    links: {
+      type: '(contact: LinkContact | null, company: LinkCompany | null) => HostLink[] | Promise<HostLink[]>',
+      description: <>Links into the host's own tools, shown with the contact in a conversation and on contact and company pages. Links that are not <code>http</code> or <code>https</code> are dropped. A throw shows none and is logged.</>,
+    },
+  }}
+/>
+
+## CRM
+
+<TypeTable
+  type={{
+    leadStages: {
+      type: 'string[]',
+      default: "['lead', 'qualified', 'customer', 'churned']",
+      description: 'The lead stages a contact or company can be in.',
+    },
+    dealStages: {
+      type: 'string[]',
+      default: "['new', 'qualified', 'proposal', 'won', 'lost']",
+      description: 'The stages a deal moves through. A deal created without a stage takes the first.',
+    },
+    customFields: {
+      type: "Partial<Record<'contact' | 'company' | 'deal', CustomFieldDef[]>>",
+      description: <>Extra fields per record, stored in its <code>custom</code> column. See <a href="#customfielddef">CustomFieldDef</a>.</>,
+    },
+  }}
+/>
+
+## Rate limits
+
+<TypeTable
+  type={{
+    anonymousRateLimit: {
+      type: 'number',
+      default: '20',
+      description: 'Conversations, messages and uploads an anonymous caller may start per hour, per IP address.',
+    },
+    customerRateLimit: {
+      type: 'number',
+      default: '60',
+      description: 'Conversations, messages and uploads a signed-in customer may start per hour.',
+    },
+  }}
+/>
+
+Fixed limits that are not configurable are listed under [HTTP routes](/docs/reference/routes#limits).
+
+## Startup checks
+
+`buildHelpdesk` throws when:
+
+- `identityTokenSecret` is set and shorter than 32 bytes.
+- An inbox's `hours` fails validation; the message names the inbox. The rules are on [Inboxes](/docs/reference/inboxes#businesshours).
+
+## Identity
+
+What `identify` returns. `Identity`, `HelpdeskUser` and `HelpdeskOrg` are exported as types.
+
+<TypeTable
+  type={{
+    user: {
+      type: 'HelpdeskUser',
+      required: true,
+      description: 'The signed-in user.',
+    },
+    orgs: {
+      type: 'HelpdeskOrg[]',
+      required: true,
+      description: 'Only the organizations the user is an active member of. A conversation can be filed under, and shared with, these.',
+    },
+    isAgent: {
+      type: 'boolean',
+      required: true,
+      description: 'Grants the agent UI and every agent route.',
+    },
+  }}
+/>
+
+### HelpdeskUser
+
+<TypeTable
+  type={{
+    id: { type: 'string', required: true, description: "The host's user id." },
+    email: { type: 'string | null', description: 'Stored lower-cased on the contact.' },
+    emailVerified: {
+      type: 'boolean',
+      description: "The host proved the address. The user's messages count as verified, and when their contact is created the address is attached to it as a verified email identity.",
+    },
+    name: { type: 'string | null' },
+    locale: { type: 'string | null', description: <>Anything starting with <code>de</code> is German; everything else is English.</> },
+    image: { type: 'string | null', description: 'Avatar URL, shown to customers when this user answers as an agent.' },
+  }}
+/>
+
+### HelpdeskOrg
+
+<TypeTable
+  type={{
+    id: { type: 'string', required: true, description: "The host's organization id, stored as a company's external_org_id." },
+    name: { type: 'string', description: <>Display name. When absent, <code>orgNames</code> is asked.</> },
+  }}
+/>
+
+## CustomFieldDef
+
+<TypeTable
+  type={{
+    key: { type: 'string', required: true, description: <>Key in the record's <code>custom</code> object.</> },
+    label: { type: 'Record<Locale, string>', required: true, description: 'Label in both languages.' },
+    type: {
+      type: "'text' | 'number' | 'date' | 'select'",
+      required: true,
+      description: 'A text value is a string of up to 2,000 characters; a number is finite; a date is a string Date.parse accepts; a select value is one of options.',
+    },
+    options: { type: 'string[]', description: <>The choices for <code>select</code>.</> },
+  }}
+/>
+
+A value may also be `null`. A key that is not defined for the record is refused with 400.
+
+## Link types
+
+The arguments and result of `links`. All three are exported as types.
+
+### LinkContact
+
+<TypeTable
+  type={{
+    id: { type: 'string', required: true, description: "The contact's id in the helpdesk." },
+    name: { type: 'string | null', required: true },
+    email: { type: 'string | null', required: true },
+    userId: { type: 'string | null', required: true, description: <>The host's user id for a customer it signed in; <code>null</code> for one who only emailed or wrote in.</> },
+  }}
+/>
+
+### LinkCompany
+
+<TypeTable
+  type={{
+    id: { type: 'string', required: true, description: "The company's id in the helpdesk." },
+    name: { type: 'string', required: true },
+    domain: { type: 'string | null', required: true },
+    orgId: { type: 'string | null', required: true, description: <>The host's organization id; <code>null</code> for a company an agent made.</> },
+  }}
+/>
+
+### HostLink
+
+<TypeTable
+  type={{
+    label: { type: 'Partial<Record<Locale, string>>', required: true, description: 'Link text per locale.' },
+    url: { type: 'string', required: true },
+  }}
+/>
+
+## Fixed values
+
+These are not configurable and not exported.
+
+| Name | Values |
+| --- | --- |
+| Locales | `en`, `de` |
+| Statuses | `open`, `pending`, `resolved` |
+| Priorities | `low`, `normal`, `high`, `urgent` |

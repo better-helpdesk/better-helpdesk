@@ -1,0 +1,170 @@
+---
+title: Set up inboxes
+description: Decide which inboxes your helpdesk needs, then set who may write to each, what customers are told, and when agents are reminded.
+---
+
+An inbox is where a conversation lands, and its settings decide how that conversation is treated: who may start it, what the widget says, which priority it starts with, and how long it may wait. The quickstart left you with one inbox, `support`. Every option below is described in the [inboxes reference](/docs/reference/inboxes#inboxconfig).
+
+## Decide which inboxes you need
+
+Give a kind of conversation its own inbox when it needs different treatment, not merely a different label. Support questions from signed-in customers and sales inquiries from anonymous visitors are the usual pair: one is private and answered within the working day, the other is public and starts at a higher priority.
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  inboxes: {
+    support: { reminderAfterHours: 4 },
+    sales: { public: true, receipt: true, defaultPriority: 'high' },
+  },
+});
+```
+
+Choose keys you mean to keep. Each conversation stores its inbox's key, and the widget names the inbox by it. Two keys behave differently from the rest:
+
+- The widget writes to `support` unless you tell it otherwise.
+- An anonymous visitor who writes to `sales` gets a contact whose lead stage is `lead`.
+
+Email that arrives through the [inbound webhook](/docs/guides/inbound-email) lands in the inbox named by `inboundInbox`, or in the first inbox when that is unset ([configuration reference](/docs/reference/configuration#email)).
+
+Conversation types (`question`, `bug`, `feature` and `lead` by default) are not per inbox. They are one list, `types`, in the [configuration](/docs/reference/configuration#conversations), and the widget chooses which of them to offer.
+
+## Point the widget at an inbox
+
+Pass the key as the widget's `inbox` prop, and `types` to narrow what it offers:
+
+```tsx title="app/pricing/page.tsx"
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+
+<HelpdeskWidget inbox="sales" types={['lead']} />
+```
+
+With a single type, the widget opens straight on the form. The [widget reference](/docs/reference/widget#react-props) lists both props, and the attributes that do the same on `<helpdesk-widget>`.
+
+## Let visitors write without signing in
+
+Set `public: true`. Visitors who are not signed in may then open conversations in that inbox, and must give an email address to do so. In an inbox without it, a request that neither `identify` nor an [identity token](/docs/guides/identity-token) recognizes is refused with 401.
+
+When the widget runs on another origin, such as a marketing site on `www.example.com` with the app on `app.example.com`, list that origin:
+
+```ts title="lib/helpdesk.ts"
+sales: {
+  public: true,
+  allowedOrigins: ['https://www.example.com'],
+},
+```
+
+The origins of all inboxes form one list, and it applies to every widget route, not only to the inbox it is written under. [Add the widget](/docs/guides/widget#on-another-origin) covers the rest of a cross-origin setup.
+
+## Confirm receipt by email
+
+Set `receipt: true` to send the customer a receipt when a conversation opens. It suits an inbox whose people are not signed in, who otherwise have only the widget to return to. Receipts go through your [email adapter](/docs/guides/email), so they need one.
+
+To offer a meeting in the receipt and in the widget once someone has written, add a booking link:
+
+```ts title="lib/helpdesk.ts"
+sales: {
+  receipt: true,
+  bookingUrl: 'https://cal.example.com/acme/intro',
+  bookingLink: reference =>
+    `https://www.example.com/book?ref=${encodeURIComponent(reference)}`,
+},
+```
+
+`bookingLink` is optional and changes the link in the receipt only, for example to send it through a redirect that counts clicks. The widget always shows `bookingUrl`.
+
+## Remind agents when a customer waits
+
+Set `reminderAfterHours` to email the agents once a customer has waited that many hours, once per wait:
+
+```ts title="lib/helpdesk.ts"
+support: { reminderAfterHours: 4 },
+```
+
+Reminders go out through the email adapter when your [jobs](/docs/guides/jobs) run, so both have to be in place. Without business hours every hour counts, nights and weekends included; [Set business hours](#set-business-hours) changes that.
+
+## Ask a qualifying question
+
+`qualify` asks one optional question in the widget, above the first message. The answer tags the contact and is stored as `segment` with the conversation, so agents can tell a small inquiry from a large one at a glance:
+
+```ts title="lib/helpdesk.ts"
+sales: {
+  qualify: {
+    label: { en: 'How large is your team?', de: 'Wie gross ist Ihr Team?' },
+    options: [
+      { value: 'small', label: { en: '1 to 10 people', de: '1 bis 10 Personen' } },
+      {
+        value: 'large',
+        label: { en: 'More than 10 people', de: 'Mehr als 10 Personen' },
+        badge: { en: '10+', de: '10+' },
+      },
+    ],
+  },
+},
+```
+
+Every label needs both languages. `badge` is the short form the agent UI shows on the contact, with the full label as its tooltip; without one, the label is the badge. Keep each `value` stable, because it is what ends up in the tags.
+
+## Start conversations at a higher priority
+
+Set `defaultPriority` to `low`, `normal`, `high` or `urgent`. New conversations in the inbox start there instead of at `normal`, which is how a sales inquiry gets ahead of a routine question. Conversations opened by inbound email start at `normal` whatever the inbox says.
+
+## Name the inbox and write its copy
+
+Four options hold text, each per locale:
+
+```ts title="lib/helpdesk.ts"
+support: {
+  name: { en: 'Support', de: 'Support' },
+  title: { en: 'Help and support', de: 'Hilfe und Support' },
+  replyPromise: {
+    en: 'We answer within a working day.',
+    de: 'Wir antworten innerhalb eines Arbeitstags.',
+  },
+  privacyUrl: { en: '/privacy', de: '/de/datenschutz' },
+},
+```
+
+`name` is what agents see in place of the key. `title` heads the widget, `replyPromise` sits under it, and `privacyUrl` is linked under the first-message form. A language you leave out counts as unset for that language: the widget falls back to its default wording, and the agent UI to the key; [Change and translate the wording](/docs/guides/languages#write-your-inboxes-copy-in-both-languages) has the details. While the inbox is closed, the widget replaces the reply promise with the time the team is back.
+
+## Set business hours
+
+Without business hours, every hour counts. A message that arrives on Friday evening has waited a whole weekend by Monday morning: the inbox shows it in red, and a reminder email, if the inbox sends one, went out on Saturday. The `hours` option tells the helpdesk when your team actually answers. [Vocabulary](/docs/concepts/vocabulary#waiting-reminders-and-snoozing) defines waiting and reminders.
+
+```ts title="lib/helpdesk.ts"
+support: {
+  reminderAfterHours: 4,
+  hours: {
+    timeZone: 'Europe/Zurich',
+    weekly: {
+      mon: [['08:00', '12:00'], ['13:00', '17:00']],
+      tue: [['08:00', '17:00']],
+      wed: [['08:00', '17:00']],
+      thu: [['08:00', '17:00']],
+      fri: [['08:00', '15:00']],
+    },
+  },
+},
+```
+
+`timeZone` is an IANA name such as `Europe/Zurich` or `America/New_York`, and the spans are wall-clock times in it, so a change to or from daylight saving time needs nothing from you. `weekly` takes the days `mon` to `sun`, each with a list of `[start, end]` spans in `HH:MM`. A day left out is closed. Each inbox has its own hours, and an inbox without them keeps counting every hour.
+
+Two kinds of span need a word. `24:00` ends a span at midnight. A span whose end is not after its start runs into the next day, which is how an evening shift is written:
+
+```ts
+weekly: {
+  fri: [['08:00', '17:00'], ['22:00', '02:00']],
+  sat: [['09:00', '24:00']],
+},
+```
+
+`buildHelpdesk` checks the hours as it builds the helpdesk, and throws `Invalid hours for inbox support: …` for an unknown time zone, a malformed time, an unknown day, or a week with no open span at all. The rules are in [BusinessHours](/docs/reference/inboxes#businesshours).
+
+### What business hours change
+
+The reminder counts open hours only. In the example above, four hours are four open hours: a message at 14:00 on Friday reminds the agents at 11:00 on Monday.
+
+The inbox's waiting colors count open hours too: a conversation turns amber after 6 open hours of waiting and red after 24.
+
+While the inbox is closed, the widget says when the team is back, in the customer's own time zone: "We are back on Monday at 08:00 CET and reply to your message then." The receipt email carries the same moment as `backOn`. When everyone who has been answering has marked themselves away, both give the first opening after their return.
+
+The Overview in the agent UI counts first response and resolution times in open hours for an inbox with hours, and says so under its figures.

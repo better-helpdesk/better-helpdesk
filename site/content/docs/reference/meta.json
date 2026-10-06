@@ -1,0 +1,17 @@
+{
+  "title": "Reference",
+  "pages": [
+    "configuration",
+    "inboxes",
+    "adapters",
+    "emails",
+    "events",
+    "routes",
+    "widget",
+    "admin",
+    "strings",
+    "cli",
+    "database",
+    "exports"
+  ]
+}

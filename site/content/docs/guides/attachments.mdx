@@ -1,0 +1,99 @@
+---
+title: Store attachments
+description: Connect a storage bucket so customers can attach files and screenshots, and email attachments are kept.
+---
+
+Attachments live in a bucket you own. With a `storage` adapter, the widget uploads files straight from the browser to that bucket, and the `helpdesk` schema holds only their keys and metadata. Without one, uploads are refused and attachments on inbound email are dropped. [How it works](/docs/concepts/how-it-works#adapters-for-everything-optional) explains why storage is yours to provide.
+
+## Write the adapter
+
+The adapter has five functions. This one uses S3 with presigned POST uploads and presigned downloads:
+
+```ts title="lib/helpdesk-storage.ts"
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { StorageAdapter } from 'better-helpdesk';
+
+const s3 = new S3Client({});
+const Bucket = process.env.HELPDESK_BUCKET!;
+
+export const storage: StorageAdapter = {
+  presignUpload: (Key, { contentType, maxBytes }) =>
+    createPresignedPost(s3, {
+      Bucket,
+      Key,
+      Fields: { 'Content-Type': contentType },
+      Conditions: [['content-length-range', 0, maxBytes]],
+      Expires: 300,
+    }),
+  presignDownload: (Key, filename) =>
+    getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket,
+        Key,
+        ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      }),
+      { expiresIn: 300 }
+    ),
+  async put(Key, Body, ContentType) {
+    await s3.send(new PutObjectCommand({ Bucket, Key, Body, ContentType }));
+  },
+  exists: Key =>
+    s3.send(new HeadObjectCommand({ Bucket, Key })).then(
+      () => true,
+      error => {
+        if (error.name === 'NotFound') return false;
+        throw error;
+      }
+    ),
+  async delete(Key) {
+    await s3.send(new DeleteObjectCommand({ Bucket, Key }));
+  },
+};
+```
+
+Pass it to the config, with a size limit if 10 MiB is not the one you want. Both are described under [Adapters and host hooks](/docs/reference/configuration#adapters-and-host-hooks).
+
+```ts title="lib/helpdesk.ts"
+import { storage } from './helpdesk-storage';
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  storage,
+  maxAttachmentBytes: 5 * 1024 * 1024,
+});
+```
+
+## Allow uploads from the browser
+
+The widget POSTs each file directly to the URL `presignUpload` returned, as a multipart form: the returned `fields` first, then the file as `file`. The bucket's CORS rules must allow that POST from every origin the widget runs on. On S3:
+
+```json title="cors.json"
+[
+  {
+    "AllowedOrigins": ["https://app.example.com", "https://www.example.com"],
+    "AllowedMethods": ["POST"],
+    "AllowedHeaders": ["*"]
+  }
+]
+```
+
+Downloads need no CORS rule: the handler answers a download with a redirect to the URL `presignDownload` returned.
+
+## Make deletes stick
+
+The helpdesk calls `exists` after each `delete`, and it must then return `false`. If the object is still there, the deletion stops with an error and the conversation's rows stay, so the next run can try again. [Storage](/docs/reference/adapters#storage) in the adapters reference says when each function is called.
+
+## What customers and agents see
+
+The widget offers **Attach file** and a screenshot on the first message of a question, bug report or feature request, and inbound email brings its attachments along. Without `storage`, the widget hides both. Agents see a conversation's files in its sidebar. Only the person who opened a conversation can attach files to it, so erasing a person erases their files.
+
+The widget accepts PNG, JPEG, GIF, WebP, PDF and plain text, up to `maxAttachmentBytes` each and 20 per conversation. An email attachment of any other type is kept, but served as `application/octet-stream`, and a larger one is skipped. The package checks the type and size the browser declares; your `presignUpload` must bind them into the signed upload so the bucket enforces them. The limits are listed under [Storage](/docs/reference/adapters#storage).
