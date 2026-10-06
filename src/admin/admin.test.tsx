@@ -758,6 +758,44 @@ describe('HelpdeskAdmin', () => {
     ).toBe('Ask billing first');
   });
 
+  it('shortens, formalises or translates what the agent wrote, in place', async () => {
+    routes['agent/me/'] = { ...me, ai: true };
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (String(input).endsWith('agent/conversations/c1/draft/')) {
+          posts.push(JSON.parse(String(init?.body)));
+          return new Response(JSON.stringify({ text: 'Bitte lesen Sie das.' }));
+        }
+        return respond(String(input));
+      })
+    );
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    expect(screen.queryByRole('button', { name: 'Shorten' })).toBeNull();
+    reply.innerHTML = 'Please read this.';
+    fireEvent.input(reply);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Into the customer’s language',
+      })
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Reply' }).textContent).toBe(
+        'Bitte lesen Sie das.'
+      )
+    );
+    expect(posts).toEqual([{ mode: 'translate', text: 'Please read this.' }]);
+    expect(screen.getByRole('button', { name: 'Shorten' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'More formal' })).toBeTruthy();
+  });
+
   it('never shows a draft to another agent signed in to the same browser', async () => {
     window.history.replaceState(null, '', '/support/conversations/c1/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);

@@ -957,6 +957,31 @@ export function ConversationView({ id }: { id: string }) {
                   {busy === 'draft' ? t('admin.drafting') : t('admin.draft')}
                 </button>
               )}
+              {me.ai &&
+                body.trim() !== '' &&
+                (['shorten', 'formal', 'translate'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className="sa-btn sa-ghost"
+                    disabled={busy !== null}
+                    onClick={async () => {
+                      setBusy('draft');
+                      try {
+                        const rewritten = await api<{ text: string }>(
+                          `agent/conversations/${id}/draft`,
+                          { body: { mode, text: body } }
+                        );
+                        setBody(() => rewritten.text);
+                      } catch {
+                        setError('send');
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}>
+                    {t(`admin.rewrite.${mode}`)}
+                  </button>
+                ))}
               <span className="sa-grow sa-kbd">
                 <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
               </span>

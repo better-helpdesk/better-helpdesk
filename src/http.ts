@@ -1058,9 +1058,22 @@ export function createHandler(support: Helpdesk) {
     }
   );
 
-  agentRoute('POST', 'conversations/:id/draft', async ({ params }) => {
+  agentRoute('POST', 'conversations/:id/draft', async ({ params, body }) => {
     const conversation = await requireConversation(params.id);
-    return json({ text: await support.draftReply(conversation) });
+    // With a mode, the agent's own text is rewritten instead of a new draft.
+    const data = z
+      .object({
+        mode: z.enum(['shorten', 'formal', 'translate']).optional(),
+        text: z.string().trim().min(1).max(20_000).optional(),
+      })
+      .refine(d => !d.mode || d.text, { message: 'A mode needs the text' })
+      .parse(await body());
+    return json({
+      text:
+        data.mode && data.text
+          ? await support.rewriteDraft(conversation, data.mode, data.text)
+          : await support.draftReply(conversation),
+    });
   });
 
   agentRoute('POST', 'conversations/:id/triage', async ({ params }) => {

@@ -729,6 +729,77 @@ describe('smaller hardening', () => {
     ).toBe(403);
   });
 
+  it('rewrites the agent’s own text in the mode asked, into the customer’s language when translating', async () => {
+    const asked: { system: string; prompt: string }[] = [];
+    const ai = createHarness({
+      ai: {
+        async generate<T>(input: { system: string; prompt: string }) {
+          asked.push(input);
+          return {
+            reply: 'Lesen Sie [die Anleitung](https://docs.test/a).',
+          } as T;
+        },
+      },
+    });
+    try {
+      ai.addUser('ada');
+      ai.addUser('agent', { isAgent: true });
+      const created = await ai.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'hi' },
+      });
+      await ai.support.store.db.execute(
+        sql`UPDATE helpdesk.contact SET locale = 'de'`
+      );
+      const draft = (body: Record<string, unknown>) =>
+        ai.call(
+          'POST',
+          `agent/conversations/${created.data.conversation.id}/draft`,
+          {
+            user: 'agent',
+            body,
+          }
+        );
+
+      const translated = await draft({
+        mode: 'translate',
+        text: 'Please read the guide.',
+      });
+      expect(translated.data.text).toBe(
+        'Lesen Sie die Anleitung (https://docs.test/a).'
+      );
+      expect(asked[0]?.system).toContain(
+        'Translate it into Swiss Standard German'
+      );
+      expect(asked[0]?.prompt).toBe(
+        '<reply>\nPlease read the guide.\n</reply>'
+      );
+
+      await draft({ mode: 'shorten', text: 'A long reply.' });
+      expect(asked[1]?.system).toContain('Make it shorter');
+      expect((await draft({ mode: 'shorten' })).status).toBe(400);
+      expect((await draft({ mode: 'louder', text: 'Hi' })).status).toBe(400);
+      expect(asked).toHaveLength(2);
+    } finally {
+      await ai.close();
+    }
+  });
+
+  it('refuses a rewrite without an AI adapter', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const created = await h.call('POST', 'widget/conversations', {
+      user: 'ada',
+      body: { inbox: 'support', type: 'question', body: 'hi' },
+    });
+    const res = await h.call(
+      'POST',
+      `agent/conversations/${created.data.conversation.id}/draft`,
+      { user: 'agent', body: { mode: 'formal', text: 'hey' } }
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('shows where every link in an AI draft goes', async () => {
     const ai = createHarness({
       ai: {
