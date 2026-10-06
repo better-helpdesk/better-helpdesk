@@ -629,6 +629,57 @@ describe('Widget', () => {
     expect(screen.queryByRole('button', { name: 'Zurück' })).toBeNull();
   });
 
+  it('keeps one visitor per API, so a second helpdesk on the page cannot replace it', async () => {
+    // Node's own localStorage shadows jsdom's and needs a file to exist.
+    vi.stubGlobal('localStorage', sessionStorage);
+    onTestFinished(() => sessionStorage.clear());
+    localStorage.setItem('helpdesk-visitor', 'v'.repeat(43));
+    const fetch = vi.fn(async (url: string, init?: RequestInit) =>
+      Response.json(
+        url.includes('widget/session')
+          ? { ...session, identified: false, orgs: [] }
+          : init?.method === 'POST'
+            ? {
+                conversation: { id: 'c1', reference: 'DG-1000' },
+                visitorToken: 'n'.repeat(43),
+              }
+            : { conversation: ownThread, messages: [] },
+        { status: init?.method === 'POST' ? 201 : 200 }
+      )
+    );
+    vi.stubGlobal('fetch', fetch);
+    render(
+      <Widget
+        api="/demo/api/"
+        inbox="sales"
+        locale="en"
+        types={['lead']}
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.change(await screen.findByLabelText('Work email'), {
+      target: { value: 'ada@example.test' },
+    });
+    const message = screen.getByRole('textbox', {
+      name: 'What can we help you with?',
+    });
+    message.innerHTML = 'Pricing?';
+    fireEvent.input(message);
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(localStorage.getItem('helpdesk-visitor:/demo/api')).toBe(
+        'n'.repeat(43)
+      )
+    );
+    expect(localStorage.getItem('helpdesk-visitor')).toBe('v'.repeat(43));
+    const [, first] = fetch.mock.calls[0] ?? [];
+    expect(new Headers(first?.headers).get('x-helpdesk-visitor')).toBe(
+      'v'.repeat(43)
+    );
+  });
+
   it('names the one person who answers, and the team once there are more', async () => {
     mockApi({ 'widget/session': session });
     render(

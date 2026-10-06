@@ -99,7 +99,10 @@ type View =
   | { name: 'list' }
   | { name: 'thread'; id: string };
 
+// Keyed by API so two helpdesks on one origin keep separate visitors. The bare
+// key is what earlier versions wrote, read once so nobody loses a conversation.
 const VISITOR_KEY = 'helpdesk-visitor';
+const visitorKey = (api: string) => `${VISITOR_KEY}:${api.replace(/\/$/, '')}`;
 const LANDING_KEY = 'helpdesk-landing';
 const REFERRER_KEY = 'helpdesk-referrer';
 
@@ -261,7 +264,11 @@ function openingPromise(
 export function Widget(props: WidgetProps) {
   const { locale, inbox, onEvent } = props;
   const t = useMemo(() => translator(locale), [locale]);
-  const token = useRef(storage('local')?.getItem(VISITOR_KEY) ?? null);
+  const token = useRef(
+    storage('local')?.getItem(visitorKey(props.api)) ??
+      storage('local')?.getItem(VISITOR_KEY) ??
+      null
+  );
   const identityToken = useRef(props.identityToken);
   identityToken.current = props.identityToken;
   const api = useMemo(
@@ -494,7 +501,7 @@ export function Widget(props: WidgetProps) {
               session={data}
               onToken={value => {
                 token.current = value;
-                storage('local')?.setItem(VISITOR_KEY, value);
+                storage('local')?.setItem(visitorKey(props.api), value);
               }}
               onCreated={(id, detail) => {
                 onEvent?.({ name: 'helpdesk:message-sent', detail });
