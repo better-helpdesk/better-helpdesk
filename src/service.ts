@@ -339,7 +339,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
             name: data.name ?? null,
             email: normalizeEmail(data.email),
             locale: data.context?.locale ?? null,
-            leadStage: data.inbox === 'sales' ? 'lead' : null,
+            leadStage:
+              data.inbox === 'sales' ? (config.leadStages[0] ?? null) : null,
             lastSeenAt: new Date(),
           },
           {

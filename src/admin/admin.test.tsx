@@ -134,6 +134,21 @@ const respond = (url: string) => {
   return new Response('{}', { status: 404 });
 };
 
+// jsdom has no modal dialogs.
+const stubDialogs = () => {
+  const { showModal, close } = HTMLDialogElement.prototype;
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+    this.dispatchEvent(new Event('close'));
+  };
+  onTestFinished(() => {
+    Object.assign(HTMLDialogElement.prototype, { showModal, close });
+  });
+};
+
 beforeEach(() => {
   sessionStorage.clear();
   window.history.replaceState(null, '', '/support/conversations/');
@@ -279,6 +294,258 @@ describe('HelpdeskAdmin', () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
 
     expect(await screen.findByText('Last seen 3 hours ago')).toBeTruthy();
+  });
+
+  it('keeps a lead stage the host removed when saving other changes to a contact', async () => {
+    stubDialogs();
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/contacts/p1/')) {
+          if (init?.method === 'PATCH') {
+            patches.push(JSON.parse(String(init.body)));
+            return new Response(JSON.stringify({ contact: {} }));
+          }
+          return new Response(
+            JSON.stringify({
+              contact: {
+                id: 'p1',
+                name: 'Ada',
+                email: 'ada@example.test',
+                companyId: null,
+                leadStage: 'trial',
+                tags: [],
+                custom: { gone: 'kept' },
+                createdAt: new Date().toISOString(),
+              },
+              identities: [],
+              company: null,
+              conversations: [],
+              timeline: [],
+              deals: [],
+            })
+          );
+        }
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/contacts/p1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = screen.getByRole('dialog');
+    const stage = within(dialog).getByRole('combobox', {
+      name: 'Lead stage',
+    }) as HTMLSelectElement;
+    expect(stage.selectedOptions[0]?.textContent).toBe('trial');
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Ada Lovelace' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patches).toEqual([
+        {
+          name: 'Ada Lovelace',
+          leadStage: 'trial',
+          tags: [],
+          custom: { gone: 'kept' },
+        },
+      ])
+    );
+  });
+
+  it('shows a deal whose stage the host removed in a column of its own, and moves it to a configured stage', async () => {
+    const deal = {
+      id: 'd1',
+      title: 'Pilot',
+      stage: 'trial',
+      value: '1200',
+      currency: 'CHF',
+      companyId: null,
+      companyName: null,
+      contactName: null,
+      expectedCloseAt: null,
+      createdAt: new Date().toISOString(),
+      stageChangedAt: new Date().toISOString(),
+    };
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/deals/d1/') && init?.method === 'PATCH') {
+          const body = JSON.parse(String(init.body));
+          patches.push(body);
+          Object.assign(deal, body);
+          return new Response(JSON.stringify({ deal }));
+        }
+        if (url.endsWith('agent/deals/'))
+          return new Response(JSON.stringify({ deals: [deal] }));
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/deals/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const removed = await screen.findByRole('region', { name: 'trial' });
+    expect(
+      screen.getAllByRole('region').map(r => r.getAttribute('aria-label'))
+    ).toEqual(['New', 'Won', 'trial']);
+    const card = within(removed).getByRole('button', { name: /Pilot/ });
+
+    const dataTransfer = { setData: vi.fn(), getData: () => 'd1' };
+    fireEvent.dragStart(card, { dataTransfer });
+    const won = screen.getByRole('region', { name: 'Won' });
+    fireEvent.dragOver(won, { dataTransfer });
+    fireEvent.drop(won, { dataTransfer });
+
+    await waitFor(() => expect(patches).toEqual([{ stage: 'won' }]));
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'trial' })).toBeNull()
+    );
+    expect(
+      within(screen.getByRole('region', { name: 'Won' })).getByRole('button', {
+        name: /Pilot/,
+      })
+    ).toBeTruthy();
+  });
+
+  it('keeps the removed stage of a deal saved from its dialog', async () => {
+    stubDialogs();
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/deals/d1/') && init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ deal: {} }));
+        }
+        if (url.endsWith('agent/deals/'))
+          return new Response(
+            JSON.stringify({
+              deals: [
+                {
+                  id: 'd1',
+                  title: 'Pilot',
+                  stage: 'trial',
+                  value: null,
+                  currency: 'CHF',
+                  companyId: null,
+                  companyName: null,
+                  contactName: null,
+                  expectedCloseAt: null,
+                  createdAt: new Date().toISOString(),
+                  stageChangedAt: new Date().toISOString(),
+                },
+              ],
+            })
+          );
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/deals/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Pilot/ }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patches).toEqual([
+        {
+          title: 'Pilot',
+          stage: 'trial',
+          value: null,
+          expectedCloseAt: null,
+          custom: {},
+        },
+      ])
+    );
+  });
+
+  it('shows and saves a deal\u2019s custom fields, keeping values of fields the host removed', async () => {
+    stubDialogs();
+    routes['agent/me/'] = {
+      ...me,
+      customFields: {
+        deal: [
+          {
+            key: 'region',
+            label: { en: 'Region', de: 'Region' },
+            type: 'select',
+            options: ['emea', 'apac'],
+          },
+          {
+            key: 'seats',
+            label: { en: 'Seats', de: 'Plätze' },
+            type: 'number',
+          },
+        ],
+      },
+    };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/deals/d1/') && init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ deal: {} }));
+        }
+        if (url.endsWith('agent/deals/'))
+          return new Response(
+            JSON.stringify({
+              deals: [
+                {
+                  id: 'd1',
+                  title: 'Pilot',
+                  stage: 'new',
+                  value: null,
+                  currency: 'CHF',
+                  companyId: null,
+                  companyName: null,
+                  contactName: null,
+                  expectedCloseAt: null,
+                  createdAt: new Date().toISOString(),
+                  stageChangedAt: new Date().toISOString(),
+                  custom: { region: 'emea', seats: 5, legacy: 'kept' },
+                },
+              ],
+            })
+          );
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/deals/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Pilot/ }));
+    const dialog = screen.getByRole('dialog');
+    expect(
+      (
+        within(dialog).getByRole('combobox', {
+          name: 'Region',
+        }) as HTMLSelectElement
+      ).value
+    ).toBe('emea');
+    fireEvent.change(
+      within(dialog).getByRole('spinbutton', { name: 'Seats' }),
+      {
+        target: { value: '12' },
+      }
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patches).toEqual([
+        expect.objectContaining({
+          custom: { region: 'emea', seats: 12, legacy: 'kept' },
+        }),
+      ])
+    );
   });
 
   it('lists waiting conversations and opens one as a deep link', async () => {

@@ -38,9 +38,9 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-Without it, the stages are `lead`, `qualified`, `customer` and `churned`. A visitor who is not signed in and writes into an inbox keyed `sales` starts at `lead`, whatever the list says, so keep `lead` in it if you have such an inbox. Every other contact and company starts with no stage, until an agent sets one.
+Without it, the stages are `lead`, `qualified`, `customer` and `churned`. A visitor who is not signed in and writes into an inbox keyed `sales` starts at the first stage in the list, or with no stage when the list is empty. Every other contact and company starts with no stage, until an agent sets one.
 
-Keep a stage in the list while contacts or companies are in it. The agent UI sends the stage back whenever an agent saves the record, and a stage that is not in the list is refused.
+You can remove a stage that contacts or companies are still in. They keep it, the agent UI still shows it, and an agent can still save their other changes. Only a stage in the list can be set anew.
 
 The agent UI translates the default stages. Name your own through `HelpdeskAdmin`'s `messages`, with the key `stage.` and the stage, as in [Change and translate the wording](/docs/guides/languages#replace-the-agent-uis-strings):
 
@@ -62,7 +62,7 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-Without it, the stages are `new`, `qualified`, `proposal`, `won` and `lost`. A new deal starts in the first stage, and a deal in a stage you remove from the list no longer shows on the board. The Deals board shows one column per stage, in your order, with the total value of each; an agent drags a deal to move it, and a deal 14 days in one stage is flagged. No stage has a meaning of its own to the helpdesk, `won` and `lost` included. Custom deal stages take their names from `messages` under `stage.` as well.
+Without it, the stages are `new`, `qualified`, `proposal`, `won` and `lost`. A new deal starts in the first stage. The Deals board shows one column per stage, in your order, with the total value of each; an agent drags a deal to move it, and a deal 14 days in one stage is flagged. A deal in a stage you remove from the list keeps it, in a column of its own at the end of the board, until an agent drags it into one of your stages. No stage has a meaning of its own to the helpdesk, `won` and `lost` included. Custom deal stages take their names from `messages` under `stage.` as well.
 
 Agents create deals on the board, on a contact's or a company's page, and from a conversation of type `lead`, which fills in its contact and company. The agent who creates a deal owns it.
 
@@ -83,9 +83,9 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-Each field needs a `key`, a label in both languages and a `type`: `text`, `number`, `date`, or `select` with its `options`. The values are stored in the record's `custom` column, and a value of the wrong type, or for a key you have not defined, is refused. That makes removing a field a trap: the agent UI sends a record's stored values back when an agent saves it, so a contact or company that holds a value for the removed field can no longer be saved there. [CustomFieldDef](/docs/reference/configuration#customfielddef) describes each type's values.
+Each field needs a `key`, a label in both languages and a `type`: `text`, `number`, `date`, or `select` with its `options`. The values are stored in the record's `custom` column, and a value of the wrong type, or for a key you have not defined, is refused unless the record already holds it. So when you remove a field, or an option of a `select`, the values records hold stay in place, and agents can still save those records. [CustomFieldDef](/docs/reference/configuration#customfielddef) describes each type's values.
 
-The agent UI shows and edits the fields of contacts and companies on their pages. It does not show deal fields.
+The agent UI shows and edits the fields of contacts and companies on their pages, and those of a deal when an agent opens it on the Deals board.
 
 ## Record what happened
 

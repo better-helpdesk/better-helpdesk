@@ -37,7 +37,7 @@ The schema also holds the sequence `reference_seq`, which numbers conversations 
 | `name` | `text` | no | | |
 | `external_org_id` | `text` | yes | | The host's organization id. Unique. `null` for a company an agent made. |
 | `domain` | `text` | yes | | Lower-cased. Indexed. |
-| `lead_stage` | `text` | yes | | One of `leadStages`. |
+| `lead_stage` | `text` | yes | | One of `leadStages` when written; a stage the host later removed stays until an agent changes it. |
 | `tags` | `text[]` | no | `{}` | |
 | `custom` | `jsonb` | no | `{}` | Values of `customFields.company`. |
 | `created_at` | `timestamptz` | no | `now()` | |
@@ -50,7 +50,7 @@ The schema also holds the sequence `reference_seq`, which numbers conversations 
 | `name` | `text` | yes | | |
 | `email` | `text` | yes | | Lower-cased. Indexed. |
 | `company_id` | `uuid` | yes | | `company.id`; set to `null` when the company is deleted. |
-| `lead_stage` | `text` | yes | | One of `leadStages`. |
+| `lead_stage` | `text` | yes | | One of `leadStages` when written; a stage the host later removed stays until an agent changes it. |
 | `tags` | `text[]` | no | `{}` | Includes the answers to inbox qualifying questions. |
 | `custom` | `jsonb` | no | `{}` | Values of `customFields.contact`. |
 | `locale` | `text` | yes | | Decides the language of the customer's emails. |
@@ -218,7 +218,7 @@ The files themselves live with the [storage adapter](/docs/reference/adapters#st
 | `title` | `text` | no | | |
 | `company_id` | `uuid` | yes | | Deleted with the company. |
 | `contact_id` | `uuid` | yes | | Set to `null` when the contact is deleted. |
-| `stage` | `text` | no | | One of `dealStages`. |
+| `stage` | `text` | no | | One of `dealStages` when written; a stage the host later removed stays until an agent moves the deal. |
 | `stage_changed_at` | `timestamptz` | no | `now()` | |
 | `value` | `numeric(14, 2)` | yes | | |
 | `currency` | `text` | no | `CHF` | Three letters. |

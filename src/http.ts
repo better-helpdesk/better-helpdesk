@@ -1226,12 +1226,18 @@ export function createHandler(support: Helpdesk) {
 
   // CRM ---------------------------------------------------------------------
 
-  const customValues = (entity: 'contact' | 'company' | 'deal') =>
+  // A value equal to the stored one passes, so a record whose field or stage
+  // the host has since removed can still be saved with its other changes.
+  const customValues = (
+    entity: 'contact' | 'company' | 'deal',
+    stored: Record<string, unknown>
+  ) =>
     z
       .record(z.string(), z.union([z.string(), z.number(), z.null()]))
       .superRefine((values, ctx) => {
         const defs = config.customFields?.[entity] ?? [];
         for (const [key, value] of Object.entries(values)) {
+          if (value === stored[key]) continue;
           const def = defs.find(d => d.key === key);
           if (!def) {
             ctx.addIssue({
@@ -1259,11 +1265,12 @@ export function createHandler(support: Helpdesk) {
     return row;
   };
 
-  const leadStage = z
-    .string()
-    .refine(s => config.leadStages.includes(s))
-    .nullable()
-    .optional();
+  const leadStage = (stored?: string | null) =>
+    z
+      .string()
+      .refine(s => config.leadStages.includes(s) || s === stored)
+      .nullable()
+      .optional();
 
   agentRoute('GET', 'contacts', async ({ url }) => {
     const p = url.searchParams;
@@ -1284,7 +1291,7 @@ export function createHandler(support: Helpdesk) {
         name: z.string().trim().min(1).max(200),
         email: z.email().optional(),
         companyId: uuid.nullable().optional(),
-        leadStage,
+        leadStage: leadStage(),
       })
       .parse(await body());
     if (data.companyId) await requireRow(data.companyId, store.getCompany);
@@ -1335,9 +1342,9 @@ export function createHandler(support: Helpdesk) {
       .object({
         name: z.string().trim().max(200).nullable().optional(),
         companyId: uuid.nullable().optional(),
-        leadStage,
+        leadStage: leadStage(contact.leadStage),
         tags,
-        custom: customValues('contact').optional(),
+        custom: customValues('contact', contact.custom).optional(),
         blocked: z.boolean().optional(),
       })
       .parse(await body());
@@ -1372,7 +1379,7 @@ export function createHandler(support: Helpdesk) {
       .object({
         name: z.string().trim().min(1).max(200),
         domain: z.string().trim().toLowerCase().max(200).nullable().optional(),
-        leadStage,
+        leadStage: leadStage(),
       })
       .parse(await body());
     return json({ company: await store.createCompany(data) }, 201);
@@ -1406,15 +1413,16 @@ export function createHandler(support: Helpdesk) {
       .object({
         name: z.string().trim().min(1).max(200).optional(),
         domain: z.string().trim().toLowerCase().max(200).nullable().optional(),
-        leadStage,
+        leadStage: leadStage(company.leadStage),
         tags,
-        custom: customValues('company').optional(),
+        custom: customValues('company', company.custom).optional(),
       })
       .parse(await body());
     return json({ company: await store.updateCompany(company.id, data) });
   });
 
-  const dealStage = z.string().refine(s => config.dealStages.includes(s));
+  const dealStage = (stored?: string) =>
+    z.string().refine(s => config.dealStages.includes(s) || s === stored);
 
   agentRoute('GET', 'deals', async () => {
     const rows = await store.listDeals({});
@@ -1433,7 +1441,7 @@ export function createHandler(support: Helpdesk) {
         title: z.string().trim().min(1).max(200),
         companyId: uuid.nullable().optional(),
         contactId: uuid.nullable().optional(),
-        stage: dealStage.optional(),
+        stage: dealStage().optional(),
         value: z.number().nonnegative().nullable().optional(),
         currency: z.string().length(3).optional(),
         expectedCloseAt: z.iso.datetime().nullable().optional(),
@@ -1458,12 +1466,12 @@ export function createHandler(support: Helpdesk) {
     const data = z
       .object({
         title: z.string().trim().min(1).max(200).optional(),
-        stage: dealStage.optional(),
+        stage: dealStage(deal.stage).optional(),
         value: z.number().nonnegative().nullable().optional(),
         currency: z.string().length(3).optional(),
         expectedCloseAt: z.iso.datetime().nullable().optional(),
         ownerId: uuid.nullable().optional(),
-        custom: customValues('deal').optional(),
+        custom: customValues('deal', deal.custom).optional(),
       })
       .parse(await body());
     if (data.ownerId && !(await store.getActiveAgent(data.ownerId))) {

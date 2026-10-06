@@ -511,6 +511,24 @@ describe('anonymous visitors', () => {
     });
   });
 
+  it('gives a sales visitor the first configured lead stage, or none', async () => {
+    for (const [leadStages, expected] of [
+      [['prospect', 'customer'], 'prospect'],
+      [[], null],
+    ] as const) {
+      await h.reset();
+      const custom = createHarness({ leadStages: [...leadStages] });
+      try {
+        await custom.call('POST', 'widget/conversations', { body: salesBody });
+        expect(
+          await rows(sql`SELECT lead_stage FROM helpdesk.contact`)
+        ).toEqual([{ lead_stage: expected }]);
+      } finally {
+        await custom.close();
+      }
+    }
+  });
+
   it('drops honeypot submissions without storing anything', async () => {
     const res = await h.call('POST', 'widget/conversations', {
       body: { ...salesBody, website: 'http://spam.test' },

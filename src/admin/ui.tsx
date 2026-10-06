@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import type { HostLink, Locale } from '../config';
+import type { CustomFieldDef, HostLink, Locale } from '../config';
 import type { Translate } from '../ui/i18n';
 
 export const paths = {
@@ -448,6 +448,71 @@ export function money(value: string | null, currency: string, locale: string) {
     currency,
     maximumFractionDigits: 0,
   }).format(Number(value));
+}
+
+type CustomValue = string | number | null;
+
+export function CustomFields({
+  fields,
+  values,
+  locale,
+  onChange,
+}: {
+  fields: CustomFieldDef[];
+  values: Record<string, CustomValue>;
+  locale: Locale;
+  onChange: (key: string, value: CustomValue) => void;
+}) {
+  return fields.map(field => {
+    const value = values[field.key];
+    return field.type === 'select' ? (
+      <label key={field.key} className="sa-field">
+        {field.label[locale]}
+        <select
+          className="sa-select"
+          style={{ width: '100%' }}
+          value={String(value ?? '')}
+          onChange={e => onChange(field.key, e.target.value || null)}>
+          <option value="">—</option>
+          {[
+            ...(field.options ?? []),
+            ...(value != null && !field.options?.includes(String(value))
+              ? [String(value)]
+              : []),
+          ].map(o => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : (
+      <label key={field.key} className="sa-field">
+        {field.label[locale]}
+        <input
+          className="sa-input"
+          type={
+            field.type === 'number'
+              ? 'number'
+              : field.type === 'date'
+                ? 'date'
+                : 'text'
+          }
+          value={String(value ?? '')}
+          onChange={e =>
+            onChange(
+              field.key,
+              e.target.value === ''
+                ? null
+                : field.type === 'number'
+                  ? Number(e.target.value)
+                  : e.target.value
+            )
+          }
+        />
+      </label>
+    );
+  });
 }
 
 /** A property of the open record, labelled above its control so it never reads as a filter. */

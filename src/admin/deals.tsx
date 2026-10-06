@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
 import { useAdmin } from './context';
-import { Dialog, Empty, money, paths, Svg } from './ui';
+import { CustomFields, Dialog, Empty, money, paths, Svg } from './ui';
 
 /** A deal this long in one stage is flagged for a nudge. */
 const STALE_DAYS = 14;
@@ -20,6 +20,7 @@ type Deal = {
   expectedCloseAt: string | null;
   createdAt: string;
   stageChangedAt: string;
+  custom?: Record<string, string | number | null>;
 };
 
 export function DealsBoard() {
@@ -51,6 +52,14 @@ export function DealsBoard() {
   };
 
   const none = deals.data?.deals.length === 0;
+  // A deal in a stage the host removed keeps a column of its own, so it can
+  // still be found and dragged into a configured stage.
+  const stages = [
+    ...new Set([
+      ...me.dealStages,
+      ...(deals.data?.deals.map(d => d.stage) ?? []),
+    ]),
+  ];
 
   return (
     <div className="sa">
@@ -68,8 +77,9 @@ export function DealsBoard() {
       {none && <Empty text={t('admin.emptyDeals')} />}
       <div
         className="sa-board"
-        style={{ '--cols': me.dealStages.length } as React.CSSProperties}>
-        {me.dealStages.map(stage => {
+        style={{ '--cols': stages.length } as React.CSSProperties}>
+        {stages.map(stage => {
+          const configured = me.dealStages.includes(stage);
           const inStage =
             deals.data?.deals.filter(d => d.stage === stage) ?? [];
           const total = inStage.reduce(
@@ -83,6 +93,7 @@ export function DealsBoard() {
               data-over={over === stage}
               aria-label={t(`stage.${stage}`)}
               onDragOver={e => {
+                if (!configured) return;
                 e.preventDefault();
                 setOver(stage);
               }}
@@ -102,7 +113,7 @@ export function DealsBoard() {
                   {money(String(total), 'CHF', locale)}
                 </span>
               </div>
-              {inStage.length === 0 && !none && (
+              {inStage.length === 0 && !none && configured && (
                 <p className="sa-drop-hint">{t('admin.dropDeal')}</p>
               )}
               {inStage.map(d => (
@@ -166,8 +177,14 @@ export function DealDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { api, t, me } = useAdmin();
+  const { api, t, me, locale } = useAdmin();
   const existing = deal && deal !== 'new' ? deal : null;
+  const [custom, setCustom] = useState(existing?.custom ?? {});
+  const [shown, setShown] = useState(deal);
+  if (deal !== shown) {
+    setShown(deal);
+    setCustom(existing?.custom ?? {});
+  }
   return (
     <Dialog
       open={deal !== null}
@@ -187,7 +204,10 @@ export function DealDialog({
             expectedCloseAt: close ? new Date(close).toISOString() : null,
           };
           if (existing) {
-            await api(`agent/deals/${existing.id}`, { method: 'PATCH', body });
+            await api(`agent/deals/${existing.id}`, {
+              method: 'PATCH',
+              body: { ...body, custom },
+            });
           } else {
             await api('agent/deals', {
               body: {
@@ -217,7 +237,12 @@ export function DealDialog({
               style={{ width: '100%' }}
               name="stage"
               defaultValue={existing?.stage ?? me.dealStages[0]}>
-              {me.dealStages.map(s => (
+              {[
+                ...me.dealStages,
+                ...(existing && !me.dealStages.includes(existing.stage)
+                  ? [existing.stage]
+                  : []),
+              ].map(s => (
                 <option key={s} value={s}>
                   {t(`stage.${s}`)}
                 </option>
@@ -243,6 +268,16 @@ export function DealDialog({
               defaultValue={existing?.expectedCloseAt?.slice(0, 10) ?? ''}
             />
           </label>
+          {existing && (
+            <CustomFields
+              fields={me.customFields.deal ?? []}
+              values={custom}
+              locale={locale}
+              onChange={(key, value) =>
+                setCustom(v => ({ ...v, [key]: value }))
+              }
+            />
+          )}
         </div>
         <div className="sa-dialog-foot">
           {existing && (
