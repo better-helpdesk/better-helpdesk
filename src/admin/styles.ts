@@ -175,6 +175,7 @@ export const adminCss = `
 .sa-muted { color: var(--a-muted); font-size: 13px; }
 .sa-fine { color: var(--a-muted); font-size: 12px; }
 .sa-pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--a-subtle); border: 1px solid var(--a-border); white-space: nowrap; }
+.sa-pill-danger { color: var(--a-danger); border-color: color-mix(in srgb, var(--a-danger) 40%, var(--a-border)); }
 .sa-pill[data-tone="high"] { color: var(--a-warn); border-color: currentColor; background: transparent; }
 .sa-pill[data-tone="urgent"] { color: var(--a-danger); border-color: currentColor; background: transparent; }
 .sa-pill[data-tone="late"] { color: var(--a-danger); }

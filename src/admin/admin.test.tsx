@@ -197,6 +197,54 @@ describe('HelpdeskAdmin', () => {
     expect(link.getAttribute('target')).toBe('_blank');
   });
 
+  it('blocks a sender from their contact page and marks them blocked', async () => {
+    let blocked = false;
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/contacts/p1/')) {
+          if (init?.method === 'PATCH') {
+            patches.push(JSON.parse(String(init.body)));
+            blocked = true;
+            return new Response(JSON.stringify({ contact: {} }));
+          }
+          return new Response(
+            JSON.stringify({
+              contact: {
+                id: 'p1',
+                name: 'Spam Bot',
+                email: 'spam@bot.test',
+                companyId: null,
+                leadStage: null,
+                tags: [],
+                custom: {},
+                blocked,
+                createdAt: new Date().toISOString(),
+              },
+              identities: [],
+              company: null,
+              conversations: [],
+              timeline: [],
+              deals: [],
+            })
+          );
+        }
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/contacts/p1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Block sender' })
+    );
+
+    await waitFor(() => expect(patches).toEqual([{ blocked: true }]));
+    expect(await screen.findByText('Blocked')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Unblock sender' })).toBeTruthy();
+  });
+
   it('lists waiting conversations and opens one as a deep link', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     const row = await screen.findByRole('link', { name: /DG-1000/ });

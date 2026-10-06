@@ -63,6 +63,8 @@ export const contacts = helpdesk.table(
     tags: text('tags').array().notNull().default(sql`'{}'`),
     custom: jsonb('custom').$type<CustomValues>().notNull().default({}),
     locale: text('locale'),
+    /** Refused as a sender, and their conversations left out of the inbox. */
+    blocked: boolean('blocked').notNull().default(false),
     createdAt: createdAt(),
     lastSeenAt: ts('last_seen_at'),
   },
