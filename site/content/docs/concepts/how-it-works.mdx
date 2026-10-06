@@ -1,0 +1,67 @@
+---
+title: How it works
+description: Why Better Helpdesk runs inside your app instead of beside it, and what each part does once it is there.
+---
+
+Most helpdesks are somewhere you go. A hosted one runs on its vendor's servers and keeps its own copy of your customers; a self-hosted one is a second application with its own login, database and deploy, which you then connect to your product. Either way there are two systems, and a good part of the work is keeping them in step.
+
+Better Helpdesk takes the other path. It is a library that your app imports, so there is only one system: yours. The helpdesk answers on your domain, reads your session, writes to your database and ships in your deploy. It is closer to a room added to your house than to a shop down the road: it shares the front door, the plumbing and the address, and there is no second set of keys to look after.
+
+That one decision explains most of the rest of the design.
+
+## One handler
+
+`buildHelpdesk()` returns an object, and its `handler` is a plain function from a web `Request` to a `Response`. You mount it on one catch-all route, and it serves every path under `basePath` (by default `/api/helpdesk`). The routes fall into groups by who calls them:
+
+| Caller | Uses | Talks to |
+| --- | --- | --- |
+| Visitors and customers | The widget, in your app or on another site | `{basePath}/widget/*` |
+| Your support team | The agent UI, `HelpdeskAdmin` | `{basePath}/agent/*` |
+| Your mail relay | A POST of each raw inbound email | `{basePath}/inbound` |
+| Your scheduler | A POST with a bearer secret, or `helpdesk.runJobs()` in process | `{basePath}/jobs` |
+| A customer's email client | The rating links in a reply to a resolved conversation | `{basePath}/rate` |
+
+Because the handler speaks only web standards, the core of the package never imports Next.js. The one Next.js-specific file is `better-helpdesk/next`, which adjusts your Next.js config so it compiles the package. Any server that can hand the handler a `Request` and send back its `Response` can mount it; Next.js is the framework the package is built and tested against.
+
+The same object is also the helpdesk's API for your own server code. Functions such as `createConversation`, `track` and `removeAgent`, and the queries under `helpdesk.store`, run in your process. There is no REST API to authenticate against, no API key to issue and no webhook to register, because your code is already on the inside. [Call the helpdesk from your own code](/docs/guides/own-code) shows what that looks like.
+
+## Your database
+
+Everything the helpdesk knows lives in a `helpdesk` schema in your Postgres: contacts, companies, conversations, messages, deals and settings. Even the job queue and the rate-limit counters are rows there, so every instance of your app sees the same ones.
+
+The package ships its migrations, and `better-helpdesk-migrate` applies them. It opens one connection, brings the schema up to date and exits, so it fits into the release step that already runs your own migrations. Upgrading Better Helpdesk is updating the package and running the migrations again.
+
+Because the tables are in your database, they are also yours to read. Reports are SQL queries, dashboards can point at the same schema, and a backup of your database holds your support history, apart from the files in your storage. Postgres is the only database the package supports, and the schema is owned by its own migrations; that narrowness is what lets the code rely on the tables being exactly what its migrations made.
+
+## Adapters for everything optional
+
+A helpdesk needs to send mail, receive it, store files, and perhaps call a language model or search a help center. A service would run all of that itself. A library cannot, without becoming a service, so Better Helpdesk asks you for each one as a small interface on the configuration:
+
+| Capability | Configuration | What you provide |
+| --- | --- | --- |
+| Attachments | `storage` | Presigned uploads and downloads, for example on an S3-compatible bucket |
+| Outbound email | `email` | A `send(message)` function over your own mail provider |
+| Inbound email | `inboundWebhookSecret` | A relay that forwards each raw message to the inbound route |
+| AI | `ai` | A `generate()` function that returns an object matching a given schema |
+| Help search | `help` | A `search(query, locale)` function over your own documentation |
+| Events | `onEvent` | A function told about new conversations, new messages and changes to a conversation |
+
+When an adapter is missing, its feature is not there: without `storage` there are no attachments, without `email` nobody is mailed, without `ai` there are no suggestions or drafts. Nothing falls back to a service the package runs on its own, because there is none. [Adapters](/docs/reference/adapters) lists every interface and its methods.
+
+A few hooks work the same way in the other direction, asking your app for what only it knows: `identify` for who is asking, `resolveContext` and `orgNames` for facts about your organizations, and `links` for the pages in your own tools that belong to a customer.
+
+## What runs where
+
+**In the browser.** The widget is a web component, `<helpdesk-widget>`, that renders into its own shadow root, so your page's styles and its styles never meet; the only way in is the `--helpdesk-*` CSS custom properties. The agent UI is a React component you render on a page of your app. Both talk to the handler over HTTP and poll for changes: an open conversation in the widget checks every five seconds. There is no WebSocket and no long-lived connection to keep open. Files go from the browser straight to your storage, through the presigned URL the handler hands out.
+
+**On your server.** The handler runs inside your app's request handling. It calls your `identify` to learn who is behind a widget or agent request, and it awaits your `onEvent` inside the request that caused the event, so a slow handler slows that request.
+
+**On your schedule.** Some work should not happen inside a request: a reminder when a customer has waited too long, the email that tells them about a reply, the deletion of conversations past `retentionDays`. The package puts that work in its `job` table, and your scheduler runs it by calling `helpdesk.runJobs()` or `POST {basePath}/jobs`. A run wakes snoozed conversations that are due, queues reminders, applies retention, and then works through queued jobs until its time budget is spent. A job that fails stays in the table and is tried again on a later run, each time after a longer wait, until it has failed five times. The email about an agent's reply waits two minutes before it goes out, and it is skipped if the customer has already read the reply in the widget.
+
+**Outside your app.** A relay, such as an email worker or your mail provider's inbound webhook, turns incoming mail into a POST. Your mail provider sends what `email.send` hands it. Your storage holds the files. Each of these is something you already run or choose, and the helpdesk only ever reaches it through the adapter you wrote.
+
+## What the shape costs
+
+An embedded helpdesk asks things of you that a hosted one does not. You write `identify`, because only your app knows who is signed in. You run the migrations and schedule the jobs, because there is no server of ours to do it. Updates arrive by polling, which is plain and dependable but not instant. And the package supports one database and leans on one framework first.
+
+In return there is nothing to synchronize. The customer in the widget is the user in your session, and the conversation is a row next to your other rows.

@@ -1,0 +1,82 @@
+---
+title: Vocabulary
+description: The words Better Helpdesk gives a fixed meaning, as they appear in its configuration, its API and these docs.
+---
+
+Several everyday words mean one particular thing in Better Helpdesk. The code, the types and these docs use them consistently, so knowing them makes the rest easier to read. The first one matters most.
+
+## Agent
+
+An **agent** is a member of your support team: a user of your app whose identity came back with `isAgent: true`. Agents work in the agent UI, answer conversations and own deals. Their first request writes an agent row keyed to your user id.
+
+An agent is never an AI. AI is the optional `ai` adapter, and what it produces is either a **suggestion**, a triage of type, priority, title and likely duplicates that an agent accepts or dismisses, or a **draft** reply that an agent may edit and send.
+
+## People and identity
+
+The **host** is your app, the one Better Helpdesk is mounted in. It owns users, sessions and organizations.
+
+`identify(request)` is the function through which the host says who is asking. It returns an **identity**: a `user`, the `orgs` they belong to, and `isAgent`. From another origin, where `identify` cannot see the session, the host signs an **identity token** instead, a short-lived JWT the widget sends along. A token never grants the agent UI.
+
+In the database, an identity row is one way the helpdesk knows a person: a channel (`host` for your user id, `email` for an address, `visitor` for a browser token), the id in that channel, and whether it is **verified**, meaning proven by your app or by a signed email rather than only typed in. One person can have several.
+
+A **customer** is anyone on the widget's side, signed in or not. A **visitor** is a customer nobody has signed in, known only by the visitor token their browser keeps.
+
+## Contacts and companies
+
+A **contact** is a person, and a **company** is an organization. A company is linked to one of your organizations by its id, `externalOrgId`. Both carry a lead stage, tags and custom field values, and together they are the CRM.
+
+A **participant** is a contact added to a conversation that belongs to someone else. A conversation belongs to the contact who started it; when its author shares it with their company (`sharedWithCompany`), the other members of that company can see it and reply too.
+
+## Conversations
+
+A **conversation** is the unit of support work. Elsewhere you might call it a ticket; the code says conversation. Each one has:
+
+A **reference**, such as `ACME-1042`: the `referencePrefix` and a number from a sequence that starts at 1000. Customers and emails go by it.
+
+An **inbox**, one of the keys of `inboxes`, such as `support` or `sales`. The inbox's configuration decides whether visitors may write to it, when agents are reminded, and what the widget says at the top. Its `allowedOrigins` are pooled with every other inbox's into one list of origins that may call the widget routes. "Inbox" is also the name of the agent UI's screen that lists conversations.
+
+A **type**, a **status** and a **priority**. Types are `question`, `bug`, `feature` and `lead` unless you configure your own. Priorities are `low`, `normal`, `high` and `urgent`. Statuses are named from the customer's side: `open` means the conversation is with your team, `pending` means it awaits the customer's reply, and `resolved` means it is done.
+
+A **subject** and a **title**. The subject is what the customer called it, and the only name they ever see. The title is the team's name for it, from AI triage or a rename, and agents see it first.
+
+**Tags**, free text the team adds, lower-cased and unique within a conversation. The inbox can be filtered by one.
+
+**Messages**, written by a contact, an agent, or the system. An **internal** message is a note that only agents see. **Attachments** are stored through your storage adapter; the helpdesk keeps their keys and metadata.
+
+**Context**: what the widget captured when the conversation started, such as the page URL, the window size, the language, recent errors, the referrer and campaign parameters, together with any strings your page passed in the widget's `context` prop. Agents also see what `resolveContext` returns about the customer's organization, which is asked for when shown rather than stored.
+
+## Waiting, reminders and snoozing
+
+A conversation is **waiting** while the last word is the customer's; `waitingSince` records since when. When an inbox has `reminderAfterHours` and a conversation has waited that long, the agents get a reminder email, once.
+
+An inbox can have **hours**, its business hours as weekly spans in a time zone. Such an inbox counts only open hours for its reminder and for how long a conversation has waited, and while it is closed the widget and the receipt say when it opens again.
+
+A waiting conversation is **unread** in the inbox until an agent opens it after the customer's last message.
+
+A **snoozed** conversation is a pending one with a `snoozedUntil` time. It gets no reminder and is left out of the waiting count until the scheduled jobs wake it back to `open` at that time, or a customer message wakes it sooner.
+
+A **rating** is the customer's verdict on a resolved conversation, `good` or `bad`, given in the widget or through the links in the reply email. A bad rating opens the conversation again.
+
+## The CRM
+
+A **deal** belongs to a company. It moves through the deal stages, has a value in a currency and an owning agent, and keeps going if the contact it was opened with is deleted. An **activity** is a note, call, meeting or event logged against a contact, a company or a deal; `helpdesk.track()` records events from your own code.
+
+A **lead stage** sits on a contact or a company, and a **deal stage** sits on a deal. They are separate ladders.
+
+## Email
+
+**Outbound** mail goes through your `email.send` adapter as one of five kinds: `customer-reply`, `customer-receipt` (the acknowledgement sent when the inbox has `receipt`), `agent-new`, `agent-reminder`, and `agent-mention` (to a teammate picked with `@` in an internal note).
+
+**Inbound** mail arrives when a **relay**, any service that can forward a raw message to a URL, posts it to `{basePath}/inbound/` with `inboundWebhookSecret`. A message is **verified** when its From domain signed it. A reply finds its conversation by the message ids it answers, or by the reference in a plus-address such as `support+ACME-1042@example.com`, which `replyToAddress` puts into the Reply-To header.
+
+## Jobs and retention
+
+A **job** is a piece of queued work in the `job` table, such as sending an email or running AI triage. Your scheduler runs them through `helpdesk.runJobs()` or `POST {basePath}/jobs` with `jobsSecret`. A run wakes snoozed conversations that are due, queues reminders, applies **retention**, which deletes resolved conversations `retentionDays` after they were resolved, and then works through due jobs within a time budget.
+
+## The two interfaces
+
+The **widget** is `<helpdesk-widget>`, a launcher and a panel in a shadow root. `HelpdeskWidget` wraps it for React, and `widget.js` is the standalone build for pages that are not React. It talks to the `widget/*` routes, from another origin when any inbox lists that origin in `allowedOrigins`.
+
+The **agent UI**, which the code also calls the admin, is `HelpdeskAdmin`, a React component you render on a page of your app. It talks to the `agent/*` routes. `adminUrl` is its absolute address: agent emails link to it, and changes are accepted only from its origin.
+
+A **canned reply** is a saved answer that agents insert into a reply. **Settings** are the few values agents change in the agent UI, stored as one JSON value per key in the `setting` table.

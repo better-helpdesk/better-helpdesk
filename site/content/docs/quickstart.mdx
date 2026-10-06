@@ -1,0 +1,223 @@
+---
+title: Quickstart
+description: Build a Next.js app with Better Helpdesk inside it, write in as a visitor and answer as an agent.
+---
+
+In this tutorial you build a small Next.js app with Better Helpdesk mounted in it. By the end you will have sent a message from the widget as a visitor, answered it from the agent UI as an agent, and read the answer back in the widget.
+
+You need Node.js 22.19 or newer and Docker, which runs the Postgres database.
+
+## 1. Create the app
+
+```sh
+npx create-next-app@latest helpdesk-quickstart --ts --app --no-src-dir --import-alias "@/*" --yes
+cd helpdesk-quickstart
+```
+
+This gives you a TypeScript app that uses the App Router, with `@/` pointing at the project root.
+
+## 2. Start Postgres
+
+```sh
+docker run --rm -d --name helpdesk-postgres -p 5432:5432 \
+  -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=helpdesk postgres:18-alpine
+```
+
+The container listens on port 5432 and has an empty database called `helpdesk`. Give it a few seconds to start accepting connections before the next steps.
+
+## 3. Install the package
+
+```sh
+npm install better-helpdesk pg
+npm install --save-dev @types/pg
+```
+
+`pg` is the Postgres driver Better Helpdesk reaches your database through. React and React DOM, its other peer dependencies, are already in the app.
+
+## 4. Create the schema
+
+```sh
+HELPDESK_DATABASE_URL=postgres://postgres@localhost:5432/helpdesk npx better-helpdesk-migrate
+```
+
+The command prints `helpdesk: migrations applied`. Your database now has a `helpdesk` schema with every table the helpdesk needs.
+
+Give the app the same connection string:
+
+```sh title=".env.local"
+HELPDESK_DATABASE_URL=postgres://postgres@localhost:5432/helpdesk
+```
+
+## 5. Configure Next.js
+
+Remove the generated `next.config.ts`:
+
+```sh
+rm next.config.ts
+```
+
+and create `next.config.mjs` in its place:
+
+```js title="next.config.mjs"
+import { withHelpdesk } from 'better-helpdesk/next';
+
+export default withHelpdesk({
+  trailingSlash: true,
+});
+```
+
+`withHelpdesk` lets Next.js compile the package. `trailingSlash: true` matters because the widget and the agent UI request every path with a trailing slash.
+
+## 6. Build the helpdesk
+
+Create `lib/helpdesk.ts`:
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
+import pg from 'pg';
+
+const pool = new pg.Pool({ connectionString: process.env.HELPDESK_DATABASE_URL });
+
+export const helpdesk = buildHelpdesk({
+  db: postgresAdapter({ pool }),
+  referencePrefix: 'ACME',
+  adminUrl: 'http://localhost:3000/helpdesk/',
+  inboxes: {
+    support: { public: true },
+  },
+  // A stand-in for your app's sign-in: the quickstart-role cookie makes you an agent.
+  identify: async request => {
+    const cookie = request.headers.get('cookie') ?? '';
+    const agent = /(?:^|;\s*)quickstart-role=agent(?:;|$)/.test(cookie);
+    if (!agent || process.env.NODE_ENV === 'production') return null;
+    return {
+      user: { id: 'agent-1', email: 'robin@example.com', emailVerified: true, name: 'Robin Park' },
+      orgs: [],
+      isAgent: true,
+    };
+  },
+});
+```
+
+This is the whole configuration for now: one inbox called `support` that visitors may write to without signing in, and an `identify` function that turns a request into a person. In a real app `identify` reads your session; here a cookie stands in for it.
+
+<Callout type="warn">
+  The stand-in `identify` makes anyone with the cookie an agent. It refuses to do so in production, and it belongs to this tutorial only.
+</Callout>
+
+## 7. Mount the handler
+
+Create `app/api/helpdesk/[...slug]/route.ts`:
+
+```ts title="app/api/helpdesk/[...slug]/route.ts"
+import { helpdesk } from '@/lib/helpdesk';
+
+const handle = (request: Request) => helpdesk.handler(request);
+export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle as DELETE, handle as OPTIONS };
+```
+
+Every request under `/api/helpdesk` now reaches the helpdesk.
+
+## 8. Add a way to switch roles
+
+Create `app/role/route.ts`:
+
+```ts title="app/role/route.ts"
+import { cookies } from 'next/headers';
+
+export async function GET(request: Request) {
+  const jar = await cookies();
+  if (new URL(request.url).searchParams.get('as') === 'agent') {
+    jar.set('quickstart-role', 'agent', { path: '/' });
+    return new Response(null, { status: 303, headers: { location: '/helpdesk/' } });
+  }
+  jar.delete('quickstart-role');
+  return new Response(null, { status: 303, headers: { location: '/' } });
+}
+```
+
+Opening `/role/?as=agent` makes you an agent and takes you to the agent UI. Opening `/role/` makes you a visitor again.
+
+## 9. Render the agent UI
+
+Create `app/helpdesk/[[...slug]]/page.tsx`:
+
+```tsx title="app/helpdesk/[[...slug]]/page.tsx"
+import { HelpdeskAdmin } from 'better-helpdesk/admin';
+
+export default function Page() {
+  return <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale="en" />;
+}
+```
+
+## 10. Add the widget
+
+Open `app/layout.tsx` and add the import at the top:
+
+```tsx title="app/layout.tsx"
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+```
+
+Further down, the generated file renders the page inside `<body>` on one line:
+
+```tsx title="app/layout.tsx"
+<body>{children}</body>
+```
+
+Replace that line with this, which renders the widget right after `{children}`:
+
+```tsx title="app/layout.tsx"
+<body>
+  {children}
+  <HelpdeskWidget inbox="support" locale="en" />
+</body>
+```
+
+Leave the rest of the file as it is.
+
+## 11. Write in as a visitor
+
+Start the app:
+
+```sh
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Use `localhost` rather than `127.0.0.1`: the helpdesk accepts changes only from the origin of `adminUrl`.
+
+A launcher sits in the bottom right corner of the page. Open it, choose **Question**, write a message, enter an invented email address such as `ada@example.com`, and send it.
+
+The widget thanks you and names the conversation **ACME-1000**. That is its reference, the number customers and emails use for it.
+
+## 12. Answer as an agent
+
+Open [http://localhost:3000/role/?as=agent](http://localhost:3000/role/?as=agent). You land in the agent UI, and the inbox lists ACME-1000 with your message.
+
+Open the conversation, write a reply, and press **Send**.
+
+## 13. Read the answer as the visitor
+
+Open [http://localhost:3000/role/](http://localhost:3000/role/) to become the visitor again, and open the widget. Your conversation is there, with the agent's reply under your message.
+
+Notice that the browser was never signed in as the visitor. The widget kept a visitor token when you sent the first message, and that token is how the helpdesk knows the conversation is yours.
+
+## 14. See the rows
+
+Everything you did is in your own database:
+
+```sh
+docker exec helpdesk-postgres psql -U postgres -d helpdesk \
+  -c "select number, inbox, status, subject from helpdesk.conversation"
+```
+
+The output shows one row: number 1000, in the `support` inbox, with the status `pending`. An agent has answered, so the conversation now waits on the customer.
+
+## What you built
+
+You have the full loop of Better Helpdesk: a widget that takes a message, a handler that stores it in your Postgres, and an agent UI where your team answers it. A real installation adds three things to this:
+
+- An `identify` that reads your app's session instead of a cookie. [Identity and trust](/docs/concepts/identity) explains what it must return and why.
+- An email adapter, so customers hear about replies when they are not looking at the widget. See [Send email](/docs/guides/email).
+- A schedule for background work such as reminders and outgoing mail. See [Run jobs and retention](/docs/guides/jobs).
+
+[How it works](/docs/concepts/how-it-works) describes what each piece you added does, and [Configuration](/docs/reference/configuration) lists every option `buildHelpdesk` accepts.

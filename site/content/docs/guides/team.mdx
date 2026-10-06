@@ -1,0 +1,44 @@
+---
+title: Remove someone from the team
+description: Stop agent email to someone who no longer answers, hand their conversations back to the team, and make sure they lose access.
+---
+
+Two things make someone an agent, and leaving the team means undoing both. Your app grants access: `identify` returns `isAgent: true` for them. The helpdesk keeps a record: the first time they open the agent UI, they join its team, and from then on they receive agent email and can be assigned conversations.
+
+## Take away access in your app
+
+Stop returning `isAgent: true` for the user, by whatever role or flag your `identify` reads. From their next request on, the agent API refuses them with 403. Nothing in the helpdesk can take this step for you, because only your app knows who is on the team.
+
+## Remove them from the helpdesk's team
+
+Call [`removeAgent`](/docs/reference/exports#what-buildhelpdesk-returns) with the user's id in your app, where you take the role away:
+
+```ts title="app/admin/team/actions.ts"
+'use server';
+
+import { helpdesk } from '@/lib/helpdesk';
+
+export async function revokeSupportRole(userId: string) {
+  await setUserRole(userId, 'member'); // however your app does it
+  await helpdesk.removeAgent(userId);
+}
+```
+
+An agent can do the same for a colleague in the agent UI: under Settings, in the Team list, choose Remove next to their name, then confirm with "Remove and unassign?". Agents cannot remove themselves there.
+
+Removing someone:
+
+- hands every conversation assigned to them back to the team, and records the change in each conversation's history;
+- stops the emails about new conversations, reminders and mentions;
+- takes them out of the Team list and the choices for assignee and deal owner;
+- takes them out of the agents the widget and the receipt email show to customers.
+
+It is safe to call for a user who never was an agent, or was removed already; nothing happens.
+
+## If they come back
+
+Removal holds only while your app agrees. The next time the person makes a request to the agent UI with `isAgent: true`, they rejoin the team and start receiving agent email again. That is why the first step matters: `removeAgent` alone does not lock anyone out. [Identity and trust](/docs/concepts/identity#agents-isagent-and-nothing-else) explains why your app, not the helpdesk, decides who is an agent.
+
+## Someone who quietly stopped
+
+A host cannot always tell that someone has stopped answering. As a backstop, an agent who has not opened the agent UI for 30 days receives no emails about new conversations or reminders until they open it again, and no longer appears to customers as one of the team. Mentions still reach them.

@@ -1,0 +1,125 @@
+---
+title: Send email
+description: Connect the mail sender your app already uses, so customers get replies and receipts and agents hear about new conversations.
+---
+
+Better Helpdesk sends no mail of its own. It hands every outgoing message to an `email.send` function you write, and that function decides what the message looks like and which service delivers it. Leave `email` out and nothing is sent; everything else works as before.
+
+## Write the adapter
+
+The adapter receives a `HelpdeskEmail`, one of five kinds, and turns it into a call to your mailer. This one sends plain text over SMTP with Nodemailer:
+
+```ts title="lib/helpdesk-email.ts"
+import type { HelpdeskEmail } from 'better-helpdesk';
+import nodemailer from 'nodemailer';
+
+const transport = nodemailer.createTransport(process.env.SMTP_URL);
+const from = 'Acme Support <support@example.com>';
+
+function render(message: HelpdeskEmail) {
+  switch (message.kind) {
+    case 'customer-reply':
+      return {
+        subject: `Re: ${message.subject ?? message.reference}`,
+        text: [
+          message.body,
+          message.agentName,
+          message.ratingLinks &&
+            `Solved? ${message.ratingLinks.good}\nNot solved? ${message.ratingLinks.bad}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        replyTo: message.replyTo,
+        inReplyTo: message.inReplyTo,
+        references: message.inReplyTo,
+      };
+    case 'customer-receipt':
+      return {
+        subject: `We got your message (${message.reference})`,
+        text: [
+          `Thanks for writing. ${message.responderName ?? 'We'} will answer here.`,
+          message.backOn && `We are back on ${new Date(message.backOn).toDateString()}.`,
+          message.bookingUrl && `Or book a call: ${message.bookingUrl}`,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        replyTo: message.replyTo,
+      };
+    case 'agent-new':
+    case 'agent-reminder':
+      return {
+        subject: message.reopened ? `Reopened: ${message.subject}` : message.subject,
+        text: `${message.body}\n\n${message.url}`,
+      };
+    case 'agent-mention':
+      return {
+        subject: `${message.authorName} mentioned you in ${message.reference}`,
+        text: `${message.body}\n\n${message.url}`,
+      };
+  }
+}
+
+export const email = {
+  async send(message: HelpdeskEmail) {
+    await transport.sendMail({ from, to: message.to, ...render(message) });
+  },
+};
+```
+
+Then pass it to `buildHelpdesk` as [`email`](/docs/reference/configuration#email):
+
+```ts title="lib/helpdesk.ts"
+import { email } from './helpdesk-email';
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  email,
+});
+```
+
+On Resend, the same adapter is [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts) in the repository's examples.
+
+<Callout type="warn">
+Every email is queued as a job and sent when the jobs run. Until something runs them, no mail leaves at all. Set that up in [Run jobs and retention](/docs/guides/jobs).
+</Callout>
+
+## Which kind goes where
+
+`customer-reply` and `customer-receipt` go to the customer. A reply goes out two minutes after the agent sends it, and not at all if the customer has read it in the widget by then; a receipt goes out only from an inbox with `receipt: true`. `agent-new`, `agent-reminder` and `agent-mention` go to agents. [Email messages](/docs/reference/emails) says when each kind is sent and lists its fields.
+
+An `agent-new` or `agent-reminder` goes to every agent who has opened the agent UI in the last 30 days, or only to the assignee when the conversation is assigned to one of them. A mention goes to every agent picked, however long ago they last opened it, as long as they have not been removed; [Remove someone from the team](/docs/guides/team) covers removal. Agent emails always carry `locale: 'en'`; customer emails carry the customer's locale, `en` or `de`, so a template can pick its language from it.
+
+Two fields need a fallback. A `customer-reply` has no `subject` when the message that opened the conversation was not proven, for instance because someone typed their address into a public form, so the adapter above falls back to the reference. Proving the address later does not bring the subject back; [Identity and trust](/docs/concepts/identity#verified-and-unverified) explains why. `agentName` can be an empty string, which `filter(Boolean)` drops.
+
+## Thread replies back into the conversation
+
+When the customer answers your email, the answer should land in the same conversation. Two things make that work:
+
+- Pass `replyTo` through, and set `replyToAddress` in the config so it carries the reference, such as `support+ACME-1042@example.com`.
+- Pass `inReplyTo` through as the `In-Reply-To` header. It holds the message id of the customer's last email in the thread, when there is one.
+
+Receiving those answers is set up in [Receive email](/docs/guides/inbound-email).
+
+## Let customers rate from the email
+
+A `customer-reply` carries `ratingLinks` when the conversation is resolved by the time the email goes out, as it is after an agent uses **Send and resolve**, and nobody has rated it yet. Put both links in the email, as the adapter above does.
+
+Each link opens a small page at `{basePath}/rate/` on the origin of your `adminUrl`. The page asks the customer to confirm with a button, so a mail scanner that follows every link rates nothing. "Not solved" opens the conversation again, waiting on your team. The links are signed with a key the package keeps in its own settings table, so there is nothing to configure, and they work for 30 days.
+
+## Send HTML as well
+
+Message bodies are plain text with a small Markdown subset, written to read well unrendered, which is why the adapter above sends them as they are. For an HTML part, render the body with `RichText` from `better-helpdesk/rich` inside the `customer-reply` case, and return the result as `html` next to `text`:
+
+```ts title="lib/helpdesk-email.ts"
+import { RichText } from 'better-helpdesk/rich';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+const html = renderToStaticMarkup(createElement(RichText, { text: message.body }));
+```
+
+Pass `compact: true` as well when the body sits inside a paragraph of your own template: it renders inline only, with lists as lines.
+
+## When a send fails
+
+Throw. A job whose handler throws is tried again, up to five attempts with growing waits between them, and then parked with its last error in the `helpdesk.job` table. A send that fails silently is never retried. [Run jobs and retention](/docs/guides/jobs#find-jobs-that-failed) shows how to find parked jobs.

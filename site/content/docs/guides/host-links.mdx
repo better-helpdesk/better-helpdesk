@@ -1,0 +1,43 @@
+---
+title: Link to your own tools
+description: Give agents one click from a customer to the pages your app already has for them, such as your admin or your billing.
+---
+
+Your app probably has an admin page for each user and a billing page for each organization. The `links` option puts links to them next to the customer in the agent UI, so an agent reading a conversation does not have to look the customer up again.
+
+## Return the links
+
+`links` receives the contact and their company, and returns labeled URLs. The two carry your own ids: `userId` is the user's id in your app, and `orgId` the organization's.
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  links: (contact, company) => [
+    ...(contact?.userId
+      ? [
+          {
+            label: { en: 'Open in admin', de: 'In der Verwaltung öffnen' },
+            url: `https://app.example.com/admin/users/${contact.userId}`,
+          },
+        ]
+      : []),
+    ...(company?.orgId
+      ? [{ label: { en: 'Billing' }, url: `https://billing.example.com/orgs/${company.orgId}` }]
+      : []),
+  ],
+});
+```
+
+Either argument can be `null`, and so can the ids. `userId` is set only for a customer your app signed in, through `identify` or an identity token; someone who only emailed or wrote in as a visitor has none. `orgId` is set only for a company that came from one of your organizations; a company an agent created, or one `better-helpdesk-import` created, has none. Return no link for what you cannot address. The contact and company also carry `id`, `name` and `email` or `domain`, if your tools look customers up by address instead. [Link types](/docs/reference/configuration#link-types) lists every field.
+
+`links` may be `async`, for a link that needs a lookup first. It runs each time an agent opens a conversation, a contact or a company, inside that request, so keep it fast.
+
+## Label them per language
+
+`label` takes an entry per locale. The agent UI shows the agent's language, then English, then whichever label there is, and the URL itself when there is none.
+
+## Where they appear
+
+The links show under the contact in a conversation, and on the contact's and the company's pages; the company page has no contact, so `links` receives `null` for it there. Each link opens in a new tab.
+
+Only `http` and `https` URLs are shown; others are dropped. If `links` throws, the page shows no links and the error is logged as `[helpdesk] links failed`, so a broken lookup never keeps an agent from the conversation.

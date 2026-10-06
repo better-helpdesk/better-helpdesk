@@ -1,0 +1,65 @@
+---
+title: React to events
+description: Run your own code when a conversation is opened, a message is written or an agent changes something, to notify Slack, open an issue or assign work.
+---
+
+[`onEvent`](/docs/reference/configuration#conversations) is a function in your config that is called with every new conversation, every new message and every change to a conversation, once it is stored. It takes the place of webhooks. Whatever you want to happen next, a Slack post, an issue in your tracker, an analytics event, an assignment, you write there in your own code.
+
+## Post urgent bugs to Slack
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  onEvent: async event => {
+    const { conversation } = event;
+    const urgentBug = conversation.type === 'bug' && conversation.priority === 'urgent';
+    const justBecameOne =
+      event.kind === 'conversation.created' ||
+      (event.kind === 'conversation.updated' && ('type' in event.before || 'priority' in event.before));
+    if (!urgentBug || !justBecameOne) return;
+    await fetch(process.env.SLACK_WEBHOOK_URL!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text: `Urgent bug ${helpdesk.reference(conversation)}: ${conversation.subject}`,
+      }),
+    });
+  },
+});
+```
+
+Every event carries `conversation` as it stands after the change. A `conversation.updated` event also carries `before`, which holds only the fields that changed, with their old values. Testing `'priority' in event.before` is therefore how to tell that the priority changed in this event.
+
+## Assign new conversations in turn
+
+Writes through `helpdesk.store` are allowed inside `onEvent`. This hands each new conversation to the next agent who is not away:
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  onEvent: async event => {
+    if (event.kind !== 'conversation.created') return;
+    const now = new Date();
+    const agents = (await helpdesk.store.listAgents()).filter(
+      agent => !agent.awayUntil || agent.awayUntil <= now
+    );
+    const next = agents[event.conversation.number % agents.length];
+    if (!next) return;
+    await helpdesk.store.updateConversation(event.conversation.id, { assigneeId: next.id });
+  },
+});
+```
+
+Writes through `helpdesk.store` raise no events, so a handler cannot set itself off. The email about a new conversation is sent later, by the [jobs run](/docs/guides/jobs), and goes to the assignee alone when the conversation has one by then and they have opened the agent UI in the last 30 days.
+
+## Which event you get
+
+There are three kinds. `conversation.created` is raised when a conversation is opened from the widget, by email or by [`createConversation`](/docs/guides/own-code). `message.created` is raised when a customer or an agent writes; `internal` is `true` for an agent's note. `conversation.updated` is raised when an agent changes a conversation or accepts an AI suggestion, when a customer resolves or rates it, and when a snooze runs out.
+
+`agentId` on `conversation.updated` names the agent who made the change, and is `null` when a customer or a snooze did. A customer reply that reopens a resolved conversation raises only `message.created`, with `conversation.status` back at `open`. Merging conversations, blocking a sender, edits to contacts and companies, and notes the system adds raise nothing. [Events](/docs/reference/events) lists the payload of each kind and everything that raises it.
+
+## Keep the handler fast
+
+The handler is awaited inside the request that caused the event: the agent's click, the customer's message, the email relay's webhook. A slow handler makes each of those slow, so do the quick part there and put anything longer on your own queue. [How it works](/docs/concepts/how-it-works#what-runs-where) shows where the handler sits among the other work.
+
+What the handler throws is logged with the event's kind and never changes the response. The change it reports is already stored, so an error in your code loses your side effect, never the helpdesk's data.

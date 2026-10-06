@@ -1,0 +1,56 @@
+---
+title: Add AI suggestions and drafts
+description: Connect a language model so agents get a suggested type, priority and title for each new conversation and can ask for a draft reply.
+---
+
+Better Helpdesk calls no model of its own. With an `ai` adapter it asks yours for structured answers, and everything the model produces is a suggestion or a draft that an agent applies, edits or dismisses. The model never answers a customer.
+
+## Write the adapter
+
+The adapter has one function, `generate`. It receives a system prompt, a prompt and a Zod schema, and must return an object that satisfies the schema. This one uses the Anthropic SDK's structured outputs:
+
+```ts title="lib/helpdesk-ai.ts"
+import Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import type { AiAdapter } from 'better-helpdesk';
+
+const anthropic = new Anthropic();
+
+export const ai: AiAdapter = {
+  async generate({ system, prompt, schema }) {
+    const response = await anthropic.messages.parse({
+      model: 'claude-opus-5-5',
+      max_tokens: 16000,
+      system,
+      messages: [{ role: 'user', content: prompt }],
+      output_config: { format: zodOutputFormat(schema) },
+    });
+    return schema.parse(response.parsed_output);
+  },
+};
+```
+
+```ts title="lib/helpdesk.ts"
+import { ai } from './helpdesk-ai';
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  ai,
+});
+```
+
+Any provider works the same way: send `system` and `prompt`, ask for output in the shape of `schema`, and finish with `schema.parse` so a malformed answer throws instead of reaching the database. The prompts already treat the customer's text as data, not instructions; [Security model](/docs/concepts/security#ai) says more. [AI](/docs/reference/adapters#ai) in the adapters reference lists each call and its result schema.
+
+## What agents get
+
+Each new conversation gets a suggestion. A triage job asks the model for a type, a priority, a short title and a two-sentence summary, and, among the other conversations that share its words, for the ones that describe the same request. The agent UI shows it as an **AI suggestion** with **Apply**, **Dismiss** and **Suggest again**. Applying sets the type, the priority and, unless an agent has already named the conversation, the title. Conversations of type `lead` get a title and summary but no type, priority or duplicates, which stay with your sales flow.
+
+An agent can ask for a draft reply: **Draft with AI** in the reply box asks for an answer in the customer's language, from the conversation, what your [help search](/docs/guides/help-search) finds for its subject, and what `resolveContext` returns for the customer's company. The draft goes into the editor; nothing is sent until the agent sends it. Links come back written out in full, so the agent sees where each one points.
+
+An agent can also have their own reply rewritten, with **Shorten**, **More formal** and **Into the customer's language**. German output is Swiss Standard German that addresses the customer as "Sie".
+
+## When it runs
+
+Triage runs as a job, so it needs the [jobs run](/docs/guides/jobs) like email does, and it shows up a little after the conversation arrives. It is capped at 100 new conversations an hour from your signed-in users and 100 from everyone else; past the cap, conversations arrive without a suggestion until the next hour. A failed model call is retried as any job is.
+
+Drafts and rewrites run when the agent asks, inside that request. If `generate` throws there, the agent sees an error and can try again.

@@ -1,0 +1,199 @@
+---
+title: Package exports
+description: Each entry point of the better-helpdesk package and what it exports.
+---
+
+The `better-helpdesk` package has six entry points. Related guide: [Call the helpdesk from your own code](/docs/guides/own-code).
+
+| Entry point | Runs on | Exports |
+| --- | --- | --- |
+| [`better-helpdesk`](#better-helpdesk) | Server | `buildHelpdesk`, `postgresAdapter`, identity tokens, references, types |
+| [`better-helpdesk/widget`](#better-helpdeskwidget) | Browser | The widget and the support page, for React and as custom elements |
+| [`better-helpdesk/admin`](#better-helpdeskadmin) | Browser | The agent UI |
+| [`better-helpdesk/rich`](#better-helpdeskrich) | Server or browser | The message format: parser and renderer |
+| [`better-helpdesk/next`](#better-helpdesknext) | Build | `withHelpdesk` for `next.config` |
+| [`better-helpdesk/widget.js`](#better-helpdeskwidgetjs) | Browser | The standalone widget script |
+
+The package is ESM only and ships its type declarations. Its peer dependencies are `pg`, `react` and `react-dom` (React 19), and it requires Node.js 22.19 or newer.
+
+## better-helpdesk
+
+| Export | Kind | What it is |
+| --- | --- | --- |
+| `buildHelpdesk(config)` | function | Builds the helpdesk from a [`HelpdeskConfig`](/docs/reference/configuration). Throws on [invalid configuration](/docs/reference/configuration#startup-checks). |
+| `postgresAdapter({ pool })` | function | The `HelpdeskStore` over a `pg.Pool`, for the `db` option. |
+| `signIdentityToken(payload, secret, options?)` | function | Signs an identity token. |
+| `verifyIdentityToken(token, secret)` | function | Returns the `Identity` a token vouches for, with `isAgent: false`, or `null` when it is forged, malformed or expired. |
+| `formatReference(prefix, number)` | function | `formatReference('ACME', 1042)` is `ACME-1042`. |
+| `parseReference(prefix, value)` | function | The number in a reference such as `ACME-1042`, matched case-insensitively, or `undefined`. |
+| `HelpdeskError` | class | An error with an HTTP `status` and, for a bulk change, the failed `ids`. The handler answers it with that status. |
+| `BuiltHelpdesk` | type | What `buildHelpdesk` returns. |
+| `Conversation`, `Message` | type | Rows of [`conversation`](/docs/reference/database#conversation) and [`message`](/docs/reference/database#message). |
+| `HelpdeskStore` | type | The query layer. |
+| `HelpdeskEvent` | type | See [Events](/docs/reference/events). |
+| `IdentityClaims` | type | The claims of an identity token. |
+
+Every type in the configuration module is exported as well: `HelpdeskConfig`, `InboxConfig`, `BusinessHours`, `Identity`, `HelpdeskUser`, `HelpdeskOrg`, `HostLink`, `LinkContact`, `LinkCompany`, `HelpdeskEmail`, `StorageAdapter`, `AiAdapter`, `HelpResult`, `InboundMessage`, `CustomFieldDef`, `Locale` and `ResolvedConfig`. The default lists, such as the statuses and the default types, are not exported.
+
+### What buildHelpdesk returns
+
+<TypeTable
+  type={{
+    handler: {
+      type: '(request: Request) => Promise<Response>',
+      description: <>Serves every <a href="/docs/reference/routes">route</a> under <code>basePath</code>.</>,
+    },
+    config: {
+      type: 'ResolvedConfig',
+      description: 'The configuration with its defaults filled in.',
+    },
+    store: {
+      type: 'HelpdeskStore',
+      description: <>The queries the routes run. Writes through it raise no events. See <a href="#helpdeskstore">HelpdeskStore</a>.</>,
+    },
+    reference: {
+      type: '(conversation: { number: number }) => string',
+      description: "The conversation's reference, such as ACME-1042.",
+    },
+    createConversation: {
+      type: '(request: Request, input: unknown) => Promise<{ conversation: Conversation | null; visitorToken?: string }>',
+      description: <>Opens a conversation as <code>POST widget/conversations</code> does, for the customer the request identifies, and raises <code>conversation.created</code>. <code>input</code> takes <a href="/docs/reference/routes#opening-a-conversation">that route's body</a>; where the route would answer an error, it throws: a <code>HelpdeskError</code> with that status, or a Zod error for an invalid body.</>,
+    },
+    runJobs: {
+      type: '(options?: { budgetMs?: number }) => Promise<JobsReport>',
+      description: <>Runs scheduled work and due jobs. See <a href="/docs/reference/routes#jobs">Jobs</a>.</>,
+    },
+    track: {
+      type: '(input: { externalUserId?: string; externalOrgId?: string; event: string; props?: Record<string, unknown> }) => Promise<boolean>',
+      description: <>Puts a host event on a timeline as an <code>activity</code> of kind <code>event</code>. With <code>externalUserId</code>, on the contact that holds that host identity, and on its company; with only <code>externalOrgId</code>, on that organization's company, created when missing. Returns <code>false</code> and records nothing when no contact holds the user id, or neither id is given.</>,
+    },
+    removeAgent: {
+      type: '(externalUserId: string) => Promise<void>',
+      description: <>Removes an agent from the team and unassigns their conversations, as <code>DELETE agent/agents/{'{id}'}</code> does. Their next request to an agent route with <code>isAgent: true</code> adds them back.</>,
+    },
+    deleteContact: {
+      type: '(contactId: string) => Promise<{ conversations: number }>',
+      description: "Deletes a contact by its helpdesk id, with their conversations, what they wrote in other conversations, and their files. Returns the number of conversations deleted.",
+    },
+    deleteCompany: {
+      type: '(externalOrgId: string) => Promise<{ conversations: number }>',
+      description: "Deletes a host organization's company with its conversations and files. Its contacts who have no conversation outside the company are deleted too, with what they wrote elsewhere; the others stay, without a company. Returns the number of conversations deleted, 0 when no company has that id.",
+    },
+  }}
+/>
+
+`JobsReport` stands for `{ woken, reminders, retention, jobs, failed, errors }`, described under [Jobs](/docs/reference/routes#jobs); it is not an exported name. The object also carries the internal functions the handler is built from, which are not listed here.
+
+### HelpdeskStore
+
+`helpdesk.store` holds the queries the routes run, over the `helpdesk` schema. These are the ones the [guides](/docs/guides/own-code) use. Rows use the column names of [Database](/docs/reference/database) in camel case.
+
+<TypeTable
+  type={{
+    db: {
+      type: 'NodePgDatabase',
+      description: <>The Drizzle database over the host's pool.</>,
+    },
+    findContactByIdentity: {
+      type: "(channel: 'host' | 'email' | 'visitor' | 'github', externalId: string, options: { verifiedOnly: boolean }) => Promise<Contact | null>",
+      description: <>The contact that holds an <a href="/docs/reference/database#identity">identity</a>, a verified one first.</>,
+    },
+    findContactByEmail: {
+      type: '(email: string) => Promise<Contact | null>',
+      description: 'The oldest contact with exactly this address. Addresses are stored lower-cased.',
+    },
+    updateContact: {
+      type: '(id: string, patch: Partial<Contact>) => Promise<Contact | null>',
+      description: 'Writes the fields given.',
+    },
+    listContacts: {
+      type: '(filter: { query?: string; leadStage?: string; companyId?: string; limit?: number }) => Promise<Contact[]>',
+      description: <>Contacts, most recently active first, at most <code>limit</code> (100 by default). <code>query</code> matches name or email. Each row also carries <code>conversationCount</code>, <code>lastMessageAt</code>, <code>isTeam</code> and <code>firstContext</code>.</>,
+    },
+    listAgents: {
+      type: '() => Promise<Agent[]>',
+      description: 'The team, by name, without removed agents.',
+    },
+    listInbox: {
+      type: '(filter: InboxFilter) => Promise<{ conversation: Conversation; contact: Contact }[]>',
+      description: <>The agent inbox, longest waiting first, at most <code>limit</code> (200 by default). The filter takes <code>inbox</code>, <code>status</code> (also <code>snoozed</code> and <code>rated-bad</code>), <code>assigneeId</code> (<code>null</code> for unassigned), <code>contactId</code>, <code>companyId</code>, <code>tag</code>, <code>query</code>, <code>priority: 'high'</code>, <code>sort</code> and <code>limit</code>. Blocked contacts' conversations are left out unless <code>contactId</code> is given.</>,
+    },
+    updateConversation: {
+      type: '(id: string, patch: Partial<Conversation>) => Promise<Conversation | null>',
+      description: 'Writes the fields given, without a timeline row or an event.',
+    },
+    listActivities: {
+      type: '(filter: { contactId?: string; companyId?: string; dealId?: string }) => Promise<{ activity: Activity; agentName: string | null }[]>',
+      description: 'Activities on any of the given records, newest first, at most 200.',
+    },
+  }}
+/>
+
+`Contact`, `Agent` and `Activity` are the stored rows; only `Conversation` and `Message` are exported as type names.
+
+### signIdentityToken
+
+```ts
+signIdentityToken(
+  payload: Omit<IdentityClaims, 'exp'>,
+  secret: string,
+  options?: { expiresInSeconds?: number } // default 3600
+): string
+```
+
+The claims of the token:
+
+<TypeTable
+  type={{
+    sub: { type: 'string', required: true, description: "The host's user id, 1 to 200 characters." },
+    exp: { type: 'number', required: true, description: <>Seconds since the epoch. <code>signIdentityToken</code> sets it.</> },
+    email: { type: 'string', description: 'An email address, up to 320 characters.' },
+    email_verified: { type: 'boolean', default: 'false', description: <>Becomes <code>emailVerified</code>.</> },
+    name: { type: 'string', description: 'Up to 200 characters.' },
+    locale: { type: 'string', description: 'Up to 35 characters.' },
+    orgs: { type: '{ id: string; name?: string }[]', default: '[]', description: 'Up to 100; each id 1 to 200 characters, each name up to 200.' },
+  }}
+/>
+
+The token is an HS256 JWT, so any JWT library that signs the same claims produces a valid one.
+
+## better-helpdesk/widget
+
+`HelpdeskWidget`, `HelpdeskConversations`, `defineHelpdeskWidget` and `defineHelpdeskConversations`. See [Widget](/docs/reference/widget).
+
+## better-helpdesk/admin
+
+`HelpdeskAdmin`, `HELPDESK_SECTIONS` and `HELPDESK_CHANGED`. See [Agent UI](/docs/reference/admin).
+
+## better-helpdesk/rich
+
+The message format that messages and canned replies are written in, and a renderer for it. The module has no hooks and no `'use client'`, so it renders on the server as well, for example in an email template.
+
+The format is plain text with a small set of Markdown: `**bold**`, `_italic_`, `++underline++`, `[label](url)`, bare `http` and `https` links, lists whose lines start with `-`, `*` or `•`, or with a number and `.` or `)`, blank lines between paragraphs, and code blocks between lines of three or more backticks.
+
+| Export | Signature | What it does |
+| --- | --- | --- |
+| `RichText` | `(props: { text: string; compact?: boolean; hosts?: boolean; code?: (text: string) => ReactNode; reference?: (reference: string) => ReactNode }) => ReactNode` | Renders a message. `compact` renders inline only, with lists as `•` lines. `hosts` shows where each labeled link goes. `code` renders code blocks. `reference` renders each conversation reference outside links and code. |
+| `parseRich` | `(text: string) => Block[]` | Parses a message into paragraphs, lists and code blocks. |
+| `parseInline` | `(text: string) => Inline[]` | Parses one line into text, bold, italic, underline and link runs. |
+| `plainText` | `(text: string) => string` | The words without the markers. |
+| `safeHref` | `(href: string) => string \| null` | The target when it starts with `http://`, `https://` or `mailto:`, otherwise `null`. |
+| `unlabelLinks` | `(text: string) => string` | Rewrites `[label](url)` as `label (url)`. |
+| `fence` | `(text: string) => string` | Wraps text in a code block whose backtick lines are longer than any run inside it. |
+| `Block`, `Inline` | type | The parsed shapes. |
+
+## better-helpdesk/next
+
+```js title="next.config.mjs"
+import { withHelpdesk } from 'better-helpdesk/next';
+
+export default withHelpdesk({ trailingSlash: true });
+```
+
+`withHelpdesk(nextConfig = {})` returns the config with `better-helpdesk` added to `transpilePackages`, keeping any packages already listed.
+
+## better-helpdesk/widget.js
+
+The minified standalone widget, the file `dist/widget.js`, for a page without React. See [Script tag](/docs/reference/widget#script-tag).
+
+`better-helpdesk/package.json` is exported too.
