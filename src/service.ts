@@ -176,6 +176,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
           });
         }
       }
+      if (contact) await store.markContactSeen(contact.id);
       const companies = await store.companiesByExternalOrgIds(
         identity.orgs.map(o => o.id)
       );
@@ -186,6 +187,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       token && VISITOR_TOKEN.test(token)
         ? await store.findVisitor(hashToken(token), VISITOR_IDLE_DAYS)
         : null;
+    if (contact) await store.markContactSeen(contact.id);
     return { identity: null, contact, companies: [] };
   }
 
@@ -338,6 +340,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
             email: normalizeEmail(data.email),
             locale: data.context?.locale ?? null,
             leadStage: data.inbox === 'sales' ? 'lead' : null,
+            lastSeenAt: new Date(),
           },
           {
             channel: 'visitor',

@@ -161,7 +161,10 @@ HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-migrate
 
 The CLI opens one connection, creates the `helpdesk` schema and its tables,
 and exits, so it fits into a release step next to your own migrations. It
-also reads `APP_DATABASE_URL`, and `DATABASE_SSL=true` turns on TLS.
+also reads `APP_DATABASE_URL`. `DATABASE_SSL=true` turns on TLS and verifies
+the server's certificate; `DATABASE_SSL=no-verify` encrypts without checking
+it, for a database with a self-signed certificate. An `sslmode` in the
+connection string takes precedence over both.
 
 ### 3. Let Next.js compile the package
 
@@ -264,9 +267,10 @@ has it wired up end to end.
 ### The widget
 
 `HelpdeskWidget` takes `api`, `inbox`, `locale`, `types`, `orgId`,
-`identityToken`, `appVersion`, `context` and `label`. `context` is a map of
-strings that is attached to every conversation the widget opens, alongside
-what it captures itself.
+`identityToken`, `appVersion`, `context`, `label` and `theme`. `context` is a
+map of strings that is attached to every conversation the widget opens,
+alongside what it captures itself. `theme="auto"` follows the operating
+system's dark mode.
 
 On a page that is not React, serve `widget.js` from the published package
 (for instance by copying `node_modules/better-helpdesk/dist/widget.js` into

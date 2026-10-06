@@ -191,6 +191,22 @@ export function createStore(db: Db) {
       return row.contact;
     },
 
+    /** The widget polls; one write every few minutes is enough for "last seen". */
+    async markContactSeen(id: string) {
+      await db
+        .update(contacts)
+        .set({ lastSeenAt: sql`now()` })
+        .where(
+          and(
+            eq(contacts.id, id),
+            or(
+              isNull(contacts.lastSeenAt),
+              lt(contacts.lastSeenAt, sql`now() - interval '5 minutes'`)
+            )
+          )
+        );
+    },
+
     async createContact(
       values: typeof contacts.$inferInsert,
       identity?: IdentityInput
@@ -399,6 +415,7 @@ export function createStore(db: Db) {
               companyId: sql`coalesce(${contacts.companyId}, ${source.companyId}::uuid)`,
               // A block on either side holds for the merged person.
               blocked: sql`${contacts.blocked} OR ${source.blocked}`,
+              lastSeenAt: sql`greatest(${contacts.lastSeenAt}, ${source.lastSeenAt}::timestamptz)`,
             })
             .where(eq(contacts.id, targetId));
         }

@@ -297,8 +297,11 @@ export function Widget(props: WidgetProps) {
   const [awaitingTeam, setAwaitingTeam] = useState(false);
   const [isAgent, setIsAgent] = useState(false);
   const session = useResource(
-    () => api<Session>(`widget/session?inbox=${encodeURIComponent(inbox)}`),
-    `session:${inbox}`,
+    () =>
+      api<Session>(
+        `widget/session?inbox=${encodeURIComponent(inbox)}&locale=${locale}`
+      ),
+    `session:${inbox}:${locale}`,
     open || isAgent ? 60_000 : awaitingTeam ? 300_000 : undefined
   );
   useEffect(() => {

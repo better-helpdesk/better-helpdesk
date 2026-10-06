@@ -836,6 +836,33 @@ describe('Widget', () => {
     ).toBeTruthy();
   });
 
+  it('loads the session in its own locale', async () => {
+    const twoAgents = [
+      { name: 'Angelo', initials: 'AD' },
+      { name: 'Mia', initials: 'MB' },
+    ];
+    mockApi({
+      'widget/session': { ...session, team: twoAgents, teamName: 'The team' },
+      'widget/session/?inbox=support&locale=de': {
+        ...session,
+        team: twoAgents,
+        teamName: 'Das Team',
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="de"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Support öffnen' }));
+    expect(
+      await screen.findByText(/^Das Team antwortet Ihnen persönlich/)
+    ).toBeTruthy();
+  });
+
   it.each([
     [true, 2],
     [false, 0],

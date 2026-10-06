@@ -350,6 +350,66 @@ describe('visibility', () => {
   });
 });
 
+describe('last seen', () => {
+  async function lastSeen(email: string) {
+    const [row] = await rows<{ ms: number | null }>(
+      sql`SELECT (extract(epoch FROM date_trunc('milliseconds', last_seen_at)) * 1000)::float8 AS ms FROM helpdesk.contact WHERE email = ${email}`
+    );
+    return row?.ms ?? null;
+  }
+
+  async function age(email: string, interval: string) {
+    await h.support.store.db.execute(
+      sql`UPDATE helpdesk.contact SET last_seen_at = now() - ${interval}::interval WHERE email = ${email}`
+    );
+    return lastSeen(email);
+  }
+
+  it('records a signed-in customer, and writes again only after a few minutes', async () => {
+    h.addUser('ada', { email: 'ada@harbor.test' });
+    await openBug('ada');
+    expect(await lastSeen('ada@harbor.test')).toEqual(expect.any(Number));
+
+    const recent = await age('ada@harbor.test', '2 minutes');
+    await h.call('GET', 'widget/session?inbox=support', { user: 'ada' });
+    expect(await lastSeen('ada@harbor.test')).toEqual(recent);
+
+    const stale = await age('ada@harbor.test', '10 minutes');
+    await h.call('GET', 'widget/session?inbox=support', { user: 'ada' });
+    expect(await lastSeen('ada@harbor.test')).toBeGreaterThan(
+      stale ?? Number.POSITIVE_INFINITY
+    );
+  });
+
+  it('records a visitor when they write and when their token comes back', async () => {
+    const created = await h.call('POST', 'widget/conversations', {
+      body: {
+        inbox: 'sales',
+        type: 'lead',
+        body: 'Pricing?',
+        email: 'buyer@example.test',
+      },
+    });
+    expect(await lastSeen('buyer@example.test')).toEqual(expect.any(Number));
+
+    const stale = await age('buyer@example.test', '1 day');
+    await h.call('GET', 'widget/session?inbox=sales', {
+      headers: { 'x-helpdesk-visitor': created.data.visitorToken },
+    });
+    expect(await lastSeen('buyer@example.test')).toBeGreaterThan(
+      stale ?? Number.POSITIVE_INFINITY
+    );
+  });
+
+  it('keeps the later of the two when contacts merge', async () => {
+    const a = await h.support.store.createContact({ email: 'a@harbor.test' });
+    const b = await h.support.store.createContact({ email: 'b@harbor.test' });
+    const later = await age('b@harbor.test', '1 hour');
+    await h.support.store.mergeContacts(a.id, b.id);
+    expect(await lastSeen('a@harbor.test')).toEqual(later);
+  });
+});
+
 describe('anonymous visitors', () => {
   const salesBody = {
     inbox: 'sales',
