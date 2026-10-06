@@ -13,7 +13,7 @@ import { testDatabaseUrl } from './database-url';
 
 export const ADMIN_ORIGIN = 'https://app.test';
 export const WWW_ORIGIN = 'https://www.test';
-export const IDENTITY_SECRET = 'identity-secret';
+export const IDENTITY_SECRET = 'identity-secret-for-the-test-harness';
 
 export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
   const pool = new pg.Pool({ connectionString: testDatabaseUrl(), max: 4 });
