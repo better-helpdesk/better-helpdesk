@@ -204,6 +204,17 @@ export function createStore(db: Db) {
       });
     },
 
+    /** The oldest contact with this address, however it was proven. */
+    async findContactByEmail(email: string) {
+      const [row] = await db
+        .select()
+        .from(contacts)
+        .where(eq(contacts.email, email))
+        .orderBy(asc(contacts.createdAt))
+        .limit(1);
+      return row ?? null;
+    },
+
     async addIdentity(contactId: string, identity: IdentityInput) {
       const insert = db.insert(identities).values({ ...identity, contactId });
       // Proving an address the contact already holds unverified upgrades it.

@@ -20,44 +20,31 @@ messages are in the old tool.
 
 ## Import contacts, companies and saved replies
 
-The agent routes that the agent UI uses also take imports. Open the agent
-UI, signed in as an agent, and run a loop over your export in the browser
-console. With the default `basePath`:
+Export what you have as CSV and run the import CLI against the same database
+as the migrations:
 
-```js
-const post = (path, body) =>
-  fetch(`/api/helpdesk/agent/${path}/`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  }).then(async r => {
-    if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`);
-    return r.json();
-  });
-
-// rows parsed from your export
-for (const row of companies) {
-  const { company } = await post('companies', { name: row.name, domain: row.domain });
-  row.id = company.id;
-}
-for (const row of contacts) {
-  await post('contacts', {
-    name: row.name || row.email,
-    email: row.email || undefined,
-    companyId: companies.find(c => c.name === row.company)?.id,
-  });
-}
-for (const row of macros) {
-  await post('canned', { title: row.title, body: row.body });
-}
+```sh
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import contacts people.csv
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import canned replies.csv
 ```
 
-A contact needs a `name`; `email`, `companyId` and `leadStage` are optional.
-The loop stops at the first row the server refuses, with the reason, so fix
-that row and rerun from there.
-A saved reply takes a `title`, a `body` and an optional `locale` (`en` or
-`de`). In a saved reply, `{firstName}` and `{reference}` are filled in when
-an agent inserts it, so rewrite the old tool's placeholders to those two.
+It prints how many rows it created, updated and skipped. Column names are
+read without regard to case, and a header row is required.
+
+- **Contacts** need an `email`; `name`, `tags` (separated by `;` or `|`) and
+  `lead_stage` are optional. A row joins the company with its `domain`, or,
+  when it has a `company` but no `domain`, the company with the email's
+  domain; a missing company is created and named after `company`. A row
+  without a usable email is skipped.
+- **Saved replies** need a `title` and a `body`; `locale` (`en` or `de`) is
+  optional. In a saved reply, `{firstName}` and `{reference}` are filled in
+  when an agent inserts it, so rewrite the old tool's placeholders to those
+  two.
+
+Running it again is safe. A contact whose email is already known, from an
+earlier import or because the person already wrote in, is updated and keeps
+its tags; a saved reply whose title and locale exist is left alone. So fix
+the export and run the whole file again.
 
 An imported contact is not linked to anyone's login. When the same person
 later writes in or signs in, they may arrive as a second contact; open the
