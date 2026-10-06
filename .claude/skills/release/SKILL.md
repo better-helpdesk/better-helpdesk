@@ -12,12 +12,12 @@ A release is a `vX.Y.Z` tag on `main` whose version equals `package.json`.
 anywhere), then a GitHub Release whose notes are the titles of the pull
 requests merged since the previous tag.
 
-Done means both of these hold: `npm view better-helpdesk version` prints the
-new version, and `gh release view vX.Y.Z` shows notes that read as a
-changelog.
+Done means all of these hold: `npm view better-helpdesk version` prints the
+new version, `gh release view vX.Y.Z` shows notes that read as a changelog,
+and the site runs the new version (step 6).
 
-Two gates are the maintainer's and never yours: merging the bump PR and
-pushing the tag. Ask at each. A yes for one is not a yes for the other, and
+Three gates are the maintainer's and never yours: merging the bump PR,
+pushing the tag and merging the site PR. Ask at each. A yes for one is not a yes for the other, and
 a push of the release branch is a push too.
 
 ## 1. Is there a release here?
@@ -80,3 +80,22 @@ Report the version, the release URL and anything in the notes that reads
 badly. A run that fails after `npm publish` has still published: re-run the
 whole workflow from the Actions page rather than publishing by hand. Both
 jobs skip what already exists, the npm version and the GitHub Release.
+
+## 6. Move the site to the release
+
+`site/` runs the published package, so it moves only once npm has the new
+version; for a `0.x` version the caret in `site/package.json` never reaches
+the next minor on its own. `examples/demo` follows the workspace and needs
+nothing.
+
+```sh
+git switch -c site-better-helpdesk-X-Y-Z origin/main
+pnpm --filter better-helpdesk-site add better-helpdesk@^X.Y.Z
+pnpm --filter better-helpdesk-site exec tsc --noEmit
+pnpm --filter better-helpdesk-site run build
+```
+
+Adapt the site to what the release notes change, open the PR titled
+`chore(site): run better-helpdesk X.Y.Z` and watch its CI. Before Divio
+deploys it, tell the maintainer every environment variable the release
+changes for the site.
