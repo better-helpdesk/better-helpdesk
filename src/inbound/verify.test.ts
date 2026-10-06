@@ -142,6 +142,25 @@ describe('bounded verification', () => {
     ).toBe(false);
     expect(Date.now() - started).toBeLessThan(2_000);
   });
+
+  // The parse is synchronous, so the deadline above cannot interrupt it.
+  it('parses a crafted From header without holding the event loop', async () => {
+    const raw = Buffer.from(
+      [
+        `From: ${'a.'.repeat(30_000)}@`,
+        'To: support@devguard.ch',
+        'Subject: Hi',
+        '',
+        'Hello',
+        '',
+      ].join('\r\n')
+    );
+    const started = Date.now();
+    expect(await fromDomainSigned(raw, 'anna@example.ch', resolver)).toBe(
+      false
+    );
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
 });
 
 // mailauth's verifier accepts a signature whose h= leaves From out; its signer

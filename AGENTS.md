@@ -20,7 +20,7 @@ code already does. Concretely:
   but the embedded model is not up for discussion. The core never imports
   Next: Biome fails the build on it, and `next.mjs` is the one file allowed
   to.
-- **TypeScript strict, ESM, Node 20 or newer, React 19** for the agent UI and
+- **TypeScript strict, ESM, Node 22.19 or newer, React 19** for the agent UI and
   the widget alike. pnpm with a frozen lockfile.
 - **Postgres only, and Drizzle owns the schema.** Tables live in
   `src/db/schema.ts` under the `helpdesk` schema. Migrations are SQL that
