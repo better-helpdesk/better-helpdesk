@@ -70,6 +70,8 @@ export const contacts = helpdesk.table(
   },
   t => [
     index('contact_company_idx').on(t.companyId),
+    // Every widget submission and inbound mail asks whether a blocked contact holds the address.
+    index('contact_blocked_idx').on(t.id).where(sql`${t.blocked}`),
     index('contact_email_idx').on(t.email),
   ]
 );

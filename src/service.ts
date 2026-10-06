@@ -348,7 +348,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
     const contact = customer.contact;
     if (!contact) throw new HelpdeskError(401, 'Unauthenticated');
-    await refuseBlocked(contact);
+    // An anonymous visitor's address was checked before their contact was made.
+    if (customer.identity) await refuseBlocked(contact);
     if (customer.identity) await limitContact(contact.id);
 
     let companyId: string | null = null;
