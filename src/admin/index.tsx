@@ -19,6 +19,7 @@ import { ConversationView } from './conversation';
 import { CompanyList, CompanyView, ContactList, ContactView } from './crm';
 import { DealsBoard } from './deals';
 import { AwayControl, Inbox } from './inbox';
+import { NotificationBell } from './notifications';
 import { OverviewPage } from './overview';
 import { Settings } from './settings';
 import { adminCss } from './styles';
@@ -187,6 +188,7 @@ export function HelpdeskAdmin({
                   ))}
                 </nav>
                 <div className="sa-me">
+                  <NotificationBell />
                   <Avatar name={me.data.agent.name} agent />
                   <AwayControl />
                 </div>

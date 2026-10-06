@@ -314,6 +314,12 @@ export const adminCss = `
 .sa-menu > summary::-webkit-details-marker { display: none; }
 .sa-menu-pop { position: absolute; right: 0; top: 40px; z-index: 5; display: grid; min-width: 260px; padding: 6px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); box-shadow: var(--a-shadow-pop); }
 .sa-menu-pop .sa-btn { justify-content: flex-start; }
+.sa-bell > summary { position: relative; }
+.sa-bell-count { position: absolute; top: 2px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--a-accent); color: var(--a-accent-fg); font-size: 11px; line-height: 16px; text-align: center; }
+.sa-bell-pop { width: min(340px, calc(100vw - 32px)); max-height: 420px; overflow-y: auto; gap: 2px; }
+.sa .sa-bell-item { height: auto; padding: 8px; display: grid; gap: 2px; text-align: left; white-space: normal; }
+.sa-bell-pop > p { margin: 8px; }
+.sa-bell-pop > .sa-toggle { margin: 6px 8px 2px; padding-top: 8px; border-top: 1px solid var(--a-border); }
 .sa-dialog h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .sa-dialog h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--a-muted); }
 .sa-keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
