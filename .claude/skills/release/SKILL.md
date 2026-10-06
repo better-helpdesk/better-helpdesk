@@ -17,8 +17,8 @@ new version, `gh release view vX.Y.Z` shows notes that read as a changelog,
 and the site runs the new version (step 6).
 
 Three gates are the maintainer's and never yours: merging the bump PR,
-pushing the tag and merging the site PR. Ask at each. A yes for one is not a yes for the other, and
-a push of the release branch is a push too.
+pushing the tag and merging the site PR. Ask at each. A yes for one is not a
+yes for the other, and a push of the release branch is a push too.
 
 ## 1. Is there a release here?
 
