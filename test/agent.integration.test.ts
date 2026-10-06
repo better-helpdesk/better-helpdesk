@@ -420,18 +420,37 @@ describe('deletion', () => {
     expect(await rows(sql`SELECT 1 FROM helpdesk.identity`)).toHaveLength(0);
   });
 
-  it('deletes resolved conversations past the retention period', async () => {
+  it('deletes resolved conversations past the retention period, with their files, and keeps the rest', async () => {
     const retained = createHarness({ retentionDays: 30 });
     try {
-      h.addUser('ada');
-      const conversation = await open('ada');
-      await retained.support.store.db.execute(
-        sql`UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '31 days' WHERE id = ${conversation.id}::uuid`
-      );
+      for (const user of ['ada', 'bob', 'cleo']) h.addUser(user);
+      const expired = await open('ada');
+      const stillOpen = await open('bob');
+      const recent = await open('cleo');
+      await retained.support.store.db.execute(sql`
+        UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '31 days'
+        WHERE id = ${expired.id}::uuid`);
+      await retained.support.store.db.execute(sql`
+        UPDATE helpdesk.conversation SET created_at = now() - interval '90 days'
+        WHERE id = ${stillOpen.id}::uuid`);
+      await retained.support.store.db.execute(sql`
+        UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '29 days'
+        WHERE id = ${recent.id}::uuid`);
+      const key = `support/${expired.id}/log.txt`;
+      await retained.storage.put(key, new Uint8Array([1]), 'text/plain');
+      await retained.support.store.db.execute(sql`
+        INSERT INTO helpdesk.attachment (conversation_id, key, filename, content_type, size, uploaded)
+        VALUES (${expired.id}::uuid, ${key}, 'log.txt', 'text/plain', 1, true)`);
+
       await retained.support.runJobs();
-      expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-        0
+
+      const kept = await rows<{ id: string }>(
+        sql`SELECT id FROM helpdesk.conversation`
       );
+      expect(kept.map(c => c.id).sort()).toEqual(
+        [stillOpen.id, recent.id].sort()
+      );
+      expect(retained.objects.has(key)).toBe(false);
     } finally {
       await retained.close();
     }
