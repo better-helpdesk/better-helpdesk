@@ -18,6 +18,6 @@ export async function identify(request: Request): Promise<Identity | null> {
       image: user.image,
     },
     orgs: orgs.map(org => ({ id: org.id, name: org.name })),
-    isAgent: user.role === 'support',
+    isAgent: user.role?.split(',').includes('support') ?? false,
   };
 }
