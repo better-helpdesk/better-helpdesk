@@ -95,7 +95,9 @@ pnpm --filter better-helpdesk-site exec tsc --noEmit
 pnpm --filter better-helpdesk-site run build
 ```
 
-Adapt the site to what the release notes change, open the PR titled
-`chore(site): run better-helpdesk X.Y.Z` and watch its CI. Before Divio
-deploys it, tell the maintainer every environment variable the release
-changes for the site.
+`pnpm add` also adds the new version to `minimumReleaseAgeExclude` in
+`pnpm-workspace.yaml`, which belongs in the commit. Adapt the site to what
+the release notes change and run both checks again. Ask, then push the
+branch and open the PR titled `chore(site): run better-helpdesk X.Y.Z`, and
+watch its CI. Before Divio deploys it, tell the maintainer every environment
+variable the release changes for the site.
