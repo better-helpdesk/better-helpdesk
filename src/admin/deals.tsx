@@ -51,6 +51,14 @@ export function DealsBoard() {
   };
 
   const none = deals.data?.deals.length === 0;
+  // A deal in a stage the host removed keeps a column of its own, so it can
+  // still be found and dragged into a configured stage.
+  const stages = [
+    ...new Set([
+      ...me.dealStages,
+      ...(deals.data?.deals.map(d => d.stage) ?? []),
+    ]),
+  ];
 
   return (
     <div className="sa">
@@ -68,8 +76,9 @@ export function DealsBoard() {
       {none && <Empty text={t('admin.emptyDeals')} />}
       <div
         className="sa-board"
-        style={{ '--cols': me.dealStages.length } as React.CSSProperties}>
-        {me.dealStages.map(stage => {
+        style={{ '--cols': stages.length } as React.CSSProperties}>
+        {stages.map(stage => {
+          const configured = me.dealStages.includes(stage);
           const inStage =
             deals.data?.deals.filter(d => d.stage === stage) ?? [];
           const total = inStage.reduce(
@@ -83,6 +92,7 @@ export function DealsBoard() {
               data-over={over === stage}
               aria-label={t(`stage.${stage}`)}
               onDragOver={e => {
+                if (!configured) return;
                 e.preventDefault();
                 setOver(stage);
               }}
@@ -102,7 +112,7 @@ export function DealsBoard() {
                   {money(String(total), 'CHF', locale)}
                 </span>
               </div>
-              {inStage.length === 0 && !none && (
+              {inStage.length === 0 && !none && configured && (
                 <p className="sa-drop-hint">{t('admin.dropDeal')}</p>
               )}
               {inStage.map(d => (
@@ -217,7 +227,12 @@ export function DealDialog({
               style={{ width: '100%' }}
               name="stage"
               defaultValue={existing?.stage ?? me.dealStages[0]}>
-              {me.dealStages.map(s => (
+              {[
+                ...me.dealStages,
+                ...(existing && !me.dealStages.includes(existing.stage)
+                  ? [existing.stage]
+                  : []),
+              ].map(s => (
                 <option key={s} value={s}>
                   {t(`stage.${s}`)}
                 </option>
