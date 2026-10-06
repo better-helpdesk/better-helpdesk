@@ -376,6 +376,67 @@ describe('jobs and email', () => {
   });
 });
 
+describe('notifications', () => {
+  it('tells an agent what colleagues and their customers did, and counts what is new since they last looked', async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('lead', { isAgent: true });
+    h.addUser('ada');
+    const me = (await h.call('GET', 'agent/me', { user: 'agent' })).data.agent
+      .id as string;
+    await h.call('GET', 'agent/me', { user: 'lead' });
+    const first = await open('ada');
+    const second = await open('ada');
+    const feed = async () =>
+      (await h.call('GET', 'agent/notifications', { user: 'agent' })).data as {
+        unread: number;
+        notifications: { kind: string; reference: string; who: string }[];
+      };
+
+    // Taking a conversation yourself is no news, and neither is the message it already had.
+    await h.call('PATCH', `agent/conversations/${second.id}`, {
+      user: 'agent',
+      body: { assigneeId: me },
+    });
+    expect(await feed()).toEqual({ unread: 0, notifications: [] });
+
+    await h.call('PATCH', `agent/conversations/${first.id}`, {
+      user: 'lead',
+      body: { assigneeId: me },
+    });
+    await h.call('POST', `agent/conversations/${first.id}/messages`, {
+      user: 'lead',
+      body: { body: 'Can you take this?', internal: true, notify: [me] },
+    });
+    await h.call('POST', `widget/conversations/${first.id}/messages`, {
+      user: 'ada',
+      body: { body: 'Any news?' },
+    });
+
+    const all = await feed();
+    expect(all.unread).toBe(3);
+    expect(all.notifications.map(n => [n.kind, n.reference, n.who])).toEqual([
+      ['reply', first.reference, 'ada'],
+      ['mentioned', first.reference, 'lead'],
+      ['assigned', first.reference, 'lead'],
+    ]);
+
+    await h.call('POST', 'agent/notifications/seen', {
+      user: 'agent',
+      body: {},
+    });
+    expect((await feed()).unread).toBe(0);
+    await h.call('POST', `widget/conversations/${first.id}/messages`, {
+      user: 'ada',
+      body: { body: 'Hello?' },
+    });
+    expect((await feed()).unread).toBe(1);
+    expect(
+      (await h.call('GET', 'agent/notifications', { user: 'lead' })).data
+        .notifications
+    ).toEqual([]);
+  });
+});
+
 describe('saved views', () => {
   beforeEach(async () => {
     h.addUser('agent', { isAgent: true });

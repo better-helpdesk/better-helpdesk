@@ -5,6 +5,7 @@ import { openCutoff } from '../ui/hours';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
+import { NotificationBell } from './notifications';
 import { formatSnooze } from './snooze';
 import {
   Avatar,
@@ -244,6 +245,7 @@ export function Inbox() {
             {t('admin.sort')}: {t('admin.sortPriority')}
           </option>
         </select>
+        {!nav && <NotificationBell />}
         {!nav && <AwayControl />}
         <label className="sa-toggle">
           <input

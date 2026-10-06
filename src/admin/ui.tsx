@@ -18,6 +18,7 @@ export const paths = {
   x: 'M18 6 6 18M6 6l12 12',
   text: 'M4 6h16M4 12h10M4 18h7',
   panel: 'M4 5h16v14H4zM15 5v14',
+  bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
 };
 
 export function Svg({ d }: { d: string }) {
@@ -332,6 +333,11 @@ const queue = storedSwitch('helpdesk.queue', false);
 export const setQueueOn = queue.set;
 /** "Work the queue": after a reply, the next conversation in the inbox's order opens. */
 export const useQueueOn = queue.useSwitch;
+
+const titleCount = storedSwitch('helpdesk.titleCount', true);
+export const setTitleCountOn = titleCount.set;
+/** Whether new notifications are counted in the tab title; muted per browser. */
+export const useTitleCountOn = titleCount.useSwitch;
 
 /**
  * Single-key shortcuts on the window, keyed by `KeyboardEvent.key` with letters
