@@ -757,6 +757,11 @@ stages `new`, `qualified`, `proposal`, `won`, `lost`.
 
 ## Demo
 
+Try it without installing anything at
+[better-helpdesk.com/demo](https://better-helpdesk.com/demo/): write in as a
+customer, answer as the agent, and see the rows land in Postgres. Everyone
+shares that inbox, and it starts over every quarter hour.
+
 [`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
 is Harbor, a pretend shipping product with the package installed the way this
 README describes: one route handler, the agent UI at `/helpdesk`, the widget
