@@ -20,12 +20,24 @@ export const roleFromCookie = (value: string | undefined): DemoRole =>
 export const demoEnabled = () => Boolean(process.env.DEMO_DATABASE_URL);
 
 const cache = globalThis as typeof globalThis & { demoPool?: pg.Pool };
-cache.demoPool ??= new pg.Pool({
-  connectionString: process.env.DEMO_DATABASE_URL,
-  ssl:
-    process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  max: 4,
-});
+if (!cache.demoPool) {
+  cache.demoPool = new pg.Pool({
+    connectionString: process.env.DEMO_DATABASE_URL,
+    ssl:
+      process.env.DATABASE_SSL === 'true'
+        ? { rejectUnauthorized: false }
+        : false,
+    max: 4,
+    // The demo page waits on it; an unreachable host should fail fast.
+    connectionTimeoutMillis: 5_000,
+  });
+  cache.demoPool.on('connect', client =>
+    client.on('error', error =>
+      console.error('[demo] database connection lost', error)
+    )
+  );
+  cache.demoPool.on('error', () => {});
+}
 const pool = cache.demoPool;
 
 export const NEWEST_ROWS_SQL = `select c.number, m.author_type, left(m.body, 80) as body, m.created_at
