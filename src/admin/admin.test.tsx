@@ -91,6 +91,7 @@ const routes: Record<string, unknown> = {
   'agent/canned/': { replies: [] },
   'agent/tags/': { tags: ['billing', 'vip'] },
   'agent/views/': { views: [] },
+  'agent/notifications/': { unread: 0, notifications: [] },
   'agent/settings/': { confirmation: {} },
   'agent/deals/': { deals: [] },
   'agent/overview/?days=30': {
@@ -253,6 +254,67 @@ describe('HelpdeskAdmin', () => {
         },
       ])
     );
+  });
+
+  it('counts new notifications on the bell and in the tab title, marks them seen when opened, and opens their conversation', async () => {
+    routes['agent/notifications/'] = {
+      unread: 2,
+      notifications: [
+        {
+          kind: 'reply',
+          conversationId: 'c1',
+          reference: 'DG-1000',
+          subject: 'Export broken',
+          who: 'Ada',
+          at: new Date().toISOString(),
+        },
+        {
+          kind: 'assigned',
+          conversationId: 'c1',
+          reference: 'DG-1000',
+          subject: 'Export broken',
+          who: null,
+          at: new Date().toISOString(),
+        },
+      ],
+    };
+    document.title = 'Support';
+    onTestFinished(() => {
+      routes['agent/notifications/'] = { unread: 0, notifications: [] };
+      document.title = '';
+    });
+    const posts: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posts.push(String(input));
+          routes['agent/notifications/'] = {
+            ...(routes['agent/notifications/'] as object),
+            unread: 0,
+          };
+          return new Response(JSON.stringify({ ok: true }));
+        }
+        return respond(String(input));
+      })
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const bell = await screen.findByLabelText('Notifications, 2 new');
+    await waitFor(() => expect(document.title).toBe('(2) Support'));
+
+    fireEvent.click(bell);
+    (bell.parentElement as HTMLDetailsElement).open = true;
+    fireEvent(bell.parentElement as Element, new Event('toggle'));
+    await waitFor(() =>
+      expect(posts.some(p => p.endsWith('agent/notifications/seen/'))).toBe(
+        true
+      )
+    );
+    await waitFor(() => expect(document.title).toBe('Support'));
+    expect(screen.getByText('Someone assigned DG-1000 to you')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Ada replied in DG-1000'));
+    expect(window.location.pathname).toBe('/support/conversations/c1/');
   });
 
   it('shows the open count on each assignee tab and keeps it while another tab loads', async () => {

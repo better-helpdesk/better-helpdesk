@@ -11,6 +11,7 @@ import type {
   Conversation,
   Message,
 } from './db/store';
+import { formatReference } from './domain';
 import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
@@ -691,6 +692,29 @@ export function createHandler(support: Helpdesk) {
     }
     throw new HelpdeskError(404, 'Not found');
   }
+
+  agentRoute('GET', 'notifications', async ({ agent }) => {
+    const [rows, seenAt] = await Promise.all([
+      store.notificationsFor(agent.id),
+      store.notificationsSeenAt(agent.id),
+    ]);
+    return json({
+      unread: rows.filter(r => !seenAt || r.at > seenAt).length,
+      notifications: rows.map(r => ({
+        kind: r.kind,
+        conversationId: r.conversation_id,
+        reference: formatReference(config.referencePrefix, r.number),
+        subject: r.subject,
+        who: r.who,
+        at: r.at,
+      })),
+    });
+  });
+
+  agentRoute('POST', 'notifications/seen', async ({ agent }) => {
+    await store.markNotificationsSeen(agent.id);
+    return json({ ok: true });
+  });
 
   agentRoute('GET', 'views', async ({ agent }) => {
     const [own, shared] = await Promise.all([
