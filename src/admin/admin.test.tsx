@@ -149,6 +149,29 @@ afterEach(() => {
 });
 
 describe('HelpdeskAdmin', () => {
+  it('offers the host’s links for the customer beside the conversation', async () => {
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      links: [
+        {
+          label: { en: 'Open in Acme admin', de: 'In Acme öffnen' },
+          url: 'https://app.test/users/7',
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    const link = await screen.findByRole('link', {
+      name: /Open in Acme admin/,
+    });
+    expect(link.getAttribute('href')).toBe('https://app.test/users/7');
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+
   it('lists waiting conversations and opens one as a deep link', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     const row = await screen.findByRole('link', { name: /DG-1000/ });

@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
+import type { HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
 import { relativeTime } from '../ui/i18n';
@@ -12,6 +13,7 @@ import { formatSnooze, SnoozeControl } from './snooze';
 import {
   Avatar,
   browserLabel,
+  HostLinks,
   humanizeKey,
   LoadError,
   Property,
@@ -82,6 +84,7 @@ type Detail = {
   } | null;
   company: { id: string; name: string } | null;
   suggestedCompany: { id: string; name: string } | null;
+  links: HostLink[];
   customerContext: Record<string, string>;
   participants: { id: string; name: string | null; email: string | null }[];
   viewers: Viewer[];
@@ -1009,6 +1012,7 @@ export function ConversationView({ id }: { id: string }) {
                   {me.segments[tag]?.badge[locale]}
                 </span>
               ))}
+            <HostLinks links={data.links} locale={locale} />
           </div>
 
           <div className="sa-card">
