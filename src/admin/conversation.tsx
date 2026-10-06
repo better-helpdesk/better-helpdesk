@@ -218,7 +218,7 @@ export function ConversationView({ id }: { id: string }) {
   const [mentioned, setMentioned] = useState<{ id: string; label: string }[]>(
     []
   );
-  const [busy, setBusy] = useState<'send' | 'draft' | null>(null);
+  const [busy, setBusy] = useState<'send' | 'draft' | 'rewrite' | null>(null);
   const [error, setError] = useState<'send' | 'resolve' | 'action' | null>(
     null
   );
@@ -966,13 +966,17 @@ export function ConversationView({ id }: { id: string }) {
                     className="sa-btn sa-ghost"
                     disabled={busy !== null}
                     onClick={async () => {
-                      setBusy('draft');
+                      setBusy('rewrite');
                       try {
+                        const sent = body;
                         const rewritten = await api<{ text: string }>(
                           `agent/conversations/${id}/draft`,
-                          { body: { mode, text: body } }
+                          { body: { mode, text: sent } }
                         );
-                        setBody(() => rewritten.text);
+                        // Typing in the meantime wins over the rewrite.
+                        setBody(current =>
+                          current === sent ? rewritten.text : current
+                        );
                       } catch {
                         setError('send');
                       } finally {

@@ -780,6 +780,15 @@ describe('smaller hardening', () => {
       expect((await draft({ mode: 'shorten' })).status).toBe(400);
       expect((await draft({ mode: 'louder', text: 'Hi' })).status).toBe(400);
       expect(asked).toHaveLength(2);
+
+      // Asking for a draft with no body at all still drafts.
+      const bare = await ai.call(
+        'POST',
+        `agent/conversations/${created.data.conversation.id}/draft`,
+        { user: 'agent', headers: { 'content-type': 'application/json' } }
+      );
+      expect(bare.status).toBe(200);
+      expect(asked).toHaveLength(3);
     } finally {
       await ai.close();
     }
