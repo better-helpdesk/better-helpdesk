@@ -31,9 +31,12 @@ if (!cache.demoPool) {
     // The demo page waits on it; an unreachable host should fail fast.
     connectionTimeoutMillis: 5_000,
   });
-  cache.demoPool.on('error', error =>
-    console.error('[demo] database connection lost', error)
+  cache.demoPool.on('connect', client =>
+    client.on('error', error =>
+      console.error('[demo] database connection lost', error)
+    )
   );
+  cache.demoPool.on('error', () => {});
 }
 const pool = cache.demoPool;
 
@@ -155,10 +158,6 @@ export async function resetDemo() {
       'DEMO_DATABASE_URL names the site database; the reset would wipe the real inbox.'
     );
   const client = await pool.connect();
-  // A held connection is not the pool's to watch; its loss mid-reset would crash the site.
-  client.on('error', error =>
-    console.error('[demo] reset connection lost', error)
-  );
   try {
     const { rows } = await client.query<{ ok: boolean }>(
       "select pg_try_advisory_lock(hashtext('better-helpdesk-demo')) as ok"
