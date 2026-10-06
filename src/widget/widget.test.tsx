@@ -13,6 +13,9 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { widgetCss } from './styles';
 import { Widget } from './widget';
 
+// jsdom has no layout, so nothing can scroll.
+Element.prototype.scrollIntoView = () => {};
+
 type Call = { url: string; method: string; body: unknown };
 
 function mockApi(routes: Record<string, unknown>) {
@@ -26,7 +29,9 @@ function mockApi(routes: Record<string, unknown>) {
         method: init?.method ?? 'GET',
         body: init?.body ? JSON.parse(String(init.body)) : undefined,
       });
-      const key = Object.keys(routes).find(k => url.includes(k));
+      const key = Object.keys(routes)
+        .filter(k => url.includes(k))
+        .sort((a, b) => b.length - a.length)[0];
       return new Response(JSON.stringify(key ? routes[key] : {}), {
         status: 200,
       });
@@ -45,6 +50,33 @@ const session = {
   team: [{ name: 'Angelo', initials: 'AD' }],
   inbox: null,
   conversations: [],
+};
+
+// Posting answers with the new conversation; the widget then opens and polls it.
+const posted = {
+  'widget/conversations/': {
+    conversation: { id: 'c1', reference: 'DG-1000' },
+  },
+  'widget/conversations/c1/': {
+    conversation: {
+      id: 'c1',
+      reference: 'DG-1000',
+      subject: null,
+      type: 'bug',
+      status: 'open',
+    },
+    messages: [
+      {
+        id: 'm1',
+        author: 'contact',
+        name: 'Ada',
+        own: true,
+        body: 'Broken',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+    attachments: [],
+  },
 };
 
 const ownThread = {
@@ -72,9 +104,7 @@ describe('Widget', () => {
   it('sends a bug report with the context the user kept', async () => {
     const calls = mockApi({
       'widget/session': session,
-      'widget/conversations/': {
-        conversation: { id: 'c1', reference: 'DG-1000' },
-      },
+      ...posted,
     });
     render(
       <Widget
@@ -109,6 +139,8 @@ describe('Widget', () => {
         )
       ).toBe(true)
     );
+    // The widget opens the new thread and loads it; let that land inside the test.
+    await screen.findByText('Thank you for reporting this');
     const post = calls.find(
       c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
     );
@@ -156,9 +188,7 @@ describe('Widget', () => {
   it('sends a pasted three-line trace as a code block', async () => {
     const calls = mockApi({
       'widget/session': session,
-      'widget/conversations/': {
-        conversation: { id: 'c1', reference: 'DG-1000' },
-      },
+      ...posted,
     });
     // jsdom has no editing commands; this one only appends, as at the end.
     document.execCommand = (command: string, _?: boolean, html?: string) => {
@@ -202,14 +232,14 @@ describe('Widget', () => {
         )?.body
       ).toMatchObject({ body: `\`\`\`\n${trace}\n\`\`\`` })
     );
+    // The widget opens the new thread and loads it; let that land inside the test.
+    await screen.findByText('Thank you for reporting this');
   });
 
   it('keeps the formatting of a rich paste whose text is indented', async () => {
     const calls = mockApi({
       'widget/session': session,
-      'widget/conversations/': {
-        conversation: { id: 'c1', reference: 'DG-1000' },
-      },
+      ...posted,
     });
     // jsdom has no editing commands; this one only appends, as at the end.
     document.execCommand = (command: string, _?: boolean, html?: string) => {
@@ -253,14 +283,14 @@ describe('Widget', () => {
         )?.body
       ).toMatchObject({ body: '**Plan:**\n\n- export\n- import' })
     );
+    // The widget opens the new thread and loads it; let that land inside the test.
+    await screen.findByText('Thank you for reporting this');
   });
 
   it('shows each captured page error and sends only the ones left ticked', async () => {
     const calls = mockApi({
       'widget/session': session,
-      'widget/conversations/': {
-        conversation: { id: 'c1', reference: 'DG-1000' },
-      },
+      ...posted,
     });
     render(
       <Widget
@@ -293,6 +323,8 @@ describe('Widget', () => {
         )
       ).toBe(true)
     );
+    // The widget opens the new thread and loads it; let that land inside the test.
+    await screen.findByText('Thank you for reporting this');
     const post = calls.find(
       c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
     );
@@ -303,7 +335,6 @@ describe('Widget', () => {
   });
 
   it('shows where a labelled link goes in a colleague’s message, not in one’s own', async () => {
-    Element.prototype.scrollIntoView = () => {};
     mockApi({
       'widget/session': {
         ...session,
@@ -374,7 +405,6 @@ describe('Widget', () => {
   });
 
   it('shows a code block in a reply with a button to copy it', async () => {
-    Element.prototype.scrollIntoView = () => {};
     mockApi({
       'widget/session': { ...session, conversations: [ownThread] },
       'widget/conversations/c1/': {
@@ -809,7 +839,6 @@ describe('Widget', () => {
   });
 
   it('lets the author mark a thread resolved and says so when that fails', async () => {
-    Element.prototype.scrollIntoView = () => {};
     const summary = ownThread;
     let status = 'open';
     let failPatch = true;
@@ -928,7 +957,6 @@ describe('Widget', () => {
   });
 
   it('asks the author to rate a resolved thread, once', async () => {
-    Element.prototype.scrollIntoView = () => {};
     const summary = { ...ownThread, status: 'resolved' };
     let rating: string | null = null;
     const ratings: unknown[] = [];
@@ -983,7 +1011,6 @@ describe('Widget', () => {
   });
 
   it('offers no resolve button on a teammate’s shared thread', async () => {
-    Element.prototype.scrollIntoView = () => {};
     const summary = {
       ...ownThread,
       subject: 'Shared thread',
