@@ -138,6 +138,7 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
   return {
     support,
     pool,
+    storage,
     objects,
     emails,
     call,
