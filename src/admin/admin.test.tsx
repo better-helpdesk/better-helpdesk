@@ -90,6 +90,8 @@ const routes: Record<string, unknown> = {
   'agent/agents/': { agents: [] },
   'agent/canned/': { replies: [] },
   'agent/tags/': { tags: ['billing', 'vip'] },
+  'agent/views/': { views: [] },
+  'agent/notifications/': { unread: 0, notifications: [] },
   'agent/settings/': { confirmation: {} },
   'agent/deals/': { deals: [] },
   'agent/overview/?days=30': {
@@ -148,6 +150,101 @@ afterEach(() => {
 });
 
 describe('HelpdeskAdmin', () => {
+  it('links a conversation reference in a message to the inbox search for it', async () => {
+    const base = original as { messages: { body: string }[] };
+    routes['agent/conversations/c1/'] = {
+      ...base,
+      messages: [
+        { ...base.messages[0], body: 'Same as DG-1001, please check' },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const link = await screen.findByRole('link', { name: 'DG-1001' });
+    expect(link.getAttribute('href')).toBe(
+      '/support/conversations/?q=DG-1001&status=any'
+    );
+
+    fireEvent.click(link);
+    expect(window.location.search).toBe('?q=DG-1001&status=any');
+  });
+
+  it('offers the host’s links for the customer beside the conversation', async () => {
+    routes['agent/conversations/c1/'] = {
+      ...(original as object),
+      links: [
+        {
+          label: { en: 'Open in Acme admin', de: 'In Acme öffnen' },
+          url: 'https://app.test/users/7',
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    // sessionStorage is cleared before each test, so the open panel stays in this one.
+    vi.stubGlobal('localStorage', sessionStorage);
+    localStorage.setItem('helpdesk.aside', 'open');
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const link = await screen.findByRole('link', {
+      name: /Open in Acme admin/,
+    });
+    expect(link.getAttribute('href')).toBe('https://app.test/users/7');
+    expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  it('blocks a sender from their contact page and marks them blocked', async () => {
+    let blocked = false;
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/contacts/p1/')) {
+          if (init?.method === 'PATCH') {
+            patches.push(JSON.parse(String(init.body)));
+            blocked = true;
+            return new Response(JSON.stringify({ contact: {} }));
+          }
+          return new Response(
+            JSON.stringify({
+              contact: {
+                id: 'p1',
+                name: 'Spam Bot',
+                email: 'spam@bot.test',
+                companyId: null,
+                leadStage: null,
+                tags: [],
+                custom: {},
+                blocked,
+                createdAt: new Date().toISOString(),
+              },
+              identities: [],
+              company: null,
+              conversations: [],
+              timeline: [],
+              deals: [],
+            })
+          );
+        }
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/contacts/p1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Block sender' })
+    );
+
+    await waitFor(() => expect(patches).toEqual([{ blocked: true }]));
+    expect(await screen.findByText('Blocked')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Unblock sender' })).toBeTruthy();
+  });
+
   it('lists waiting conversations and opens one as a deep link', async () => {
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
     const row = await screen.findByRole('link', { name: /DG-1000/ });
@@ -156,6 +253,138 @@ describe('HelpdeskAdmin', () => {
     fireEvent.click(row);
     expect(window.location.pathname).toBe('/support/conversations/c1/');
     expect(await screen.findByText('The CSV export fails')).toBeTruthy();
+  });
+
+  it('opens a saved view with its count, and saves the current filters as a new one', async () => {
+    routes['agent/views/'] = {
+      views: [
+        {
+          id: 'v1',
+          name: 'Urgent anywhere',
+          query: 'status=any&priority=high',
+          shared: true,
+          count: 3,
+        },
+      ],
+    };
+    const { showModal, close } = HTMLDialogElement.prototype;
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+    onTestFinished(() => {
+      routes['agent/views/'] = { views: [] };
+      Object.assign(HTMLDialogElement.prototype, { showModal, close });
+    });
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posts.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ view: {} }), { status: 201 });
+        }
+        return respond(String(input));
+      })
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const views = await screen.findByRole('group', { name: 'Views' });
+    const view = await within(views).findByRole('button', {
+      name: /Urgent anywhere/,
+    });
+    expect(view.textContent).toBe('Urgent anywhere 3');
+
+    fireEvent.click(view);
+    expect(window.location.search).toBe('?status=any&priority=high');
+    await waitFor(() => expect(view.ariaPressed).toBe('true'));
+    expect(
+      within(views).getByRole('button', { name: 'Delete view' })
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unassigned' }));
+    fireEvent.click(
+      await within(views).findByRole('button', { name: 'Save as view' })
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Up for grabs' },
+    });
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Share with the team' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(posts).toEqual([
+        {
+          name: 'Up for grabs',
+          query: 'status=any&assignee=none&priority=high',
+          shared: true,
+        },
+      ])
+    );
+  });
+
+  it('counts new notifications on the bell and in the tab title, marks them seen when opened, and opens their conversation', async () => {
+    routes['agent/notifications/'] = {
+      unread: 2,
+      notifications: [
+        {
+          kind: 'reply',
+          conversationId: 'c1',
+          reference: 'DG-1000',
+          subject: 'Export broken',
+          who: 'Ada',
+          at: new Date().toISOString(),
+        },
+        {
+          kind: 'assigned',
+          conversationId: 'c1',
+          reference: 'DG-1000',
+          subject: 'Export broken',
+          who: null,
+          at: new Date().toISOString(),
+        },
+      ],
+    };
+    document.title = 'Support';
+    onTestFinished(() => {
+      routes['agent/notifications/'] = { unread: 0, notifications: [] };
+      document.title = '';
+    });
+    const posts: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posts.push(String(input));
+          routes['agent/notifications/'] = {
+            ...(routes['agent/notifications/'] as object),
+            unread: 0,
+          };
+          return new Response(JSON.stringify({ ok: true }));
+        }
+        return respond(String(input));
+      })
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const bell = await screen.findByLabelText('Notifications, 2 new');
+    await waitFor(() => expect(document.title).toBe('(2) Support'));
+
+    fireEvent.click(bell);
+    (bell.parentElement as HTMLDetailsElement).open = true;
+    fireEvent(bell.parentElement as Element, new Event('toggle'));
+    await waitFor(() =>
+      expect(posts.some(p => p.endsWith('agent/notifications/seen/'))).toBe(
+        true
+      )
+    );
+    await waitFor(() => expect(document.title).toBe('Support'));
+    expect(screen.getByText('Someone assigned DG-1000 to you')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Ada replied in DG-1000'));
+    expect(window.location.pathname).toBe('/support/conversations/c1/');
   });
 
   it('shows the open count on each assignee tab and keeps it while another tab loads', async () => {
@@ -600,6 +829,44 @@ describe('HelpdeskAdmin', () => {
     expect(
       screen.getByRole('textbox', { name: 'Internal note' }).textContent
     ).toBe('Ask billing first');
+  });
+
+  it('shortens, formalises or translates what the agent wrote, in place', async () => {
+    routes['agent/me/'] = { ...me, ai: true };
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (String(input).endsWith('agent/conversations/c1/draft/')) {
+          posts.push(JSON.parse(String(init?.body)));
+          return new Response(JSON.stringify({ text: 'Bitte lesen Sie das.' }));
+        }
+        return respond(String(input));
+      })
+    );
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    expect(screen.queryByRole('button', { name: 'Shorten' })).toBeNull();
+    reply.innerHTML = 'Please read this.';
+    fireEvent.input(reply);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Into the customer’s language',
+      })
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Reply' }).textContent).toBe(
+        'Bitte lesen Sie das.'
+      )
+    );
+    expect(posts).toEqual([{ mode: 'translate', text: 'Please read this.' }]);
+    expect(screen.getByRole('button', { name: 'Shorten' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'More formal' })).toBeTruthy();
   });
 
   it('never shows a draft to another agent signed in to the same browser', async () => {

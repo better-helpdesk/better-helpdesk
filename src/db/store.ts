@@ -65,12 +65,65 @@ export type InboxFilter = {
   companyId?: string;
   tag?: string;
   query?: string;
+  /** `high` keeps high and urgent conversations only. */
+  priority?: 'high';
   /** Longest waiting first by default; `priority` puts urgent and high on top. */
   sort?: 'waiting' | 'priority';
   limit?: number;
 };
 
 const MAX_ATTEMPTS = 5;
+
+const notBlocked = sql`${conversations.contactId} NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)`;
+
+/** The filters of the agent inbox, shared by its list and its counts. */
+function inboxConditions(filter: InboxFilter) {
+  const q = filter.query?.trim();
+  const conditions: (SQL | undefined)[] = [
+    filter.inbox ? eq(conversations.inbox, filter.inbox) : undefined,
+    filter.status === 'snoozed'
+      ? and(
+          eq(conversations.status, 'pending'),
+          isNotNull(conversations.snoozedUntil)
+        )
+      : filter.status === 'rated-bad'
+        ? eq(conversations.rating, 'bad')
+        : filter.status
+          ? eq(conversations.status, filter.status)
+          : undefined,
+    filter.assigneeId === null
+      ? isNull(conversations.assigneeId)
+      : filter.assigneeId
+        ? eq(conversations.assigneeId, filter.assigneeId)
+        : undefined,
+    filter.contactId
+      ? eq(conversations.contactId, filter.contactId)
+      : undefined,
+    filter.companyId
+      ? eq(conversations.companyId, filter.companyId)
+      : undefined,
+    filter.tag ? arrayContains(conversations.tags, [filter.tag]) : undefined,
+    filter.priority === 'high'
+      ? inArray(conversations.priority, ['high', 'urgent'])
+      : undefined,
+    // A blocked sender's conversations stay on their contact page only.
+    filter.contactId ? undefined : notBlocked,
+  ];
+  if (q) {
+    const number = Number(q.replace(/^\D+-/, ''));
+    conditions.push(
+      or(
+        sql`${conversations.search} @@ websearch_to_tsquery('simple', ${q})`,
+        sql`${conversations.id} IN (SELECT conversation_id FROM helpdesk.message WHERE search @@ websearch_to_tsquery('simple', ${q}))`,
+        // `number` is an int4; a longer digit run is text, not a reference.
+        Number.isSafeInteger(number) && number <= 2_147_483_647
+          ? eq(conversations.number, number)
+          : undefined
+      )
+    );
+  }
+  return conditions;
+}
 
 /** The Postgres adapter. It shares the host's pool and never opens its own. */
 export function postgresAdapter({ pool }: { pool: Pool }) {
@@ -153,6 +206,32 @@ export function createStore(db: Db) {
         }
         return contact;
       });
+    },
+
+    /** Whether a blocked contact holds this address, as its email or as one merged into it. */
+    async isEmailBlocked(email: string) {
+      const result = await db.execute(sql`
+        SELECT 1 FROM helpdesk.contact c
+        WHERE c.blocked AND (
+          c.email = ${email}
+          OR EXISTS (
+            SELECT 1 FROM helpdesk.identity i
+            WHERE i.contact_id = c.id AND i.channel = 'email' AND i.external_id = ${email}
+          )
+        )
+        LIMIT 1`);
+      return result.rows.length > 0;
+    },
+
+    /** The oldest contact with this address, however it was proven. */
+    async findContactByEmail(email: string) {
+      const [row] = await db
+        .select()
+        .from(contacts)
+        .where(eq(contacts.email, email))
+        .orderBy(asc(contacts.createdAt))
+        .limit(1);
+      return row ?? null;
     },
 
     async addIdentity(contactId: string, identity: IdentityInput) {
@@ -318,6 +397,8 @@ export function createStore(db: Db) {
               email: sql`coalesce(${contacts.email}, ${source.email})`,
               name: sql`coalesce(${contacts.name}, ${source.name})`,
               companyId: sql`coalesce(${contacts.companyId}, ${source.companyId}::uuid)`,
+              // A block on either side holds for the merged person.
+              blocked: sql`${contacts.blocked} OR ${source.blocked}`,
             })
             .where(eq(contacts.id, targetId));
         }
@@ -358,6 +439,17 @@ export function createStore(db: Db) {
         .select()
         .from(companies)
         .where(eq(companies.id, id));
+      return row ?? null;
+    },
+
+    /** The oldest company with this name, ignoring case. */
+    async findCompanyByName(name: string) {
+      const [row] = await db
+        .select()
+        .from(companies)
+        .where(sql`lower(${companies.name}) = lower(${name})`)
+        .orderBy(asc(companies.createdAt))
+        .limit(1);
       return row ?? null;
     },
 
@@ -500,6 +592,11 @@ export function createStore(db: Db) {
         .from(settings)
         .where(eq(settings.key, key));
       return (row?.value as T | undefined) ?? null;
+    },
+
+    /** Stores the value unless the key already has one. */
+    async addSetting(key: string, value: unknown) {
+      await db.insert(settings).values({ key, value }).onConflictDoNothing();
     },
 
     async setSetting(key: string, value: unknown) {
@@ -744,47 +841,7 @@ export function createStore(db: Db) {
     },
 
     async listInbox(filter: InboxFilter) {
-      const q = filter.query?.trim();
-      const conditions: (SQL | undefined)[] = [
-        filter.inbox ? eq(conversations.inbox, filter.inbox) : undefined,
-        filter.status === 'snoozed'
-          ? and(
-              eq(conversations.status, 'pending'),
-              isNotNull(conversations.snoozedUntil)
-            )
-          : filter.status === 'rated-bad'
-            ? eq(conversations.rating, 'bad')
-            : filter.status
-              ? eq(conversations.status, filter.status)
-              : undefined,
-        filter.assigneeId === null
-          ? isNull(conversations.assigneeId)
-          : filter.assigneeId
-            ? eq(conversations.assigneeId, filter.assigneeId)
-            : undefined,
-        filter.contactId
-          ? eq(conversations.contactId, filter.contactId)
-          : undefined,
-        filter.companyId
-          ? eq(conversations.companyId, filter.companyId)
-          : undefined,
-        filter.tag
-          ? arrayContains(conversations.tags, [filter.tag])
-          : undefined,
-      ];
-      if (q) {
-        const number = Number(q.replace(/^\D+-/, ''));
-        conditions.push(
-          or(
-            sql`${conversations.search} @@ websearch_to_tsquery('simple', ${q})`,
-            sql`${conversations.id} IN (SELECT conversation_id FROM helpdesk.message WHERE search @@ websearch_to_tsquery('simple', ${q}))`,
-            // `number` is an int4; a longer digit run is text, not a reference.
-            Number.isSafeInteger(number) && number <= 2_147_483_647
-              ? eq(conversations.number, number)
-              : undefined
-          )
-        );
-      }
+      const conditions = inboxConditions(filter);
       return db
         .select({ conversation: conversations, contact: contacts })
         .from(conversations)
@@ -803,6 +860,14 @@ export function createStore(db: Db) {
           desc(conversations.lastMessageAt)
         )
         .limit(filter.limit ?? 200);
+    },
+
+    async countInbox(filter: InboxFilter) {
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversations)
+        .where(and(...inboxConditions(filter)));
+      return row?.count ?? 0;
     },
 
     /** The newest public message of each conversation, for list previews. */
@@ -938,6 +1003,67 @@ export function createStore(db: Db) {
         );
     },
 
+    /**
+     * What happened for an agent lately: assignments and mentions by
+     * colleagues, and customer replies on conversations assigned to them since
+     * they got them. Derived from events and messages, newest first.
+     */
+    async notificationsFor(agentId: string, limit = 30) {
+      const result = await db.execute<{
+        kind: 'assigned' | 'mentioned' | 'reply';
+        conversation_id: string;
+        number: number;
+        subject: string | null;
+        who: string | null;
+        at: string;
+      }>(sql`
+        WITH n AS (
+          SELECT 'assigned' AS kind, e.conversation_id, e.created_at AS at, a.name AS who
+          FROM helpdesk.conversation_event e
+          LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
+          WHERE e.kind = 'assigneeId' AND e.data->>'to' = ${agentId}
+            AND e.agent_id IS DISTINCT FROM ${agentId}::uuid
+            AND e.created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'mentioned', e.conversation_id, e.created_at, a.name
+          FROM helpdesk.conversation_event e
+          LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
+          WHERE e.kind = 'mentioned' AND e.data->'agentIds' ? ${agentId}
+            AND e.created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'reply', m.conversation_id, m.created_at, coalesce(ct.name, ct.email)
+          FROM helpdesk.message m
+          JOIN helpdesk.conversation c ON c.id = m.conversation_id
+          LEFT JOIN helpdesk.contact ct ON ct.id = m.contact_id
+          WHERE m.author_type = 'contact' AND NOT m.internal
+            AND c.assignee_id = ${agentId}::uuid
+            AND m.created_at > now() - interval '30 days'
+            AND m.created_at > coalesce(
+              (SELECT max(created_at) FROM helpdesk.conversation_event
+                WHERE conversation_id = c.id AND kind = 'assigneeId' AND data->>'to' = ${agentId}),
+              c.created_at)
+        )
+        SELECT n.kind, n.conversation_id, c.number, coalesce(c.title, c.subject) AS subject,
+          n.who, to_char(n.at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
+        FROM n JOIN helpdesk.conversation c ON c.id = n.conversation_id
+        ORDER BY n.at DESC
+        LIMIT ${limit}`);
+      return result.rows;
+    },
+
+    async notificationsSeenAt(agentId: string) {
+      return this.getSetting<string>(`notifications-seen:${agentId}`);
+    },
+
+    // The database's clock, as the notifications it is compared with use.
+    async markNotificationsSeen(agentId: string) {
+      await db.execute(sql`
+        INSERT INTO helpdesk.setting (key, value)
+        VALUES (${`notifications-seen:${agentId}`},
+          to_jsonb(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now()`);
+    },
+
     async countOpen(agentId: string) {
       const [row] = await db
         .select({
@@ -946,7 +1072,7 @@ export function createStore(db: Db) {
           unassigned: sql<number>`(count(*) FILTER (WHERE ${conversations.assigneeId} IS NULL))::int`,
         })
         .from(conversations)
-        .where(eq(conversations.status, 'open'));
+        .where(and(eq(conversations.status, 'open'), notBlocked));
       return row ?? { all: 0, mine: 0, unassigned: 0 };
     },
 
@@ -958,7 +1084,8 @@ export function createStore(db: Db) {
           and(
             isNotNull(conversations.waitingSince),
             ne(conversations.status, 'resolved'),
-            isNull(conversations.snoozedUntil)
+            isNull(conversations.snoozedUntil),
+            notBlocked
           )
         );
       return row?.count ?? 0;
@@ -1369,6 +1496,7 @@ export function createStore(db: Db) {
       const result = await db.execute<{ id: string }>(sql`
         UPDATE helpdesk.conversation SET reminded_at = now()
         WHERE inbox = ${inbox}
+          AND contact_id NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)
           AND status <> 'resolved'
           AND snoozed_until IS NULL
           AND waiting_since IS NOT NULL

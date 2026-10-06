@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import type { CustomFieldDef } from '../config';
+import type { CustomFieldDef, HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { relativeTime } from '../ui/i18n';
 import { useAdmin } from './context';
@@ -12,6 +12,7 @@ import {
   Avatar,
   Dialog,
   Empty,
+  HostLinks,
   LoadError,
   money,
   paths,
@@ -31,6 +32,7 @@ type Contact = {
   leadStage: string | null;
   tags: string[];
   custom: Record<string, string | number | null>;
+  blocked?: boolean;
   createdAt: string;
 };
 
@@ -313,6 +315,7 @@ export function ContactView({ id }: { id: string }) {
           externalId: string | null;
         }[];
         company: Company | null;
+        links: HostLink[];
         conversations: ConversationRow[];
         timeline: TimelineEntry[];
         deals: Deal[];
@@ -379,6 +382,11 @@ export function ContactView({ id }: { id: string }) {
                 {tag}
               </span>
             ))}
+            {c.blocked && (
+              <span className="sa-pill sa-pill-danger">
+                {t('admin.blocked')}
+              </span>
+            )}
             {c.source && (
               <span className="sa-fine">
                 {t('admin.sourceLine', { source: c.source })}
@@ -402,6 +410,19 @@ export function ContactView({ id }: { id: string }) {
               className="sa-btn sa-ghost"
               onClick={() => setMerging(true)}>
               {t('admin.merge')}
+            </button>
+            <button
+              type="button"
+              className="sa-btn sa-ghost"
+              title={c.blocked ? undefined : t('admin.blockHint')}
+              onClick={async () => {
+                await api(`agent/contacts/${id}`, {
+                  method: 'PATCH',
+                  body: { blocked: !c.blocked },
+                });
+                await detail.refresh();
+              }}>
+              {t(c.blocked ? 'admin.unblock' : 'admin.block')}
             </button>
             <button
               type="button"
@@ -435,6 +456,7 @@ export function ContactView({ id }: { id: string }) {
           )}
         </div>
         <aside className="sa">
+          <HostLinks links={data.links} locale={locale} />
           <div className="sa-card">
             <h3>{t('admin.company')}</h3>
             {data.company ? (
@@ -685,12 +707,13 @@ export function CompanyList() {
 }
 
 export function CompanyView({ id }: { id: string }) {
-  const { api, t, me, navigate, href } = useAdmin();
+  const { api, t, me, navigate, href, locale } = useAdmin();
   const detail = useResource(
     () =>
       api<{
         company: Company;
         context: Record<string, string>;
+        links: HostLink[];
         contacts: Contact[];
         conversations: ConversationRow[];
         timeline: TimelineEntry[];
@@ -754,6 +777,7 @@ export function CompanyView({ id }: { id: string }) {
           )}
         </div>
         <aside className="sa">
+          <HostLinks links={data.links} locale={locale} />
           {Object.keys(data.context).length > 0 && (
             <div className="sa-card">
               <h3>{t('admin.customerContext')}</h3>

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { signIdentityToken } from '../src';
 import { createHarness, IDENTITY_SECRET, WWW_ORIGIN } from './harness';
@@ -87,6 +87,23 @@ describe('in-app conversations', () => {
       },
     });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('seen by an agent', () => {
+  it('tells the customer when an agent has opened their latest message', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada');
+    const thread = () =>
+      h.call('GET', `widget/conversations/${conversation.id}`, { user: 'ada' });
+
+    expect((await thread()).data.conversation.agentSeenAt).toBeNull();
+    await h.call('GET', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+    });
+    const seen = (await thread()).data;
+    expect(seen.conversation.agentSeenAt).toBe(seen.messages[0].createdAt);
   });
 });
 
@@ -577,6 +594,23 @@ describe('attachments', () => {
       { user: 'bob' }
     );
     expect(other.status).toBe(404);
+    // Through a conversation Bob can see, the file is still not his.
+    const bobs = await openBug('bob');
+    const borrowed = await h.call(
+      'GET',
+      `widget/conversations/${bobs.id}/attachments/${id}`,
+      { user: 'bob' }
+    );
+    expect(borrowed.status).toBe(404);
+
+    h.addUser('agent', { isAgent: true });
+    const agent = (conversationId: string, user = 'agent') =>
+      h.call('GET', `agent/conversations/${conversationId}/attachments/${id}`, {
+        user,
+      });
+    expect((await agent(conversation.id)).status).toBe(302);
+    expect((await agent(bobs.id)).status).toBe(404);
+    expect((await agent(conversation.id, 'ada')).status).toBe(403);
   });
 
   it('refuses an executable content type', async () => {
@@ -835,5 +869,107 @@ describe('host identity tokens', () => {
       },
     });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('rating from the email', () => {
+  async function resolvedReply(user: string) {
+    h.addUser(user);
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug(user);
+    await h.call('POST', `agent/conversations/${conversation.id}/messages`, {
+      user: 'agent',
+      body: { body: 'Fixed in the latest release.' },
+    });
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'resolved' },
+    });
+    await h.runDueJobs();
+    const email = h.emails.find(e => e.kind === 'customer-reply');
+    if (email?.kind !== 'customer-reply') throw new Error('no reply email');
+    return { conversation, links: email.ratingLinks };
+  }
+  const open = (url: string, method = 'GET') =>
+    h.support.handler(new Request(url, { method }));
+  const rating = async (id: string) =>
+    (
+      await rows<{ rating: string | null; status: string }>(
+        sql`SELECT rating, status FROM helpdesk.conversation WHERE id = ${id}::uuid`
+      )
+    )[0];
+
+  it('records a rating once, from the button on the page the link opens', async () => {
+    const { conversation, links } = await resolvedReply('ada');
+    if (!links) throw new Error('no rating links');
+
+    const landing = await open(links.good);
+    expect(landing.status).toBe(200);
+    expect(await landing.text()).toContain('<form method="post">');
+    // A mail scanner opening every link casts nothing.
+    await open(links.bad);
+    expect(await rating(conversation.id)).toEqual({
+      rating: null,
+      status: 'resolved',
+    });
+
+    const done = await open(links.good, 'POST');
+    expect(done.status).toBe(200);
+    expect(await done.text()).toContain('Thank you for rating');
+    expect(await rating(conversation.id)).toEqual({
+      rating: 'good',
+      status: 'resolved',
+    });
+    expect(await (await open(links.bad, 'POST')).text()).toContain(
+      'has been rated already'
+    );
+    expect(await rating(conversation.id)).toMatchObject({ rating: 'good' });
+
+    const forged = new URL(links.good);
+    forged.searchParams.set('r', 'bad');
+    expect((await open(forged.toString(), 'POST')).status).toBe(404);
+  });
+
+  it('refuses an expired link, and offers no button once the conversation is open again', async () => {
+    const { conversation, links } = await resolvedReply('dora');
+    if (!links) throw new Error('no rating links');
+    vi.useFakeTimers({ now: Date.now() + 31 * 86_400_000, toFake: ['Date'] });
+    try {
+      expect((await open(links.good)).status).toBe(404);
+    } finally {
+      vi.useRealTimers();
+    }
+    await h.call('PATCH', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+      body: { status: 'open' },
+    });
+    const reopened = await open(links.good);
+    expect(reopened.status).toBe(409);
+    expect(await reopened.text()).not.toContain('<form');
+  });
+
+  it('opens the conversation again for a bad rating', async () => {
+    const { conversation, links } = await resolvedReply('bob');
+    if (!links) throw new Error('no rating links');
+    await open(links.bad, 'POST');
+    expect(await rating(conversation.id)).toEqual({
+      rating: 'bad',
+      status: 'open',
+    });
+  });
+
+  it('adds no rating links to a reply on an open conversation', async () => {
+    h.addUser('cleo');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('cleo');
+    await h.call('POST', `agent/conversations/${conversation.id}/messages`, {
+      user: 'agent',
+      body: { body: 'Looking into it.' },
+    });
+    await h.runDueJobs();
+    const email = h.emails.find(e => e.kind === 'customer-reply');
+    expect(
+      email && 'ratingLinks' in email ? email.ratingLinks : undefined
+    ).toBeUndefined();
   });
 });

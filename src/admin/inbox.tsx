@@ -5,6 +5,7 @@ import { openCutoff } from '../ui/hours';
 import { duration } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
+import { NotificationBell } from './notifications';
 import { formatSnooze } from './snooze';
 import {
   Avatar,
@@ -24,6 +25,7 @@ import {
   type Viewer,
   ViewerStack,
 } from './ui';
+import { SavedViews } from './views';
 
 export type ConversationRow = {
   id: string;
@@ -243,6 +245,7 @@ export function Inbox() {
             {t('admin.sort')}: {t('admin.sortPriority')}
           </option>
         </select>
+        {!nav && <NotificationBell />}
         {!nav && <AwayControl />}
         <label className="sa-toggle">
           <input
@@ -269,6 +272,7 @@ export function Inbox() {
           )
         )}
       </div>
+      <SavedViews filters={filters} canSave={filtered} />
       <p className="sa-sr-only" role="status">
         {visibleSelected.length > 0
           ? t('admin.selected', { count: String(visibleSelected.length) })

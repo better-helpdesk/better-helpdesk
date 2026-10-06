@@ -21,13 +21,41 @@ export const roleFromCookie = (value: string | undefined): DemoRole =>
 export const demoEnabled = () => Boolean(process.env.DEMO_DATABASE_URL);
 
 const cache = globalThis as typeof globalThis & { demoPool?: pg.Pool };
-cache.demoPool ??= new pg.Pool({
-  connectionString: process.env.DEMO_DATABASE_URL,
-  ssl:
-    process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  max: 4,
-});
+if (!cache.demoPool) {
+  cache.demoPool = new pg.Pool({
+    connectionString: process.env.DEMO_DATABASE_URL,
+    ssl:
+      process.env.DATABASE_SSL === 'true'
+        ? { rejectUnauthorized: false }
+        : false,
+    max: 4,
+    // The demo page waits on it; an unreachable host should fail fast.
+    connectionTimeoutMillis: 5_000,
+  });
+  cache.demoPool.on('connect', client =>
+    client.on('error', error =>
+      console.error('[demo] database connection lost', error)
+    )
+  );
+  cache.demoPool.on('error', () => {});
+}
 const pool = cache.demoPool;
+
+export const NEWEST_ROWS_SQL = `select c.number, m.author_type, left(m.body, 80) as body, m.created_at
+from helpdesk.message m join helpdesk.conversation c on c.id = m.conversation_id
+where not m.internal
+order by m.created_at desc limit 5`;
+
+/** The demo's five newest customer-visible messages, read straight from its tables. */
+export async function newestRows() {
+  const { rows } = await pool.query<{
+    number: number;
+    author_type: string;
+    body: string;
+    created_at: Date;
+  }>(NEWEST_ROWS_SQL);
+  return rows;
+}
 
 const IDENTITIES = {
   customer: {

@@ -63,11 +63,15 @@ export const contacts = helpdesk.table(
     tags: text('tags').array().notNull().default(sql`'{}'`),
     custom: jsonb('custom').$type<CustomValues>().notNull().default({}),
     locale: text('locale'),
+    /** Refused as a sender, and their conversations left out of the inbox. */
+    blocked: boolean('blocked').notNull().default(false),
     createdAt: createdAt(),
     lastSeenAt: ts('last_seen_at'),
   },
   t => [
     index('contact_company_idx').on(t.companyId),
+    // Every widget submission and inbound mail asks whether a blocked contact holds the address.
+    index('contact_blocked_idx').on(t.id).where(sql`${t.blocked}`),
     index('contact_email_idx').on(t.email),
   ]
 );

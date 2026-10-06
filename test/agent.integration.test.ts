@@ -376,6 +376,278 @@ describe('jobs and email', () => {
   });
 });
 
+describe('host links', () => {
+  it('asks the host for links with its own ids, and passes only web links on', async () => {
+    const asked: unknown[] = [];
+    const linked = createHarness({
+      links: (contact, company) => {
+        asked.push({ contact, company });
+        return [
+          {
+            label: { en: 'Admin', de: 'Verwaltung' },
+            url: `https://app.test/users/${contact?.userId ?? company?.orgId}`,
+          },
+          { label: { en: 'Bad' }, url: 'javascript:alert(1)' },
+          { label: { en: 'Broken' }, url: 'not a url' },
+        ];
+      },
+    });
+    try {
+      linked.addUser('ada', { orgs: [orgA] });
+      linked.addUser('agent', { isAgent: true });
+      const res = await linked.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: {
+          inbox: 'support',
+          type: 'question',
+          body: 'Hi',
+          orgId: orgA.id,
+        },
+      });
+      const id = res.data.conversation.id as string;
+      const detail = (
+        await linked.call('GET', `agent/conversations/${id}`, { user: 'agent' })
+      ).data;
+      expect(detail.links).toEqual([
+        {
+          label: { en: 'Admin', de: 'Verwaltung' },
+          url: 'https://app.test/users/user-ada',
+        },
+      ]);
+      expect(asked[0]).toMatchObject({
+        contact: { email: 'ada@example.test', userId: 'user-ada' },
+        company: { orgId: orgA.id, name: orgA.name },
+      });
+
+      const company = (
+        await linked.call('GET', `agent/companies/${detail.company.id}`, {
+          user: 'agent',
+        })
+      ).data;
+      expect(company.links.map((l: { url: string }) => l.url)).toEqual([
+        `https://app.test/users/${orgA.id}`,
+      ]);
+      const contact = (
+        await linked.call('GET', `agent/contacts/${detail.contact.id}`, {
+          user: 'agent',
+        })
+      ).data;
+      expect(contact.links).toHaveLength(1);
+    } finally {
+      await linked.close();
+    }
+  });
+
+  it('shows no links rather than an error when the hook throws', async () => {
+    const broken = createHarness({
+      links: () => {
+        throw new Error('CRM down');
+      },
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      broken.addUser('ada');
+      broken.addUser('agent', { isAgent: true });
+      const res = await broken.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Hi' },
+      });
+      const detail = await broken.call(
+        'GET',
+        `agent/conversations/${res.data.conversation.id}`,
+        { user: 'agent' }
+      );
+      expect(detail.status).toBe(200);
+      expect(detail.data.links).toEqual([]);
+    } finally {
+      error.mockRestore();
+      await broken.close();
+    }
+  });
+});
+
+describe('notifications', () => {
+  it('tells an agent what colleagues and their customers did, and counts what is new since they last looked', async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('lead', { isAgent: true });
+    h.addUser('ada');
+    const me = (await h.call('GET', 'agent/me', { user: 'agent' })).data.agent
+      .id as string;
+    await h.call('GET', 'agent/me', { user: 'lead' });
+    const first = await open('ada');
+    const second = await open('ada');
+    const feed = async () =>
+      (await h.call('GET', 'agent/notifications', { user: 'agent' })).data as {
+        unread: number;
+        notifications: { kind: string; reference: string; who: string }[];
+      };
+
+    // Taking a conversation yourself is no news, and neither is the message it already had.
+    await h.call('PATCH', `agent/conversations/${second.id}`, {
+      user: 'agent',
+      body: { assigneeId: me },
+    });
+    expect(await feed()).toEqual({ unread: 0, notifications: [] });
+
+    await h.call('PATCH', `agent/conversations/${first.id}`, {
+      user: 'lead',
+      body: { assigneeId: me },
+    });
+    await h.call('POST', `agent/conversations/${first.id}/messages`, {
+      user: 'lead',
+      body: { body: 'Can you take this?', internal: true, notify: [me] },
+    });
+    await h.call('POST', `widget/conversations/${first.id}/messages`, {
+      user: 'ada',
+      body: { body: 'Any news?' },
+    });
+
+    const all = await feed();
+    expect(all.unread).toBe(3);
+    expect(all.notifications.map(n => [n.kind, n.reference, n.who])).toEqual([
+      ['reply', first.reference, 'ada'],
+      ['mentioned', first.reference, 'lead'],
+      ['assigned', first.reference, 'lead'],
+    ]);
+
+    await h.call('POST', 'agent/notifications/seen', {
+      user: 'agent',
+      body: {},
+    });
+    expect((await feed()).unread).toBe(0);
+    await h.call('POST', `widget/conversations/${first.id}/messages`, {
+      user: 'ada',
+      body: { body: 'Hello?' },
+    });
+    expect((await feed()).unread).toBe(1);
+    expect(
+      (await h.call('GET', 'agent/notifications', { user: 'lead' })).data
+        .notifications
+    ).toEqual([]);
+  });
+});
+
+describe('saved views', () => {
+  beforeEach(async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('lead', { isAgent: true });
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    await h.call('GET', 'agent/me', { user: 'lead' });
+  });
+
+  const save = (user: string, body: Record<string, unknown>) =>
+    h.call('POST', 'agent/views', { user, body });
+  const views = async (user: string) =>
+    (await h.call('GET', 'agent/views', { user })).data.views as {
+      id: string;
+      name: string;
+      query: string;
+      shared: boolean;
+      count: number;
+    }[];
+
+  it('keeps a personal view to its agent and shows a shared one to everyone, with counts', async () => {
+    h.addUser('ada');
+    h.addUser('bob');
+    const urgent = await open('ada');
+    await open('bob');
+    await h.call('PATCH', `agent/conversations/${urgent.id}`, {
+      user: 'agent',
+      body: { priority: 'urgent' },
+    });
+
+    expect(
+      (
+        await save('agent', {
+          name: 'Unassigned',
+          query: 'assignee=none&status=open&page=2',
+        })
+      ).status
+    ).toBe(201);
+    expect(
+      (
+        await save('lead', {
+          name: 'Urgent and high',
+          query: 'status=any&priority=high',
+          shared: true,
+        })
+      ).status
+    ).toBe(201);
+
+    expect(await views('agent')).toMatchObject([
+      {
+        name: 'Unassigned',
+        query: 'status=open&assignee=none',
+        shared: false,
+        count: 2,
+      },
+      {
+        name: 'Urgent and high',
+        query: 'status=any&priority=high',
+        shared: true,
+        count: 1,
+      },
+    ]);
+    expect((await views('lead')).map(v => v.name)).toEqual(['Urgent and high']);
+  });
+
+  it('renames and deletes a view, and finds no view of another agent', async () => {
+    const mine = (await save('agent', { name: 'Mine', query: 'assignee=me' }))
+      .data.view;
+    expect(
+      (
+        await h.call('PATCH', `agent/views/${mine.id}`, {
+          user: 'lead',
+          body: { name: 'Taken' },
+        })
+      ).status
+    ).toBe(404);
+    await h.call('PATCH', `agent/views/${mine.id}`, {
+      user: 'agent',
+      body: { name: 'My queue' },
+    });
+    expect((await views('agent')).map(v => v.name)).toEqual(['My queue']);
+    expect(
+      (await h.call('DELETE', `agent/views/${mine.id}`, { user: 'agent' }))
+        .status
+    ).toBe(200);
+    expect(await views('agent')).toEqual([]);
+  });
+
+  it('refuses a view without a name or with a filter the inbox cannot apply, and views to anyone but an agent', async () => {
+    expect((await save('agent', { name: ' ', query: '' })).status).toBe(400);
+    expect(
+      (
+        await save('agent', {
+          name: 'Jane',
+          query: 'assignee=jane',
+          shared: true,
+        })
+      ).status
+    ).toBe(400);
+    // One stored before filters were checked still leaves the rest listed.
+    await h.support.store.setSetting('views:shared', [
+      { id: 'old', name: 'Old link', query: 'assignee=jane' },
+    ]);
+    await save('agent', { name: 'Mine', query: 'assignee=me' });
+    const listed = await h.call('GET', 'agent/views', { user: 'agent' });
+    expect(listed.status).toBe(200);
+    expect(
+      listed.data.views.map((v: { name: string; count: number | null }) => [
+        v.name,
+        v.count,
+      ])
+    ).toEqual([
+      ['Mine', 0],
+      ['Old link', null],
+    ]);
+    h.addUser('ada');
+    expect((await h.call('GET', 'agent/views', { user: 'ada' })).status).toBe(
+      403
+    );
+  });
+});
+
 describe('deletion', () => {
   it('hard-deletes an organization and its files, and keeps the same person’s other organization', async () => {
     h.addUser('ada', { orgs: [orgA, orgB] });
@@ -420,18 +692,37 @@ describe('deletion', () => {
     expect(await rows(sql`SELECT 1 FROM helpdesk.identity`)).toHaveLength(0);
   });
 
-  it('deletes resolved conversations past the retention period', async () => {
+  it('deletes resolved conversations past the retention period, with their files, and keeps the rest', async () => {
     const retained = createHarness({ retentionDays: 30 });
     try {
-      h.addUser('ada');
-      const conversation = await open('ada');
-      await retained.support.store.db.execute(
-        sql`UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '31 days' WHERE id = ${conversation.id}::uuid`
-      );
+      for (const user of ['ada', 'bob', 'cleo']) h.addUser(user);
+      const expired = await open('ada');
+      const stillOpen = await open('bob');
+      const recent = await open('cleo');
+      await retained.support.store.db.execute(sql`
+        UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '31 days'
+        WHERE id = ${expired.id}::uuid`);
+      await retained.support.store.db.execute(sql`
+        UPDATE helpdesk.conversation SET created_at = now() - interval '90 days'
+        WHERE id = ${stillOpen.id}::uuid`);
+      await retained.support.store.db.execute(sql`
+        UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '29 days'
+        WHERE id = ${recent.id}::uuid`);
+      const key = `support/${expired.id}/log.txt`;
+      await retained.storage.put(key, new Uint8Array([1]), 'text/plain');
+      await retained.support.store.db.execute(sql`
+        INSERT INTO helpdesk.attachment (conversation_id, key, filename, content_type, size, uploaded)
+        VALUES (${expired.id}::uuid, ${key}, 'log.txt', 'text/plain', 1, true)`);
+
       await retained.support.runJobs();
-      expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-        0
+
+      const kept = await rows<{ id: string }>(
+        sql`SELECT id FROM helpdesk.conversation`
       );
+      expect(kept.map(c => c.id).sort()).toEqual(
+        [stillOpen.id, recent.id].sort()
+      );
+      expect(retained.objects.has(key)).toBe(false);
     } finally {
       await retained.close();
     }

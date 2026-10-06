@@ -1,0 +1,1 @@
+CREATE INDEX "contact_blocked_idx" ON "helpdesk"."contact" USING btree ("id") WHERE "helpdesk"."contact"."blocked";

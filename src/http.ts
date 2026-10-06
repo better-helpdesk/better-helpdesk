@@ -1,10 +1,17 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
-import type { Agent, Conversation, Message } from './db/store';
+import type {
+  Agent,
+  Company,
+  Contact,
+  Conversation,
+  Message,
+} from './db/store';
+import { formatReference } from './domain';
 import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
@@ -17,6 +24,7 @@ import {
   MAX_ATTACHMENTS,
 } from './service';
 import { sourceOf } from './source';
+import { translator } from './ui/i18n';
 
 type Params = { id: string; attachmentId: string };
 type Route = {
@@ -30,6 +38,36 @@ type Route = {
     body: () => Promise<unknown>;
   }) => Promise<Response>;
 };
+
+const escapeHtml = (text: string) =>
+  text.replace(
+    /[&<>"']/g,
+    c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        c
+      ] ?? c
+  );
+
+/** A small page of its own, for links opened from an email; with `button`, a form that posts back to the same URL. */
+function page(locale: Locale, status: number, text: string, button?: string) {
+  const form = button
+    ? `<form method="post"><button type="submit">${escapeHtml(button)}</button></form>`
+    : '';
+  return new Response(
+    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${escapeHtml(text)}</title><style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;color:#0c2034}button{font:inherit;padding:.6rem 1.2rem;border:0;border-radius:8px;background:#0c2034;color:#f0f4f8;cursor:pointer}</style></head><body><p>${escapeHtml(text)}</p>${form}</body></html>`,
+    {
+      status,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        // The URL carries the signature.
+        'referrer-policy': 'no-referrer',
+        'content-security-policy': "frame-ancestors 'none'",
+        'x-frame-options': 'DENY',
+      },
+    }
+  );
+}
 
 const json = (data: unknown, status = 200, headers?: HeadersInit) =>
   new Response(JSON.stringify(data), {
@@ -52,6 +90,17 @@ type ConfirmationSetting = Partial<Record<Locale, string>>;
 // the database's; the app host's may drift from it.
 const dbNow = () => sql`now()` as unknown as Date;
 const MAX_TAGS = 50;
+const MAX_VIEWS = 50;
+/** The inbox filters a saved view keeps, in the order it stores them. */
+const VIEW_FILTERS = [
+  'inbox',
+  'status',
+  'assignee',
+  'q',
+  'tag',
+  'sort',
+  'priority',
+];
 // A message is at most 20,000 characters; this leaves room for its context.
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_INBOUND_BYTES = 25 * 1024 * 1024;
@@ -98,6 +147,8 @@ export function createHandler(support: Helpdesk) {
       c.waitingSince === null,
     rating: c.rating,
     merged: c.mergedIntoId !== null,
+    // The newest message an agent has opened the thread on; the widget shows "Seen" from it.
+    agentSeenAt: c.agentSeenAt,
     createdAt: c.createdAt,
   });
 
@@ -323,21 +374,14 @@ export function createHandler(support: Helpdesk) {
           comment: z.string().trim().max(2000).optional(),
         })
         .parse(await body());
-      const patch: Partial<Conversation> = {
-        rating: data.rating,
-        ratingComment: data.comment || null,
-        ratedAt: dbNow(),
-        ...(data.rating === 'bad' && {
-          status: 'open',
-          waitingSince: dbNow(),
-          resolvedAt: null,
-        }),
-      };
-      const updated = await store.rateConversation(conversation.id, patch);
+      const updated = await support.rateAsCustomer(
+        conversation,
+        data.rating,
+        data.comment
+      );
       if (!updated) {
         throw new HelpdeskError(409, 'Not open for a rating');
       }
-      await emitUpdated(config, conversation, updated, patch, null, 'customer');
       return json({ conversation: customerView(customer, updated) });
     }
   );
@@ -608,26 +652,35 @@ export function createHandler(support: Helpdesk) {
     return json({ ok: true });
   });
 
-  agentRoute('GET', 'conversations', async ({ url, agent }) => {
-    const p = url.searchParams;
+  /** The agent inbox's query parameters as a filter, for its list and for saved views. */
+  function inboxFilter(p: URLSearchParams, agentId: string) {
     const id = (key: string) => uuid.optional().parse(p.get(key) || undefined);
     const assignee = p.get('assignee');
+    const status = p.get('status');
+    return {
+      inbox: p.get('inbox') || undefined,
+      status: status && status !== 'any' ? status : undefined,
+      assigneeId:
+        assignee === 'me'
+          ? agentId
+          : assignee === 'none'
+            ? null
+            : id('assignee'),
+      contactId: id('contactId'),
+      companyId: id('companyId'),
+      tag: p.get('tag')?.trim().toLowerCase() || undefined,
+      query: p.get('q') || undefined,
+      priority: p.get('priority') === 'high' ? ('high' as const) : undefined,
+      sort:
+        p.get('sort') === 'priority'
+          ? ('priority' as const)
+          : ('waiting' as const),
+    };
+  }
+
+  agentRoute('GET', 'conversations', async ({ url, agent }) => {
     const [rows, counts] = await Promise.all([
-      store.listInbox({
-        inbox: p.get('inbox') || undefined,
-        status: p.get('status') || undefined,
-        assigneeId:
-          assignee === 'me'
-            ? agent.id
-            : assignee === 'none'
-              ? null
-              : id('assignee'),
-        contactId: id('contactId'),
-        companyId: id('companyId'),
-        tag: p.get('tag')?.trim().toLowerCase() || undefined,
-        query: p.get('q') || undefined,
-        sort: p.get('sort') === 'priority' ? 'priority' : 'waiting',
-      }),
+      store.listInbox(inboxFilter(url.searchParams, agent.id)),
       store.countOpen(agent.id),
     ]);
     const ids = rows.map(r => r.conversation.id);
@@ -649,6 +702,151 @@ export function createHandler(support: Helpdesk) {
       })),
     });
   });
+
+  type SavedView = { id: string; name: string; query: string };
+  const viewsKey = (agentId: string | null) =>
+    agentId ? `views:agent:${agentId}` : 'views:shared';
+  const readViews = async (key: string) =>
+    (await store.getSetting<SavedView[]>(key)) ?? [];
+  // ponytail: read-modify-write on one setting row; two agents saving shared views in the same instant can drop one.
+  async function findView(agentId: string, id: string) {
+    for (const key of [viewsKey(agentId), viewsKey(null)]) {
+      const views = await readViews(key);
+      if (views.some(v => v.id === id)) return { key, views };
+    }
+    throw new HelpdeskError(404, 'Not found');
+  }
+
+  agentRoute('GET', 'notifications', async ({ agent }) => {
+    const [rows, seenAt] = await Promise.all([
+      store.notificationsFor(agent.id),
+      store.notificationsSeenAt(agent.id),
+    ]);
+    return json({
+      unread: rows.filter(r => !seenAt || r.at > seenAt).length,
+      notifications: rows.map(r => ({
+        kind: r.kind,
+        conversationId: r.conversation_id,
+        reference: formatReference(config.referencePrefix, r.number),
+        subject: r.subject,
+        who: r.who,
+        at: r.at,
+      })),
+    });
+  });
+
+  agentRoute('POST', 'notifications/seen', async ({ agent }) => {
+    await store.markNotificationsSeen(agent.id);
+    return json({ ok: true });
+  });
+
+  agentRoute('GET', 'views', async ({ agent }) => {
+    const [own, shared] = await Promise.all([
+      readViews(viewsKey(agent.id)),
+      readViews(viewsKey(null)),
+    ]);
+    const views = [
+      ...own.map(v => ({ ...v, shared: false })),
+      ...shared.map(v => ({ ...v, shared: true })),
+    ];
+    // A view stored before its filters were checked must not hide the others.
+    const counts = await Promise.all(
+      views.map(v => {
+        try {
+          return store.countInbox(
+            inboxFilter(new URLSearchParams(v.query), agent.id)
+          );
+        } catch {
+          return null;
+        }
+      })
+    );
+    return json({ views: views.map((v, i) => ({ ...v, count: counts[i] })) });
+  });
+
+  agentRoute('POST', 'views', async ({ agent, body }) => {
+    const data = z
+      .object({
+        name: z.string().trim().min(1).max(80),
+        query: z.string().max(2000),
+        shared: z.boolean().default(false),
+      })
+      .parse(await body());
+    const given = new URLSearchParams(data.query);
+    const query = new URLSearchParams(
+      VIEW_FILTERS.flatMap(k => {
+        const value = given.get(k)?.trim();
+        return value ? [[k, value]] : [];
+      })
+    ).toString();
+    // Refuses what the inbox could not filter by, such as an unknown assignee.
+    inboxFilter(new URLSearchParams(query), agent.id);
+    const key = viewsKey(data.shared ? null : agent.id);
+    const views = await readViews(key);
+    if (views.length >= MAX_VIEWS) {
+      throw new HelpdeskError(409, 'Too many views');
+    }
+    const view = { id: randomUUID(), name: data.name, query };
+    await store.setSetting(key, [...views, view]);
+    return json({ view: { ...view, shared: data.shared } }, 201);
+  });
+
+  agentRoute('PATCH', 'views/:id', async ({ agent, params, body }) => {
+    const { name } = z
+      .object({ name: z.string().trim().min(1).max(80) })
+      .parse(await body());
+    const { key, views } = await findView(agent.id, params.id);
+    await store.setSetting(
+      key,
+      views.map(v => (v.id === params.id ? { ...v, name } : v))
+    );
+    return json({ ok: true });
+  });
+
+  agentRoute('DELETE', 'views/:id', async ({ agent, params }) => {
+    const { key, views } = await findView(agent.id, params.id);
+    await store.setSetting(
+      key,
+      views.filter(v => v.id !== params.id)
+    );
+    return json({ ok: true });
+  });
+
+  /** The host's links for a contact and company; a failing hook or a non-web URL shows nothing rather than an error. */
+  async function hostLinks(
+    contact: Contact | null,
+    company: Company | null,
+    identities: { channel: string; externalId: string }[] = []
+  ) {
+    if (!config.links || (!contact && !company)) return [];
+    try {
+      const links = await config.links(
+        contact && {
+          id: contact.id,
+          name: contact.name,
+          email: contact.email,
+          userId:
+            identities.find(i => i.channel === 'host')?.externalId ?? null,
+        },
+        company && {
+          id: company.id,
+          name: company.name,
+          domain: company.domain,
+          orgId: company.externalOrgId,
+        }
+      );
+      return links.filter(link => {
+        try {
+          return ['http:', 'https:'].includes(new URL(link.url).protocol);
+        } catch {
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('[helpdesk] links failed', error);
+      return [];
+    }
+  }
 
   agentRoute('GET', 'conversations/:id', async ({ params, agent }) => {
     const conversation = await requireConversation(params.id);
@@ -690,6 +888,7 @@ export function createHandler(support: Helpdesk) {
       },
       company,
       suggestedCompany,
+      links: await hostLinks(contact, company, identities),
       customerContext: conversation.companyId
         ? await support.companyContext(conversation.companyId)
         : {},
@@ -926,9 +1125,26 @@ export function createHandler(support: Helpdesk) {
     }
   );
 
-  agentRoute('POST', 'conversations/:id/draft', async ({ params }) => {
+  agentRoute('POST', 'conversations/:id/draft', async ({ params, body }) => {
     const conversation = await requireConversation(params.id);
-    return json({ text: await support.draftReply(conversation) });
+    // Asking for a draft took no body before rewrites existed, so none still means a draft.
+    const raw = await body().catch(error => {
+      if (error instanceof SyntaxError) return {};
+      throw error;
+    });
+    const data = z
+      .object({
+        mode: z.enum(['shorten', 'formal', 'translate']).optional(),
+        text: z.string().trim().min(1).max(20_000).optional(),
+      })
+      .refine(d => !d.mode || d.text, { message: 'A mode needs the text' })
+      .parse(raw ?? {});
+    return json({
+      text:
+        data.mode && data.text
+          ? await support.rewriteDraft(conversation, data.mode, data.text)
+          : await support.draftReply(conversation),
+    });
   });
 
   agentRoute('POST', 'conversations/:id/triage', async ({ params }) => {
@@ -1102,6 +1318,7 @@ export function createHandler(support: Helpdesk) {
         externalId: i.channel === 'visitor' ? null : i.externalId,
       })),
       company,
+      links: await hostLinks(contact, company, identities),
       conversations: conversations.map(r => agentView(r.conversation)),
       timeline: await timeline(
         conversations.map(r => r.conversation),
@@ -1120,6 +1337,7 @@ export function createHandler(support: Helpdesk) {
         leadStage,
         tags,
         custom: customValues('contact').optional(),
+        blocked: z.boolean().optional(),
       })
       .parse(await body());
     if (data.companyId) await requireRow(data.companyId, store.getCompany);
@@ -1170,6 +1388,7 @@ export function createHandler(support: Helpdesk) {
     return json({
       company,
       context: await support.companyContext(company.id),
+      links: await hostLinks(null, company),
       contacts: contactList.map(contactRow),
       conversations: conversations.map(r => agentView(r.conversation)),
       timeline: await timeline(
@@ -1323,6 +1542,44 @@ export function createHandler(support: Helpdesk) {
 
   // Inbound email -----------------------------------------------------------
 
+  // Rating from an email: the link opens a page whose button records it, as a
+  // mail scanner that follows every link must not cast a rating.
+  async function ratePage(url: URL, submit: boolean) {
+    const link = await support.verifyRatingLink(url.searchParams);
+    const conversation =
+      link && uuid.safeParse(link.conversationId).success
+        ? await store.getConversation(link.conversationId)
+        : null;
+    if (!link || !conversation) {
+      return page('en', 404, translator('en')('rate.invalid'));
+    }
+    const contact = await store.getContact(conversation.contactId);
+    const locale = support.toLocale(contact?.locale);
+    const t = translator(locale);
+    const reference = support.reference(conversation);
+    if (conversation.rating) {
+      return page(locale, 200, t('rate.done', { reference }));
+    }
+    if (conversation.status !== 'resolved' || conversation.mergedIntoId) {
+      return page(locale, 409, t('rate.closed', { reference }));
+    }
+    if (!submit) {
+      return page(
+        locale,
+        200,
+        t(`rate.confirm.${link.rating}`, { reference }),
+        t(`rate.button.${link.rating}`)
+      );
+    }
+    const updated = await support.rateAsCustomer(conversation, link.rating);
+    return updated
+      ? page(locale, 200, t(`rate.thanks.${link.rating}`, { reference }))
+      : page(locale, 409, t('rate.closed', { reference }));
+  }
+
+  define('GET', 'rate', async ({ url }) => ratePage(url, false));
+  define('POST', 'rate', async ({ url }) => ratePage(url, true));
+
   define('POST', 'inbound', async ({ request }) => {
     const secret = config.inboundWebhookSecret;
     const given = request.headers.get('authorization')?.replace(/^Bearer /, '');
@@ -1385,7 +1642,13 @@ export function createHandler(support: Helpdesk) {
    * CORS preflight, so a cross-site form cannot ride an agent's cookie.
    */
   function checkMutation(request: Request, path: string) {
-    if (request.method === 'GET' || path === 'jobs' || path === 'inbound') {
+    // `rate` acts only on the signed link in its own URL, never on a session.
+    if (
+      request.method === 'GET' ||
+      path === 'jobs' ||
+      path === 'inbound' ||
+      path === 'rate'
+    ) {
       return;
     }
     // Only a POST can come from a plain form; PATCH and DELETE always preflight.

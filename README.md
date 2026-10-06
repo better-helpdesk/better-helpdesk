@@ -57,8 +57,8 @@ database, its deploy and its design tokens.
 
 - **Shared inbox.** Several inboxes (say, support and sales), priorities,
   human-readable references like `ACME-1042`, internal notes, canned replies,
-  keyboard navigation, and reminder emails when a customer has waited too
-  long.
+  keyboard navigation, saved views of the inbox filters for one agent or the
+  whole team, and reminder emails when a customer has waited too long.
 - **Lightweight CRM.** Contacts and companies taken from your app's identity,
   lead stages, deals with stages and values, logged activities, tags and
   custom fields.
@@ -107,7 +107,7 @@ deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk
 | SLA                     | business hours and a reminder per inbox, by design | paid tier                               | yes                         | Expert                                | yes                                    |
 | Automation              | `onEvent` in your code                            | yes                                     | yes                         | Advanced and up                        | yes                                    |
 | Reporting               | SQL over your database                            | yes                                     | an overview page            | yes                                   | yes                                    |
-| CSAT                    | no                                                | yes                                     | yes                         | yes                                   | yes                                    |
+| CSAT                    | good or bad, from the widget or the reply email   | yes                                     | yes                         | yes                                   | yes                                    |
 | Help centre             | search over your own docs, by design              | Startups and up                          | yes                         | yes                                    | yes                                     |
 | AI                      | suggestions and drafts for the agent, by design   | Captain, paid tier                      | your OpenAI-compatible key  | Fin, $0.99 per outcome                | Copilot, +$50                           |
 | Events out              | `onEvent` in your code                            | webhooks                                | webhooks                    | webhooks                              | webhooks                               |
@@ -295,11 +295,32 @@ The widget dispatches DOM events such as `helpdesk:open`,
 `helpdesk:message-sent` and `helpdesk:booking-clicked`, so analytics can
 listen without touching the package.
 
+### A Support page in your app
+
+`HelpdeskConversations` is the widget's conversation list and threads in the
+page itself, for a Support page: no launcher and nothing to close, and a
+signed-in customer sees their own conversations and the ones their company
+shares, as in the widget. It takes the same props as `HelpdeskWidget` except
+`label`, uses the same routes and `--helpdesk-*` tokens, and
+`--helpdesk-page-height` sets its height (640px by default).
+
+```tsx
+import { HelpdeskConversations } from 'better-helpdesk/widget';
+
+<HelpdeskConversations inbox="support" locale="de" />
+```
+
+Like the widget it renders into its own shadow root, so your page's styles
+and its styles never meet; outside React, `defineHelpdeskConversations()`
+registers `<helpdesk-conversations>` with the same attributes.
+
 ### Signed-in users on another origin
 
 When the widget runs where `identify` cannot see your session, your backend
 signs an HS256 JWT with `identityTokenSecret` and the page passes it as
-`identity-token` (`identityToken` in React):
+`identity-token` (`identityToken` in React). Every signed-in user holds such a
+token, so the secret must resist offline guessing: the helpdesk refuses one
+shorter than 32 bytes. `openssl rand -base64 32` makes one.
 
 ```ts
 import { signIdentityToken } from 'better-helpdesk';
@@ -333,7 +354,9 @@ email: {
         return mailer.send({
           to: message.to,
           subject: `Re: ${message.subject ?? message.reference}`,
-          text: message.body,
+          text: message.ratingLinks
+            ? `${message.body}\n\nSolved? ${message.ratingLinks.good}\nNot solved? ${message.ratingLinks.bad}`
+            : message.body,
           replyTo: message.replyTo,
           inReplyTo: message.inReplyTo,
         });
@@ -356,6 +379,13 @@ email: {
   },
 },
 ```
+
+A `customer-reply` to a resolved conversation carries `ratingLinks`, one
+link for solved and one for not solved. Each opens a small page under your
+`basePath` whose button records the rating, so a mail scanner that follows
+every link rates nothing; "not solved" opens the conversation again. The
+links are signed with a key the package keeps in its own settings and work
+for 30 days.
 
 `mailer` and `receiptText` stand for whatever you send mail with;
 [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts) is the same adapter on Resend. A receipt
@@ -527,6 +557,28 @@ For reads, `helpdesk.store` holds the queries the agent UI runs, such as
 `onEvent`. Both recipes are type-checked in
 [`examples/demo/lib/recipes.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/demo/lib/recipes.ts).
 
+### Links to your own tools
+
+`links` gives agents one click from a customer to the pages you already have
+for them. It gets the contact and the company with your own ids, `userId`
+for someone your app signed in and `orgId` for their organisation, and
+returns labelled URLs:
+
+```ts
+links: (contact, company) => [
+  ...(contact?.userId
+    ? [{ label: { en: 'Open in admin', de: 'In der Verwaltung öffnen' }, url: `https://app.example.com/admin/users/${contact.userId}` }]
+    : []),
+  ...(company?.orgId
+    ? [{ label: { en: 'Billing' }, url: `https://billing.example.com/orgs/${company.orgId}` }]
+    : []),
+],
+```
+
+They show under the contact in a conversation, and on the contact and
+company pages, and open in a new tab. Only `http` and `https` URLs are
+shown; if the hook throws, the page shows none and the error is logged.
+
 ### Storage, AI and help search
 
 - `storage` presigns uploads and downloads and stores attachments, so an
@@ -634,8 +686,13 @@ package's own strings by key, for example `admin.inbox`.
 ### Switching from another helpdesk
 
 [`docs/switching.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/docs/switching.md) walks through it for Intercom,
-Zendesk, a shared Gmail inbox and Chatwoot, including importing contacts,
-companies and saved replies. In short:
+Zendesk, a shared Gmail inbox and Chatwoot. In short:
+
+- **Import contacts, companies and saved replies** from CSV with
+  `npx better-helpdesk-import contacts people.csv` and
+  `npx better-helpdesk-import canned replies.csv`, against the same
+  `HELPDESK_DATABASE_URL` as the migrations. Running it again adds what is
+  new and undoes nothing an agent changed.
 
 - **Pick a cutover date.** New conversations start here from that date;
   history is not imported. Keep the old tool read-only for 60 to 90 days so
@@ -665,8 +722,9 @@ full documentation.
 | `basePath`                                                            |          | Mount path of the handler. Default `/api/helpdesk`.                                                     |
 | `types`                                                               |          | Conversation types. Default `question`, `bug`, `feature`, `lead`.                                       |
 | `teamName`, `agentTitles`                                             |          | How the team and individual agents are named where they sign, per locale.                               |
-| `identityTokenSecret`                                                 |          | Verifies identity tokens from other origins. Consulted only when `identify` returns `null`.             |
+| `identityTokenSecret`                                                 |          | Verifies identity tokens from other origins, 32 bytes or more. Consulted only when `identify` returns `null`. |
 | `resolveContext(externalOrgId)`, `orgNames(externalOrgIds)`           |          | Extra context and display names for your organisations.                                                 |
+| `links(contact, company)`                                             |          | Links into your own tools (your admin, Stripe, a CRM), shown with the contact and company. `http(s)` only. |
 | `storage`, `maxAttachmentBytes`                                       |          | Attachments. Without `storage` there are none.                                                          |
 | `email.send(message)`                                                 |          | Outbound mail.                                                                                          |
 | `inboundWebhookSecret`, `inboundInbox`, `replyToAddress`, `dnsResolver` |        | Inbound mail.                                                                                           |
@@ -687,6 +745,7 @@ Each inbox is configured on its own:
 | `public`                         | Anonymous visitors may open conversations here.                                     |
 | `allowedOrigins`                 | Origins allowed to call the widget API cross-origin.                                |
 | `reminderAfterHours`             | Email the agents when a customer has waited this long.                              |
+| `hours`                          | Opening hours. Reminders and waiting colours then count only these.                 |
 | `defaultPriority`                | Priority new conversations start with, for example `high` for sales.                |
 | `title`, `replyPromise`          | The widget's header and what it promises about replies, per locale.                 |
 | `qualify`                        | One qualifying question with options, asked before the first message.               |
@@ -694,12 +753,42 @@ Each inbox is configured on its own:
 | `receipt`                        | Email a receipt to people who write in.                                             |
 | `bookingUrl`, `bookingLink(ref)` | A meeting link offered once someone has written, in the widget and in the receipt.  |
 
+`hours` takes an IANA time zone and spans per weekday, `mon` to `sun`. A day
+left out is closed, `24:00` ends a span at midnight, and a span whose end is
+not after its start runs into the next day:
+
+```ts
+support: {
+  reminderAfterHours: 4,
+  hours: {
+    timeZone: 'Europe/Zurich',
+    weekly: {
+      mon: [['08:00', '12:00'], ['13:00', '17:00']],
+      tue: [['08:00', '17:00']],
+      wed: [['08:00', '17:00']],
+      thu: [['08:00', '17:00']],
+      fri: [['08:00', '15:00']],
+    },
+  },
+},
+```
+
+Four hours there are four open hours: a message at 14:00 on Friday reminds
+the agents at 11:00 on Monday. While the inbox is closed, the receipt and the
+widget say when the team is back. Without `hours`, every hour counts and the
+team is back on the next weekday.
+
 Statuses are `open`, `pending` and `resolved`, read from the customer's
 side. Priorities are `low`, `normal`, `high` and `urgent`. The default lead
 stages are `lead`, `qualified`, `customer`, `churned`, and the default deal
 stages `new`, `qualified`, `proposal`, `won`, `lost`.
 
 ## Demo
+
+Try it without installing anything at
+[better-helpdesk.com/demo](https://better-helpdesk.com/demo/): write in as a
+customer, answer as the agent, and see the rows land in Postgres. Everyone
+shares that inbox, and it starts over every quarter hour.
 
 [`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
 is Harbor, a pretend shipping product with the package installed the way this

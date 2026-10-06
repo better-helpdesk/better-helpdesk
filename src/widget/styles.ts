@@ -300,6 +300,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .msgs { display: flex; flex-direction: column; gap: 12px; }
 .msg-row { display: flex; gap: 8px; align-items: flex-end; }
 .msg-row.mine { justify-content: flex-end; }
+.seen { margin-top: -8px; font-size: 12px; color: var(--s-muted); }
+.seen.mine { align-self: flex-end; }
 .msg { max-width: 80%; padding: 9px 12px; border-radius: var(--s-radius); white-space: pre-wrap; word-wrap: break-word; }
 .msg-row.mine .msg { background: var(--s-accent); color: var(--s-accent-fg); border-bottom-right-radius: min(4px, var(--s-r-inner)); }
 .msg-row.theirs .msg { background: var(--s-subtle); border-bottom-left-radius: min(4px, var(--s-r-inner)); }
@@ -343,5 +345,15 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
     --s-head-bg: var(--helpdesk-panel-header-bg, #243b53);
     --s-head-fg: var(--helpdesk-panel-header-fg, #f0f4f8);
   }
+}
+`;
+
+/** `<helpdesk-conversations>`: the same panel, in the page's flow instead of floating. */
+export const inlineCss = `
+:host { position: static; display: block; z-index: auto; }
+.panel[data-inline] {
+  position: static; width: 100%; height: var(--helpdesk-page-height, 640px); max-height: none;
+  border-radius: var(--s-radius); border: var(--helpdesk-panel-border, 1px solid var(--s-border));
+  box-shadow: none; animation: none;
 }
 `;

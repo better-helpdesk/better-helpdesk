@@ -3441,6 +3441,9 @@ kbd.on {
   font-size: 18px;
   max-width: 56ch;
 }
+.qs-rows {
+  overflow-x: auto;
+}
 .qs-steps {
   list-style: none;
   margin: clamp(56px, 7vw, 96px) 0 0;
