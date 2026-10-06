@@ -461,6 +461,18 @@ describe('anonymous visitors', () => {
     );
   });
 
+  it('tells the widget whether uploads are available', async () => {
+    const session = await h.call('GET', 'widget/session?inbox=sales');
+    expect(session.data.uploads).toBe(true);
+    const bare = createHarness({ storage: undefined });
+    try {
+      const without = await bare.call('GET', 'widget/session?inbox=sales');
+      expect(without.data.uploads).toBe(false);
+    } finally {
+      await bare.close();
+    }
+  });
+
   it('rate-limits anonymous posts per IP', async () => {
     const limited = createHarness({ anonymousRateLimit: 2 });
     try {

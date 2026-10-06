@@ -208,6 +208,7 @@ export function createHandler(support: Helpdesk) {
       orgs: await support.namedOrgs(customer.identity),
       types: config.types,
       help: Boolean(config.help),
+      uploads: Boolean(config.storage),
       conversations: conversations.map(c => ({
         ...customerView(customer, c),
         preview: previewOf(last.get(c.id)?.body, 140),
