@@ -1744,10 +1744,11 @@ describe('HelpdeskAdmin', () => {
         <HelpdeskAdmin basePath="/support" locale="en" />
       );
 
+      // The inbox list beside an open conversation is busy for a moment too.
       const busy = await vi.waitFor(() => {
-        const found = container.querySelector('[aria-busy="true"]');
-        if (!found) throw new Error('nothing busy');
-        return found;
+        const found = container.querySelectorAll('[aria-busy="true"]');
+        if (found.length !== 1) throw new Error(`${found.length} busy`);
+        return found[0] as Element;
       });
       expect(busy.textContent).toBe('Loading…');
       expect(container.querySelectorAll('[aria-busy="true"]')).toHaveLength(1);
