@@ -98,6 +98,8 @@ export function createHandler(support: Helpdesk) {
       c.waitingSince === null,
     rating: c.rating,
     merged: c.mergedIntoId !== null,
+    // The newest message an agent has opened the thread on; the widget shows "Seen" from it.
+    agentSeenAt: c.agentSeenAt,
     createdAt: c.createdAt,
   });
 
