@@ -10,9 +10,9 @@ if (!cache.sitePool) {
   cache.sitePool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
     ssl:
-      process.env.DATABASE_SSL === 'true'
+      process.env.DATABASE_SSL === 'no-verify'
         ? { rejectUnauthorized: false }
-        : false,
+        : process.env.DATABASE_SSL === 'true',
   });
   // A connection the server ends (a restart, a failover) would otherwise be
   // an uncaught exception that takes the whole site down. The pool listens

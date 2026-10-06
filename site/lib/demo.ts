@@ -25,9 +25,9 @@ if (!cache.demoPool) {
   cache.demoPool = new pg.Pool({
     connectionString: process.env.DEMO_DATABASE_URL,
     ssl:
-      process.env.DATABASE_SSL === 'true'
+      process.env.DATABASE_SSL === 'no-verify'
         ? { rejectUnauthorized: false }
-        : false,
+        : process.env.DATABASE_SSL === 'true',
     max: 4,
     // The demo page waits on it; an unreachable host should fail fast.
     connectionTimeoutMillis: 5_000,
