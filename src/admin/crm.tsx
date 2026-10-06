@@ -10,6 +10,7 @@ import { type ConversationRow, ConversationTable } from './inbox';
 import { CompanyPicker, ContactPicker } from './pickers';
 import {
   Avatar,
+  CustomFields,
   Dialog,
   Empty,
   HostLinks,
@@ -930,56 +931,12 @@ function EntityForm({
             onChange={e => setTags(e.target.value)}
           />
         </label>
-        {fields.map(field =>
-          field.type === 'select' ? (
-            <label key={field.key} className="sa-field">
-              {field.label[locale]}
-              <select
-                className="sa-select"
-                style={{ width: '100%' }}
-                value={String(custom[field.key] ?? '')}
-                onChange={e =>
-                  setCustom(v => ({
-                    ...v,
-                    [field.key]: e.target.value || null,
-                  }))
-                }>
-                <option value="">—</option>
-                {field.options?.map(o => (
-                  <option key={o} value={o}>
-                    {o}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label key={field.key} className="sa-field">
-              {field.label[locale]}
-              <input
-                className="sa-input"
-                type={
-                  field.type === 'number'
-                    ? 'number'
-                    : field.type === 'date'
-                      ? 'date'
-                      : 'text'
-                }
-                value={String(custom[field.key] ?? '')}
-                onChange={e =>
-                  setCustom(v => ({
-                    ...v,
-                    [field.key]:
-                      e.target.value === ''
-                        ? null
-                        : field.type === 'number'
-                          ? Number(e.target.value)
-                          : e.target.value,
-                  }))
-                }
-              />
-            </label>
-          )
-        )}
+        <CustomFields
+          fields={fields}
+          values={custom}
+          locale={locale}
+          onChange={(key, value) => setCustom(v => ({ ...v, [key]: value }))}
+        />
       </div>
       <div className="sa-toolbar">
         {onCancel && (

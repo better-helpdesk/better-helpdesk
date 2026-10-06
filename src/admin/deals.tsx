@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
 import { useAdmin } from './context';
-import { Dialog, Empty, money, paths, Svg } from './ui';
+import { CustomFields, Dialog, Empty, money, paths, Svg } from './ui';
 
 /** A deal this long in one stage is flagged for a nudge. */
 const STALE_DAYS = 14;
@@ -20,6 +20,7 @@ type Deal = {
   expectedCloseAt: string | null;
   createdAt: string;
   stageChangedAt: string;
+  custom?: Record<string, string | number | null>;
 };
 
 export function DealsBoard() {
@@ -176,8 +177,14 @@ export function DealDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { api, t, me } = useAdmin();
+  const { api, t, me, locale } = useAdmin();
   const existing = deal && deal !== 'new' ? deal : null;
+  const [custom, setCustom] = useState(existing?.custom ?? {});
+  const [shown, setShown] = useState(deal);
+  if (deal !== shown) {
+    setShown(deal);
+    setCustom(existing?.custom ?? {});
+  }
   return (
     <Dialog
       open={deal !== null}
@@ -197,7 +204,10 @@ export function DealDialog({
             expectedCloseAt: close ? new Date(close).toISOString() : null,
           };
           if (existing) {
-            await api(`agent/deals/${existing.id}`, { method: 'PATCH', body });
+            await api(`agent/deals/${existing.id}`, {
+              method: 'PATCH',
+              body: { ...body, custom },
+            });
           } else {
             await api('agent/deals', {
               body: {
@@ -258,6 +268,16 @@ export function DealDialog({
               defaultValue={existing?.expectedCloseAt?.slice(0, 10) ?? ''}
             />
           </label>
+          {existing && (
+            <CustomFields
+              fields={me.customFields.deal ?? []}
+              values={custom}
+              locale={locale}
+              onChange={(key, value) =>
+                setCustom(v => ({ ...v, [key]: value }))
+              }
+            />
+          )}
         </div>
         <div className="sa-dialog-foot">
           {existing && (

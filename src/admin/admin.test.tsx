@@ -453,7 +453,97 @@ describe('HelpdeskAdmin', () => {
 
     await waitFor(() =>
       expect(patches).toEqual([
-        { title: 'Pilot', stage: 'trial', value: null, expectedCloseAt: null },
+        {
+          title: 'Pilot',
+          stage: 'trial',
+          value: null,
+          expectedCloseAt: null,
+          custom: {},
+        },
+      ])
+    );
+  });
+
+  it('shows and saves a deal\u2019s custom fields, keeping values of fields the host removed', async () => {
+    stubDialogs();
+    routes['agent/me/'] = {
+      ...me,
+      customFields: {
+        deal: [
+          {
+            key: 'region',
+            label: { en: 'Region', de: 'Region' },
+            type: 'select',
+            options: ['emea', 'apac'],
+          },
+          {
+            key: 'seats',
+            label: { en: 'Seats', de: 'Plätze' },
+            type: 'number',
+          },
+        ],
+      },
+    };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith('agent/deals/d1/') && init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ deal: {} }));
+        }
+        if (url.endsWith('agent/deals/'))
+          return new Response(
+            JSON.stringify({
+              deals: [
+                {
+                  id: 'd1',
+                  title: 'Pilot',
+                  stage: 'new',
+                  value: null,
+                  currency: 'CHF',
+                  companyId: null,
+                  companyName: null,
+                  contactName: null,
+                  expectedCloseAt: null,
+                  createdAt: new Date().toISOString(),
+                  stageChangedAt: new Date().toISOString(),
+                  custom: { region: 'emea', seats: 5, legacy: 'kept' },
+                },
+              ],
+            })
+          );
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/deals/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(await screen.findByRole('button', { name: /Pilot/ }));
+    const dialog = screen.getByRole('dialog');
+    expect(
+      (
+        within(dialog).getByRole('combobox', {
+          name: 'Region',
+        }) as HTMLSelectElement
+      ).value
+    ).toBe('emea');
+    fireEvent.change(
+      within(dialog).getByRole('spinbutton', { name: 'Seats' }),
+      {
+        target: { value: '12' },
+      }
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patches).toEqual([
+        expect.objectContaining({
+          custom: { region: 'emea', seats: 12, legacy: 'kept' },
+        }),
       ])
     );
   });
