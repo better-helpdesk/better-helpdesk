@@ -44,11 +44,15 @@ export function createApi(
   };
 }
 
-/** Loads on mount and whenever `key` changes; polls while the page is visible. */
+/**
+ * Loads on mount and whenever `key` changes; polls while the page is visible,
+ * or always with `whenHidden`, for what a background tab has to show.
+ */
 export function useResource<T>(
   load: () => Promise<T>,
   key: string,
-  pollMs?: number
+  pollMs?: number,
+  { whenHidden = false }: { whenHidden?: boolean } = {}
 ) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -80,10 +84,10 @@ export function useResource<T>(
   useEffect(() => {
     if (!pollMs) return;
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh();
+      if (whenHidden || document.visibilityState === 'visible') void refresh();
     }, pollMs);
     return () => clearInterval(timer);
-  }, [pollMs, refresh]);
+  }, [pollMs, refresh, whenHidden]);
 
   return { data, error, refresh, setData };
 }

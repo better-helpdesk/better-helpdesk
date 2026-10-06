@@ -977,6 +977,67 @@ export function createStore(db: Db) {
         );
     },
 
+    /**
+     * What happened for an agent lately: assignments and mentions by
+     * colleagues, and customer replies on conversations assigned to them since
+     * they got them. Derived from events and messages, newest first.
+     */
+    async notificationsFor(agentId: string, limit = 30) {
+      const result = await db.execute<{
+        kind: 'assigned' | 'mentioned' | 'reply';
+        conversation_id: string;
+        number: number;
+        subject: string | null;
+        who: string | null;
+        at: string;
+      }>(sql`
+        WITH n AS (
+          SELECT 'assigned' AS kind, e.conversation_id, e.created_at AS at, a.name AS who
+          FROM helpdesk.conversation_event e
+          LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
+          WHERE e.kind = 'assigneeId' AND e.data->>'to' = ${agentId}
+            AND e.agent_id IS DISTINCT FROM ${agentId}::uuid
+            AND e.created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'mentioned', e.conversation_id, e.created_at, a.name
+          FROM helpdesk.conversation_event e
+          LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
+          WHERE e.kind = 'mentioned' AND e.data->'agentIds' ? ${agentId}
+            AND e.created_at > now() - interval '30 days'
+          UNION ALL
+          SELECT 'reply', m.conversation_id, m.created_at, coalesce(ct.name, ct.email)
+          FROM helpdesk.message m
+          JOIN helpdesk.conversation c ON c.id = m.conversation_id
+          LEFT JOIN helpdesk.contact ct ON ct.id = m.contact_id
+          WHERE m.author_type = 'contact' AND NOT m.internal
+            AND c.assignee_id = ${agentId}::uuid
+            AND m.created_at > now() - interval '30 days'
+            AND m.created_at > coalesce(
+              (SELECT max(created_at) FROM helpdesk.conversation_event
+                WHERE conversation_id = c.id AND kind = 'assigneeId' AND data->>'to' = ${agentId}),
+              c.created_at)
+        )
+        SELECT n.kind, n.conversation_id, c.number, coalesce(c.title, c.subject) AS subject,
+          n.who, to_char(n.at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
+        FROM n JOIN helpdesk.conversation c ON c.id = n.conversation_id
+        ORDER BY n.at DESC
+        LIMIT ${limit}`);
+      return result.rows;
+    },
+
+    async notificationsSeenAt(agentId: string) {
+      return this.getSetting<string>(`notifications-seen:${agentId}`);
+    },
+
+    // The database's clock, as the notifications it is compared with use.
+    async markNotificationsSeen(agentId: string) {
+      await db.execute(sql`
+        INSERT INTO helpdesk.setting (key, value)
+        VALUES (${`notifications-seen:${agentId}`},
+          to_jsonb(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now()`);
+    },
+
     async countOpen(agentId: string) {
       const [row] = await db
         .select({
