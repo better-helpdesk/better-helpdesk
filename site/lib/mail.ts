@@ -21,7 +21,11 @@ function render(message: HelpdeskEmail): {
     case 'customer-reply':
       return {
         subject: `Re: ${message.subject ?? message.reference}`,
-        text: `${message.body}\n\n${message.agentName}\n${message.reference}`,
+        text: `${message.body}\n\n${message.agentName}\n${message.reference}${
+          message.ratingLinks
+            ? `\n\nSolved? ${message.ratingLinks.good}\nNot solved? ${message.ratingLinks.bad}`
+            : ''
+        }`,
         replyTo: message.replyTo,
         inReplyTo: message.inReplyTo,
       };
