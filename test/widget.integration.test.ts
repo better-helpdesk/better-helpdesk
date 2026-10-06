@@ -90,6 +90,23 @@ describe('in-app conversations', () => {
   });
 });
 
+describe('seen by an agent', () => {
+  it('tells the customer when an agent has opened their latest message', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada');
+    const thread = () =>
+      h.call('GET', `widget/conversations/${conversation.id}`, { user: 'ada' });
+
+    expect((await thread()).data.conversation.agentSeenAt).toBeNull();
+    await h.call('GET', `agent/conversations/${conversation.id}`, {
+      user: 'agent',
+    });
+    const seen = (await thread()).data;
+    expect(seen.conversation.agentSeenAt).toBe(seen.messages[0].createdAt);
+  });
+});
+
 describe('visibility', () => {
   it('keeps a conversation private to its author by default', async () => {
     h.addUser('ada', { orgs: [orgA] });

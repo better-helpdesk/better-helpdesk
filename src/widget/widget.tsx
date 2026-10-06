@@ -64,6 +64,7 @@ type Summary = {
   preview: string | null;
   rating?: 'good' | 'bad' | null;
   merged?: boolean;
+  agentSeenAt?: string | null;
 };
 
 type Session = {
@@ -1373,7 +1374,7 @@ function Thread({
           </div>
         )}
         <div className="msgs">
-          {data.messages.map((m, index) => (
+          {data.messages.map((m, index, all) => (
             <Fragment key={m.id}>
               <div className={m.own ? 'msg-row mine' : 'msg-row theirs'}>
                 {!m.own && m.author === 'agent' && (
@@ -1397,6 +1398,15 @@ function Thread({
                   />
                 </div>
               </div>
+              {index === all.length - 1 &&
+                m.author === 'contact' &&
+                data.conversation.agentSeenAt &&
+                Date.parse(data.conversation.agentSeenAt) >=
+                  Date.parse(m.createdAt) && (
+                  <span className={m.own ? 'seen mine' : 'seen'}>
+                    {t('thread.seen')}
+                  </span>
+                )}
               {index === 0 && !answered && (
                 <div className="notice" role="status">
                   <strong>{thanks}</strong>

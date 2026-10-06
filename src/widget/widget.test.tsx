@@ -334,6 +334,65 @@ describe('Widget', () => {
     ).toEqual(['ReferenceError: y']);
   });
 
+  it('shows "Seen" under the customer’s last message once an agent has opened it, and only then', async () => {
+    const sent = '2026-01-01T10:00:00.000Z';
+    const thread = (agentSeenAt: string | null) => ({
+      'widget/session': { ...session, conversations: [ownThread] },
+      'widget/conversations/c1/': {
+        conversation: {
+          id: 'c1',
+          reference: 'DG-1',
+          subject: 'Export broken',
+          type: 'bug',
+          status: 'open',
+          agentSeenAt,
+        },
+        messages: [
+          {
+            id: 'm1',
+            author: 'agent',
+            name: 'Angelo',
+            own: false,
+            body: 'Which browser?',
+            createdAt: '2026-01-01T09:00:00.000Z',
+          },
+          {
+            id: 'm2',
+            author: 'contact',
+            name: 'Ada',
+            own: true,
+            body: 'Firefox',
+            createdAt: sent,
+          },
+        ],
+        attachments: [],
+      },
+    });
+    const open = async () => {
+      render(
+        <Widget
+          api="/api/support"
+          inbox="support"
+          locale="en"
+          errors={() => []}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+      fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+      fireEvent.click(await screen.findByText('Export broken'));
+      await screen.findByText('Firefox');
+    };
+
+    mockApi(thread('2026-01-01T09:30:00.000Z'));
+    await open();
+    expect(screen.queryByText('Seen')).toBeNull();
+    cleanup();
+
+    mockApi(thread(sent));
+    await open();
+    expect(await screen.findByText('Seen')).toBeTruthy();
+  });
+
   it('shows where a labelled link goes in a colleague’s message, not in one’s own', async () => {
     mockApi({
       'widget/session': {
