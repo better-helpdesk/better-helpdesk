@@ -397,6 +397,8 @@ export function createStore(db: Db) {
               email: sql`coalesce(${contacts.email}, ${source.email})`,
               name: sql`coalesce(${contacts.name}, ${source.name})`,
               companyId: sql`coalesce(${contacts.companyId}, ${source.companyId}::uuid)`,
+              // A block on either side holds for the merged person.
+              blocked: sql`${contacts.blocked} OR ${source.blocked}`,
             })
             .where(eq(contacts.id, targetId));
         }

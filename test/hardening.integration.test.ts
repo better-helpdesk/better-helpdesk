@@ -717,6 +717,30 @@ describe('blocked senders, by every address they hold', () => {
     ).toEqual([]);
   });
 
+  it('keeps the block when a blocked contact is merged into one that is not', async () => {
+    h.addUser('agent', { isAgent: true });
+    await lead('a@spam.test');
+    await lead('b@spam.test');
+    const [a, b] = await rows<{ id: string }>(
+      sql`SELECT id FROM helpdesk.contact ORDER BY email`
+    );
+    await block('b@spam.test');
+    await h.call('POST', `agent/contacts/${a?.id}/merge`, {
+      user: 'agent',
+      body: { sourceId: b?.id },
+    });
+
+    expect(
+      await rows(sql`SELECT email, blocked FROM helpdesk.contact`)
+    ).toEqual([{ email: 'a@spam.test', blocked: true }]);
+    for (const email of ['a@spam.test', 'b@spam.test']) {
+      const res = await h.call('POST', 'widget/conversations', {
+        body: { inbox: 'sales', type: 'lead', body: 'Again', email },
+      });
+      expect(res.status).toBe(404);
+    }
+  });
+
   it('refuses a signed-in customer whose address was blocked', async () => {
     h.addUser('agent', { isAgent: true });
     await lead('spam@spam.test');
