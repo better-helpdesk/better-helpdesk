@@ -334,6 +334,11 @@ const en = {
   'rate.done': '{reference} has been rated already. Thank you.',
   'rate.closed': '{reference} can no longer be rated here.',
   'rate.invalid': 'This link is no longer valid.',
+  'admin.block': 'Block sender',
+  'admin.unblock': 'Unblock sender',
+  'admin.blockHint':
+    'Refuse their messages and keep their conversations out of the inbox',
+  'admin.blocked': 'Blocked',
   'admin.views': 'Views',
   'admin.saveView': 'Save as view',
   'admin.renameView': 'Rename view',
@@ -807,6 +812,11 @@ const de: Record<MessageKey, string> = {
   'rate.done': '{reference} wurde bereits bewertet. Vielen Dank.',
   'rate.closed': '{reference} kann hier nicht mehr bewertet werden.',
   'rate.invalid': 'Dieser Link ist nicht mehr gültig.',
+  'admin.block': 'Absender sperren',
+  'admin.unblock': 'Sperre aufheben',
+  'admin.blockHint':
+    'Nachrichten ablehnen und Unterhaltungen aus dem Posteingang nehmen',
+  'admin.blocked': 'Gesperrt',
   'admin.views': 'Ansichten',
   'admin.saveView': 'Als Ansicht speichern',
   'admin.renameView': 'Ansicht umbenennen',

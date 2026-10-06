@@ -1337,6 +1337,7 @@ export function createHandler(support: Helpdesk) {
         leadStage,
         tags,
         custom: customValues('contact').optional(),
+        blocked: z.boolean().optional(),
       })
       .parse(await body());
     if (data.companyId) await requireRow(data.companyId, store.getCompany);

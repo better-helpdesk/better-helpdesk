@@ -325,6 +325,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
         return { conversation: null, visitorToken: undefined };
       }
       if (!data.email) throw new HelpdeskError(400, 'Email required');
+      if (await store.isEmailBlocked(normalizeEmail(data.email))) {
+        throw new HelpdeskError(404, 'Not found');
+      }
       // Another address on the same browser is another person, never a way
       // to write into the first one's contact.
       if (customer.contact?.email !== normalizeEmail(data.email)) {
@@ -353,6 +356,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
     const contact = customer.contact;
     if (!contact) throw new HelpdeskError(401, 'Unauthenticated');
+    await refuseBlocked(contact);
     if (customer.identity) await limitContact(contact.id);
 
     let companyId: string | null = null;
@@ -423,6 +427,16 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
   }
 
+  /** A blocked contact, or one who writes from a blocked address, as when a blocked visitor signs up. */
+  async function refuseBlocked(contact: Contact) {
+    if (
+      contact.blocked ||
+      (contact.email && (await store.isEmailBlocked(contact.email)))
+    ) {
+      throw new HelpdeskError(404, 'Not found');
+    }
+  }
+
   async function addCustomerMessage(
     request: Request,
     customer: Customer,
@@ -430,6 +444,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     body: string
   ) {
     if (!customer.contact) throw new HelpdeskError(401, 'Unauthenticated');
+    await refuseBlocked(customer.contact);
     // Appending would reopen it in the inbox, apart from the thread agents work in.
     if (conversation.mergedIntoId) {
       throw new HelpdeskError(409, 'Conversation merged');
@@ -846,6 +861,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
     // Unsigned, an out-of-office could be anyone's text.
     if (mail.automated && !mail.verified) return;
     const from = normalizeEmail(mail.from.address);
+    // Dropped quietly, as unsigned mail over budget is: refusing it would
+    // bounce to whatever address the From names.
+    if (await store.isEmailBlocked(from)) return;
 
     let conversation: Conversation | null = null;
     const threaded = await store.findMessageByEmailId(

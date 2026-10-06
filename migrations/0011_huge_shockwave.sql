@@ -1,0 +1,1 @@
+ALTER TABLE "helpdesk"."contact" ADD COLUMN "blocked" boolean DEFAULT false NOT NULL;
