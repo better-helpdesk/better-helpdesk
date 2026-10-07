@@ -1957,10 +1957,17 @@ dd.err {
   height: 8px;
   background: var(--late);
 }
+.nots .row-cta {
+  grid-column: 2;
+  margin-top: 4px;
+}
 @media (max-width: 760px) {
   .nots,
   .nots ul {
     grid-template-columns: 1fr;
+  }
+  .nots .row-cta {
+    grid-column: 1;
   }
 }
 

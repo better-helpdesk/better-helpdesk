@@ -430,6 +430,13 @@ export default function Home() {
               <li>No phone, no social channels, no help-centre CMS.</li>
               <li>No seats and no paid features in the package.</li>
             </ul>
+            <div className="row-cta">
+              <TextLink href="/docs/operations/switching/">
+                Moving from Intercom or Zendesk? Bring your contacts, companies
+                and saved replies
+                <PiArrowRightBold className="ti" aria-hidden="true" />
+              </TextLink>
+            </div>
           </div>
         </section>
 
