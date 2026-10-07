@@ -98,6 +98,20 @@ export function ipBucket(ip: string) {
 
 const RATING_LINK_DAYS = 30;
 
+const MAX_ADDRESS = 254;
+const MAX_MESSAGE_ID = 255;
+
+/**
+ * A Message-ID as it is stored and looked up. One too long for the column is
+ * kept as its hash, the same for every mail that names it, so threading
+ * still finds it; a reply to such a thread carries the hash, not the id.
+ */
+export function messageIdKey(id: string) {
+  return id.length <= MAX_MESSAGE_ID
+    ? id
+    : `<sha256.${createHash('sha256').update(id).digest('hex')}@helpdesk>`;
+}
+
 export function createHelpdesk(input: HelpdeskConfig) {
   const config: ResolvedConfig = resolveConfig(input);
   const { store } = config;
@@ -857,7 +871,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return queued;
   }
 
-  async function handleInbound(mail: InboundMessage) {
+  async function handleInbound(received: InboundMessage) {
+    // No address is longer (RFC 5321), and the columns that keep one are not.
+    if (received.from.address.length > MAX_ADDRESS) return;
+    const mail = {
+      ...received,
+      messageId: messageIdKey(received.messageId),
+      inReplyTo: received.inReplyTo && messageIdKey(received.inReplyTo),
+      references: received.references.map(messageIdKey),
+    };
     // ponytail: a database failure between the message and its follow-ups still loses them on retry; one transaction across the store calls if that bites.
     if (await store.findMessageByEmailId([mail.messageId])) return;
     // Unsigned, an out-of-office could be anyone's text.

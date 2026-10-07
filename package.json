@@ -95,9 +95,15 @@
     "zod": "^4.6.5"
   },
   "peerDependencies": {
+    "mysql2": "^3.24.0",
     "pg": "^8.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "mysql2": {
+      "optional": true
+    }
   },
   "packageManager": "pnpm@11.24.0"
 }

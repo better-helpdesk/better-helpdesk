@@ -474,17 +474,22 @@ export function mysqlAdapter({ pool }: { pool: MysqlPool }) {
   const config = (
     pool as {
       config?: {
-        connectionConfig?: { timezone?: string; dateStrings?: unknown };
+        connectionConfig?: {
+          timezone?: string;
+          dateStrings?: unknown;
+          jsonStrings?: unknown;
+        };
       };
     }
   ).config?.connectionConfig;
   if (
     config &&
     (!['Z', '+00:00', 'UTC'].includes(config.timezone ?? '') ||
-      config.dateStrings)
+      config.dateStrings ||
+      config.jsonStrings)
   ) {
     throw new Error(
-      "helpdesk: create the mysql2 pool with `timezone: 'Z'` and without `dateStrings`, so times are stored in UTC"
+      "helpdesk: create the mysql2 pool with `timezone: 'Z'` and without `dateStrings` or `jsonStrings`, so times are stored in UTC and JSON comes back parsed"
     );
   }
   return kyselyAdapter({
