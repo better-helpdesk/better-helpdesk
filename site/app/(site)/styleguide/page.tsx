@@ -206,13 +206,6 @@ export default function Styleguide() {
               <span className="sg-t4">ACME-1042 · waiting 4m</span>
             </div>
           </div>
-          <div className="sg-notches">
-            {[3, 4, 5, 6, 8].map(n => (
-              <span key={n} style={{ '--n': `${n}px` } as React.CSSProperties}>
-                notch {n}
-              </span>
-            ))}
-          </div>
         </Section>
 
         <Section

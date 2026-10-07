@@ -70,7 +70,7 @@ body {
   font-kerning: normal;
 }
 
-/* One radius system: square, with notches on surfaces; keys keep their 4px. */
+/* One radius system: square; keys keep their 4px. */
 #nd-docs-layout *,
 [role="dialog"],
 [role="dialog"] * {
@@ -86,7 +86,7 @@ body {
   color: var(--fg-2);
 }
 
-/* One focus style: the site's dashed mint outline, inset inside clipped surfaces. */
+/* One focus style: the site's dashed mint outline, inset inside framed surfaces. */
 #nd-docs-layout :focus-visible,
 [role="dialog"] :focus-visible {
   outline: 2px dashed var(--mint);
@@ -115,8 +115,6 @@ body {
     border: 0;
     background: rgba(17, 20, 19, 0.82);
     backdrop-filter: blur(12px);
-    --n: 6px;
-    clip-path: var(--notch);
   }
 }
 
@@ -160,8 +158,6 @@ body {
   padding: 0 8px 0 12px;
   border: 0;
   background: var(--s1);
-  --n: 5px;
-  clip-path: var(--notch);
   font: 400 12px / 1 var(--f-m);
   color: var(--fg-3);
 }
@@ -421,8 +417,6 @@ body {
   box-shadow: none;
   padding: 4px;
   margin-block: 20px 24px;
-  --n: 6px;
-  clip-path: var(--notch);
   --padding-left: 20px;
   --padding-right: 20px;
 }
@@ -452,8 +446,6 @@ body {
 }
 #nd-page figure.shiki > div:last-child {
   background: var(--bg);
-  --n: 4px;
-  clip-path: var(--notch);
 }
 #nd-page figure.shiki pre {
   padding-block: 16px;
@@ -528,8 +520,6 @@ body {
   font-size: 15px;
   line-height: 1.6;
   color: var(--fg-2);
-  --n: 6px;
-  clip-path: var(--notch);
 }
 .bh-callout > div:first-child {
   width: 2px;
@@ -590,8 +580,6 @@ body {
   background: var(--s1);
   border: 0;
   box-shadow: none;
-  --n: 6px;
-  clip-path: var(--notch);
 }
 
 /* Header row as the tables' labels; property names in paper, not the accent. */
@@ -614,8 +602,6 @@ body {
   background: var(--s1);
   border: 0;
   box-shadow: none;
-  --n: 6px;
-  clip-path: var(--notch);
   transition: background-color 0.15s steps(2);
 }
 #nd-page a[data-card]:not(:is(h1, h2, h3, h4, h5, h6) > a):hover {
