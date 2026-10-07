@@ -42,7 +42,7 @@ const TRACKED = [
   'rating',
 ] as const;
 
-/** Records and reports the `patch` keys whose stored value changed; the patch itself may hold SQL such as `now()`. */
+/** Records and reports the `patch` keys whose stored value changed. */
 export async function emitUpdated(
   config: HelpdeskConfig,
   old: Conversation,

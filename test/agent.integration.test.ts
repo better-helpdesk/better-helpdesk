@@ -165,11 +165,13 @@ describe('jobs and email', () => {
     for (let i = 0; i < 5; i++) await h.runDueJobs();
     const [job] = await rows<{
       attempts: number;
-      run_at: string;
+      parked: boolean;
       last_error: string;
-    }>(sql`SELECT attempts, run_at::text, last_error FROM helpdesk.job`);
+    }>(
+      sql`SELECT attempts, run_at >= '9999-01-01' AS parked, last_error FROM helpdesk.job`
+    );
     expect(job?.attempts).toBe(5);
-    expect(job?.run_at).toBe('infinity');
+    expect(job?.parked).toBe(true);
     expect(job?.last_error).toContain('no-such-kind');
   });
 
