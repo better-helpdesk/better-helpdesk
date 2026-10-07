@@ -1502,11 +1502,29 @@ dd.err {
   font-weight: 500;
 }
 .w-agent {
-  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
   background: var(--mint-dim);
-  display: grid;
-  gap: 8px;
-  justify-items: start;
+  color: inherit;
+  font-size: 13px;
+  text-decoration: none;
+}
+.w-agent span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.w-agent b {
+  flex: none;
+  color: var(--mint);
+  font-weight: 600;
+}
+.w-agent:hover b {
+  text-decoration: underline;
 }
 .launch {
   all: unset;

@@ -97,12 +97,10 @@ export function WidgetDemo() {
             </div>
             <div className="w-b">
               {agent && (
-                <div className="w-agent">
-                  <p>{t.waiting(4)}</p>
-                  <a className="w-btn" href="#product">
-                    {t.openInbox}
-                  </a>
-                </div>
+                <a className="w-agent" href="#product">
+                  <span>{t.waiting(4)}</span>
+                  <b>{t.openInbox}</b>
+                </a>
               )}
               {step === 'home' && (
                 <>

@@ -124,8 +124,8 @@ export default function Home() {
               Your helpdesk, <em>inside</em> your app.
             </h1>
             <div className="hero-cta">
-              <a className="btn btn-p" href="/docs/installation/">
-                Get started
+              <a className="btn btn-p" href="/demo/">
+                Try demo
                 <ButtonIcon />
               </a>
               <Install />
