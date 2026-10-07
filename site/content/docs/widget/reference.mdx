@@ -109,6 +109,18 @@ defineHelpdeskWidget();
 
 Only the element the script creates comes alive. A `<helpdesk-widget>` already in the page's markup stays inert. Loading the script again while its widget is still in the page adds no second one.
 
+## Element methods
+
+| Method | What it does |
+| --- | --- |
+| `open({ type? })` | Opens the panel of `<helpdesk-widget>`. With `type`, such as `'bug'`, it opens on that type's form when the inbox offers it, and on its first view otherwise; focus moves into the form. |
+
+The method is on the element, so code that holds it calls it directly, for example from a button of the host's own:
+
+```ts
+document.querySelector('helpdesk-widget')?.open({ type: 'bug' });
+```
+
 ## DOM events
 
 The element dispatches these on itself. They bubble and cross the shadow boundary.

@@ -2,7 +2,7 @@
 import { waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { defineHelpdeskConversations } from './element';
+import { defineHelpdeskConversations, defineHelpdeskWidget } from './element';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -41,4 +41,42 @@ it('renders <helpdesk-conversations> in the page, in its own shadow root, withou
     expect(shadow?.querySelector('[role="region"]')).toBeTruthy()
   );
   expect(shadow?.querySelector('.launcher')).toBeNull();
+});
+
+it('opens <helpdesk-widget> on the form a host asks for', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            identified: true,
+            name: 'Ada',
+            email: 'ada@example.test',
+            orgs: [],
+            types: ['question', 'bug'],
+            team: [],
+            inbox: null,
+            conversations: [],
+          })
+        )
+    )
+  );
+  defineHelpdeskWidget();
+  document.body.innerHTML =
+    '<helpdesk-widget api="/api/helpdesk" inbox="support" locale="en"></helpdesk-widget>';
+  const element = document.querySelector('helpdesk-widget') as HTMLElement & {
+    open(options?: { type?: string }): void;
+  };
+  await waitFor(() =>
+    expect(element.shadowRoot?.querySelector('.launcher')).toBeTruthy()
+  );
+  element.open({ type: 'bug' });
+  await waitFor(() =>
+    expect(
+      element.shadowRoot
+        ?.querySelector('[role="dialog"]')
+        ?.getAttribute('aria-label')
+    ).toBe('Report a bug')
+  );
 });

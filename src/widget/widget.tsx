@@ -49,6 +49,8 @@ export type WidgetProps = {
   label?: string;
   /** In the page itself: always open, no launcher, the conversations first. */
   inline?: boolean;
+  /** Set anew by the host to open the panel, on the form of `type` when the inbox offers it. */
+  openRequest?: { type?: string };
   errors: () => string[];
   onEvent?: (event: WidgetEvent) => void;
 };
@@ -358,6 +360,36 @@ export function Widget(props: WidgetProps) {
     if (emptyList)
       setView(single ? { name: 'form', type: single } : { name: 'home' });
   }, [emptyList, single]);
+
+  // A host's request waits for the session, which says what the inbox offers.
+  const [requested, setRequested] = useState<string | null>(null);
+  const focusForm = useRef(false);
+  useEffect(() => {
+    if (!props.openRequest) return;
+    setRequested(props.openRequest.type ?? '');
+    setMenuOpen(false);
+    setOpen(true);
+  }, [props.openRequest]);
+  const offeredKey = offered.join(',');
+  useEffect(() => {
+    if (requested === null || !data) return;
+    setRequested(null);
+    focusForm.current = true;
+    setView(
+      requested && offeredKey.split(',').includes(requested)
+        ? { name: 'form', type: requested }
+        : single
+          ? { name: 'form', type: single }
+          : { name: 'home' }
+    );
+  }, [requested, data, offeredKey, single]);
+  useEffect(() => {
+    if (!focusForm.current || view.name !== 'form') return;
+    focusForm.current = false;
+    panel.current
+      ?.querySelector<HTMLElement>('.rt-input, textarea, input')
+      ?.focus();
+  }, [view]);
 
   const close = useCallback(() => {
     if (inline) return;

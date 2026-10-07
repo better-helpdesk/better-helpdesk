@@ -1409,3 +1409,41 @@ describe('Widget', () => {
     expect(within(page).queryByText('Export broken')).toBeNull();
   });
 });
+
+describe('opened by the host', () => {
+  afterEach(cleanup);
+  const widget = (openRequest?: { type?: string }) => (
+    <Widget
+      api="/api/support"
+      inbox="support"
+      locale="en"
+      errors={() => []}
+      openRequest={openRequest}
+    />
+  );
+
+  it('opens on the form the host asks for, with focus in it', async () => {
+    mockApi({ 'widget/session': session });
+    const { rerender } = render(widget());
+    expect(
+      screen.queryByRole('textbox', { name: 'What happened?' })
+    ).toBeNull();
+    rerender(widget({ type: 'bug' }));
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    expect(screen.getByRole('dialog', { name: 'Report a bug' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(message));
+  });
+
+  it('opens on its first view when the inbox does not offer the type', async () => {
+    mockApi({ 'widget/session': session });
+    render(widget({ type: 'refund' }));
+    expect(
+      await screen.findByRole('button', { name: /Report a bug/ })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('textbox', { name: 'What happened?' })
+    ).toBeNull();
+  });
+});

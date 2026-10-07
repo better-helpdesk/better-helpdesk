@@ -38,6 +38,7 @@ export function defineHelpdeskWidget(
     #root: Root | null = null;
     #context: Record<string, string> = {};
     #errors: string[] = [];
+    #openRequest: { type?: string } | undefined;
 
     #onError = (event: ErrorEvent) => this.#record(event.message);
     #onRejection = (event: PromiseRejectionEvent) =>
@@ -76,6 +77,15 @@ export function defineHelpdeskWidget(
       this.#errors = [...this.#errors, message.slice(0, 300)].slice(
         -MAX_ERRORS
       );
+    }
+
+    /**
+     * Opens the panel, on the form of `type` (such as `'bug'`) when the inbox
+     * offers it, on its first view otherwise.
+     */
+    open({ type }: { type?: string } = {}) {
+      this.#openRequest = { type };
+      this.#render();
     }
 
     get context() {
@@ -138,6 +148,7 @@ export function defineHelpdeskWidget(
           hostContext={this.#context}
           label={this.getAttribute('label') ?? undefined}
           inline={inline}
+          openRequest={this.#openRequest}
           errors={() => this.#errors}
           onEvent={this.#emit}
         />
