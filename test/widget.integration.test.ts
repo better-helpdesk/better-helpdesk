@@ -1,8 +1,15 @@
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { signIdentityToken } from '../src';
-import { createHarness, IDENTITY_SECRET, WWW_ORIGIN } from './harness';
+import {
+  ago,
+  createHarness,
+  DAY,
+  HOUR,
+  IDENTITY_SECRET,
+  MINUTE,
+  WWW_ORIGIN,
+} from './harness';
 
 const h = createHarness();
 const orgA = { id: 'org-a', name: 'Org A' };
@@ -11,8 +18,14 @@ const orgB = { id: 'org-b', name: 'Org B' };
 beforeEach(() => h.reset());
 afterAll(() => h.close());
 
-async function rows<T>(query: ReturnType<typeof sql>) {
-  return (await h.support.store.db.execute(query)).rows as T[];
+async function conversationCompanies() {
+  const companies = await h.find('company');
+  return (await h.find('conversation'))
+    .map(c => ({
+      context: c.context as { url?: string } | null,
+      company: companies.find(co => co.id === c.companyId)?.externalOrgId,
+    }))
+    .filter(row => row.company !== undefined);
 }
 
 async function openBug(user: string, extra: Record<string, unknown> = {}) {
@@ -37,14 +50,10 @@ describe('in-app conversations', () => {
     const conversation = await openBug('ada', { orgId: orgA.id });
 
     expect(conversation.reference).toMatch(/^DG-\d+$/);
-    const [row] = await rows<{ context: { url: string }; company: string }>(
-      sql`SELECT c.context, co.external_org_id AS company FROM helpdesk.conversation c JOIN helpdesk.company co ON co.id = c.company_id`
-    );
-    expect(row?.context.url).toBe('https://app.test/controls/42');
+    const [row] = await conversationCompanies();
+    expect(row?.context?.url).toBe('https://app.test/controls/42');
     expect(row?.company).toBe(orgA.id);
-    const jobs = await rows<{ kind: string }>(
-      sql`SELECT kind FROM helpdesk.job`
-    );
+    const jobs = await h.find('job');
     expect(jobs.map(j => j.kind)).toEqual(['notify-agents']);
   });
 
@@ -59,9 +68,7 @@ describe('in-app conversations', () => {
       },
     });
     expect(res.status).toBe(201);
-    const [row] = await rows<{ subject: string }>(
-      sql`SELECT subject FROM helpdesk.conversation`
-    );
+    const row = await h.findOne('conversation');
     expect(row?.subject).toBe('Export fails');
   });
 
@@ -72,9 +79,7 @@ describe('in-app conversations', () => {
       body: { inbox: 'support', type: 'question', body: 'hi', orgId: orgB.id },
     });
     expect(res.status).toBe(403);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      0
-    );
+    expect(await h.count('conversation')).toBe(0);
   });
 
   it('refuses anonymous posts to a non-public inbox', async () => {
@@ -173,9 +178,7 @@ describe('visibility', () => {
     );
 
     expect(reply.status).toBe(201);
-    expect(
-      await rows(sql`SELECT 1 FROM helpdesk.message WHERE body = 'Same here'`)
-    ).toHaveLength(1);
+    expect(await h.count('message', { body: 'Same here' })).toBe(1);
   });
 
   it('lets only the author change sharing', async () => {
@@ -226,37 +229,46 @@ describe('visibility', () => {
       ).status
     ).toBe(400);
     expect((await resolve('ada')).status).toBe(200);
-    const [{ resolved_at: resolvedAt } = { resolved_at: null }] = await rows<{
-      resolved_at: string | null;
-    }>(
-      sql`SELECT resolved_at FROM helpdesk.conversation WHERE id = ${conversation.id}`
-    );
+    const resolvedAt =
+      (await h.findOne('conversation', { id: conversation.id }))?.resolvedAt ??
+      null;
     expect((await resolve('ada')).status).toBe(200);
 
     expect(resolvedAt).not.toBeNull();
     expect(
-      await rows(
-        sql`SELECT status, resolved_at, waiting_since, snoozed_until
-            FROM helpdesk.conversation WHERE id = ${conversation.id}`
-      )
+      (await h.find('conversation', { id: conversation.id })).map(r => ({
+        status: r.status,
+        resolvedAt: r.resolvedAt,
+        waitingSince: r.waitingSince,
+        snoozedUntil: r.snoozedUntil,
+      }))
     ).toEqual([
       {
         status: 'resolved',
-        resolved_at: resolvedAt,
-        waiting_since: null,
-        snoozed_until: null,
+        resolvedAt,
+        waitingSince: null,
+        snoozedUntil: null,
       },
     ]);
     expect(
-      await rows(
-        sql`SELECT kind, agent_id, data->>'by' AS by FROM helpdesk.conversation_event
-            WHERE conversation_id = ${conversation.id}
-              AND kind IN ('status', 'snoozedUntil') AND agent_id IS NULL
-            ORDER BY kind`
-      )
+      (
+        await h.find(
+          'conversation_event',
+          {
+            conversationId: conversation.id,
+            kind: ['status', 'snoozedUntil'],
+            agentId: null,
+          },
+          { orderBy: { kind: 'asc' } }
+        )
+      ).map(r => ({
+        kind: r.kind,
+        agentId: r.agentId,
+        by: r.data.by ?? null,
+      }))
     ).toEqual([
-      { kind: 'snoozedUntil', agent_id: null, by: 'customer' },
-      { kind: 'status', agent_id: null, by: 'customer' },
+      { kind: 'snoozedUntil', agentId: null, by: 'customer' },
+      { kind: 'status', agentId: null, by: 'customer' },
     ]);
     const thread = await h.call(
       'GET',
@@ -299,21 +311,28 @@ describe('visibility', () => {
     });
     expect((await rate('ada', { rating: 'good' })).status).toBe(409);
 
-    const [row] = await rows<Record<string, unknown>>(
-      sql`SELECT rating, rating_comment, rated_at IS NOT NULL AS rated
-          FROM helpdesk.conversation WHERE id = ${conversation.id}`
-    );
-    expect(row).toEqual({
+    const row = await h.findOne('conversation', { id: conversation.id });
+    expect({
+      rating: row?.rating,
+      ratingComment: row?.ratingComment,
+      rated: row?.ratedAt != null,
+    }).toEqual({
       rating: 'bad',
-      rating_comment: 'Still broken',
+      ratingComment: 'Still broken',
       rated: true,
     });
     expect(
-      await rows(
-        sql`SELECT kind, data->>'to' AS to, data->>'by' AS by FROM helpdesk.conversation_event
-            WHERE conversation_id = ${conversation.id} AND kind IN ('rating', 'status')
-            ORDER BY created_at, kind`
-      )
+      (
+        await h.find(
+          'conversation_event',
+          { conversationId: conversation.id, kind: ['rating', 'status'] },
+          { orderBy: { createdAt: 'asc', kind: 'asc' } }
+        )
+      ).map(r => ({
+        kind: r.kind,
+        to: r.data.to ?? null,
+        by: r.data.by ?? null,
+      }))
     ).toEqual([
       { kind: 'status', to: 'resolved', by: 'customer' },
       { kind: 'rating', to: 'bad', by: 'customer' },
@@ -352,16 +371,12 @@ describe('visibility', () => {
 
 describe('last seen', () => {
   async function lastSeen(email: string) {
-    const [row] = await rows<{ ms: number | null }>(
-      sql`SELECT (extract(epoch FROM date_trunc('milliseconds', last_seen_at)) * 1000)::float8 AS ms FROM helpdesk.contact WHERE email = ${email}`
-    );
-    return row?.ms ?? null;
+    const row = await h.findOne('contact', { email });
+    return row?.lastSeenAt?.getTime() ?? null;
   }
 
-  async function age(email: string, interval: string) {
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.contact SET last_seen_at = now() - ${interval}::interval WHERE email = ${email}`
-    );
+  async function age(email: string, ms: number) {
+    await h.update('contact', { email }, { lastSeenAt: ago(ms) });
     return lastSeen(email);
   }
 
@@ -370,11 +385,11 @@ describe('last seen', () => {
     await openBug('ada');
     expect(await lastSeen('ada@harbor.test')).toEqual(expect.any(Number));
 
-    const recent = await age('ada@harbor.test', '2 minutes');
+    const recent = await age('ada@harbor.test', 2 * MINUTE);
     await h.call('GET', 'widget/session?inbox=support', { user: 'ada' });
     expect(await lastSeen('ada@harbor.test')).toEqual(recent);
 
-    const stale = await age('ada@harbor.test', '10 minutes');
+    const stale = await age('ada@harbor.test', 10 * MINUTE);
     await h.call('GET', 'widget/session?inbox=support', { user: 'ada' });
     expect(await lastSeen('ada@harbor.test')).toBeGreaterThan(
       stale ?? Number.POSITIVE_INFINITY
@@ -392,7 +407,7 @@ describe('last seen', () => {
     });
     expect(await lastSeen('buyer@example.test')).toEqual(expect.any(Number));
 
-    const stale = await age('buyer@example.test', '1 day');
+    const stale = await age('buyer@example.test', DAY);
     await h.call('GET', 'widget/session?inbox=sales', {
       headers: { 'x-helpdesk-visitor': created.data.visitorToken },
     });
@@ -404,7 +419,7 @@ describe('last seen', () => {
   it('keeps the later of the two when contacts merge', async () => {
     const a = await h.support.store.createContact({ email: 'a@harbor.test' });
     const b = await h.support.store.createContact({ email: 'b@harbor.test' });
-    const later = await age('b@harbor.test', '1 hour');
+    const later = await age('b@harbor.test', HOUR);
     await h.support.store.mergeContacts(a.id, b.id);
     expect(await lastSeen('a@harbor.test')).toEqual(later);
   });
@@ -477,8 +492,7 @@ describe('anonymous visitors', () => {
         })
       ).status
     ).toBe(404);
-    const contacts = await rows(sql`SELECT id FROM helpdesk.contact`);
-    expect(contacts).toHaveLength(2);
+    expect(await h.count('contact')).toBe(2);
   });
 
   it('opens a new contact when the same browser types another address', async () => {
@@ -491,9 +505,10 @@ describe('anonymous visitors', () => {
       headers: { 'x-helpdesk-visitor': token },
     });
     expect(second.data.visitorToken).not.toBe(token);
-    const owners = await rows<{ email: string }>(sql`
-      SELECT ct.email FROM helpdesk.conversation c
-      JOIN helpdesk.contact ct ON ct.id = c.contact_id ORDER BY c.created_at`);
+    const contacts = await h.find('contact');
+    const owners = (
+      await h.find('conversation', {}, { orderBy: { createdAt: 'asc' } })
+    ).flatMap(c => contacts.filter(ct => ct.id === c.contactId));
     expect(owners.map(o => o.email)).toEqual([
       'buyer@example.test',
       'someone.else@example.test',
@@ -502,11 +517,12 @@ describe('anonymous visitors', () => {
 
   it('marks sales visitors as leads', async () => {
     await h.call('POST', 'widget/conversations', { body: salesBody });
-    const [contact] = await rows<{ lead_stage: string; email: string }>(
-      sql`SELECT lead_stage, email FROM helpdesk.contact`
-    );
+    const [contact] = (await h.find('contact')).map(r => ({
+      leadStage: r.leadStage,
+      email: r.email,
+    }));
     expect(contact).toEqual({
-      lead_stage: 'lead',
+      leadStage: 'lead',
       email: 'buyer@example.test',
     });
   });
@@ -521,8 +537,8 @@ describe('anonymous visitors', () => {
       try {
         await custom.call('POST', 'widget/conversations', { body: salesBody });
         expect(
-          await rows(sql`SELECT lead_stage FROM helpdesk.contact`)
-        ).toEqual([{ lead_stage: expected }]);
+          (await h.find('contact')).map(r => ({ leadStage: r.leadStage }))
+        ).toEqual([{ leadStage: expected }]);
       } finally {
         await custom.close();
       }
@@ -534,9 +550,7 @@ describe('anonymous visitors', () => {
       body: { ...salesBody, website: 'http://spam.test' },
     });
     expect(res.status).toBe(201);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      0
-    );
+    expect(await h.count('conversation')).toBe(0);
   });
 
   it('tells the widget whether uploads are available', async () => {
@@ -562,9 +576,7 @@ describe('anonymous visitors', () => {
       expect((await post()).status).toBe(201);
       expect((await post()).status).toBe(201);
       expect((await post()).status).toBe(429);
-      expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-        2
-      );
+      expect(await h.count('conversation')).toBe(2);
     } finally {
       await limited.close();
     }
@@ -577,7 +589,7 @@ describe('identity merging', () => {
     await openBug('first');
     h.addUser('second', { email: 'same@example.test' });
     await openBug('second');
-    expect(await rows(sql`SELECT id FROM helpdesk.contact`)).toHaveLength(1);
+    expect(await h.count('contact')).toBe(1);
   });
 
   it('does not merge on an unverified host email', async () => {
@@ -585,7 +597,7 @@ describe('identity merging', () => {
     await openBug('first');
     h.addUser('second', { email: 'same@example.test', emailVerified: false });
     await openBug('second');
-    expect(await rows(sql`SELECT id FROM helpdesk.contact`)).toHaveLength(2);
+    expect(await h.count('contact')).toBe(2);
   });
 });
 
@@ -772,9 +784,15 @@ describe('first-message qualification', () => {
           })
         ).status
       ).toBe(201);
-      const [row] = await rows<{ tags: string[]; priority: string }>(
-        sql`SELECT c.tags, v.priority FROM helpdesk.contact c JOIN helpdesk.conversation v ON v.contact_id = c.id`
+      const rows = await Promise.all(
+        (await h.find('conversation')).map(async v => ({
+          tags: v.contactId
+            ? (await h.support.store.getContact(v.contactId))?.tags
+            : undefined,
+          priority: v.priority,
+        }))
       );
+      const [row] = rows.filter(r => r.tags !== undefined);
       expect(row).toEqual({ tags: ['consultancy'], priority: 'high' });
     } finally {
       await qualified.close();
@@ -796,15 +814,13 @@ describe('what an unproven visitor can reach', () => {
     const typed = await h.call('POST', 'widget/conversations', { body: lead });
     const token = typed.data.visitorToken as string;
     await openBug('ada');
-    const [host] = await rows<{ contact_id: string }>(
-      sql`SELECT contact_id FROM helpdesk.identity WHERE channel = 'host'`
-    );
-    const [leadContact] = await rows<{ contact_id: string }>(
-      sql`SELECT contact_id FROM helpdesk.conversation WHERE id = ${typed.data.conversation.id}::uuid`
-    );
-    await h.call('POST', `agent/contacts/${leadContact?.contact_id}/merge`, {
+    const host = await h.findOne('identity', { channel: 'host' });
+    const leadContact = await h.findOne('conversation', {
+      id: typed.data.conversation.id,
+    });
+    await h.call('POST', `agent/contacts/${leadContact?.contactId}/merge`, {
       user: 'agent',
-      body: { sourceId: host?.contact_id },
+      body: { sourceId: host?.contactId },
     });
 
     const session = await h.call('GET', 'widget/session?inbox=sales', {
@@ -923,9 +939,7 @@ describe('host identity tokens', () => {
       agent: null,
     });
     expect(session.data.conversations).toHaveLength(1);
-    const [row] = await rows<{ company: string }>(
-      sql`SELECT co.external_org_id AS company FROM helpdesk.conversation c JOIN helpdesk.company co ON co.id = c.company_id`
-    );
+    const [row] = await conversationCompanies();
     expect(row?.company).toBe(orgB.id);
   });
 
@@ -947,9 +961,7 @@ describe('host identity tokens', () => {
       });
       expect(res.status).toBe(401);
     }
-    expect(await rows(sql`SELECT id FROM helpdesk.conversation`)).toHaveLength(
-      0
-    );
+    expect(await h.count('conversation')).toBe(0);
   });
 
   it('never grants the agent API', async () => {
@@ -983,11 +995,10 @@ describe('rating from the email', () => {
   const open = (url: string, method = 'GET') =>
     h.support.handler(new Request(url, { method }));
   const rating = async (id: string) =>
-    (
-      await rows<{ rating: string | null; status: string }>(
-        sql`SELECT rating, status FROM helpdesk.conversation WHERE id = ${id}::uuid`
-      )
-    )[0];
+    (await h.find('conversation', { id })).map(r => ({
+      rating: r.rating,
+      status: r.status,
+    }))[0];
 
   it('records a rating once, from the button on the page the link opens', async () => {
     const { conversation, links } = await resolvedReply('ada');

@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createHarness } from './harness';
@@ -7,10 +6,6 @@ const h = createHarness();
 
 beforeEach(() => h.reset());
 afterAll(() => h.close());
-
-async function rows<T>(query: ReturnType<typeof sql>) {
-  return (await h.support.store.db.execute(query)).rows as T[];
-}
 
 async function open(user: string, body: string) {
   const res = await h.call('POST', 'widget/conversations', {
@@ -37,47 +32,59 @@ describe('merging conversations', () => {
   it('moves messages, attachments and the customer onto the target and resolves the source', async () => {
     const source = await open('carol', 'From the widget');
     const target = await open('dan', 'By email');
-    const [message] = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.message WHERE conversation_id = ${source.id}::uuid`
-    );
-    await h.support.store.db.execute(sql`
-      INSERT INTO helpdesk.attachment (conversation_id, message_id, key, filename, content_type, size, uploaded)
-      VALUES (${source.id}::uuid, ${message?.id}::uuid, 'k', 'log.txt', 'text/plain', 3, true)`);
+    const message = await h.findOne('message', { conversationId: source.id });
+    await h.insert('attachment', {
+      conversationId: source.id,
+      messageId: message?.id,
+      key: 'k',
+      filename: 'log.txt',
+      contentType: 'text/plain',
+      size: 3,
+      uploaded: true,
+    });
 
     expect((await merge(source.id, target.id)).status).toBe(200);
 
     expect(
-      await rows(
-        sql`SELECT body FROM helpdesk.message WHERE conversation_id = ${target.id}::uuid ORDER BY created_at`
-      )
+      (
+        await h.find(
+          'message',
+          { conversationId: target.id },
+          { orderBy: { createdAt: 'asc' } }
+        )
+      ).map(r => ({ body: r.body }))
     ).toEqual([{ body: 'From the widget' }, { body: 'By email' }]);
     expect(
-      await rows(sql`SELECT conversation_id FROM helpdesk.attachment`)
-    ).toEqual([{ conversation_id: target.id }]);
-    const [merged] = await rows<{
-      status: string;
-      merged_into_id: string;
-      resolved: boolean;
-    }>(
-      sql`SELECT status, merged_into_id, resolved_at IS NOT NULL AS resolved FROM helpdesk.conversation WHERE id = ${source.id}::uuid`
-    );
-    expect(merged).toEqual({
+      (await h.find('attachment')).map(r => ({
+        conversationId: r.conversationId,
+      }))
+    ).toEqual([{ conversationId: target.id }]);
+    const merged = await h.findOne('conversation', { id: source.id });
+    expect({
+      status: merged?.status,
+      mergedIntoId: merged?.mergedIntoId,
+      resolved: merged?.resolvedAt != null,
+    }).toEqual({
       status: 'resolved',
-      merged_into_id: target.id,
+      mergedIntoId: target.id,
       resolved: true,
     });
     expect(
-      await rows(
-        sql`SELECT conversation_id, kind, data->>'reference' AS reference FROM helpdesk.conversation_event ORDER BY kind`
-      )
+      (
+        await h.find('conversation_event', {}, { orderBy: { kind: 'asc' } })
+      ).map(r => ({
+        conversationId: r.conversationId,
+        kind: r.kind,
+        reference: r.data.reference,
+      }))
     ).toEqual([
       {
-        conversation_id: target.id,
+        conversationId: target.id,
         kind: 'merged.from',
         reference: source.reference,
       },
       {
-        conversation_id: source.id,
+        conversationId: source.id,
         kind: 'merged.into',
         reference: target.reference,
       },
@@ -107,10 +114,10 @@ describe('merging conversations', () => {
     });
 
     expect(
-      await rows(
-        sql`SELECT conversation_id FROM helpdesk.message WHERE body = 'Any news?'`
-      )
-    ).toEqual([{ conversation_id: target.id }]);
+      (await h.find('message', { body: 'Any news?' })).map(r => ({
+        conversationId: r.conversationId,
+      }))
+    ).toEqual([{ conversationId: target.id }]);
   });
 
   it('follows a chain of merges for a reply to the first source', async () => {
@@ -133,10 +140,10 @@ describe('merging conversations', () => {
     });
 
     expect(
-      await rows(
-        sql`SELECT conversation_id FROM helpdesk.message WHERE body = 'Still there?'`
-      )
-    ).toEqual([{ conversation_id: third.id }]);
+      (await h.find('message', { body: 'Still there?' })).map(r => ({
+        conversationId: r.conversationId,
+      }))
+    ).toEqual([{ conversationId: third.id }]);
   });
 
   it('refuses a widget reply to a merged-away conversation and leaves it resolved', async () => {
@@ -151,13 +158,11 @@ describe('merging conversations', () => {
     );
 
     expect(res.status).toBe(409);
+    expect(await h.count('message', { body: 'Late reply' })).toBe(0);
     expect(
-      await rows(sql`SELECT 1 FROM helpdesk.message WHERE body = 'Late reply'`)
-    ).toEqual([]);
-    expect(
-      await rows(
-        sql`SELECT status FROM helpdesk.conversation WHERE id = ${source.id}::uuid`
-      )
+      (await h.find('conversation', { id: source.id })).map(r => ({
+        status: r.status,
+      }))
     ).toEqual([{ status: 'resolved' }]);
   });
 
@@ -171,15 +176,12 @@ describe('merging conversations', () => {
 
     expect((await merge(source.id, target.id)).status).toBe(200);
 
-    const [row] = await rows<{
-      status: string;
-      resolved_at: string | null;
-      waiting: boolean;
-    }>(
-      sql`SELECT status, resolved_at, waiting_since IS NOT NULL AS waiting
-          FROM helpdesk.conversation WHERE id = ${target.id}::uuid`
-    );
-    expect(row).toEqual({ status: 'open', resolved_at: null, waiting: true });
+    const row = await h.findOne('conversation', { id: target.id });
+    expect({
+      status: row?.status,
+      resolvedAt: row?.resolvedAt,
+      waiting: row?.waitingSince != null,
+    }).toEqual({ status: 'open', resolvedAt: null, waiting: true });
   });
 
   it('asks for no rating on a merged conversation', async () => {
@@ -200,10 +202,11 @@ describe('merging conversations', () => {
       { user: 'carol', body: { rating: 'bad' } }
     );
     expect(rated.status).toBe(409);
-    const [row] = await rows<{ status: string; rating: string | null }>(
-      sql`SELECT status, rating FROM helpdesk.conversation WHERE id = ${source.id}::uuid`
-    );
-    expect(row).toEqual({ status: 'resolved', rating: null });
+    const row = await h.findOne('conversation', { id: source.id });
+    expect({ status: row?.status, rating: row?.rating }).toEqual({
+      status: 'resolved',
+      rating: null,
+    });
   });
 
   it('refuses a merge into itself, into an unknown conversation, and from or into a merged one', async () => {
@@ -218,10 +221,6 @@ describe('merging conversations', () => {
     expect((await merge(a.id, b.id)).status).toBe(200);
     expect((await merge(a.id, c.id)).status).toBe(409);
     expect((await merge(c.id, a.id)).status).toBe(409);
-    expect(
-      await rows(
-        sql`SELECT 1 FROM helpdesk.message WHERE conversation_id = ${c.id}::uuid`
-      )
-    ).toHaveLength(1);
+    expect(await h.count('message', { conversationId: c.id })).toBe(1);
   });
 });

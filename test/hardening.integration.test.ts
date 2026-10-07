@@ -1,9 +1,8 @@
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
 import type { InboundMessage } from '../src';
-import { createHarness } from './harness';
+import { ago, createHarness, DAY, HOUR } from './harness';
 
 const h = createHarness({ customerRateLimit: 5 });
 const orgA = { id: 'org-a', name: 'Org A' };
@@ -11,10 +10,6 @@ const orgB = { id: 'org-b', name: 'Org B' };
 
 beforeEach(() => h.reset());
 afterAll(() => h.close());
-
-async function rows<T>(query: ReturnType<typeof sql>) {
-  return (await h.support.store.db.execute(query)).rows as T[];
-}
 
 const mail = (overrides: Partial<InboundMessage> = {}): InboundMessage => ({
   messageId: `<${Math.random()}@mail.test>`,
@@ -49,8 +44,10 @@ async function lead(email = 'carol@example.test') {
 describe('automated mail', () => {
   it('keeps an out-of-office as a note that neither reopens the thread nor proves the address', async () => {
     const { conversation } = await lead();
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now(), waiting_since = NULL`
+    await h.update(
+      'conversation',
+      {},
+      { status: 'resolved', resolvedAt: new Date(), waitingSince: null }
     );
 
     await h.support.handleInbound(
@@ -62,19 +59,21 @@ describe('automated mail', () => {
     );
 
     expect(
-      await rows(
-        sql`SELECT status, waiting_since FROM helpdesk.conversation WHERE id = ${conversation.id}::uuid`
-      )
-    ).toEqual([{ status: 'resolved', waiting_since: null }]);
+      (await h.find('conversation', { id: conversation.id })).map(r => ({
+        status: r.status,
+        waitingSince: r.waitingSince,
+      }))
+    ).toEqual([{ status: 'resolved', waitingSince: null }]);
     expect(
-      await rows(
-        sql`SELECT author_type, internal FROM helpdesk.message WHERE body = 'I am out of office'`
-      )
-    ).toEqual([{ author_type: 'system', internal: true }]);
+      (await h.find('message', { body: 'I am out of office' })).map(r => ({
+        authorType: r.authorType,
+        internal: r.internal,
+      }))
+    ).toEqual([{ authorType: 'system', internal: true }]);
     expect(
-      await rows(
-        sql`SELECT verified FROM helpdesk.identity WHERE channel = 'email'`
-      )
+      (await h.find('identity', { channel: 'email' })).map(r => ({
+        verified: r.verified,
+      }))
     ).toEqual([{ verified: false }]);
   });
 
@@ -88,11 +87,7 @@ describe('automated mail', () => {
         verified: false,
       })
     );
-    expect(
-      await rows(
-        sql`SELECT 1 FROM helpdesk.message WHERE body = 'Planted note'`
-      )
-    ).toHaveLength(0);
+    expect(await h.count('message', { body: 'Planted note' })).toBe(0);
   });
 
   it('ignores a signed automated mail from someone not on the thread', async () => {
@@ -105,18 +100,12 @@ describe('automated mail', () => {
         automated: true,
       })
     );
-    expect(
-      await rows(
-        sql`SELECT 1 FROM helpdesk.message WHERE author_type = 'system'`
-      )
-    ).toHaveLength(0);
+    expect(await h.count('message', { authorType: 'system' })).toBe(0);
   });
 
   it('drops an automated mail that belongs to no thread', async () => {
     await h.support.handleInbound(mail({ automated: true }));
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      0
-    );
+    expect(await h.count('conversation')).toBe(0);
   });
 });
 
@@ -136,17 +125,21 @@ describe('verification per message', () => {
       })
     );
 
-    const messages = await rows<{
-      body: string;
-      verified: boolean;
-      same_contact: boolean;
-    }>(sql`
-      SELECT m.body, m.verified, m.contact_id = c.contact_id AS same_contact
-      FROM helpdesk.message m JOIN helpdesk.conversation c ON c.id = m.conversation_id
-      WHERE c.id = ${conversation.id}::uuid ORDER BY m.created_at`);
+    const owner = await h.findOne('conversation', { id: conversation.id });
+    const messages = (
+      await h.find(
+        'message',
+        { conversationId: conversation.id },
+        { orderBy: { createdAt: 'asc' } }
+      )
+    ).map(m => ({
+      body: m.body,
+      verified: m.verified,
+      sameContact: m.contactId === owner?.contactId,
+    }));
     expect(messages).toEqual([
-      { body: 'Words nobody proved', verified: false, same_contact: true },
-      { body: 'I never wrote this', verified: true, same_contact: false },
+      { body: 'Words nobody proved', verified: false, sameContact: true },
+      { body: 'I never wrote this', verified: true, sameContact: false },
     ]);
 
     const thread = await h.call(
@@ -227,12 +220,14 @@ describe('verification per message', () => {
     await h.support.handleInbound(
       mail({ to: [`support+${reference}@devguard.test`] })
     );
+    const owner = await h.findOne('conversation', { id });
     expect(
-      await rows(sql`
-        SELECT 1 FROM helpdesk.identity i JOIN helpdesk.contact c ON c.id = i.contact_id
-        WHERE i.channel = 'email' AND i.verified AND c.id = (
-          SELECT contact_id FROM helpdesk.conversation WHERE id = ${id}::uuid)`)
-    ).toHaveLength(0);
+      await h.count('identity', {
+        channel: 'email',
+        verified: true,
+        contactId: owner?.contactId,
+      })
+    ).toBe(0);
   });
 
   it('keeps a typed subject out of replies even after the address is proven', async () => {
@@ -284,18 +279,24 @@ describe('removed agents', () => {
       user: 'ada',
       body: { inbox: 'support', type: 'question', body: 'help' },
     });
-    await h.support.store.db.execute(
-      sql`DELETE FROM helpdesk.job WHERE payload->>'conversationId' = ${assigned.data.conversation.id}`
-    );
+    await h.remove('job', {
+      id: (await h.find('job'))
+        .filter(
+          j =>
+            (j.payload as { conversationId?: string }).conversationId ===
+            assigned.data.conversation.id
+        )
+        .map(j => j.id),
+    });
     await h.runDueJobs();
     expect(h.emails.filter(e => e.kind === 'agent-new').map(e => e.to)).toEqual(
       ['agent@devguard.test']
     );
     expect(
-      await rows(
-        sql`SELECT assignee_id FROM helpdesk.conversation WHERE id = ${assigned.data.conversation.id}::uuid`
+      (await h.find('conversation', { id: assigned.data.conversation.id })).map(
+        r => ({ assigneeId: r.assigneeId })
       )
-    ).toEqual([{ assignee_id: null }]);
+    ).toEqual([{ assigneeId: null }]);
     expect(
       (
         await h.call(
@@ -313,8 +314,10 @@ describe('removed agents', () => {
     h.addUser('away', { isAgent: true, email: 'away@devguard.test' });
     await h.call('GET', 'agent/me', { user: 'agent' });
     await h.call('GET', 'agent/me', { user: 'away' });
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.agent SET last_seen_at = now() - interval '31 days' WHERE email = 'away@devguard.test'`
+    await h.update(
+      'agent',
+      { email: 'away@devguard.test' },
+      { lastSeenAt: ago(31 * DAY) }
     );
     const ask = (body: string) =>
       h.call('POST', 'widget/conversations', {
@@ -375,9 +378,7 @@ describe('budgets', () => {
       }
     }
     expect(refused).toBe(1);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      30
-    );
+    expect(await h.count('conversation')).toBe(30);
   });
 
   it('drops unsigned mail past its domain’s budget quietly, and refuses signed mail past its own', async () => {
@@ -392,9 +393,7 @@ describe('budgets', () => {
       }
     }
     expect(refused).toBe(0);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      100
-    );
+    expect(await h.count('conversation')).toBe(100);
 
     for (let i = 0; i < 101; i++) {
       try {
@@ -414,18 +413,18 @@ describe('budgets', () => {
       user: 'carol',
       body: { inbox: 'support', type: 'question', body: 'hi' },
     });
-    await h.support.store.db.execute(
-      sql`INSERT INTO helpdesk.rate_limit (key, window_start, count) VALUES ('inbound:signed:@example.test', date_trunc('hour', now()), 100)`
-    );
+    await h.insert('rate_limit', {
+      key: 'inbound:signed:@example.test',
+      windowStart: new Date(Math.floor(Date.now() / HOUR) * HOUR),
+      count: 100,
+    });
     await h.support.handleInbound(
       mail({
         to: [`support+${created.data.conversation.reference}@devguard.test`],
         text: 'Still here',
       })
     );
-    expect(
-      await rows(sql`SELECT 1 FROM helpdesk.message WHERE body = 'Still here'`)
-    ).toHaveLength(1);
+    expect(await h.count('message', { body: 'Still here' })).toBe(1);
   });
 
   it('keeps a triage budget for the host’s signed-in users that others cannot use up', async () => {
@@ -460,9 +459,7 @@ describe('budgets', () => {
       expect(calls).toBeGreaterThan(0);
 
       calls = 0;
-      await ai.support.store.db.execute(
-        sql`UPDATE helpdesk.rate_limit SET count = 100 WHERE key = 'triages:other'`
-      );
+      await ai.update('rate_limit', { key: 'triages:other' }, { count: 100 });
       await anonymousLead();
       await ai.runDueJobs();
       expect(calls).toBe(0);
@@ -492,9 +489,7 @@ describe('bounded input', () => {
       },
     });
     expect(res.status).toBe(413);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      0
-    );
+    expect(await h.count('conversation')).toBe(0);
   });
 
   it('refuses context with too many keys', async () => {
@@ -527,23 +522,23 @@ describe('bounded input', () => {
         ],
       })
     );
-    const stored = await rows<{ content_type: string }>(
-      sql`SELECT content_type FROM helpdesk.attachment ORDER BY created_at`
+    const stored = await h.find(
+      'attachment',
+      {},
+      { orderBy: { createdAt: 'asc' } }
     );
     expect(stored).toHaveLength(20);
-    expect(stored.map(a => a.content_type).sort()[0]).toBe(
+    expect(stored.map(a => a.contentType).sort()[0]).toBe(
       'application/octet-stream'
     );
-    expect(stored.every(a => a.content_type !== 'text/html')).toBe(true);
+    expect(stored.every(a => a.contentType !== 'text/html')).toBe(true);
   });
 
   it('ignores a plus-address reference too large for a conversation number', async () => {
     await h.support.handleInbound(
       mail({ to: ['support+DG-99999999999@devguard.test'] })
     );
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      1
-    );
+    expect(await h.count('conversation')).toBe(1);
   });
 });
 
@@ -569,37 +564,29 @@ describe('a retried inbound mail', () => {
 
   it('opens the conversation with its attachment and notifies agents', async () => {
     await deliverTwice(mail({ attachments: [pdf] }));
-    expect(await rows(sql`SELECT id FROM helpdesk.conversation`)).toHaveLength(
-      1
-    );
-    expect(await rows(sql`SELECT filename FROM helpdesk.attachment`)).toEqual([
-      { filename: 'invoice.pdf' },
-    ]);
+    expect(await h.count('conversation')).toBe(1);
     expect(
-      await rows(
-        sql`SELECT kind FROM helpdesk.job WHERE kind = 'notify-agents'`
-      )
-    ).toHaveLength(1);
+      (await h.find('attachment')).map(a => ({ filename: a.filename }))
+    ).toEqual([{ filename: 'invoice.pdf' }]);
+    expect(await h.count('job', { kind: 'notify-agents' })).toBe(1);
   });
 
   it('adds a reply with its attachment and reopens the resolved thread', async () => {
     const first = mail();
     await h.support.handleInbound(first);
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET status = 'resolved'`
-    );
-    await h.support.store.db.execute(sql`DELETE FROM helpdesk.job`);
+    await h.update('conversation', {}, { status: 'resolved' });
+    await h.remove('job', {});
     await deliverTwice(
       mail({ references: [first.messageId], attachments: [pdf] })
     );
-    expect(await rows(sql`SELECT id FROM helpdesk.message`)).toHaveLength(2);
-    expect(await rows(sql`SELECT filename FROM helpdesk.attachment`)).toEqual([
-      { filename: 'invoice.pdf' },
-    ]);
+    expect(await h.count('message')).toBe(2);
     expect(
-      await rows<{ reopened: boolean }>(
-        sql`SELECT payload->'reopened' AS reopened FROM helpdesk.job WHERE kind = 'notify-agents'`
-      )
+      (await h.find('attachment')).map(a => ({ filename: a.filename }))
+    ).toEqual([{ filename: 'invoice.pdf' }]);
+    expect(
+      (await h.find('job', { kind: 'notify-agents' })).map(j => ({
+        reopened: (j.payload as { reopened?: boolean }).reopened ?? null,
+      }))
     ).toEqual([{ reopened: true }]);
   });
 });
@@ -608,9 +595,9 @@ describe('blocked senders', () => {
   it('refuses a blocked address in the widget and by email, and keeps their conversations out of the inbox', async () => {
     h.addUser('agent', { isAgent: true });
     const first = await lead('spam@bot.test');
-    const [contact] = await rows<{ id: string }>(
-      sql`SELECT contact_id AS id FROM helpdesk.conversation`
-    );
+    const [contact] = (await h.find('conversation')).map(c => ({
+      id: c.contactId,
+    }));
     const inbox = async () =>
       (await h.call('GET', 'agent/conversations?status=any', { user: 'agent' }))
         .data as { conversations: { id: string }[]; counts: { all: number } };
@@ -626,9 +613,7 @@ describe('blocked senders', () => {
     expect(
       (await h.call('GET', 'agent/unread', { user: 'agent' })).data.waiting
     ).toBe(0);
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
-    );
+    await h.update('conversation', {}, { waitingSince: ago(2 * HOUR) });
     expect(await h.support.store.claimReminders('sales', 1)).toEqual([]);
     const page = await h.call('GET', `agent/contacts/${contact?.id}`, {
       user: 'agent',
@@ -661,7 +646,9 @@ describe('blocked senders', () => {
       mail({ from: { address: 'spam@bot.test', name: 'Bot' }, text: 'By mail' })
     );
     expect(
-      await rows(sql`SELECT body FROM helpdesk.message ORDER BY created_at`)
+      (await h.find('message', {}, { orderBy: { createdAt: 'asc' } })).map(
+        m => ({ body: m.body })
+      )
     ).toEqual([{ body: 'Words nobody proved' }]);
 
     await h.call('PATCH', `agent/contacts/${contact?.id}`, {
@@ -675,9 +662,7 @@ describe('blocked senders', () => {
 
 describe('blocked senders, by every address they hold', () => {
   const block = async (email: string) => {
-    const [contact] = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.contact WHERE email = ${email}`
-    );
+    const [contact] = await h.find('contact', { email });
     await h.call('PATCH', `agent/contacts/${contact?.id}`, {
       user: 'agent',
       body: { blocked: true },
@@ -689,9 +674,7 @@ describe('blocked senders, by every address they hold', () => {
     h.addUser('agent', { isAgent: true });
     await lead('a@spam.test');
     await lead('b@spam.test');
-    const [a, b] = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.contact ORDER BY email`
-    );
+    const [a, b] = await h.find('contact', {}, { orderBy: { email: 'asc' } });
     await h.call('POST', `agent/contacts/${a?.id}/merge`, {
       user: 'agent',
       body: { sourceId: b?.id },
@@ -710,20 +693,14 @@ describe('blocked senders, by every address they hold', () => {
     await h.support.handleInbound(
       mail({ from: { address: 'b@spam.test', name: 'B' }, text: 'By mail' })
     );
-    expect(
-      await rows(
-        sql`SELECT 1 FROM helpdesk.message WHERE body IN ('Again', 'By mail')`
-      )
-    ).toEqual([]);
+    expect(await h.count('message', { body: ['Again', 'By mail'] })).toBe(0);
   });
 
   it('keeps the block when a blocked contact is merged into one that is not', async () => {
     h.addUser('agent', { isAgent: true });
     await lead('a@spam.test');
     await lead('b@spam.test');
-    const [a, b] = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.contact ORDER BY email`
-    );
+    const [a, b] = await h.find('contact', {}, { orderBy: { email: 'asc' } });
     await block('b@spam.test');
     await h.call('POST', `agent/contacts/${a?.id}/merge`, {
       user: 'agent',
@@ -731,7 +708,10 @@ describe('blocked senders, by every address they hold', () => {
     });
 
     expect(
-      await rows(sql`SELECT email, blocked FROM helpdesk.contact`)
+      (await h.find('contact')).map(c => ({
+        email: c.email,
+        blocked: c.blocked,
+      }))
     ).toEqual([{ email: 'a@spam.test', blocked: true }]);
     for (const email of ['a@spam.test', 'b@spam.test']) {
       const res = await h.call('POST', 'widget/conversations', {
@@ -757,8 +737,10 @@ describe('blocked senders, by every address they hold', () => {
 describe('smaller hardening', () => {
   it('stops honouring a visitor token left unused for a month', async () => {
     const { visitorToken } = await lead();
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.identity SET last_used_at = now() - interval '31 days' WHERE channel = 'visitor'`
+    await h.update(
+      'identity',
+      { channel: 'visitor' },
+      { lastUsedAt: ago(31 * DAY) }
     );
     const session = await h.call('GET', 'widget/session?inbox=sales', {
       headers: { 'x-helpdesk-visitor': visitorToken },
@@ -782,17 +764,15 @@ describe('smaller hardening', () => {
       orgA.id,
     ]);
     const moved = await h.support.store.upsertCompany(orgB.id, orgB.name);
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET company_id = ${moved.id}::uuid WHERE id = ${id}::uuid`
-    );
+    await h.update('conversation', { id }, { companyId: moved.id });
     expect(await h.support.store.setSharing(id, company?.id ?? '', true)).toBe(
       false
     );
     expect(
-      await rows(
-        sql`SELECT shared_with_company FROM helpdesk.conversation WHERE id = ${id}::uuid`
-      )
-    ).toEqual([{ shared_with_company: false }]);
+      (await h.find('conversation', { id })).map(c => ({
+        sharedWithCompany: c.sharedWithCompany,
+      }))
+    ).toEqual([{ sharedWithCompany: false }]);
   });
 
   it('still lets the author stop sharing a thread that has no company', async () => {
@@ -824,9 +804,7 @@ describe('smaller hardening', () => {
       user: 'bob',
       body: { inbox: 'support', type: 'question', body: 'b', orgId: orgA.id },
     });
-    const [bob] = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.contact WHERE email = 'bob@example.test'`
-    );
+    const [bob] = await h.find('contact', { email: 'bob@example.test' });
     await h.call(
       'POST',
       `agent/conversations/${theirs.data.conversation.id}/participants`,
@@ -840,9 +818,7 @@ describe('smaller hardening', () => {
 
     await h.support.deleteCompany(orgA.id);
 
-    expect(
-      await rows(sql`SELECT 1 FROM helpdesk.message WHERE body = 'from bob'`)
-    ).toHaveLength(0);
+    expect(await h.count('message', { body: 'from bob' })).toBe(0);
   });
 
   it('lets only the uploader complete an upload', async () => {
@@ -898,9 +874,7 @@ describe('smaller hardening', () => {
         user: 'ada',
         body: { inbox: 'support', type: 'question', body: 'hi' },
       });
-      await ai.support.store.db.execute(
-        sql`UPDATE helpdesk.contact SET locale = 'de'`
-      );
+      await ai.update('contact', {}, { locale: 'de' });
       const draft = (body: Record<string, unknown>) =>
         ai.call(
           'POST',

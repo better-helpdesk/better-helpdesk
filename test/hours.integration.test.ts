@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import {
   afterAll,
   afterEach,
@@ -59,8 +58,10 @@ describe('business hours', () => {
     await h.call('GET', 'agent/me', { user: 'agent' });
     await write('support', 'ada');
     // Friday 27 March 17:30 CET, after closing.
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET waiting_since = '2026-03-27T16:30:00Z'`
+    await h.update(
+      'conversation',
+      {},
+      { waitingSince: new Date('2026-03-27T16:30:00Z') }
     );
     const reminders = () => h.emails.filter(e => e.kind === 'agent-reminder');
 

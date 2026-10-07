@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 
 import type { InboundMessage } from '../src';
-import { createHarness } from './harness';
+import { ago, createHarness, DAY, HOUR, MINUTE } from './harness';
 
 const h = createHarness({
   customFields: {
@@ -24,10 +23,6 @@ const orgB = { id: 'org-b', name: 'Org B' };
 
 beforeEach(() => h.reset());
 afterAll(() => h.close());
-
-async function rows<T>(query: ReturnType<typeof sql>) {
-  return (await h.support.store.db.execute(query)).rows as T[];
-}
 
 async function open(user: string, extra: Record<string, unknown> = {}) {
   const res = await h.call('POST', 'widget/conversations', {
@@ -57,8 +52,10 @@ describe('agent access', () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });
     const first = await open('ada');
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '3 hours' WHERE id = ${first.id}::uuid`
+    await h.update(
+      'conversation',
+      { id: first.id },
+      { waitingSince: ago(3 * HOUR) }
     );
     const second = await open('ada');
     const res = await h.call('GET', 'agent/conversations', { user: 'agent' });
@@ -66,19 +63,14 @@ describe('agent access', () => {
       first.id,
       second.id,
     ]);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.agent`)).toHaveLength(1);
+    expect(await h.count('agent')).toBe(1);
   });
 
   it('stops the waiting clock on a public reply, not on a note', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });
     const conversation = await open('ada');
-    const waiting = async () =>
-      (
-        await rows<{ waiting_since: Date | null }>(
-          sql`SELECT waiting_since FROM helpdesk.conversation`
-        )
-      )[0]?.waiting_since;
+    const waiting = async () => (await h.find('conversation'))[0]?.waitingSince;
 
     await h.call('POST', `agent/conversations/${conversation.id}/messages`, {
       user: 'agent',
@@ -104,10 +96,11 @@ describe('agent access', () => {
       user: 'ada',
       body: { body: 'still broken' },
     });
-    const [row] = await rows<{ status: string; resolved_at: Date | null }>(
-      sql`SELECT status, resolved_at FROM helpdesk.conversation`
-    );
-    expect(row).toEqual({ status: 'open', resolved_at: null });
+    const [row] = await h.find('conversation');
+    expect({ status: row?.status, resolvedAt: row?.resolvedAt }).toEqual({
+      status: 'open',
+      resolvedAt: null,
+    });
   });
 
   it('refuses an unknown assignee', async () => {
@@ -163,16 +156,12 @@ describe('jobs and email', () => {
   it('backs a failing job off and parks it after its last attempt', async () => {
     await h.support.store.enqueueJob('no-such-kind', {});
     for (let i = 0; i < 5; i++) await h.runDueJobs();
-    const [job] = await rows<{
-      attempts: number;
-      parked: boolean;
-      last_error: string;
-    }>(
-      sql`SELECT attempts, run_at >= '9999-01-01' AS parked, last_error FROM helpdesk.job`
-    );
+    const [job] = await h.find('job');
     expect(job?.attempts).toBe(5);
-    expect(job?.parked).toBe(true);
-    expect(job?.last_error).toContain('no-such-kind');
+    expect(job?.runAt.getTime()).toBeGreaterThanOrEqual(
+      Date.parse('9999-01-01')
+    );
+    expect(job?.lastError).toContain('no-such-kind');
   });
 
   it('emails agents about a new conversation', async () => {
@@ -300,9 +289,7 @@ describe('jobs and email', () => {
     h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
     await h.call('GET', 'agent/me', { user: 'agent' });
     await open('ada');
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
-    );
+    await h.update('conversation', {}, { waitingSince: ago(2 * HOUR) });
     await h.runDueJobs();
     await h.runDueJobs();
     expect(h.emails.filter(e => e.kind === 'agent-reminder')).toHaveLength(1);
@@ -333,9 +320,7 @@ describe('jobs and email', () => {
         });
         expect(res.status).toBe(201);
       }
-      await flaky.support.store.db.execute(
-        sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
-      );
+      await flaky.update('conversation', {}, { waitingSince: ago(2 * HOUR) });
       await flaky.runDueJobs();
       await flaky.runDueJobs();
       expect(new Set(sent).size).toBe(3);
@@ -363,13 +348,9 @@ describe('jobs and email', () => {
         user: 'ada',
         body: { inbox: 'support', type: 'question', body: 'Waiting' },
       });
-      await flaky.support.store.db.execute(
-        sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
-      );
+      await flaky.update('conversation', {}, { waitingSince: ago(2 * HOUR) });
       await flaky.runDueJobs();
-      await flaky.support.store.db.execute(
-        sql`UPDATE helpdesk.conversation SET waiting_since = NULL`
-      );
+      await flaky.update('conversation', {}, { waitingSince: null });
       await flaky.runDueJobs();
       expect(sends).toBe(1);
     } finally {
@@ -674,24 +655,18 @@ describe('deletion', () => {
     await h.support.deleteCompany(orgA.id);
 
     expect(h.objects.has(key)).toBe(false);
-    const left = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.conversation`
-    );
+    const left = await h.find('conversation');
     expect(left.map(r => r.id)).toEqual([b.id]);
-    expect(
-      await rows(
-        sql`SELECT 1 FROM helpdesk.company WHERE external_org_id = ${orgA.id}`
-      )
-    ).toHaveLength(0);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.attachment`)).toHaveLength(0);
+    expect(await h.count('company', { externalOrgId: orgA.id })).toBe(0);
+    expect(await h.count('attachment')).toBe(0);
   });
 
   it('deletes the contacts that belonged only to the organization', async () => {
     h.addUser('ada', { orgs: [orgA] });
     await open('ada', { orgId: orgA.id });
     await h.support.deleteCompany(orgA.id);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.contact`)).toHaveLength(0);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.identity`)).toHaveLength(0);
+    expect(await h.count('contact')).toBe(0);
+    expect(await h.count('identity')).toBe(0);
   });
 
   it('deletes resolved conversations past the retention period, with their files, and keeps the rest', async () => {
@@ -701,26 +676,35 @@ describe('deletion', () => {
       const expired = await open('ada');
       const stillOpen = await open('bob');
       const recent = await open('cleo');
-      await retained.support.store.db.execute(sql`
-        UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '31 days'
-        WHERE id = ${expired.id}::uuid`);
-      await retained.support.store.db.execute(sql`
-        UPDATE helpdesk.conversation SET created_at = now() - interval '90 days'
-        WHERE id = ${stillOpen.id}::uuid`);
-      await retained.support.store.db.execute(sql`
-        UPDATE helpdesk.conversation SET status = 'resolved', resolved_at = now() - interval '29 days'
-        WHERE id = ${recent.id}::uuid`);
+      await retained.update(
+        'conversation',
+        { id: expired.id },
+        { status: 'resolved', resolvedAt: ago(31 * DAY) }
+      );
+      await retained.update(
+        'conversation',
+        { id: stillOpen.id },
+        { createdAt: ago(90 * DAY) }
+      );
+      await retained.update(
+        'conversation',
+        { id: recent.id },
+        { status: 'resolved', resolvedAt: ago(29 * DAY) }
+      );
       const key = `support/${expired.id}/log.txt`;
       await retained.storage.put(key, new Uint8Array([1]), 'text/plain');
-      await retained.support.store.db.execute(sql`
-        INSERT INTO helpdesk.attachment (conversation_id, key, filename, content_type, size, uploaded)
-        VALUES (${expired.id}::uuid, ${key}, 'log.txt', 'text/plain', 1, true)`);
+      await retained.insert('attachment', {
+        conversationId: expired.id,
+        key,
+        filename: 'log.txt',
+        contentType: 'text/plain',
+        size: 1,
+        uploaded: true,
+      });
 
       await retained.support.runJobs();
 
-      const kept = await rows<{ id: string }>(
-        sql`SELECT id FROM helpdesk.conversation`
-      );
+      const kept = await retained.find('conversation');
       expect(kept.map(c => c.id).sort()).toEqual(
         [stillOpen.id, recent.id].sort()
       );
@@ -748,10 +732,8 @@ describe('inbound email', () => {
   it('creates one conversation per message even when polled twice', async () => {
     await h.support.handleInbound(mail());
     await h.support.handleInbound(mail());
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      1
-    );
-    expect(await rows(sql`SELECT 1 FROM helpdesk.message`)).toHaveLength(1);
+    expect(await h.count('conversation')).toBe(1);
+    expect(await h.count('message')).toBe(1);
   });
 
   it('threads a reply to the plus address into its conversation', async () => {
@@ -764,10 +746,10 @@ describe('inbound email', () => {
         text: 'Thanks',
       })
     );
-    const messages = await rows<{ conversation_id: string }>(
-      sql`SELECT conversation_id FROM helpdesk.message WHERE body = 'Thanks'`
-    );
-    expect(messages).toEqual([{ conversation_id: conversation.id }]);
+    const messages = await h.find('message', { body: 'Thanks' });
+    expect(messages.map(m => ({ conversationId: m.conversationId }))).toEqual([
+      { conversationId: conversation.id },
+    ]);
   });
 
   it('does not let another sender post into a thread by its address', async () => {
@@ -780,13 +762,10 @@ describe('inbound email', () => {
         to: [`support+${conversation.reference}@devguard.test`],
       })
     );
-    const [row] = await rows<{ count: number }>(
-      sql`SELECT count(*)::int AS count FROM helpdesk.message WHERE conversation_id = ${conversation.id}::uuid`
+    expect(await h.count('message', { conversationId: conversation.id })).toBe(
+      1
     );
-    expect(row?.count).toBe(1);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      2
-    );
+    expect(await h.count('conversation')).toBe(2);
   });
 
   it('verifies the typed address of a lead who replies by email', async () => {
@@ -809,9 +788,13 @@ describe('inbound email', () => {
     );
 
     expect(
-      await rows(
-        sql`SELECT verified FROM helpdesk.identity WHERE channel = 'email' ORDER BY verified`
-      )
+      (
+        await h.find(
+          'identity',
+          { channel: 'email' },
+          { orderBy: { verified: 'asc' } }
+        )
+      ).map(r => ({ verified: r.verified }))
     ).toEqual([{ verified: false }, { verified: true }]);
   });
 
@@ -852,12 +835,15 @@ describe('inbound email', () => {
     await h.support.handleInbound(
       mail({ messageId: '<a@x>', verified: false })
     );
-    expect(await rows(sql`SELECT 1 FROM helpdesk.contact`)).toHaveLength(2);
+    expect(await h.count('contact')).toBe(2);
     await h.support.handleInbound(mail({ messageId: '<b@x>', verified: true }));
-    expect(await rows(sql`SELECT 1 FROM helpdesk.contact`)).toHaveLength(2);
-    const [row] = await rows<{ contacts: number }>(sql`
-      SELECT count(DISTINCT contact_id)::int AS contacts FROM helpdesk.conversation`);
-    expect(row?.contacts).toBe(2);
+    expect(await h.count('contact')).toBe(2);
+    const contacts = new Set(
+      (await h.find('conversation'))
+        .map(c => c.contactId)
+        .filter(id => id !== null)
+    );
+    expect(contacts.size).toBe(2);
   });
 });
 
@@ -957,17 +943,21 @@ describe('CRM', () => {
         expect((await patch(path, body)).status).toBe(400);
       }
       expect(
-        await rows(sql`SELECT name, lead_stage, custom FROM helpdesk.contact`)
+        (await h.find('contact')).map(c => ({
+          name: c.name,
+          leadStage: c.leadStage,
+          custom: c.custom,
+        }))
       ).toEqual([
         {
           name: 'Dana Rossi',
-          lead_stage: 'customer',
+          leadStage: 'customer',
           custom: { tier: 'gold' },
         },
       ]);
-      expect(await rows(sql`SELECT title, stage FROM helpdesk.deal`)).toEqual([
-        { title: 'Pilot 2', stage: 'proposal' },
-      ]);
+      expect(
+        (await h.find('deal')).map(d => ({ title: d.title, stage: d.stage }))
+      ).toEqual([{ title: 'Pilot 2', stage: 'proposal' }]);
     } finally {
       await later.close();
     }
@@ -980,17 +970,16 @@ describe('CRM', () => {
       body: { title: 'Pilot', value: 12000 },
     });
     expect(deal.data.deal.stage).toBe('new');
-    await rows(
-      sql`UPDATE helpdesk.deal SET stage_changed_at = now() - interval '3 days'`
-    );
+    await h.update('deal', {}, { stageChangedAt: ago(3 * DAY) });
     await h.call('PATCH', `agent/deals/${deal.data.deal.id}`, {
       user: 'agent',
       body: { stage: 'proposal' },
     });
-    const [row] = await rows<{ stage: string; recent: boolean }>(
-      sql`SELECT stage, stage_changed_at > now() - interval '1 minute' AS recent FROM helpdesk.deal`
-    );
-    expect(row).toMatchObject({ stage: 'proposal', recent: true });
+    const [row] = await h.find('deal');
+    expect({
+      stage: row?.stage,
+      recent: (row?.stageChangedAt?.getTime() ?? 0) > ago(MINUTE).getTime(),
+    }).toMatchObject({ stage: 'proposal', recent: true });
     expect(
       (
         await h.call('PATCH', `agent/deals/${deal.data.deal.id}`, {
@@ -1008,7 +997,7 @@ describe('CRM', () => {
         event: 'org_created',
       })
     ).toBe(false);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.contact`)).toHaveLength(0);
+    expect(await h.count('contact')).toBe(0);
   });
 
   it('records a tracked event on a known user’s timeline', async () => {
@@ -1021,9 +1010,7 @@ describe('CRM', () => {
         event: 'plan_changed',
       })
     ).toBe(true);
-    const [contact] = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.contact`
-    );
+    const [contact] = await h.find('contact');
     const res = await h.call('GET', `agent/contacts/${contact?.id}`, {
       user: 'agent',
     });
@@ -1046,7 +1033,7 @@ describe('CRM', () => {
       user: 'agent',
       body: { sourceId: b.data.contact.id },
     });
-    expect(await rows(sql`SELECT 1 FROM helpdesk.contact`)).toHaveLength(1);
+    expect(await h.count('contact')).toBe(1);
   });
 
   it('offers a filed contact its own company rather than one to create', async () => {
@@ -1116,9 +1103,7 @@ describe('CRM', () => {
     await h.call('DELETE', `agent/contacts/${contact.data.contact.id}`, {
       user: 'agent',
     });
-    expect(
-      await rows(sql`SELECT 1 FROM helpdesk.deal WHERE contact_id IS NULL`)
-    ).toHaveLength(1);
+    expect(await h.count('deal', { contactId: null })).toBe(1);
   });
 
   it('deletes a contact with a bodiless DELETE, but not from another origin', async () => {
@@ -1134,7 +1119,7 @@ describe('CRM', () => {
     });
     expect(foreign.status).toBe(403);
     expect((await h.call('DELETE', path, { user: 'agent' })).status).toBe(200);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.contact`)).toHaveLength(0);
+    expect(await h.count('contact')).toBe(0);
   });
 });
 
@@ -1295,10 +1280,9 @@ describe('inbound threading trust', () => {
       automated: false,
       attachments: [],
     });
-    const [row] = await rows<{ count: number }>(
-      sql`SELECT count(*)::int AS count FROM helpdesk.message WHERE conversation_id = ${conversation.id}::uuid`
+    expect(await h.count('message', { conversationId: conversation.id })).toBe(
+      1
     );
-    expect(row?.count).toBe(1);
   });
 });
 
@@ -1319,12 +1303,7 @@ describe('customer-facing status', () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });
     const conversation = await open('ada');
-    const status = async () =>
-      (
-        await rows<{ status: string }>(
-          sql`SELECT status FROM helpdesk.conversation`
-        )
-      )[0]?.status;
+    const status = async () => (await h.find('conversation'))[0]?.status;
 
     await h.call('POST', `agent/conversations/${conversation.id}/messages`, {
       user: 'agent',
@@ -1420,9 +1399,7 @@ describe('contact list', () => {
     ]);
 
     const company = await h.support.store.createCompany({ name: 'Acme' });
-    const [ada] = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.contact WHERE email = 'ada@example.test'`
-    );
+    const [ada] = await h.find('contact', { email: 'ada@example.test' });
     await h.support.store.updateContact(ada?.id as string, {
       companyId: company.id,
     });
@@ -1566,11 +1543,10 @@ describe('tags', () => {
       body: { tags: [' Billing', 'billing', 'Bug-1234'] },
     });
     expect(res.status).toBe(200);
-    expect(
-      await rows(
-        sql`SELECT tags FROM helpdesk.conversation WHERE id = ${billing.id}::uuid`
-      )
-    ).toEqual([{ tags: ['billing', 'bug-1234'] }]);
+    expect((await h.support.store.getConversation(billing.id))?.tags).toEqual([
+      'billing',
+      'bug-1234',
+    ]);
 
     const list = async (query: string) =>
       (
@@ -1616,12 +1592,10 @@ describe('tags', () => {
 
 describe('snooze', () => {
   const later = () => new Date(Date.now() + 86_400_000).toISOString();
-  const state = async () =>
-    (
-      await rows<{ status: string; snoozed_until: Date | null }>(
-        sql`SELECT status, snoozed_until FROM helpdesk.conversation`
-      )
-    )[0];
+  const state = async () => {
+    const [row] = await h.find('conversation');
+    return row && { status: row.status, snoozedUntil: row.snoozedUntil };
+  };
   const snooze = async (id: string, snoozedUntil: string | null) =>
     h.call('PATCH', `agent/conversations/${id}`, {
       user: 'agent',
@@ -1638,8 +1612,8 @@ describe('snooze', () => {
     const until = later();
     expect((await snooze(conversation.id, until)).status).toBe(200);
     expect(
-      await rows(
-        sql`SELECT status FROM helpdesk.conversation WHERE snoozed_until = ${until}::timestamptz`
+      (await h.find('conversation', { snoozedUntil: new Date(until) })).map(
+        r => ({ status: r.status })
       )
     ).toEqual([{ status: 'pending' }]);
     const list = await h.call('GET', 'agent/conversations?status=snoozed', {
@@ -1659,12 +1633,10 @@ describe('snooze', () => {
     await h.support.runJobs();
     expect((await state())?.status).toBe('pending');
 
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET snoozed_until = now() - interval '1 minute'`
-    );
+    await h.update('conversation', {}, { snoozedUntil: ago(MINUTE) });
     const report = await h.support.runJobs();
     expect(report.woken).toBe(1);
-    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'open', snoozedUntil: null });
   });
 
   it('never reopens a resolved conversation with a stale snooze', async () => {
@@ -1674,13 +1646,11 @@ describe('snooze', () => {
       user: 'agent',
       body: { status: 'resolved' },
     });
-    expect(await state()).toEqual({ status: 'resolved', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'resolved', snoozedUntil: null });
 
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET snoozed_until = now() - interval '1 minute'`
-    );
+    await h.update('conversation', {}, { snoozedUntil: ago(MINUTE) });
     await h.support.runJobs();
-    expect(await state()).toEqual({ status: 'resolved', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'resolved', snoozedUntil: null });
   });
 
   it('wakes on a customer reply', async () => {
@@ -1690,16 +1660,14 @@ describe('snooze', () => {
       user: 'ada',
       body: { body: 'upgrade done early' },
     });
-    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'open', snoozedUntil: null });
   });
 
   it('holds back the waiting reminder while snoozed', async () => {
     await h.call('GET', 'agent/me', { user: 'agent' });
     const conversation = await open('ada');
     await snooze(conversation.id, later());
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET waiting_since = now() - interval '2 hours'`
-    );
+    await h.update('conversation', {}, { waitingSince: ago(2 * HOUR) });
     await h.runDueJobs();
     expect(h.emails.filter(e => e.kind === 'agent-reminder')).toEqual([]);
 
@@ -1712,19 +1680,19 @@ describe('snooze', () => {
     const conversation = await open('ada');
     await snooze(conversation.id, later());
     expect((await snooze(conversation.id, null)).status).toBe(200);
-    expect(await state()).toEqual({ status: 'pending', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'pending', snoozedUntil: null });
 
     await snooze(conversation.id, later());
     await h.call('PATCH', `agent/conversations/${conversation.id}`, {
       user: 'agent',
       body: { status: 'open' },
     });
-    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'open', snoozedUntil: null });
 
     expect((await snooze(conversation.id, '2026-10-06T09:00')).status).toBe(
       400
     );
-    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'open', snoozedUntil: null });
   });
 
   it('refuses a time in the past and a snooze that contradicts the status', async () => {
@@ -1740,7 +1708,7 @@ describe('snooze', () => {
       }
     );
     expect(res.status).toBe(400);
-    expect(await state()).toEqual({ status: 'open', snoozed_until: null });
+    expect(await state()).toEqual({ status: 'open', snoozedUntil: null });
   });
 
   it('snoozes a resolved conversation back into the pending queue', async () => {
@@ -1750,10 +1718,11 @@ describe('snooze', () => {
       body: { status: 'resolved' },
     });
     await snooze(conversation.id, later());
-    const [row] = await rows<{ status: string; resolved_at: Date | null }>(
-      sql`SELECT status, resolved_at FROM helpdesk.conversation`
-    );
-    expect(row).toEqual({ status: 'pending', resolved_at: null });
+    const [row] = await h.find('conversation');
+    expect({ status: row?.status, resolvedAt: row?.resolvedAt }).toEqual({
+      status: 'pending',
+      resolvedAt: null,
+    });
   });
 
   it('leaves a snoozed conversation out of the waiting count', async () => {
@@ -1808,9 +1777,13 @@ describe('event timeline', () => {
       },
     ]);
     expect(
-      await rows(
-        sql`SELECT kind FROM helpdesk.conversation_event WHERE agent_id = ${agentId}::uuid ORDER BY created_at, kind`
-      )
+      (
+        await h.find(
+          'conversation_event',
+          { agentId },
+          { orderBy: { createdAt: 'asc', kind: 'asc' } }
+        )
+      ).map(e => ({ kind: e.kind }))
     ).toEqual([{ kind: 'assigneeId' }, { kind: 'status' }]);
   });
 
@@ -1819,12 +1792,8 @@ describe('event timeline', () => {
     await patch(conversation.id, { tags: ['billing'] });
     const until = new Date(Date.now() + 86_400_000).toISOString();
     await patch(conversation.id, { snoozedUntil: until });
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.conversation SET snoozed_until = now() - interval '1 minute'`
-    );
-    const [due] = await rows<{ due: string }>(
-      sql`SELECT to_json(snoozed_until) #>> '{}' AS due FROM helpdesk.conversation`
-    );
+    await h.update('conversation', {}, { snoozedUntil: ago(MINUTE) });
+    const [due] = await h.find('conversation');
     await h.support.runJobs();
 
     const events = (await timeline(conversation.id)).filter(
@@ -1848,7 +1817,7 @@ describe('event timeline', () => {
       },
       {
         kind: 'snoozedUntil',
-        data: { from: new Date(due?.due ?? '').toISOString(), to: null },
+        data: { from: due?.snoozedUntil?.toISOString(), to: null },
         agentName: null,
       },
       {
@@ -1946,19 +1915,28 @@ describe('event timeline', () => {
     });
     expect(res.status).toBe(200);
 
+    const events = await h.find(
+      'conversation_event',
+      { kind: 'assigneeId' },
+      { orderBy: { createdAt: 'asc' } }
+    );
+    const conversations = await h.find('conversation', {
+      id: events.map(e => e.conversationId),
+    });
     expect(
-      await rows(
-        sql`SELECT c.assignee_id, e.data, e.agent_id FROM helpdesk.conversation_event e
-          JOIN helpdesk.conversation c ON c.id = e.conversation_id
-          WHERE e.kind = 'assigneeId' ORDER BY e.created_at`
-      )
+      events.map(e => ({
+        assigneeId: conversations.find(c => c.id === e.conversationId)
+          ?.assigneeId,
+        data: e.data,
+        agentId: e.agentId,
+      }))
     ).toEqual([
       {
-        assignee_id: null,
+        assigneeId: null,
         data: { from: null, to: grace },
-        agent_id: expect.any(String),
+        agentId: expect.any(String),
       },
-      { assignee_id: null, data: { from: grace, to: null }, agent_id: null },
+      { assigneeId: null, data: { from: grace, to: null }, agentId: null },
     ]);
   });
 
@@ -1980,8 +1958,8 @@ describe('event timeline', () => {
     });
 
     expect(
-      await rows(
-        sql`SELECT data FROM helpdesk.conversation_event WHERE kind = 'participant.added'`
+      (await h.find('conversation_event', { kind: 'participant.added' })).map(
+        e => ({ data: e.data })
       )
     ).toEqual([{ data: { contactId: robert.id } }]);
     expect(
@@ -2015,16 +1993,10 @@ describe('event timeline', () => {
     try {
       const conversation = await open('ada');
       await patch(conversation.id, { status: 'resolved' });
-      expect(
-        await rows(sql`SELECT 1 FROM helpdesk.conversation_event`)
-      ).toHaveLength(1);
-      await retained.support.store.db.execute(
-        sql`UPDATE helpdesk.conversation SET resolved_at = now() - interval '31 days'`
-      );
+      expect(await h.count('conversation_event')).toBe(1);
+      await retained.update('conversation', {}, { resolvedAt: ago(31 * DAY) });
       await retained.support.runJobs();
-      expect(
-        await rows(sql`SELECT 1 FROM helpdesk.conversation_event`)
-      ).toHaveLength(0);
+      expect(await h.count('conversation_event')).toBe(0);
     } finally {
       await retained.close();
     }
@@ -2120,8 +2092,10 @@ describe('agent presence', () => {
     expect(await listed('grace')).toEqual(['linus']);
     expect(await listed('linus')).toEqual(['grace']);
 
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.agent SET viewing_at = now() - interval '20 seconds' WHERE external_user_id = 'user-linus'`
+    await h.update(
+      'agent',
+      { externalUserId: 'user-linus' },
+      { viewingAt: ago(20_000) }
     );
     expect(await detail('grace')).toEqual([]);
     expect(await listed('grace')).toEqual([]);
@@ -2143,18 +2117,19 @@ describe('agent presence', () => {
     for (const user of ['linus', 'margaret']) {
       await h.call('GET', `agent/conversations/${conversation.id}`, { user });
     }
-    const { rows } = await h.support.store.db.execute<{ email: string }>(
-      sql`UPDATE helpdesk.agent SET name = NULL WHERE external_user_id = 'user-linus' RETURNING email`
-    );
-    await h.support.store.db.execute(
-      sql`UPDATE helpdesk.agent SET deactivated_at = now() WHERE external_user_id = 'user-margaret'`
+    const linus = await h.findOne('agent', { externalUserId: 'user-linus' });
+    await h.update('agent', { externalUserId: 'user-linus' }, { name: null });
+    await h.update(
+      'agent',
+      { externalUserId: 'user-margaret' },
+      { deactivatedAt: new Date() }
     );
 
     const res = await h.call('GET', `agent/conversations/${conversation.id}`, {
       user: 'grace',
     });
     expect(res.data.viewers.map((v: { name: string }) => v.name)).toEqual([
-      rows[0]?.email,
+      linus?.email,
     ]);
   });
 
