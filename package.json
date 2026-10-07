@@ -76,7 +76,6 @@
     "lint": "biome check && tsc --noEmit",
     "test": "vitest run",
     "test:integration": "node scripts/test-integration.mjs",
-    "db:generate": "node -e \"console.log('helpdesk: migrations are Kysely modules in src/db/migrate.ts; the integration suite checks them against src/db/model.ts')\"",
     "migrate": "node bin/migrate.mjs",
     "build:dist": "node scripts/build.mjs",
     "prepack": "node scripts/build.mjs"

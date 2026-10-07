@@ -29,8 +29,16 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       TEST_DATABASE_URL: postgres://postgres@localhost:5432/db
+      TEST_MYSQL_URL: mysql://root@127.0.0.1:3306/
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -41,12 +49,21 @@ jobs:
       # The example app is a workspace package now; it has no part in this job
       # and its Next.js install is not worth downloading here.
       - run: pnpm install --filter better-helpdesk --frozen-lockfile
-      # A schema change without its generated migration passes every test.
-      - name: Migrations match the schema
+      # A service container cannot take a password made at run time; this
+      # one exists only for this job and is never written down.
+      - name: Start SQL Server
         run: |
-          pnpm db:generate
-          git diff --exit-code -- migrations
-          test -z "$(git status --porcelain migrations)"
+          password="Ci-$(openssl rand -hex 16)!"
+          echo "::add-mask::$password"
+          docker run -d --name mssql -p 1433:1433 -e ACCEPT_EULA=Y \
+            -e "MSSQL_SA_PASSWORD=$password" mcr.microsoft.com/mssql/server:2022-latest
+          for _ in $(seq 1 60); do
+            docker exec mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa \
+              -P "$password" -Q 'select 1' > /dev/null 2>&1 && break
+            sleep 2
+          done
+          url_password=$(node -p 'encodeURIComponent(process.argv[1])' "$password")
+          echo "TEST_MSSQL_URL=mssql://sa:$url_password@localhost:1433/" >> "$GITHUB_ENV"
       - run: pnpm run lint
       - run: pnpm run test
       - run: pnpm run test:integration
@@ -57,14 +74,7 @@ jobs:
           mkdir "$RUNNER_TEMP/smoke" && cd "$RUNNER_TEMP/smoke"
           npm init -y > /dev/null
           npm install --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz pg react react-dom
-          node --input-type=module -e "
-            const m = await import('better-helpdesk');
-            const token = m.signIdentityToken({ sub: 'u' }, 's');
-            if (m.verifyIdentityToken(token, 's')?.user.id !== 'u') process.exit(1);
-            await import('better-helpdesk/rich');
-          "
-          test -s node_modules/better-helpdesk/dist/widget.js
-          HELPDESK_DATABASE_URL="$TEST_DATABASE_URL" npx better-helpdesk-migrate
+          HELPDESK_DATABASE_URL="$TEST_DATABASE_URL" node "$GITHUB_WORKSPACE/scripts/smoke.mjs"
 
   # Divio deploys site/ from main, and nothing else here compiles it.
   site:
