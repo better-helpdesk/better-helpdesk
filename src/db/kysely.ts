@@ -153,9 +153,15 @@ function build(
       case 'gte':
         return eb(ref, '>=', value);
       case 'in':
-        return eb(lower(ref), 'in', (value as unknown[]).map(val));
-      case 'notIn':
-        return eb(lower(ref), 'not in', (value as unknown[]).map(val));
+      case 'notIn': {
+        const values = (value as unknown[]).map(val);
+        const negated = op === 'notIn' ? sql`not in` : sql`in`;
+        // SQL Server takes about 2000 parameters per query: a long list goes as one JSON one.
+        if (family === 'mssql' && values.length > 1000) {
+          return sql<SqlBool>`${lower(ref)} ${negated} (select value from openjson(${JSON.stringify(values)}))`;
+        }
+        return eb(lower(ref), op === 'notIn' ? 'not in' : 'in', values);
+      }
       case 'contains':
       case 'startsWith':
         return sql<SqlBool>`${lower(ref)} like ${like(
