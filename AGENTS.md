@@ -25,10 +25,12 @@ code already does. Concretely:
   the widget alike. pnpm with a frozen lockfile.
 - **The database is an adapter, in two layers.** `DatabaseAdapter` is a
   small public contract: CRUD, a required `transaction`, and optional named
-  capabilities (claiming jobs, references, rate limits, search, the inbox
-  and overview reads), each with a portable fallback written over the CRUD
-  methods. `createStore(adapter)` is the one implementation of every
-  `HelpdeskStore` method over that contract. No SQL crosses the store
+  capabilities (search, duplicate candidates, the inbox and overview reads,
+  notifications), each with a portable fallback written over the CRUD
+  methods. Claiming jobs, references and rate limits are not capabilities:
+  the store writes them once over the CRUD methods. `createStore(adapter)`
+  is the one implementation of every `HelpdeskStore` method over that
+  contract. No SQL crosses the store
   boundary: `service.ts` and `http.ts` speak to the store in domain terms,
   and the store takes the time from the app, never the database's `now()`.
 - **Built-in adapters on Kysely** for Postgres, MySQL 8.4+, SQLite and
