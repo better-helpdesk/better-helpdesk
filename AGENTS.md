@@ -30,9 +30,9 @@ code already does. Concretely:
   methods. Claiming jobs, references and rate limits are not capabilities:
   the store writes them once over the CRUD methods. `createStore(adapter)`
   is the one implementation of every `HelpdeskStore` method over that
-  contract. No SQL crosses the store
-  boundary: `service.ts` and `http.ts` speak to the store in domain terms,
-  and the store takes the time from the app, never the database's `now()`.
+  contract. No SQL crosses the store boundary: `service.ts` and `http.ts`
+  speak to the store in domain terms, and the store takes the time from the
+  app, never the database's `now()`.
 - **Built-in adapters on Kysely** for Postgres, MySQL 8.4+, SQLite and
   MS SQL 2022+. The host owns the connection and passes it in
   (`postgresAdapter({ pool })` and its siblings); drivers are optional peer
