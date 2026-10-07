@@ -65,6 +65,13 @@ code {
   font-family: var(--f-m);
   font-size: 0.84em;
 }
+/* 20px past the content column on each side, but never closer than 12px to the screen's edge. */
+.nav {
+  --w: min(1256px, 100% + 2 * min(20px, var(--g) - 12px));
+  width: var(--w);
+  max-width: none;
+  margin-inline: calc((100% - var(--w)) / 2);
+}
 main,
 .foot {
   max-width: 1216px;

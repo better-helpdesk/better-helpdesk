@@ -1,5 +1,36 @@
 /* The header, buttons and marks every surface shares: the marketing pages and the docs. */
 /* Nav */
+/* Between the marketing pages and the docs (separate documents) the header
+   morphs from one width to the other. Its parts carry their own names so they
+   glide to their new place instead of stretching with the bar. */
+@view-transition {
+  navigation: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+}
+.nav {
+  view-transition-name: site-nav;
+}
+.brand {
+  view-transition-name: site-brand;
+}
+.nav-links {
+  view-transition-name: site-links;
+}
+.nav-end {
+  view-transition-name: site-end;
+}
+::view-transition-group(*) {
+  animation-duration: 0.36s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-old(site-nav),
+::view-transition-new(site-nav) {
+  height: 100%;
+}
 .nav {
   position: sticky;
   top: calc(env(safe-area-inset-top, 0px) + 12px);

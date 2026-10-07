@@ -99,10 +99,10 @@ body {
   outline-offset: -4px;
 }
 
-/* Header: the marketing nav, full width above the three columns. */
+/* The header spans the shell: Fumadocs' default --fd-layout-width. */
 .nav {
+  width: min(97rem, 100% - 24px);
   max-width: none;
-  margin: 12px 12px 0;
 }
 @media (max-width: 767px) {
   .nav {
