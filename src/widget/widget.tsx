@@ -399,7 +399,7 @@ export function Widget(props: WidgetProps) {
       offeredType
         ? { name: 'form', type: requested.type, prefill: requested.prefill }
         : single
-          ? { name: 'form', type: single }
+          ? { name: 'form', type: single, prefill: requested.prefill }
           : { name: 'home' }
     );
   }, [requested, data, offeredKey, single, view.name]);
@@ -597,6 +597,7 @@ export function Widget(props: WidgetProps) {
           )}
           {data && formType && (
             <NewMessage
+              key={formType}
               {...props}
               type={formType}
               prefill={view.name === 'form' ? view.prefill : undefined}
@@ -803,8 +804,15 @@ function NewMessage({
     }
   ) => void;
 }) {
-  const [subject, setSubject] = useState(prefill?.subject?.slice(0, 200) ?? '');
-  const [body, setBody] = useState(prefill?.message ?? '');
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  // A host's text goes into the fields the customer has left empty, so it
+  // never replaces what they wrote.
+  useEffect(() => {
+    if (!prefill) return;
+    setSubject(s => s || (prefill.subject?.slice(0, 200) ?? ''));
+    setBody(b => (b.trim() ? b : (prefill.message ?? b)));
+  }, [prefill]);
   const message = useRef<RichEditorHandle>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

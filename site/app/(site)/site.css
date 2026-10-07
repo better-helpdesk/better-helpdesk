@@ -2811,7 +2811,6 @@ kbd.on {
 .sg-form {
   padding: 0;
   background: none;
-  clip-path: none;
 }
 @media (max-width: 760px) {
   .sg-grid {

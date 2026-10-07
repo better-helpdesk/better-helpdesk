@@ -121,7 +121,7 @@ Only the element the script creates comes alive. A `<helpdesk-widget>` already i
 
 | Method | What it does |
 | --- | --- |
-| `open({ type?, subject?, message? })` | Opens the panel. With `type`, such as `'bug'`, it opens on that type's form when the inbox offers it, and on its first view otherwise; focus moves into the form. `subject` and `message` start the form's fields, and the customer can change them before sending; the subject field shows on bug, feature and question forms. On a panel that is already open, it keeps a draft the customer is writing unless `type` names another form, and it never leaves a conversation the customer is replying in. |
+| `open({ type?, subject?, message? })` | Opens the panel. With `type`, such as `'bug'`, it opens on that type's form when the inbox offers it, and on its first view otherwise; focus moves into the form. `subject` and `message` go into the form's fields the customer has left empty, and the customer can change them before sending; the subject field shows on bug, feature and question forms. On a panel that is already open, it keeps a draft the customer is writing unless `type` names another form, and it never leaves a conversation the customer is replying in. |
 
 `<helpdesk-widget>` and `<helpdesk-conversations>` both have it. Code that holds the element calls it directly, for example from a button of the host's own:
 
@@ -143,7 +143,7 @@ const widget = useRef<HelpdeskWidgetElement>(null);
 // later: widget.current?.open({ type: 'bug' });
 ```
 
-`HelpdeskWidgetElement` is the element's type; the package also registers both tags with TypeScript, so `document.querySelector('helpdesk-widget')` is typed without a cast.
+`HelpdeskWidgetElement` is the element's type and `OpenRequest` the options of `open()`; the package also registers both tags with TypeScript, so `document.querySelector('helpdesk-widget')` is typed without a cast.
 
 ## DOM events
 

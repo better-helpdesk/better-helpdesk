@@ -1484,4 +1484,52 @@ describe('opened by the host', () => {
       screen.getByRole<HTMLInputElement>('textbox', { name: /Subject/ }).value
     ).toBe('The broken button threw');
   });
+
+  it('starts the only form of a one-type inbox when the host names no type', async () => {
+    mockApi({ 'widget/session': session });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['bug']}
+        errors={() => []}
+        openRequest={{ message: 'Export failed.' }}
+      />
+    );
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    await waitFor(() => expect(message.textContent).toBe('Export failed.'));
+  });
+
+  it('opens another form named by the host with its text, not the old draft', async () => {
+    mockApi({ 'widget/session': session });
+    const { rerender } = render(widget({ type: 'question' }));
+    const question = await screen.findByRole('textbox', { name: 'Message' });
+    question.innerHTML = 'question draft';
+    fireEvent.input(question);
+    rerender(widget({ type: 'bug', message: 'The button threw.' }));
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    await waitFor(() => expect(message.textContent).toBe('The button threw.'));
+  });
+
+  it('fills an empty form that is already open, and leaves a draft alone', async () => {
+    mockApi({ 'widget/session': session });
+    const { rerender } = render(widget({ type: 'bug' }));
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    rerender(widget({ type: 'bug', message: 'First text.' }));
+    await waitFor(() => expect(message.textContent).toBe('First text.'));
+    message.innerHTML = 'my own words';
+    fireEvent.input(message);
+    rerender(widget({ type: 'bug', message: 'Second text.' }));
+    await act(async () => {});
+    expect(
+      screen.getByRole('textbox', { name: 'What happened?' }).textContent
+    ).toBe('my own words');
+  });
 });

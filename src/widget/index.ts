@@ -6,3 +6,4 @@ export {
   type HelpdeskWidgetElement,
 } from './element';
 export { HelpdeskConversations, HelpdeskWidget } from './react';
+export type { OpenRequest } from './widget';
