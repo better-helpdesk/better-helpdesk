@@ -1204,15 +1204,25 @@ export function createHandler(support: Helpdesk) {
     json({ replies: await store.listCannedReplies() })
   );
 
+  const cannedReply = z.object({
+    title: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(20_000),
+    locale: z.enum(['en', 'de']).nullable().optional(),
+  });
+
   agentRoute('POST', 'canned', async ({ body }) => {
-    const data = z
-      .object({
-        title: z.string().trim().min(1).max(200),
-        body: z.string().trim().min(1).max(20_000),
-        locale: z.enum(['en', 'de']).nullable().optional(),
-      })
-      .parse(await body());
+    const data = cannedReply.parse(await body());
     return json({ reply: await store.createCannedReply(data) }, 201);
+  });
+
+  agentRoute('PATCH', 'canned/:id', async ({ params, body }) => {
+    if (!uuid.safeParse(params.id).success)
+      throw new HelpdeskError(404, 'Not found');
+    const data = cannedReply.parse(await body());
+    const replaced = { ...data, locale: data.locale ?? null };
+    if (!(await store.updateCannedReply(params.id, replaced)))
+      throw new HelpdeskError(404, 'Not found');
+    return json({ ok: true });
   });
 
   agentRoute('DELETE', 'canned/:id', async ({ params }) => {

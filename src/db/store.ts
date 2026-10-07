@@ -1729,6 +1729,16 @@ export function createStore(adapter: DatabaseAdapter) {
       return adapter.create<Row<'canned_reply'>>('canned_reply', values);
     },
 
+    /** False when no canned reply has that id. */
+    async updateCannedReply(
+      id: string,
+      values: { title: string; body: string; locale?: string | null }
+    ) {
+      return (
+        (await adapter.updateMany('canned_reply', eq('id', id), values)) > 0
+      );
+    },
+
     async deleteCannedReply(id: string) {
       await adapter.deleteMany('canned_reply', eq('id', id));
     },
