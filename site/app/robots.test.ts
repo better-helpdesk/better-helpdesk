@@ -4,7 +4,8 @@ import robots from './robots';
 
 const before = process.env.SITE_URL;
 afterEach(() => {
-  process.env.SITE_URL = before;
+  if (before === undefined) delete process.env.SITE_URL;
+  else process.env.SITE_URL = before;
 });
 
 describe('robots.txt', () => {

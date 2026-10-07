@@ -4,7 +4,13 @@ import { siteUrl } from '../lib/site';
 
 export const dynamic = 'force-dynamic';
 
-const DISALLOW = ['/helpdesk/', '/demo/inbox/', '/demo/api/', '/api/'];
+const DISALLOW = [
+  '/helpdesk/',
+  '/demo/inbox/',
+  '/demo/api/',
+  '/api/',
+  '/llms.mdx/',
+];
 
 // Named, so a crawler that only obeys its own group still reads the rules;
 // a named group replaces `*` for that bot, so the rules repeat in it.
