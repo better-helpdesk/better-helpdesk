@@ -91,7 +91,9 @@ export const migrations: Record<Family, Record<string, Migration>> = {
   sqlite: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'sqlite') },
   },
-  mssql: {},
+  mssql: {
+    '0000_baseline': { up: (db: Db) => createBaseline(db, 'mssql') },
+  },
 };
 
 /** Brings the database up to date. Safe to run on every deploy and from several processes at once. */

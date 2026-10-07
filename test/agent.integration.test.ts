@@ -769,6 +769,19 @@ describe('inbound email', () => {
     expect(await h.count('message')).toBe(2);
   });
 
+  it('threads a reply whose References name thousands of messages', async () => {
+    await h.support.handleInbound(mail({ messageId: '<first@mail.test>' }));
+    const references = Array.from(
+      { length: 2500 },
+      (_, i) => `<old-${i}@mail.test>`
+    ).concat('<first@mail.test>');
+    await h.support.handleInbound(
+      mail({ messageId: '<late@mail.test>', references, text: 'Again' })
+    );
+    expect(await h.count('conversation')).toBe(1);
+    expect(await h.count('message')).toBe(2);
+  });
+
   it('drops mail from an address longer than any address can be', async () => {
     const from = `${'a'.repeat(250)}@example.test`;
     await h.support.handleInbound(mail({ from: { address: from } }));

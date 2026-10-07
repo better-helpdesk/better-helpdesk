@@ -100,4 +100,34 @@ describe('identifiers', () => {
     ).rejects.toThrow(/externalOrgId is longer than 255/);
     expect(await h.count('activity')).toBe(0);
   });
+
+  it('shows a member of thousands of organizations their shared conversations', async () => {
+    const orgs = Array.from({ length: 2500 }, (_, i) => ({
+      id: `org-${i}`,
+      name: `Org ${i}`,
+    }));
+    for (const org of orgs.slice(0, 3)) {
+      await h.support.store.upsertCompany(org.id, org.name);
+    }
+    for (let i = 3; i < orgs.length; i += 500) {
+      await Promise.all(
+        orgs
+          .slice(i, i + 500)
+          .map(org =>
+            h.insert('company', { externalOrgId: org.id, name: org.name })
+          )
+      );
+    }
+    h.addUser('writer', {
+      orgs: [orgs[1] as (typeof orgs)[number]],
+      email: 'writer@example.test',
+    });
+    const shared = await open('writer', 'org-1');
+    h.addUser('staff', { orgs, email: 'staff@example.test' });
+    const res = await h.call('GET', 'widget/session', { user: 'staff' });
+    expect(res.status).toBe(200);
+    expect(res.data.conversations.map((c: { id: string }) => c.id)).toEqual([
+      shared,
+    ]);
+  });
 });

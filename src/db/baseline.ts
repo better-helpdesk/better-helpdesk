@@ -1,6 +1,6 @@
 import { type Kysely, type SqlBool, sql } from 'kysely';
 
-import type { Family } from './kysely';
+import { type Family, tableName } from './kysely';
 import type { FieldKind, ModelName } from './model';
 
 // biome-ignore lint/suspicious/noExplicitAny: DDL works on tables, not typed rows
@@ -30,6 +30,20 @@ const TYPES: Partial<Record<Family, Record<FieldKind | 'key', string>>> = {
     json: 'json',
     decimal: 'decimal(14,2)',
   },
+  mssql: {
+    // nvarchar like tedious's string parameters: a char column would be
+    // converted to compare, which scans and locks every row.
+    uuid: 'nvarchar(36) collate Latin1_General_100_BIN2',
+    // Binary collation: identifiers compare exactly, as on Postgres.
+    key: 'nvarchar(255) collate Latin1_General_100_BIN2',
+    string: 'nvarchar(255) collate Latin1_General_100_BIN2',
+    text: 'nvarchar(max) collate Latin1_General_100_BIN2',
+    integer: 'int',
+    boolean: 'bit',
+    date: 'datetime2(3)',
+    json: 'nvarchar(max)',
+    decimal: 'decimal(14,2)',
+  },
 };
 
 type Column = [
@@ -49,9 +63,14 @@ type Column = [
 export async function createBaseline(db: Db, family: Family) {
   const types = TYPES[family];
   if (!types) throw new Error(`helpdesk: no baseline for ${family}`);
-  const table = (model: ModelName) => `helpdesk_${model}`;
+  const table = (model: ModelName) => tableName(family, model);
+  if (family === 'mssql') {
+    await sql`if schema_id('helpdesk') is null exec('create schema helpdesk')`.execute(
+      db
+    );
+  }
   const created = new Set<ModelName>();
-  // Foreign keys to a table not created yet: SQLite takes them anyway, MySQL needs them added after.
+  // Foreign keys to a table not created yet: SQLite takes them anyway, the others need them added after.
   const later: (() => Promise<void>)[] = [];
 
   async function create(
@@ -79,14 +98,14 @@ export async function createBaseline(db: Db, family: Family) {
           [name] as never,
           table(target),
           ['id'],
-          fk => fk.onDelete(onDelete)
+          fk => (family === 'mssql' ? fk : fk.onDelete(onDelete))
         );
       } else {
         later.push(() =>
           db.schema
             .alterTable(table(model))
             .addForeignKeyConstraint(key, [name], table(target), ['id'], fk =>
-              fk.onDelete(onDelete)
+              family === 'mssql' ? fk : fk.onDelete(onDelete)
             )
             .execute()
         );
@@ -106,8 +125,16 @@ export async function createBaseline(db: Db, family: Family) {
     model: ModelName,
     name: string,
     columns: string[],
-    { unique = false, where }: { unique?: boolean; where?: string } = {}
+    {
+      unique = false,
+      where,
+      nullable = false,
+    }: { unique?: boolean; where?: string; nullable?: boolean } = {}
   ) {
+    // SQL Server lets a unique index hold one NULL only.
+    if (unique && nullable && family === 'mssql') {
+      where = `${columns[0]} is not null`;
+    }
     // Index names share one namespace with the host's own in a SQLite database.
     let builder = db.schema
       .createIndex(`helpdesk_${name}`)
@@ -133,6 +160,7 @@ export async function createBaseline(db: Db, family: Family) {
   ]);
   await index('company', 'company_external_org_id_key', ['external_org_id'], {
     unique: true,
+    nullable: true,
   });
   await index('company', 'company_domain_idx', ['domain']);
 
@@ -296,6 +324,7 @@ export async function createBaseline(db: Db, family: Family) {
   await index('message', 'message_contact_idx', ['contact_id']);
   await index('message', 'message_email_message_id_key', ['email_message_id'], {
     unique: true,
+    nullable: true,
   });
 
   await create('conversation_event', [

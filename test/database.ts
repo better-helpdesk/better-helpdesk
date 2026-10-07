@@ -4,11 +4,14 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { createPool } from 'mysql2';
 import pg from 'pg';
+import * as tarn from 'tarn';
+import * as tedious from 'tedious';
 
 import { createAdapter } from '../src/db/adapter';
 import {
   type Family,
   type KyselyAdapter,
+  mssqlAdapter,
   mysqlAdapter,
   postgresAdapter,
   sqliteAdapter,
@@ -20,6 +23,8 @@ export const testFamily = (process.env.TEST_DB || 'postgres') as Family;
 
 const name = `helpdesk_test${process.env.TEST_DB_PREFIX ? `_${process.env.TEST_DB_PREFIX}` : ''}`;
 
+export const testDatabaseName = () => name;
+
 /** The MySQL server in `TEST_MYSQL_URL` and the test database on it. */
 export const mysqlUrls = () => {
   const server = new URL(
@@ -29,6 +34,35 @@ export const mysqlUrls = () => {
   database.pathname = `/${name}`;
   return { server: server.toString(), database: database.toString(), name };
 };
+
+/** A SQL Server adapter on `database` of the server in `TEST_MSSQL_URL`. */
+export function mssqlTestAdapter(database: string) {
+  const url = new URL(
+    process.env.TEST_MSSQL_URL ?? 'mssql://sa@localhost:1433/'
+  );
+  return mssqlAdapter({
+    tarn: { ...tarn, options: { min: 0, max: 4 } },
+    tedious: {
+      ...tedious,
+      connectionFactory: () =>
+        new tedious.Connection({
+          server: url.hostname,
+          authentication: {
+            type: 'default',
+            options: {
+              userName: decodeURIComponent(url.username),
+              password: decodeURIComponent(url.password),
+            },
+          },
+          options: {
+            port: Number(url.port) || 1433,
+            database,
+            trustServerCertificate: true,
+          },
+        }),
+    },
+  });
+}
 
 /** Where the SQLite run keeps its file. */
 export const sqlitePath = () =>
@@ -42,6 +76,10 @@ function open(): {
   pool?: pg.Pool;
   close: () => Promise<void>;
 } {
+  if (testFamily === 'mssql') {
+    const adapter = mssqlTestAdapter(name);
+    return { adapter, close: () => adapter.kysely.destroy() };
+  }
   if (testFamily === 'mysql') {
     const pool = createPool({
       uri: mysqlUrls().database,

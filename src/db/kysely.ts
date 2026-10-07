@@ -5,6 +5,8 @@ import {
   type Expression,
   type ExpressionBuilder,
   Kysely,
+  MssqlDialect,
+  type MssqlDialectConfig,
   MysqlDialect,
   type MysqlPool,
   PostgresDialect,
@@ -151,9 +153,15 @@ function build(
       case 'gte':
         return eb(ref, '>=', value);
       case 'in':
-        return eb(lower(ref), 'in', (value as unknown[]).map(val));
-      case 'notIn':
-        return eb(lower(ref), 'not in', (value as unknown[]).map(val));
+      case 'notIn': {
+        const values = (value as unknown[]).map(val);
+        const negated = op === 'notIn' ? sql`not in` : sql`in`;
+        // SQL Server takes about 2000 parameters per query: a long list goes as one JSON one.
+        if (family === 'mssql' && values.length > 1000) {
+          return sql<SqlBool>`${lower(ref)} ${negated} (select value from openjson(${JSON.stringify(values)}))`;
+        }
+        return eb(lower(ref), op === 'notIn' ? 'not in' : 'in', values);
+      }
       case 'contains':
       case 'startsWith':
         return sql<SqlBool>`${lower(ref)} like ${like(
@@ -168,8 +176,16 @@ function build(
     (eb: Eb): Expression<SqlBool> =>
       w ? condition(eb, w) : sql<SqlBool>`1 = 1`;
 
+  // SQL Server takes a lock as a table hint, written after the table.
+  const from = (model: ModelName, forUpdate?: boolean) =>
+    forUpdate && family === 'mssql'
+      ? (sql`${sql.table(table(model))} with (updlock, rowlock)` as never)
+      : table(model);
+
   function select(model: ModelName, query: FindQuery) {
-    let q = db.selectFrom(table(model)).where(where(query.where));
+    let q = db
+      .selectFrom(from(model, query.forUpdate))
+      .where(where(query.where));
     q = query.select
       ? q.select(query.select.map(f => sql.ref(column(f)).as(column(f))))
       : q.selectAll();
@@ -189,8 +205,19 @@ function build(
         );
       }
     }
-    if (query.limit !== undefined) q = q.limit(query.limit);
-    if (query.offset !== undefined) q = q.offset(query.offset);
+    if (family === 'mssql') {
+      // SQL Server has no LIMIT: TOP without an offset, OFFSET … FETCH with one.
+      if (query.offset !== undefined) {
+        if (!query.orderBy?.length) q = q.orderBy(sql`(select null)`);
+        q = q.offset(query.offset);
+        if (query.limit !== undefined) q = q.fetch(query.limit);
+      } else if (query.limit !== undefined) {
+        q = q.top(query.limit);
+      }
+    } else {
+      if (query.limit !== undefined) q = q.limit(query.limit);
+      if (query.offset !== undefined) q = q.offset(query.offset);
+    }
     if (query.forUpdate && (family === 'postgres' || family === 'mysql')) {
       q = q.forUpdate();
     }
@@ -228,7 +255,7 @@ function build(
         .groupBy('tag')
         .orderBy(sql`count(*)`, 'desc')
         .orderBy('tag')
-        .limit(limit)
+        .$call(q => (family === 'mssql' ? q.top(limit) : q.limit(limit)))
         .execute();
       return rows.map(r => String(r.tag));
     },
@@ -245,7 +272,7 @@ function build(
         .orderBy(sql`case when activity.latest is null then 1 else 0 end`)
         .orderBy('activity.latest', 'desc')
         .orderBy('created_at', 'desc')
-        .limit(limit)
+        .$call(q => (family === 'mssql' ? q.top(limit) : q.limit(limit)))
         .execute();
       return rows.map(r => String(r.id));
     },
@@ -319,7 +346,8 @@ function build(
   const input: AdapterInput = {
     id: family,
     supports: {
-      dates: family !== 'sqlite',
+      // tedious would send a Date as DATETIME, which rounds to 3 ms.
+      dates: family !== 'sqlite' && family !== 'mssql',
       booleans: family !== 'sqlite',
       json: family === 'postgres' || family === 'mysql',
     },
@@ -496,4 +524,12 @@ export function mysqlAdapter({ pool }: { pool: MysqlPool }) {
     dialect: new MysqlDialect({ pool }),
     family: 'mysql',
   });
+}
+
+/**
+ * The SQL Server adapter (2022 or newer), over the tedious and tarn modules
+ * and the connection the host configures, as Kysely's `MssqlDialect` takes them.
+ */
+export function mssqlAdapter(config: MssqlDialectConfig) {
+  return kyselyAdapter({ dialect: new MssqlDialect(config), family: 'mssql' });
 }

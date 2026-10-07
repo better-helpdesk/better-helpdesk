@@ -154,6 +154,9 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
   ];
 
   async function reset() {
+    // References between the tables go first; SQL Server has no `on delete` to clear them.
+    await adapter.updateMany('agent', undefined, { viewingId: null });
+    await adapter.updateMany('conversation', undefined, { mergedIntoId: null });
     for (const table of tables) await adapter.deleteMany(table, undefined);
     objects.clear();
     emails.length = 0;
