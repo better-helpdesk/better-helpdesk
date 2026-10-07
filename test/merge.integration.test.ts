@@ -120,6 +120,60 @@ describe('merging conversations', () => {
     ).toEqual([{ conversationId: target.id }]);
   });
 
+  it("keeps the source's participants on the target, in the widget and by email", async () => {
+    h.addUser('erin', { email: 'erin@example.test' });
+    await open('erin', 'Her own');
+    const erin = await h.findOne('contact', { email: 'erin@example.test' });
+    const source = await open('carol', 'First');
+    const target = await open('dan', 'Second');
+    await h.call('POST', `agent/conversations/${source.id}/participants`, {
+      user: 'agent',
+      body: { contactId: erin?.id },
+    });
+    await merge(source.id, target.id);
+
+    expect(
+      (
+        await h.call('GET', `widget/conversations/${target.id}`, {
+          user: 'erin',
+        })
+      ).status
+    ).toBe(200);
+    expect(
+      (
+        await h.call('POST', `widget/conversations/${target.id}/messages`, {
+          user: 'erin',
+          body: { body: 'From the widget' },
+        })
+      ).status
+    ).toBe(201);
+    await h.support.handleInbound({
+      messageId: '<erin@mail.test>',
+      from: { address: 'erin@example.test', name: 'Erin' },
+      to: [`support+${source.reference}@devguard.test`],
+      subject: 'Re: Export',
+      text: 'By email',
+      references: [],
+      verified: true,
+      automated: false,
+      attachments: [],
+    });
+
+    expect(
+      (
+        await h.find(
+          'message',
+          { contactId: erin?.id },
+          { orderBy: { createdAt: 'asc' } }
+        )
+      ).map(r => ({ body: r.body, conversationId: r.conversationId }))
+    ).toEqual([
+      { body: 'Her own', conversationId: expect.any(String) },
+      { body: 'From the widget', conversationId: target.id },
+      { body: 'By email', conversationId: target.id },
+    ]);
+  });
+
   it('follows a chain of merges for a reply to the first source', async () => {
     const first = await open('carol', 'First');
     const second = await open('carol', 'Second');
