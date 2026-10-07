@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { tableName } from '../src/db/kysely';
@@ -42,4 +43,20 @@ describe('the migrated database', () => {
       expect(actual, model).toEqual(expected);
     }
   });
+});
+
+describe('names on a database without schemas', () => {
+  it.skipIf(builtIn.family !== 'sqlite')(
+    'gives every index the helpdesk_ prefix, leaving the names of the host free',
+    async () => {
+      const { rows } = await sql<{ name: string }>`
+        select name from sqlite_master
+        where type = 'index' and tbl_name like 'helpdesk!_%' escape '!'
+          and name not like 'sqlite!_autoindex!_%' escape '!'`.execute(
+        builtIn.kysely
+      );
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.filter(r => !r.name.startsWith('helpdesk_'))).toEqual([]);
+    }
+  );
 });

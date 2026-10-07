@@ -123,6 +123,7 @@ function build(
     }
     const op = where.op ?? 'eq';
     const { value } = where;
+    // ponytail: SQLite's lower() folds ASCII only, so "über" misses "Über" there; a lowercased copy of the searched text when that matters.
     const lower = (e: Expression<unknown>) =>
       where.insensitive ? eb.fn('lower', [e]) : e;
     const val = (v: unknown) =>
@@ -431,7 +432,7 @@ function asSqliteDatabase(database: SqliteDatabaseInput): SqliteDatabase {
 
 /**
  * The SQLite adapter, over a database the host opened. It turns foreign keys
- * on, which retention and deletes rely on, and waits up to five seconds for
+ * on, so no row points at one that is gone, and waits up to five seconds for
  * another process's write.
  */
 export function sqliteAdapter({ database }: { database: SqliteDatabaseInput }) {
@@ -450,7 +451,7 @@ export function sqliteAdapter({ database }: { database: SqliteDatabaseInput }) {
         }>(CompiledQuery.raw('pragma foreign_keys'));
         if (Number(rows[0]?.foreign_keys) !== 1) {
           throw new Error(
-            'helpdesk: SQLite refused to turn foreign keys on; deletes would leave rows behind'
+            'helpdesk: SQLite refused to turn foreign keys on, so rows could point at ones that are gone'
           );
         }
       },

@@ -57,7 +57,7 @@ export async function createBaseline(db: Db, family: Family) {
       });
     }
     await builder
-      .addPrimaryKeyConstraint(`${model}_pkey`, primaryKey as never)
+      .addPrimaryKeyConstraint(`helpdesk_${model}_pkey`, primaryKey as never)
       .execute();
   }
 
@@ -67,7 +67,11 @@ export async function createBaseline(db: Db, family: Family) {
     columns: string[],
     { unique = false, where }: { unique?: boolean; where?: string } = {}
   ) {
-    let builder = db.schema.createIndex(name).on(table(model)).columns(columns);
+    // Index names share one namespace with the host's own in a SQLite database.
+    let builder = db.schema
+      .createIndex(`helpdesk_${name}`)
+      .on(table(model))
+      .columns(columns);
     if (unique) builder = builder.unique();
     if (where) builder = builder.where(sql.raw<SqlBool>(where));
     await builder.execute();
