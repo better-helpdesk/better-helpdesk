@@ -101,8 +101,22 @@ const RATING_LINK_DAYS = 30;
 /** No email address is longer (RFC 5321), and the columns that keep one are not. */
 export const MAX_ADDRESS = 254;
 
+/** Ids, names of events and the like: what an indexed column holds on every database. */
+export const MAX_KEY = 255;
+
+function fitsKey(value: string | undefined, what: string) {
+  if (value !== undefined && value.length > MAX_KEY) {
+    throw new Error(`helpdesk: ${what} is longer than ${MAX_KEY} characters`);
+  }
+}
+
 /** The host's identity, without an email longer than any address can be. */
 function bounded(identity: Identity | null): Identity | null {
+  // A host's ids that long are its mistake: refused plainly, not by the database.
+  fitsKey(identity?.user.id, 'the user id from identify');
+  for (const org of identity?.orgs ?? []) {
+    fitsKey(org.id, 'an organization id from identify');
+  }
   if (!identity?.user.email || identity.user.email.length <= MAX_ADDRESS) {
     return identity;
   }
@@ -1160,6 +1174,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
     event: string;
     props?: Record<string, unknown>;
   }) {
+    fitsKey(input.event, 'the event name');
+    fitsKey(input.externalUserId, 'externalUserId');
+    fitsKey(input.externalOrgId, 'externalOrgId');
     if (input.externalUserId) {
       const contact = await store.findContactByIdentity(
         'host',

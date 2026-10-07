@@ -90,4 +90,14 @@ describe('identifiers', () => {
     const [contact] = await h.find('contact');
     expect(contact?.email).toBeNull();
   });
+
+  it('refuses a host event or id too long for the columns, with a plain error', async () => {
+    await expect(
+      h.support.track({ externalUserId: 'user-a', event: 'x'.repeat(256) })
+    ).rejects.toThrow(/event name is longer than 255/);
+    await expect(
+      h.support.track({ externalOrgId: 'o'.repeat(256), event: 'paid' })
+    ).rejects.toThrow(/externalOrgId is longer than 255/);
+    expect(await h.count('activity')).toBe(0);
+  });
 });
