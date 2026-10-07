@@ -51,9 +51,10 @@ export default async function Page() {
                   reply shows up in the widget without a refresh.
                 </li>
                 <li>
-                  Press <BrokenButton />, then report a bug from the launcher.
-                  The form offers the error it just caught, and the inbox shows
-                  it beside the URL, viewport and app version.
+                  Press the button below. The launcher opens on a bug report
+                  that offers the error it just caught, and the inbox shows it
+                  beside the URL, viewport and app version.
+                  <BrokenButton />
                 </li>
                 <li>
                   Flip the dark switch. Both UIs follow, because they read the
