@@ -14,6 +14,8 @@ const runs = [
     },
   },
   { name: 'sqlite', env: { TEST_DB: 'sqlite' } },
+  // The example adapter that implements the contract alone, without capabilities.
+  { name: 'memory', env: { TEST_DB: 'memory' } },
   ...(process.env.TEST_MYSQL_URL
     ? [{ name: 'mysql', env: { TEST_DB: 'mysql' } }]
     : []),

@@ -7,6 +7,8 @@ import { testAdapter } from './database';
 
 const { builtIn, close } = testAdapter();
 afterAll(close);
+// The memory adapter has no tables to look at.
+const db = builtIn as NonNullable<typeof builtIn>;
 
 /** Columns a database keeps for itself, outside the model. */
 const EXTRA: Record<string, string[]> = {
@@ -16,9 +18,9 @@ const EXTRA: Record<string, string[]> = {
 };
 
 // The migrations and the model describe the same tables; a change to one without the other fails here.
-describe('the migrated database', () => {
+describe.skipIf(!builtIn)('the migrated database', () => {
   it('has every table and column of the model, nullable where the model says', async () => {
-    const tables = await builtIn.kysely.introspection.getTables();
+    const tables = await db.kysely.introspection.getTables();
     const found = new Map(
       // MySQL reports the database as the schema; its tables carry a prefix instead.
       tables.map(t => [
@@ -29,7 +31,7 @@ describe('the migrated database', () => {
       ])
     );
     for (const model of Object.keys(helpdeskModel) as ModelName[]) {
-      const table = found.get(tableName(builtIn.family, model));
+      const table = found.get(tableName(db.family, model));
       expect(table, model).toBeDefined();
       const fields = helpdeskModel[model].fields as Record<
         string,
@@ -37,11 +39,11 @@ describe('the migrated database', () => {
       >;
       const expected = Object.entries(fields)
         .map(([field, spec]) => `${column(field)}${spec.nullable ? '?' : ''}`)
-        .concat(EXTRA[`${builtIn.family}:${model}`] ?? [])
+        .concat(EXTRA[`${db.family}:${model}`] ?? [])
         .sort();
       const actual = (table?.columns ?? [])
         .map(c =>
-          (EXTRA[`${builtIn.family}:${model}`] ?? []).includes(c.name)
+          (EXTRA[`${db.family}:${model}`] ?? []).includes(c.name)
             ? c.name
             : `${c.name}${c.isNullable ? '?' : ''}`
         )
@@ -52,14 +54,14 @@ describe('the migrated database', () => {
 });
 
 describe('names on a database without schemas', () => {
-  it.skipIf(builtIn.family !== 'sqlite')(
+  it.skipIf(builtIn?.family !== 'sqlite')(
     'gives every index the helpdesk_ prefix, leaving the names of the host free',
     async () => {
       const { rows } = await sql<{ name: string }>`
         select name from sqlite_master
         where type = 'index' and tbl_name like 'helpdesk!_%' escape '!'
           and name not like 'sqlite!_autoindex!_%' escape '!'`.execute(
-        builtIn.kysely
+        db.kysely
       );
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.filter(r => !r.name.startsWith('helpdesk_'))).toEqual([]);

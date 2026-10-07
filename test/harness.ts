@@ -7,7 +7,7 @@ import {
 } from '../src';
 import type { Where as AdapterWhere } from '../src/db/adapter';
 import type { ModelName, Row as ModelRow } from '../src/db/model';
-import { testAdapter } from './database';
+import { emptyTables, testAdapter } from './database';
 
 export type Model = ModelName;
 export type Row<M extends Model> = ModelRow<M>;
@@ -131,33 +131,8 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
     });
   }
 
-  // Children first, so no foreign key holds a delete up.
-  const tables: Model[] = [
-    'conversation_tag',
-    'contact_tag',
-    'company_tag',
-    'attachment',
-    'conversation_event',
-    'participant',
-    'message',
-    'activity',
-    'deal',
-    'identity',
-    'conversation',
-    'agent',
-    'contact',
-    'company',
-    'job',
-    'rate_limit',
-    'setting',
-    'canned_reply',
-  ];
-
   async function reset() {
-    // References between the tables go first; SQL Server has no `on delete` to clear them.
-    await adapter.updateMany('agent', undefined, { viewingId: null });
-    await adapter.updateMany('conversation', undefined, { mergedIntoId: null });
-    for (const table of tables) await adapter.deleteMany(table, undefined);
+    await emptyTables(adapter);
     objects.clear();
     emails.length = 0;
     users.clear();

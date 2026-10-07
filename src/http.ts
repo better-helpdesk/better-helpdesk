@@ -3,6 +3,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
+import { clock } from './db/adapter';
 import type {
   Agent,
   Company,
@@ -335,7 +336,7 @@ export function createHandler(support: Helpdesk) {
       if (data.status && conversation.status !== 'resolved') {
         const patch: Partial<Conversation> = {
           status: 'resolved',
-          resolvedAt: new Date(),
+          resolvedAt: clock(),
           waitingSince: null,
           snoozedUntil: null,
         };
@@ -394,7 +395,7 @@ export function createHandler(support: Helpdesk) {
       const conversation = await support.requireVisible(customer, params.id);
       if (conversation.contactId === customer.contact?.id) {
         await store.updateConversation(conversation.id, {
-          customerSeenAt: new Date(),
+          customerSeenAt: clock(),
         });
       }
       return json({ ok: true });
@@ -974,7 +975,7 @@ export function createHandler(support: Helpdesk) {
     const resolving =
       data.status === 'resolved' && conversation.status !== 'resolved';
     if (resolving) {
-      patch.resolvedAt = new Date();
+      patch.resolvedAt = clock();
       patch.waitingSince = null;
     } else if (data.status && data.status !== 'resolved') {
       patch.resolvedAt = null;
@@ -1173,7 +1174,7 @@ export function createHandler(support: Helpdesk) {
           priority: suggestion.priority ?? conversation.priority,
           // An agent's own title stands; the banner never offered to replace it.
           title: conversation.title ?? suggestion.title,
-          aiSuggestion: { ...suggestion, acceptedAt: new Date().toISOString() },
+          aiSuggestion: { ...suggestion, acceptedAt: clock().toISOString() },
         };
         const updated = await store.updateConversation(conversation.id, patch);
         await emitUpdated(config, conversation, updated, patch, agent.id);
@@ -1489,7 +1490,7 @@ export function createHandler(support: Helpdesk) {
             ? new Date(data.expectedCloseAt)
             : null,
       ...(data.stage && data.stage !== deal.stage
-        ? { stageChangedAt: new Date() }
+        ? { stageChangedAt: clock() }
         : {}),
     });
     return json({ deal: updated });
@@ -1519,7 +1520,7 @@ export function createHandler(support: Helpdesk) {
     const activity = await store.createActivity({
       ...data,
       agentId: agent.id,
-      occurredAt: data.occurredAt ? new Date(data.occurredAt) : new Date(),
+      occurredAt: data.occurredAt ? new Date(data.occurredAt) : clock(),
     });
     return json({ activity }, 201);
   });

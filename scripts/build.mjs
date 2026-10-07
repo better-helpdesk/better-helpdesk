@@ -31,6 +31,7 @@ await build({
   entryPoints: [
     'src/index.ts',
     'src/adapters.ts',
+    'src/testing.ts',
     'src/ui/rich.tsx',
     'src/import.ts',
   ],

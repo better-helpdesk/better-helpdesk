@@ -20,7 +20,8 @@
     "./admin": "./src/admin/index.tsx",
     "./next": "./next.mjs",
     "./rich": "./src/ui/rich.tsx",
-    "./adapters": "./src/adapters.ts"
+    "./adapters": "./src/adapters.ts",
+    "./testing": "./src/testing.ts"
   },
   "bin": {
     "better-helpdesk-import": "bin/import.mjs",
@@ -49,6 +50,10 @@
       "./adapters": {
         "types": "./dist/adapters.d.ts",
         "default": "./dist/adapters.js"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
       },
       "./widget": {
         "types": "./dist/widget/index.d.ts",
@@ -107,7 +112,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tarn": "^3.0.0",
-    "tedious": "^20.0.0"
+    "tedious": "^20.0.0",
+    "vitest": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "mysql2": {
@@ -120,6 +126,9 @@
       "optional": true
     },
     "tedious": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   },

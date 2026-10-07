@@ -17,6 +17,8 @@ import { testDatabaseUrl } from './database-url';
 
 /** Gives the run an empty database at the latest migration. */
 export async function setup() {
+  // The memory adapter needs no database and no migrations.
+  if (testFamily === 'memory') return;
   if (testFamily === 'sqlite') {
     for (const suffix of ['', '-wal', '-shm']) {
       await rm(`${sqlitePath()}${suffix}`, { force: true });
@@ -43,7 +45,7 @@ export async function setup() {
   }
   const { builtIn, close } = testAdapter();
   try {
-    await migrate(builtIn);
+    if (builtIn) await migrate(builtIn);
   } finally {
     await close();
   }

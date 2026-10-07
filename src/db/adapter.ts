@@ -146,6 +146,19 @@ export type DatabaseAdapter = {
   raw: AdapterInput;
 };
 
+let last = 0;
+
+/**
+ * The app's time, later than the time it gave before, so rows written one
+ * after the other keep their order within a millisecond. A clock set back by
+ * more than a second, as by NTP or a test, is followed rather than outrun.
+ */
+export function clock() {
+  const now = Date.now();
+  last = now < last - 1000 ? now : Math.max(now, last + 1);
+  return new Date(last);
+}
+
 const kindOf = (model: ModelName, field: string): FieldKind | undefined =>
   (helpdeskModel[model].fields as Record<string, { kind: FieldKind }>)[field]
     ?.kind;
@@ -244,7 +257,7 @@ export function createAdapter(raw: AdapterInput): DatabaseAdapter {
               spec.default === 'uuid'
                 ? randomUUID()
                 : spec.default === 'now'
-                  ? new Date()
+                  ? clock()
                   : spec.default !== undefined
                     ? structuredClone(spec.default)
                     : null;

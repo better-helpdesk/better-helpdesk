@@ -14,6 +14,8 @@ export {
   type Where,
 } from './db/adapter';
 export {
+  type Family,
+  type KyselyAdapter,
   kyselyAdapter,
   mssqlAdapter,
   mysqlAdapter,
@@ -22,7 +24,7 @@ export {
   sqliteAdapter,
 } from './db/kysely';
 export { migrate } from './db/migrate';
-export { helpdeskModel } from './db/model';
+export { helpdeskModel, type ModelName, type Row } from './db/model';
 export {
   type Conversation,
   createStore,
