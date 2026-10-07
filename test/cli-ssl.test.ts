@@ -24,6 +24,9 @@ export const parseCsv = () => [];
 export const importContacts = () => {};
 export const importCannedReplies = () => {};
 export const postgresAdapter = () => {};
+export const mysqlAdapter = () => {};
+export const mssqlAdapter = () => {};
+export const sqliteAdapter = () => {};
 export const createStore = () => {};
 export const migrate = async () => [];`;
 const hooks = `
@@ -89,5 +92,27 @@ describe.each([
         'postgres://db.test/app?sslmode=verify-full'
       )
     ).toEqual({});
+  });
+});
+
+describe('the database a URL names', () => {
+  it('refuses a scheme it has no adapter for, saying so', () => {
+    expect(() =>
+      execFileSync(
+        'node',
+        [
+          `--import=data:text/javascript,${encodeURIComponent(hooks)}`,
+          fileURLToPath(new URL('../bin/migrate.mjs', import.meta.url)),
+        ],
+        {
+          env: {
+            PATH: process.env.PATH,
+            HELPDESK_DATABASE_URL: 'oracle://db.test/app',
+          },
+          encoding: 'utf8',
+          stdio: 'pipe',
+        }
+      )
+    ).toThrow(/no adapter for oracle:/);
   });
 });

@@ -3,7 +3,7 @@ title: CLI
 description: The two commands the package installs, better-helpdesk-migrate and better-helpdesk-import, with their arguments, environment and output.
 ---
 
-The package installs two commands, run with `npx` from the host app. Both open one Postgres connection through `pg` and close it on exit. Related guide: [Switch from another helpdesk](/docs/guides/switching).
+The package installs two commands, run with `npx` from the host app. Both open one connection to the database the URL names, through the driver the host installed, and close it on exit. Related guide: [Switch from another helpdesk](/docs/guides/switching).
 
 ## Environment
 
@@ -11,11 +11,11 @@ Both commands read the same variables.
 
 | Variable | Meaning |
 | --- | --- |
-| `HELPDESK_DATABASE_URL` | Postgres connection string. Read first. |
+| `HELPDESK_DATABASE_URL` | Connection string. Read first. Its scheme picks the database: `postgres://` or `postgresql://` (through `pg`), `mysql://` (`mysql2`, in UTC), `mssql://` or `sqlserver://` (`tedious` and `tarn`; `?encrypt=false` and `?trustServerCertificate=true` are passed on), and `file:` or a path ending in `.db`, `.sqlite` or `.sqlite3` (Node's own `node:sqlite`). |
 | `APP_DATABASE_URL` | Used when `HELPDESK_DATABASE_URL` is unset. |
-| `DATABASE_SSL` | `true` turns on TLS and verifies the server's certificate. `no-verify` turns on TLS without verifying it, for a self-signed certificate. A `sslmode` in the connection string takes precedence over both. |
+| `DATABASE_SSL` | Postgres only. `true` turns on TLS and verifies the server's certificate. `no-verify` turns on TLS without verifying it, for a self-signed certificate. A `sslmode` in the connection string takes precedence over both. |
 
-Without a connection string, the command prints `HELPDESK_DATABASE_URL or APP_DATABASE_URL must be set` and exits with status 1.
+Without a connection string, the command prints `HELPDESK_DATABASE_URL or APP_DATABASE_URL must be set` and exits with status 1. With a scheme it does not know, or without the driver the scheme needs, it says so and exits with status 1.
 
 ## better-helpdesk-migrate
 

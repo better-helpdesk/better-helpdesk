@@ -77,7 +77,7 @@ database, its deploy and its design tokens.
 - **English and German**, with every agent UI string overridable. Theming through
   `--helpdesk-*` CSS custom properties.
 - **TypeScript, ESM, four runtime dependencies**: `kysely`, `zod`,
-  `mailparser` and `mailauth`. Peer dependencies are `pg` and React 19.
+  `mailparser` and `mailauth`. Peer dependencies are React 19 and the driver of the host's database (`pg`, `mysql2`, or `tedious` and `tarn`; SQLite needs none).
 
 ## Compared with
 
@@ -136,8 +136,8 @@ AI; AI only ever produces a suggestion or a draft that a person reviews.
 ## Requirements
 
 - Node.js 22.19 or newer
-- PostgreSQL 14 or newer
-- React 19 and `pg`, as peer dependencies
+- A database: PostgreSQL 14, MySQL 8.4 or SQL Server 2022 or newer, or SQLite through Node's own `node:sqlite`
+- React 19, and the driver of your database (`pg` for Postgres), as peer dependencies
 - Next.js 15 or newer for the examples below. The handler is a plain
   function from `Request` to `Response`, so any server with that shape can
   mount it.
