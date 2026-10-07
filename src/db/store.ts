@@ -972,8 +972,9 @@ export function createStore(adapter: DatabaseAdapter) {
     },
 
     /**
-     * Moves the source's messages and attachments onto the target and resolves
-     * the source as merged. False when either side was merged first.
+     * Moves the source's messages and attachments onto the target, makes its
+     * customer and participants participants of the target, and resolves the
+     * source as merged. False when either side was merged first.
      */
     async mergeConversation(
       sourceId: string,
@@ -998,18 +999,24 @@ export function createStore(adapter: DatabaseAdapter) {
         await tx.updateMany('attachment', eq('conversationId', sourceId), {
           conversationId: targetId,
         });
-        if (source.contactId !== target.contactId) {
+        const joining = new Set([
+          source.contactId,
+          ...(
+            await tx.findMany<Row<'participant'>>('participant', {
+              where: eq('conversationId', sourceId),
+            })
+          ).map(p => p.contactId),
+        ]);
+        joining.delete(target.contactId);
+        for (const contactId of joining) {
           const already = await tx.count(
             'participant',
-            and(
-              eq('conversationId', targetId),
-              eq('contactId', source.contactId)
-            )
+            and(eq('conversationId', targetId), eq('contactId', contactId))
           );
           if (!already) {
             await tx.create('participant', {
               conversationId: targetId,
-              contactId: source.contactId,
+              contactId,
             });
           }
         }
