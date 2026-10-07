@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "better-auth": "^1.7.7",
-    "better-helpdesk": "^0.5.2",
+    "better-helpdesk": "^0.5.3",
     "fumadocs-core": "^16.16.2",
     "fumadocs-mdx": "^15.4.6",
     "fumadocs-ui": "^16.16.2",
