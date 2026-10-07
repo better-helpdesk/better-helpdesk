@@ -5,6 +5,8 @@ import {
   type Expression,
   type ExpressionBuilder,
   Kysely,
+  MysqlDialect,
+  type MysqlPool,
   PostgresDialect,
   type PostgresPool,
   type SqlBool,
@@ -70,9 +72,12 @@ function build(
     const kinds = fieldsOf(model);
     const out: Data = {};
     for (const [key, value] of Object.entries(data)) {
-      // node-pg would send a JS array as a Postgres array, not JSON.
+      // Sent as JSON text: node-pg would send a JS array as a Postgres
+      // array, and mysql2 an object as a list of assignments.
       out[column(key)] =
-        family === 'postgres' && kinds[key]?.kind === 'json' && value !== null
+        (family === 'postgres' || family === 'mysql') &&
+        kinds[key]?.kind === 'json' &&
+        value !== null
           ? JSON.stringify(value)
           : value;
     }
@@ -316,7 +321,7 @@ function build(
     supports: {
       dates: family !== 'sqlite',
       booleans: family !== 'sqlite',
-      json: family === 'postgres',
+      json: family === 'postgres' || family === 'mysql',
     },
     async create(model, data) {
       await db
@@ -457,5 +462,38 @@ export function sqliteAdapter({ database }: { database: SqliteDatabaseInput }) {
       },
     }),
     family: 'sqlite',
+  });
+}
+
+/**
+ * The MySQL adapter, over the host's mysql2 pool (8.4 or newer). The pool
+ * must be created with `timezone: 'Z'`: times are kept as UTC `DATETIME`
+ * and mysql2 converts them in that zone.
+ */
+export function mysqlAdapter({ pool }: { pool: MysqlPool }) {
+  const config = (
+    pool as {
+      config?: {
+        connectionConfig?: {
+          timezone?: string;
+          dateStrings?: unknown;
+          jsonStrings?: unknown;
+        };
+      };
+    }
+  ).config?.connectionConfig;
+  if (
+    config &&
+    (!['Z', '+00:00', 'UTC'].includes(config.timezone ?? '') ||
+      config.dateStrings ||
+      config.jsonStrings)
+  ) {
+    throw new Error(
+      "helpdesk: create the mysql2 pool with `timezone: 'Z'` and without `dateStrings` or `jsonStrings`, so times are stored in UTC and JSON comes back parsed"
+    );
+  }
+  return kyselyAdapter({
+    dialect: new MysqlDialect({ pool }),
+    family: 'mysql',
   });
 }

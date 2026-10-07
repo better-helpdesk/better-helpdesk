@@ -98,6 +98,46 @@ export function ipBucket(ip: string) {
 
 const RATING_LINK_DAYS = 30;
 
+/** No email address is longer (RFC 5321), and the columns that keep one are not. */
+export const MAX_ADDRESS = 254;
+
+/** Ids, names of events and the like: what an indexed column holds on every database. */
+export const MAX_KEY = 255;
+
+function fitsKey(value: string | undefined, what: string) {
+  if (value !== undefined && value.length > MAX_KEY) {
+    throw new Error(`helpdesk: ${what} is longer than ${MAX_KEY} characters`);
+  }
+}
+
+/** The host's identity, without an email longer than any address can be. */
+function bounded(identity: Identity | null): Identity | null {
+  // A host's ids that long are its mistake: refused plainly, not by the database.
+  fitsKey(identity?.user.id, 'the user id from identify');
+  for (const org of identity?.orgs ?? []) {
+    fitsKey(org.id, 'an organization id from identify');
+  }
+  if (!identity?.user.email || identity.user.email.length <= MAX_ADDRESS) {
+    return identity;
+  }
+  return {
+    ...identity,
+    user: { ...identity.user, email: null, emailVerified: false },
+  };
+}
+const MAX_MESSAGE_ID = 255;
+
+/**
+ * A Message-ID as it is stored and looked up. One too long for the column is
+ * kept as its hash, the same for every mail that names it, so threading
+ * still finds it; a reply to such a thread carries the hash, not the id.
+ */
+export function messageIdKey(id: string) {
+  return id.length <= MAX_MESSAGE_ID
+    ? id
+    : `<sha256.${createHash('sha256').update(id).digest('hex')}@helpdesk>`;
+}
+
 export function createHelpdesk(input: HelpdeskConfig) {
   const config: ResolvedConfig = resolveConfig(input);
   const { store } = config;
@@ -150,8 +190,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
     request: Request,
     { create }: { create: boolean }
   ): Promise<Customer> {
-    const identity =
-      (await config.identify(request)) ?? identityFromToken(request);
+    const identity = bounded(
+      (await config.identify(request)) ?? identityFromToken(request)
+    );
     if (identity) {
       const { user } = identity;
       let contact = await store.findContactByIdentity('host', user.id, {
@@ -256,7 +297,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   }
 
   async function requireAgent(request: Request) {
-    const identity = await config.identify(request);
+    const identity = bounded(await config.identify(request));
     if (!identity) throw new HelpdeskError(401, 'Unauthenticated');
     if (!identity.isAgent) throw new HelpdeskError(403, 'Forbidden');
     return store.touchAgent({
@@ -295,7 +336,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     orgId: z.string().optional(),
     sharedWithCompany: z.boolean().optional(),
     name: z.string().trim().max(200).optional(),
-    email: z.email().max(320).optional(),
+    email: z.email().max(MAX_ADDRESS).optional(),
     website: z.string().optional(),
   });
 
@@ -857,7 +898,14 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return queued;
   }
 
-  async function handleInbound(mail: InboundMessage) {
+  async function handleInbound(received: InboundMessage) {
+    if (received.from.address.length > MAX_ADDRESS) return;
+    const mail = {
+      ...received,
+      messageId: messageIdKey(received.messageId),
+      inReplyTo: received.inReplyTo && messageIdKey(received.inReplyTo),
+      references: received.references.map(messageIdKey),
+    };
     // ponytail: a database failure between the message and its follow-ups still loses them on retry; one transaction across the store calls if that bites.
     if (await store.findMessageByEmailId([mail.messageId])) return;
     // Unsigned, an out-of-office could be anyone's text.
@@ -1126,6 +1174,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
     event: string;
     props?: Record<string, unknown>;
   }) {
+    fitsKey(input.event, 'the event name');
+    fitsKey(input.externalUserId, 'externalUserId');
+    fitsKey(input.externalOrgId, 'externalOrgId');
     if (input.externalUserId) {
       const contact = await store.findContactByIdentity(
         'host',

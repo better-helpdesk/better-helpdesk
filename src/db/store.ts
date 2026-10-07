@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { PRIORITIES } from '../config';
 import type { DatabaseAdapter, Where } from './adapter';
 import {
@@ -1872,7 +1874,12 @@ export function createStore(adapter: DatabaseAdapter) {
     },
 
     /** Counts one hit; returns the total in the current hour for `key`. */
-    async hitRateLimit(key: string): Promise<number> {
+    async hitRateLimit(name: string): Promise<number> {
+      // Keys built from an address can outgrow the column; their hash cannot.
+      const key =
+        name.length <= 200
+          ? name
+          : `sha256:${createHash('sha256').update(name).digest('hex')}`;
       const windowStart = new Date(Math.floor(Date.now() / HOUR) * HOUR);
       const window = and(eq('key', key), eq('windowStart', windowStart));
       for (;;) {

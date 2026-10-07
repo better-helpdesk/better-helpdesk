@@ -7,7 +7,7 @@ import type { Identity } from './config';
 const claims = z.object({
   sub: z.string().min(1).max(200),
   exp: z.number().int(),
-  email: z.email().max(320).optional(),
+  email: z.email().max(254).optional(),
   email_verified: z.boolean().optional(),
   name: z.string().max(200).optional(),
   locale: z.string().max(35).optional(),

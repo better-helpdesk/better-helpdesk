@@ -20,6 +20,7 @@ import {
   type Customer,
   type Helpdesk,
   HelpdeskError,
+  MAX_ADDRESS,
   MAX_ATTACHMENTS,
 } from './service';
 import { sourceOf } from './source';
@@ -1285,7 +1286,7 @@ export function createHandler(support: Helpdesk) {
     const data = z
       .object({
         name: z.string().trim().min(1).max(200),
-        email: z.email().optional(),
+        email: z.email().max(MAX_ADDRESS).optional(),
         companyId: uuid.nullable().optional(),
         leadStage: leadStage(),
       })

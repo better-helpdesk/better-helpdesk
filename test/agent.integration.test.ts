@@ -752,6 +752,29 @@ describe('inbound email', () => {
     ]);
   });
 
+  it('keeps a Message-ID too long for the column, and threads a reply to it', async () => {
+    const long = `<${'x'.repeat(300)}@mail.test>`;
+    await h.support.handleInbound(mail({ messageId: long }));
+    await h.support.handleInbound(mail({ messageId: long }));
+    expect(await h.count('conversation')).toBe(1);
+    await h.support.handleInbound(
+      mail({
+        messageId: '<answer@mail.test>',
+        inReplyTo: long,
+        references: [long],
+        text: 'Still broken',
+      })
+    );
+    expect(await h.count('conversation')).toBe(1);
+    expect(await h.count('message')).toBe(2);
+  });
+
+  it('drops mail from an address longer than any address can be', async () => {
+    const from = `${'a'.repeat(250)}@example.test`;
+    await h.support.handleInbound(mail({ from: { address: from } }));
+    expect(await h.count('conversation')).toBe(0);
+  });
+
   it('does not let another sender post into a thread by its address', async () => {
     h.addUser('carol', { email: 'carol@example.test' });
     const conversation = await open('carol');

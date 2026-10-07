@@ -85,7 +85,9 @@ const postgres: Record<string, Migration> = {
 
 export const migrations: Record<Family, Record<string, Migration>> = {
   postgres,
-  mysql: {},
+  mysql: {
+    '0000_baseline': { up: (db: Db) => createBaseline(db, 'mysql') },
+  },
   sqlite: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'sqlite') },
   },

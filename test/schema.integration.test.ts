@@ -20,7 +20,13 @@ describe('the migrated database', () => {
   it('has every table and column of the model, nullable where the model says', async () => {
     const tables = await builtIn.kysely.introspection.getTables();
     const found = new Map(
-      tables.map(t => [t.schema ? `${t.schema}.${t.name}` : t.name, t])
+      // MySQL reports the database as the schema; its tables carry a prefix instead.
+      tables.map(t => [
+        t.schema && !t.name.startsWith('helpdesk_')
+          ? `${t.schema}.${t.name}`
+          : t.name,
+        t,
+      ])
     );
     for (const model of Object.keys(helpdeskModel) as ModelName[]) {
       const table = found.get(tableName(builtIn.family, model));
