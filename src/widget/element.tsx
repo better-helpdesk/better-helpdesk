@@ -6,14 +6,33 @@ import { Widget, type WidgetEvent } from './widget';
 
 const MAX_ERRORS = 10;
 
+/** `<helpdesk-widget>` and `<helpdesk-conversations>` as a host's code sees them. */
+export interface HelpdeskWidgetElement extends HTMLElement {
+  /** Host context attached to new reports, e.g. `{ control: 'A.5.1' }`. */
+  context: Record<string, string>;
+  /**
+   * Opens the panel, on the form of `type` (such as `'bug'`) when the inbox
+   * offers it, on its first view otherwise. An open panel keeps a draft the
+   * customer is writing unless the host names another form.
+   */
+  open(options?: { type?: string }): void;
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'helpdesk-widget': HelpdeskWidgetElement;
+    'helpdesk-conversations': HelpdeskWidgetElement;
+  }
+}
+
 /**
  * Registers `<helpdesk-widget>`: a launcher and panel rendered into a shadow
  * root, so host styles and widget styles never meet. Attributes: `api`,
  * `inbox`, `locale`, `types` (comma list), `org`, `identity-token`,
  * `app-version`, `label`, and
  * `theme="auto"` to follow the OS dark mode. The `context` property carries
- * host context for new reports. Emits `helpdesk:open` and
- * `helpdesk:message-sent`.
+ * host context for new reports, and `open({ type })` opens the panel from
+ * the host's own code. Emits `helpdesk:open` and `helpdesk:message-sent`.
  */
 export function defineHelpdeskWidget(
   tag = 'helpdesk-widget',
@@ -116,6 +135,8 @@ export function defineHelpdeskWidget(
     }
 
     disconnectedCallback() {
+      // A request belongs to the moment it was made, not to the next mount.
+      this.#openRequest = undefined;
       for (const type of ['keydown', 'keyup', 'keypress'] as const) {
         this.removeEventListener(type, this.#onKey);
       }

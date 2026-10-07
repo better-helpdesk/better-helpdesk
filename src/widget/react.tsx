@@ -1,8 +1,12 @@
 'use client';
 
-import { createElement, useEffect, useRef } from 'react';
+import { createElement, type Ref, useCallback, useEffect, useRef } from 'react';
 
-import { defineHelpdeskConversations, defineHelpdeskWidget } from './element';
+import {
+  defineHelpdeskConversations,
+  defineHelpdeskWidget,
+  type HelpdeskWidgetElement,
+} from './element';
 
 type Props = {
   api?: string;
@@ -16,6 +20,8 @@ type Props = {
   label?: string;
   /** `auto` follows the operating system's dark mode. */
   theme?: 'auto';
+  /** The element, for its `open({ type })` method. */
+  ref?: Ref<HelpdeskWidgetElement>;
 };
 
 /** React wrapper around `<helpdesk-widget>`. */
@@ -44,9 +50,19 @@ function HostElement({
   orgId,
   identityToken,
   appVersion,
+  ref: hostRef,
   ...rest
 }: Props & { tag: string; define: () => void }) {
-  const ref = useRef<HTMLElement & { context: Record<string, string> }>(null);
+  const ref = useRef<HelpdeskWidgetElement>(null);
+  // The host's ref and the wrapper's own both get the element.
+  const setRef = useCallback(
+    (element: HelpdeskWidgetElement | null) => {
+      ref.current = element;
+      if (typeof hostRef === 'function') hostRef(element);
+      else if (hostRef) hostRef.current = element;
+    },
+    [hostRef]
+  );
 
   // Before the context effect: set on an element not yet defined, `context`
   // would become a plain property that hides the element's own setter.
@@ -57,7 +73,7 @@ function HostElement({
   }, [context]);
 
   return createElement(tag, {
-    ref,
+    ref: setRef,
     ...rest,
     types: types?.join(','),
     org: orgId,

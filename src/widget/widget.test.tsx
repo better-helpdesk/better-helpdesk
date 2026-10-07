@@ -1446,4 +1446,20 @@ describe('opened by the host', () => {
       screen.queryByRole('textbox', { name: 'What happened?' })
     ).toBeNull();
   });
+
+  it('keeps a draft when the host opens the panel again without naming another form', async () => {
+    mockApi({ 'widget/session': session });
+    const { rerender } = render(widget({ type: 'bug' }));
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    message.innerHTML = 'my long draft';
+    fireEvent.input(message);
+    rerender(widget({}));
+    rerender(widget({ type: 'refund' }));
+    await act(async () => {});
+    expect(
+      screen.getByRole('textbox', { name: 'What happened?' }).textContent
+    ).toBe('my long draft');
+  });
 });

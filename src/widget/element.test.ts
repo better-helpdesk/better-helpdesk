@@ -65,9 +65,8 @@ it('opens <helpdesk-widget> on the form a host asks for', async () => {
   defineHelpdeskWidget();
   document.body.innerHTML =
     '<helpdesk-widget api="/api/helpdesk" inbox="support" locale="en"></helpdesk-widget>';
-  const element = document.querySelector('helpdesk-widget') as HTMLElement & {
-    open(options?: { type?: string }): void;
-  };
+  const element = document.querySelector('helpdesk-widget');
+  if (!element) throw new Error('missing');
   await waitFor(() =>
     expect(element.shadowRoot?.querySelector('.launcher')).toBeTruthy()
   );
@@ -79,4 +78,41 @@ it('opens <helpdesk-widget> on the form a host asks for', async () => {
         ?.getAttribute('aria-label')
     ).toBe('Report a bug')
   );
+});
+
+it('does not reopen after a move: a request belongs to the moment it was made', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            identified: true,
+            name: 'Ada',
+            email: 'ada@example.test',
+            orgs: [],
+            types: ['question', 'bug'],
+            team: [],
+            inbox: null,
+            conversations: [],
+          })
+        )
+    )
+  );
+  defineHelpdeskWidget();
+  document.body.innerHTML =
+    '<div id="a"><helpdesk-widget api="/api/helpdesk" inbox="support" locale="en"></helpdesk-widget></div><div id="b"></div>';
+  const element = document.querySelector('helpdesk-widget');
+  if (!element) throw new Error('missing');
+  element.open({ type: 'bug' });
+  await waitFor(() =>
+    expect(element.shadowRoot?.querySelector('[role="dialog"]')).toBeTruthy()
+  );
+  element.shadowRoot?.querySelector<HTMLButtonElement>('.launcher')?.click();
+  await waitFor(() =>
+    expect(element.shadowRoot?.querySelector('[role="dialog"]')).toBeNull()
+  );
+  document.getElementById('b')?.append(element);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(element.shadowRoot?.querySelector('[role="dialog"]')).toBeNull();
 });

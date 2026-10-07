@@ -362,11 +362,19 @@ export function Widget(props: WidgetProps) {
   }, [emptyList, single]);
 
   // A host's request waits for the session, which says what the inbox offers.
-  const [requested, setRequested] = useState<string | null>(null);
+  const [requested, setRequested] = useState<{
+    type: string;
+    wasOpen: boolean;
+  } | null>(null);
   const focusForm = useRef(false);
+  const isOpen = useRef(open);
+  isOpen.current = open;
   useEffect(() => {
     if (!props.openRequest) return;
-    setRequested(props.openRequest.type ?? '');
+    setRequested({
+      type: props.openRequest.type ?? '',
+      wasOpen: isOpen.current,
+    });
     setMenuOpen(false);
     setOpen(true);
   }, [props.openRequest]);
@@ -374,15 +382,19 @@ export function Widget(props: WidgetProps) {
   useEffect(() => {
     if (requested === null || !data) return;
     setRequested(null);
+    const offeredType = offeredKey.split(',').includes(requested.type);
+    // An open panel keeps what the customer is writing: only a form the host
+    // names replaces it, and never a thread with its reply.
+    if (requested.wasOpen && (!offeredType || view.name === 'thread')) return;
     focusForm.current = true;
     setView(
-      requested && offeredKey.split(',').includes(requested)
-        ? { name: 'form', type: requested }
+      offeredType
+        ? { name: 'form', type: requested.type }
         : single
           ? { name: 'form', type: single }
           : { name: 'home' }
     );
-  }, [requested, data, offeredKey, single]);
+  }, [requested, data, offeredKey, single, view.name]);
   useEffect(() => {
     if (!focusForm.current || view.name !== 'form') return;
     focusForm.current = false;
