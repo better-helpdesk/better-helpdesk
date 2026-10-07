@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 
-import { openWidget } from '../components/launcher-skin';
 import { shatter } from './glass';
 
 /** Minutes until the next quarter hour, when instrumentation.ts resets the demo. */
@@ -23,12 +22,7 @@ export function ResetCountdown({ minutes }: { minutes: number }) {
 let pressedUntil = 0;
 
 function openBugReport() {
-  const widget = document.querySelector<
-    HTMLElement & { open?: (options: { type: string }) => void }
-  >('helpdesk-widget');
-  // Published releases before open() still open on the type list.
-  if (widget?.open) widget.open({ type: 'bug' });
-  else openWidget();
+  document.querySelector('helpdesk-widget')?.open({ type: 'bug' });
 }
 
 /**
