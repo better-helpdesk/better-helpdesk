@@ -8,12 +8,18 @@ import {
   postgresAdapter,
   sqliteAdapter,
 } from '../dist/index.js';
+import { databaseOf } from './url.mjs';
 
 async function load(name, family) {
   try {
     return await import(name);
   } catch (error) {
-    if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+    // Only the driver itself missing; a missing dependency of it says its own name.
+    const missing =
+      (error?.code === 'ERR_MODULE_NOT_FOUND' ||
+        error?.code === 'MODULE_NOT_FOUND') &&
+      String(error.message).includes(`'${name}'`);
+    if (!missing) throw error;
     throw new Error(
       `helpdesk: ${family} needs the ${name} package; install it next to better-helpdesk`
     );
@@ -21,8 +27,8 @@ async function load(name, family) {
 }
 
 export async function openDatabase(url) {
-  const scheme = url.match(/^([a-z0-9+]+):/i)?.[1]?.toLowerCase();
-  if (scheme === 'postgres' || scheme === 'postgresql') {
+  const { family, path, scheme } = databaseOf(url);
+  if (family === 'postgres') {
     const pg = (await load('pg', 'Postgres')).default;
     const pool = new pg.Pool({
       connectionString: url,
@@ -34,7 +40,7 @@ export async function openDatabase(url) {
     });
     return { adapter: postgresAdapter({ pool }), close: () => pool.end() };
   }
-  if (scheme === 'mysql') {
+  if (family === 'mysql') {
     const mysql = await load('mysql2', 'MySQL');
     const pool = (mysql.default ?? mysql).createPool({
       uri: url,
@@ -44,7 +50,7 @@ export async function openDatabase(url) {
     const adapter = mysqlAdapter({ pool });
     return { adapter, close: () => adapter.kysely.destroy() };
   }
-  if (scheme === 'mssql' || scheme === 'sqlserver') {
+  if (family === 'mssql') {
     const tedious = await load('tedious', 'SQL Server');
     const tarn = await load('tarn', 'SQL Server');
     const parsed = new URL(url);
@@ -75,10 +81,8 @@ export async function openDatabase(url) {
     });
     return { adapter, close: () => adapter.kysely.destroy() };
   }
-  if (scheme === 'file' || (!scheme && /\.(db|sqlite3?)$/i.test(url))) {
+  if (family === 'sqlite') {
     const { DatabaseSync } = await import('node:sqlite');
-    const path =
-      scheme === 'file' ? decodeURIComponent(new URL(url).pathname) : url;
     const adapter = sqliteAdapter({ database: new DatabaseSync(path) });
     return { adapter, close: () => adapter.kysely.destroy() };
   }

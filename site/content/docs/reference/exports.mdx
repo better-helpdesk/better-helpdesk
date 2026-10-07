@@ -15,7 +15,7 @@ The `better-helpdesk` package has seven entry points. Related guide: [Call the h
 | [`better-helpdesk/next`](#better-helpdesknext) | Build | `withHelpdesk` for `next.config` |
 | [`better-helpdesk/widget.js`](#better-helpdeskwidgetjs) | Browser | The standalone widget script |
 
-The package is ESM only and ships its type declarations. Its peer dependencies are `pg`, `react` and `react-dom` (React 19), `mysql2` 3.24 or newer for MySQL, and `tedious` 20 and `tarn` 3 for SQL Server, which only a host on that database installs; it requires Node.js 22.19 or newer.
+The package is ESM only and ships its type declarations. Its peer dependencies are `react` and `react-dom` (React 19) and the driver of the host's database, which only a host on that database installs: `pg` for Postgres, `mysql2` 3.24 or newer for MySQL, `tedious` 20 and `tarn` 3 for SQL Server, and none for SQLite; it requires Node.js 22.19 or newer.
 
 ## better-helpdesk
 
