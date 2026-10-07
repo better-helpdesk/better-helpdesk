@@ -1,6 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
-import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { type Locale, PRIORITIES, STATUSES } from './config';
@@ -86,9 +85,6 @@ const previewOf = (body: string | undefined, length: number) =>
     : null;
 /** What the widget says after a first message, per locale; `{email}` and `{reference}` are filled in. */
 type ConfirmationSetting = Partial<Record<Locale, string>>;
-// Timestamps compared with message and job times come from the same clock:
-// the database's; the app host's may drift from it.
-const dbNow = () => sql`now()` as unknown as Date;
 const MAX_TAGS = 50;
 const MAX_VIEWS = 50;
 /** The inbox filters a saved view keeps, in the order it stores them. */
@@ -338,7 +334,7 @@ export function createHandler(support: Helpdesk) {
       if (data.status && conversation.status !== 'resolved') {
         const patch: Partial<Conversation> = {
           status: 'resolved',
-          resolvedAt: dbNow(),
+          resolvedAt: new Date(),
           waitingSince: null,
           snoozedUntil: null,
         };
@@ -397,7 +393,7 @@ export function createHandler(support: Helpdesk) {
       const conversation = await support.requireVisible(customer, params.id);
       if (conversation.contactId === customer.contact?.id) {
         await store.updateConversation(conversation.id, {
-          customerSeenAt: dbNow(),
+          customerSeenAt: new Date(),
         });
       }
       return json({ ok: true });
@@ -977,7 +973,7 @@ export function createHandler(support: Helpdesk) {
     const resolving =
       data.status === 'resolved' && conversation.status !== 'resolved';
     if (resolving) {
-      patch.resolvedAt = dbNow();
+      patch.resolvedAt = new Date();
       patch.waitingSince = null;
     } else if (data.status && data.status !== 'resolved') {
       patch.resolvedAt = null;
@@ -1492,7 +1488,7 @@ export function createHandler(support: Helpdesk) {
             ? new Date(data.expectedCloseAt)
             : null,
       ...(data.stage && data.stage !== deal.stage
-        ? { stageChangedAt: dbNow() }
+        ? { stageChangedAt: new Date() }
         : {}),
     });
     return json({ deal: updated });

@@ -130,7 +130,7 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
 
   async function runDueJobs() {
     await support.store.db.execute(
-      sql`UPDATE helpdesk.job SET run_at = now() WHERE run_at <> 'infinity'`
+      sql`UPDATE helpdesk.job SET run_at = now() WHERE run_at < '9999-01-01'`
     );
     return support.runJobs();
   }

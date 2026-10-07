@@ -73,6 +73,12 @@ export type InboxFilter = {
 };
 
 const MAX_ATTEMPTS = 5;
+/** When a job that failed for good would run: never. */
+const NEVER = new Date('9999-12-31T00:00:00Z');
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const ago = (ms: number) => new Date(Date.now() - ms);
 
 const notBlocked = sql`${conversations.contactId} NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)`;
 
@@ -133,6 +139,14 @@ export function postgresAdapter({ pool }: { pool: Pool }) {
 export type HelpdeskStore = ReturnType<typeof createStore>;
 
 export function createStore(db: Db) {
+  async function conversationIdsWhere(where: SQL | undefined) {
+    const rows = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(where);
+    return rows.map(r => r.id);
+  }
+
   const store = {
     db,
 
@@ -170,10 +184,7 @@ export function createStore(db: Db) {
           and(
             eq(identities.channel, 'visitor'),
             eq(identities.externalId, tokenHash),
-            gt(
-              identities.lastUsedAt,
-              sql`now() - make_interval(days => ${idleDays})`
-            )
+            gt(identities.lastUsedAt, ago(idleDays * DAY))
           )
         )
         .limit(1);
@@ -181,11 +192,11 @@ export function createStore(db: Db) {
       // The widget polls; one write an hour is enough to measure idleness.
       await db
         .update(identities)
-        .set({ lastUsedAt: sql`now()` })
+        .set({ lastUsedAt: new Date() })
         .where(
           and(
             eq(identities.id, row.identity.id),
-            lt(identities.lastUsedAt, sql`now() - interval '1 hour'`)
+            lt(identities.lastUsedAt, ago(HOUR))
           )
         );
       return row.contact;
@@ -195,13 +206,13 @@ export function createStore(db: Db) {
     async markContactSeen(id: string) {
       await db
         .update(contacts)
-        .set({ lastSeenAt: sql`now()` })
+        .set({ lastSeenAt: new Date() })
         .where(
           and(
             eq(contacts.id, id),
             or(
               isNull(contacts.lastSeenAt),
-              lt(contacts.lastSeenAt, sql`now() - interval '5 minutes'`)
+              lt(contacts.lastSeenAt, ago(5 * MINUTE))
             )
           )
         );
@@ -401,21 +412,25 @@ export function createStore(db: Db) {
         await tx.execute(sql`
           UPDATE helpdesk.identity SET contact_id = ${targetId}::uuid
           WHERE contact_id = ${sourceId}::uuid`);
-        const [source] = await tx
+        const rows = await tx
           .select()
           .from(contacts)
-          .where(eq(contacts.id, sourceId));
+          .where(inArray(contacts.id, [sourceId, targetId]))
+          .orderBy(asc(contacts.id))
+          .for('update');
+        const source = rows.find(r => r.id === sourceId);
+        const target = rows.find(r => r.id === targetId);
         await tx.delete(contacts).where(eq(contacts.id, sourceId));
-        if (source) {
+        if (source && target) {
           await tx
             .update(contacts)
             .set({
-              email: sql`coalesce(${contacts.email}, ${source.email})`,
-              name: sql`coalesce(${contacts.name}, ${source.name})`,
-              companyId: sql`coalesce(${contacts.companyId}, ${source.companyId}::uuid)`,
+              email: target.email ?? source.email,
+              name: target.name ?? source.name,
+              companyId: target.companyId ?? source.companyId,
               // A block on either side holds for the merged person.
-              blocked: sql`${contacts.blocked} OR ${source.blocked}`,
-              lastSeenAt: sql`greatest(${contacts.lastSeenAt}, ${source.lastSeenAt}::timestamptz)`,
+              blocked: target.blocked || source.blocked,
+              lastSeenAt: latest(target.lastSeenAt, source.lastSeenAt),
             })
             .where(eq(contacts.id, targetId));
         }
@@ -538,7 +553,7 @@ export function createStore(db: Db) {
               name: user.name ?? null,
               email: user.email ?? null,
               avatarUrl: user.avatarUrl ?? null,
-              lastSeenAt: sql`now()`,
+              lastSeenAt: new Date(),
               deactivatedAt: null,
             },
           })
@@ -563,10 +578,7 @@ export function createStore(db: Db) {
         .where(
           and(
             isNull(agents.deactivatedAt),
-            gt(
-              agents.lastSeenAt,
-              sql`now() - make_interval(days => ${idleDays})`
-            )
+            gt(agents.lastSeenAt, ago(idleDays * DAY))
           )
         )
         .orderBy(asc(agents.name));
@@ -577,7 +589,7 @@ export function createStore(db: Db) {
       await db.transaction(async tx => {
         const removed = await tx
           .update(agents)
-          .set({ deactivatedAt: sql`now()` })
+          .set({ deactivatedAt: new Date() })
           .where(
             and(
               eq(agents.externalUserId, externalUserId),
@@ -622,7 +634,7 @@ export function createStore(db: Db) {
         .values({ key, value })
         .onConflictDoUpdate({
           target: settings.key,
-          set: { value, updatedAt: sql`now()` },
+          set: { value, updatedAt: new Date() },
         });
     },
 
@@ -656,7 +668,7 @@ export function createStore(db: Db) {
         const conversation = first(
           await tx
             .insert(conversations)
-            .values({ ...values, waitingSince: sql`now()` })
+            .values({ ...values, waitingSince: new Date() })
             .returning()
         );
         const message = first(
@@ -733,7 +745,7 @@ export function createStore(db: Db) {
           .set({
             mergedIntoId: targetId,
             status: 'resolved',
-            resolvedAt: source.resolvedAt ?? sql`now()`,
+            resolvedAt: source.resolvedAt ?? new Date(),
             waitingSince: null,
             snoozedUntil: null,
           })
@@ -750,7 +762,7 @@ export function createStore(db: Db) {
         await tx
           .update(conversations)
           .set({
-            lastMessageAt: sql`greatest(${conversations.lastMessageAt}, ${source.lastMessageAt})`,
+            lastMessageAt: latest(target.lastMessageAt, source.lastMessageAt),
             waitingSince: waiting,
             ...(reopen ? { status: source.status, resolvedAt: null } : {}),
           })
@@ -906,7 +918,7 @@ export function createStore(db: Db) {
     async markViewing(agentId: string, conversationId: string) {
       await db
         .update(agents)
-        .set({ viewingId: conversationId, viewingAt: sql`now()` })
+        .set({ viewingId: conversationId, viewingAt: new Date() })
         .where(eq(agents.id, agentId));
     },
 
@@ -925,7 +937,7 @@ export function createStore(db: Db) {
           and(
             inArray(agents.viewingId, conversationIds),
             // Sized against the conversation view's 5-second poll; change the two together.
-            gt(agents.viewingAt, sql`now() - interval '15 seconds'`),
+            gt(agents.viewingAt, ago(15_000)),
             ne(agents.id, exceptAgentId),
             isNull(agents.deactivatedAt)
           )
@@ -952,7 +964,7 @@ export function createStore(db: Db) {
         .from(agents)
         .where(
           and(
-            gt(agents.lastSeenAt, sql`now() - interval '30 days'`),
+            gt(agents.lastSeenAt, ago(30 * DAY)),
             isNull(agents.deactivatedAt)
           )
         )
@@ -970,7 +982,7 @@ export function createStore(db: Db) {
 
     /** Conversations opened, resolved or rated in the last `sinceDays`, with their first public agent reply; merged-away ones are left out. */
     async overview(sinceDays: number) {
-      const since = sql`now() - make_interval(days => ${sinceDays})`;
+      const since = ago(sinceDays * DAY).toISOString();
       const result = await db.execute<{
         inbox: string;
         assignee_id: string | null;
@@ -1003,8 +1015,8 @@ export function createStore(db: Db) {
       }));
     },
 
-    // Copies `last_message_at`, not `now()`: `now()` is the transaction start, so a
-    // customer message committing concurrently could predate it and never read as unread.
+    // Copies `last_message_at`, not the current time: a customer message committing
+    // concurrently could carry an earlier time and never read as unread.
     async markAgentSeen(id: string) {
       await db
         .update(conversations)
@@ -1026,6 +1038,7 @@ export function createStore(db: Db) {
      * they got them. Derived from events and messages, newest first.
      */
     async notificationsFor(agentId: string, limit = 30) {
+      const since = ago(30 * DAY).toISOString();
       const result = await db.execute<{
         kind: 'assigned' | 'mentioned' | 'reply';
         conversation_id: string;
@@ -1040,13 +1053,13 @@ export function createStore(db: Db) {
           LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
           WHERE e.kind = 'assigneeId' AND e.data->>'to' = ${agentId}
             AND e.agent_id IS DISTINCT FROM ${agentId}::uuid
-            AND e.created_at > now() - interval '30 days'
+            AND e.created_at > ${since}
           UNION ALL
           SELECT 'mentioned', e.conversation_id, e.created_at, a.name
           FROM helpdesk.conversation_event e
           LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
           WHERE e.kind = 'mentioned' AND e.data->'agentIds' ? ${agentId}
-            AND e.created_at > now() - interval '30 days'
+            AND e.created_at > ${since}
           UNION ALL
           SELECT 'reply', m.conversation_id, m.created_at, coalesce(ct.name, ct.email)
           FROM helpdesk.message m
@@ -1054,7 +1067,7 @@ export function createStore(db: Db) {
           LEFT JOIN helpdesk.contact ct ON ct.id = m.contact_id
           WHERE m.author_type = 'contact' AND NOT m.internal
             AND c.assignee_id = ${agentId}::uuid
-            AND m.created_at > now() - interval '30 days'
+            AND m.created_at > ${since}
             AND m.created_at > coalesce(
               (SELECT max(created_at) FROM helpdesk.conversation_event
                 WHERE conversation_id = c.id AND kind = 'assigneeId' AND data->>'to' = ${agentId}),
@@ -1072,13 +1085,11 @@ export function createStore(db: Db) {
       return this.getSetting<string>(`notifications-seen:${agentId}`);
     },
 
-    // The database's clock, as the notifications it is compared with use.
     async markNotificationsSeen(agentId: string) {
-      await db.execute(sql`
-        INSERT INTO helpdesk.setting (key, value)
-        VALUES (${`notifications-seen:${agentId}`},
-          to_jsonb(to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
-        ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now()`);
+      await store.setSetting(
+        `notifications-seen:${agentId}`,
+        new Date().toISOString()
+      );
     },
 
     async countOpen(agentId: string) {
@@ -1202,27 +1213,28 @@ export function createStore(db: Db) {
       values: typeof messages.$inferInsert
     ): Promise<Message> {
       return db.transaction(async tx => {
+        const [conversation] = await tx
+          .select()
+          .from(conversations)
+          .where(eq(conversations.id, values.conversationId))
+          .for('update');
         const message = first(
           await tx.insert(messages).values(values).returning()
         );
+        const now = new Date();
         // A note is not a message to the customer: it must not mark their
         // thread unread or lift it in their list.
         const patch: Partial<typeof conversations.$inferInsert> =
-          values.internal
-            ? {}
-            : { lastMessageAt: sql`now()` as unknown as Date };
+          values.internal ? {} : { lastMessageAt: now };
         if (values.authorType === 'contact') {
-          patch.waitingSince =
-            sql`coalesce(${conversations.waitingSince}, now())` as unknown as Date;
+          patch.waitingSince = conversation?.waitingSince ?? now;
           patch.status = 'open';
           patch.snoozedUntil = null;
-          patch.resolvedAt =
-            sql`CASE WHEN ${conversations.status} = 'resolved' THEN NULL ELSE ${conversations.resolvedAt} END` as unknown as Date;
+          if (conversation?.status === 'resolved') patch.resolvedAt = null;
         } else if (values.authorType === 'agent' && !values.internal) {
           patch.waitingSince = null;
           patch.remindedAt = null;
-          patch.status =
-            sql`CASE WHEN ${conversations.status} = 'resolved' THEN 'resolved' ELSE 'pending' END` as unknown as string;
+          if (conversation?.status !== 'resolved') patch.status = 'pending';
         }
         if (Object.keys(patch).length > 0) {
           await tx
@@ -1414,18 +1426,19 @@ export function createStore(db: Db) {
       await db.insert(jobs).values({
         kind,
         payload,
-        // The database clock decides what is due; the app's may run ahead.
-        runAt: opts.runAt ?? (sql`now()` as unknown as Date),
+        runAt: opts.runAt ?? new Date(),
       });
     },
 
     /** Claims due jobs; a claim expires, so a crashed run's jobs come back. */
     async claimJobs(limit: number): Promise<Job[]> {
+      const now = new Date();
+      const lockedUntil = new Date(now.getTime() + 2 * MINUTE);
       const result = await db.execute<Record<string, unknown>>(sql`
-        UPDATE helpdesk.job SET locked_until = now() + interval '2 minutes', attempts = attempts + 1
+        UPDATE helpdesk.job SET locked_until = ${lockedUntil.toISOString()}, attempts = attempts + 1
         WHERE id IN (
           SELECT id FROM helpdesk.job
-          WHERE run_at <= now() AND (locked_until IS NULL OR locked_until < now())
+          WHERE run_at <= ${now.toISOString()} AND (locked_until IS NULL OR locked_until < ${now.toISOString()})
           ORDER BY run_at
           LIMIT ${limit}
           FOR UPDATE SKIP LOCKED
@@ -1451,22 +1464,21 @@ export function createStore(db: Db) {
           lockedUntil: null,
           lastError: error.slice(0, 2000),
           runAt: dead
-            ? sql`'infinity'::timestamptz`
-            : sql`now() + make_interval(mins => ${2 ** job.attempts})`,
+            ? NEVER
+            : new Date(Date.now() + 2 ** job.attempts * MINUTE),
         })
         .where(eq(jobs.id, job.id));
     },
 
     /** Counts one hit; returns the total in the current hour for `key`. */
     async hitRateLimit(key: string): Promise<number> {
+      const windowStart = new Date(Math.floor(Date.now() / HOUR) * HOUR);
       const result = await db.execute<{ count: number }>(sql`
         INSERT INTO helpdesk.rate_limit (key, window_start, count)
-        VALUES (${key}, date_trunc('hour', now()), 1)
+        VALUES (${key}, ${windowStart.toISOString()}, 1)
         ON CONFLICT (key, window_start) DO UPDATE SET count = helpdesk.rate_limit.count + 1
         RETURNING count`);
-      await db
-        .delete(rateLimits)
-        .where(lt(rateLimits.windowStart, sql`now() - interval '1 day'`));
+      await db.delete(rateLimits).where(lt(rateLimits.windowStart, ago(DAY)));
       return Number(result.rows[0]?.count ?? 0);
     },
 
@@ -1481,7 +1493,7 @@ export function createStore(db: Db) {
       }>(sql`
         WITH due AS (
           SELECT id, status, snoozed_until FROM helpdesk.conversation
-          WHERE snoozed_until <= now()
+          WHERE snoozed_until <= ${new Date().toISOString()}
           FOR UPDATE SKIP LOCKED
         ), cleared AS (
           UPDATE helpdesk.conversation c
@@ -1511,7 +1523,7 @@ export function createStore(db: Db) {
      */
     async claimReminders(inbox: string, afterHours: number, cutoff?: Date) {
       const result = await db.execute<{ id: string }>(sql`
-        UPDATE helpdesk.conversation SET reminded_at = now()
+        UPDATE helpdesk.conversation SET reminded_at = ${new Date().toISOString()}
         WHERE inbox = ${inbox}
           AND contact_id NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)
           AND status <> 'resolved'
@@ -1520,7 +1532,7 @@ export function createStore(db: Db) {
           AND ${
             cutoff
               ? sql`waiting_since <= ${cutoff.toISOString()}`
-              : sql`waiting_since < now() - make_interval(hours => ${afterHours})`
+              : sql`waiting_since < ${ago(afterHours * HOUR).toISOString()}`
           }
           AND (reminded_at IS NULL OR reminded_at < waiting_since)
         RETURNING id`);
@@ -1542,12 +1554,24 @@ export function createStore(db: Db) {
       return rows.map(r => r.key);
     },
 
-    async conversationIdsWhere(where: SQL | undefined) {
-      const rows = await db
-        .select({ id: conversations.id })
-        .from(conversations)
-        .where(where);
-      return rows.map(r => r.id);
+    async resolvedConversationIdsBefore(cutoff: Date) {
+      return conversationIdsWhere(
+        and(
+          eq(conversations.status, 'resolved'),
+          lt(conversations.resolvedAt, cutoff)
+        )
+      );
+    },
+
+    async contactConversationIds(contactId: string) {
+      return conversationIdsWhere(eq(conversations.contactId, contactId));
+    },
+
+    /** The company's conversations, and those of its contacts who wrote in for no other company. */
+    async companyConversationIds(companyId: string) {
+      return conversationIdsWhere(
+        sql`${conversations.companyId} = ${companyId}::uuid OR ${conversations.contactId} IN (SELECT id FROM helpdesk.contact WHERE company_id = ${companyId}::uuid AND id NOT IN (SELECT contact_id FROM helpdesk.conversation WHERE company_id IS DISTINCT FROM ${companyId}::uuid))`
+      );
     },
 
     async deleteConversations(ids: string[]) {
@@ -1555,8 +1579,8 @@ export function createStore(db: Db) {
       await db.delete(conversations).where(inArray(conversations.id, ids));
     },
 
-    async deleteContactsWhere(where: SQL | undefined) {
-      await db.delete(contacts).where(where);
+    async deleteContact(id: string) {
+      await db.delete(contacts).where(eq(contacts.id, id));
     },
 
     /** Contacts of the company that `deleteCompany` will drop: those without a conversation of their own. */
@@ -1669,6 +1693,10 @@ function first<T>(rows: T[]): T {
   const row = rows[0];
   if (row === undefined) throw new Error('Expected a returned row');
   return row;
+}
+
+function latest<T extends Date | null>(a: T, b: Date | null): T {
+  return (b && (!a || b > a) ? b : a) as T;
 }
 
 function escapeLike(value: string) {

@@ -6,7 +6,6 @@ import {
   timingSafeEqual,
 } from 'node:crypto';
 
-import { and, eq, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
@@ -18,12 +17,12 @@ import {
   type ResolvedConfig,
   resolveConfig,
 } from './config';
-import {
-  type Company,
-  type Contact,
-  type Conversation,
-  type IdentityInput,
-  type Message,
+import type {
+  Company,
+  Contact,
+  Conversation,
+  IdentityInput,
+  Message,
   schema,
 } from './db/store';
 import { formatReference, parseReference } from './domain';
@@ -33,8 +32,6 @@ import { plainText } from './rich';
 import { nextOpening, openCutoff, openHoursBetween } from './ui/hours';
 import { nextWorkday } from './ui/i18n';
 import { unlabelLinks } from './ui/rich';
-
-const { contacts, conversations } = schema;
 
 export type Customer = {
   identity: Identity | null;
@@ -1084,14 +1081,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
   async function applyRetention() {
     if (!config.retentionDays) return 0;
-    const ids = await store.conversationIdsWhere(
-      and(
-        eq(conversations.status, 'resolved'),
-        lt(
-          conversations.resolvedAt,
-          sql`now() - make_interval(days => ${config.retentionDays})`
-        )
-      )
+    const ids = await store.resolvedConversationIdsBefore(
+      new Date(Date.now() - config.retentionDays * 86_400_000)
     );
     await purgeConversations(ids);
     return ids.length;
@@ -1101,9 +1092,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   async function deleteCompany(externalOrgId: string) {
     const [company] = await store.companiesByExternalOrgIds([externalOrgId]);
     if (!company) return { conversations: 0 };
-    const ids = await store.conversationIdsWhere(
-      sql`${conversations.companyId} = ${company.id}::uuid OR ${conversations.contactId} IN (SELECT id FROM helpdesk.contact WHERE company_id = ${company.id}::uuid AND id NOT IN (SELECT contact_id FROM helpdesk.conversation WHERE company_id IS DISTINCT FROM ${company.id}::uuid))`
-    );
+    const ids = await store.companyConversationIds(company.id);
     await purgeConversations(ids);
     // Contacts dropped with the company take what they wrote in other
     // organizations' threads with them, as `deleteContact` does.
@@ -1118,14 +1107,12 @@ export function createHelpdesk(input: HelpdeskConfig) {
 
   /** Hard-deletes one person: their conversations, files and contact row. */
   async function deleteContact(contactId: string) {
-    const ids = await store.conversationIdsWhere(
-      eq(conversations.contactId, contactId)
-    );
+    const ids = await store.contactConversationIds(contactId);
     await purgeConversations(ids);
     // What they wrote in threads they were only added to goes too.
     await deleteObjects(await store.attachmentKeysBy(contactId));
     await store.deleteMessagesBy(contactId);
-    await store.deleteContactsWhere(eq(contacts.id, contactId));
+    await store.deleteContact(contactId);
     return { conversations: ids.length };
   }
 
@@ -1326,7 +1313,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     rating: 'good' | 'bad',
     comment?: string
   ) {
-    const now = sql`now()` as unknown as Date;
+    const now = new Date();
     const patch: Partial<Conversation> = {
       rating,
       ratingComment: comment || null,
