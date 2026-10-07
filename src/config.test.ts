@@ -4,6 +4,7 @@ import { type HelpdeskConfig, resolveConfig } from './config';
 
 const config = (identityTokenSecret?: string) =>
   ({
+    db: { capabilities: {} },
     inboxes: { support: {} },
     identityTokenSecret,
   }) as unknown as HelpdeskConfig;

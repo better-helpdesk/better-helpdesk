@@ -23,9 +23,9 @@ export const helpdesk = buildHelpdesk({
 <TypeTable
   type={{
     db: {
-      type: 'HelpdeskStore',
+      type: 'DatabaseAdapter',
       required: true,
-      description: <>The query layer. <code>postgresAdapter({'{ pool }'})</code> builds it over a <code>pg.Pool</code>.</>,
+      description: <>Where the helpdesk keeps its data. <code>postgresAdapter({'{ pool }'})</code> builds it over a <code>pg.Pool</code>.</>,
     },
     referencePrefix: {
       type: 'string',

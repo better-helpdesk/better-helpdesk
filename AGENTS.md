@@ -46,12 +46,9 @@ code already does. Concretely:
   when the result drifts from the committed model. A schema change is: edit
   the model, add a migration for every family, run the integration tests on
   every database.
-- **Four runtime dependencies**: `drizzle-orm`, `zod`, `mailparser`,
-  `mailauth`. #175 replaces `drizzle-orm` with `kysely` (MIT, no
-  dependencies), so the count stays at four; until then the Postgres schema
-  is `src/db/schema.ts` with `pnpm db:generate`. Adding one needs a stated
-  reason in the PR and an MIT-compatible licence (MIT, BSD, Apache 2.0,
-  ISC).
+- **Four runtime dependencies**: `kysely`, `zod`, `mailparser`, `mailauth`.
+  Adding one needs a stated reason in the PR and an MIT-compatible licence
+  (MIT, BSD, Apache 2.0, ISC).
 - **Everything optional is an adapter.** Storage, email, AI and help search
   are interfaces in `src/config.ts` that the host implements; inbound email
   and jobs are routes the host's relay and scheduler call, each behind a
@@ -94,7 +91,10 @@ code already does. Concretely:
   email relay webhook, `jobs`. Also CORS and the same-origin check on
   mutations.
 - `src/service.ts`: the behaviour (conversations, emails, reminders, jobs,
-  retention). `src/db/store.ts`: the queries, over `src/db/schema.ts`.
+  retention). `src/db/store.ts`: every query, written once over the
+  `DatabaseAdapter` contract in `src/db/adapter.ts`; `src/db/model.ts`: the
+  tables; `src/db/kysely.ts`: the built-in adapters; `src/db/migrate.ts`:
+  the migrations.
 - `src/admin/`: the agent UI, `HelpdeskAdmin`. `src/widget/`: the widget.
   `src/ui/`: shared i18n, the API client and rich text.
 - `src/inbound/`: parsing and DKIM verification of inbound email. `relays/`:

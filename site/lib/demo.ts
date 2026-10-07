@@ -158,12 +158,22 @@ export async function resetDemo() {
     try {
       const tables = await client.query<{ name: string }>(
         `select quote_ident(tablename) as name from pg_tables
-          where schemaname = 'helpdesk' and tablename <> '__migrations'`
+          where schemaname = 'helpdesk'
+            and tablename not in ('__migrations', 'migration', 'migration_lock', 'counter')`
       );
       await client.query(
         `truncate ${tables.rows.map(t => `helpdesk.${t.name}`).join(', ')} restart identity cascade`
       );
       await client.query('alter sequence helpdesk.reference_seq restart');
+      // Versions with database adapters take references from this counter.
+      if (
+        (await client.query("select to_regclass('helpdesk.counter') as t"))
+          .rows[0]?.t
+      ) {
+        await client.query(
+          "update helpdesk.counter set value = 1000 where name = 'reference'"
+        );
+      }
       await seed();
     } finally {
       await client.query(

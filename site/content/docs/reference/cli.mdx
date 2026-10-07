@@ -23,7 +23,7 @@ Without a connection string, the command prints `HELPDESK_DATABASE_URL or APP_DA
 HELPDESK_DATABASE_URL=postgres://user:password@localhost:5432/app npx better-helpdesk-migrate
 ```
 
-Applies the SQL migrations shipped in the package's `migrations/` folder: it creates the `helpdesk` schema and its tables on the first run and brings them up to date on later ones. Applied migrations are recorded in `helpdesk.__migrations`. It takes no arguments and prints `helpdesk: migrations applied` on success.
+Applies the package's migrations: it creates the `helpdesk` schema and its tables on the first run and brings them up to date on later ones. Applied migrations are recorded in `helpdesk.migration`; an install that drizzle migrated before keeps its history in `helpdesk.__migrations`, and only what it lacks runs. A lock keeps two runs from applying the same migration. It takes no arguments and prints the migrations it applied, or `helpdesk: up to date`.
 
 ## better-helpdesk-import
 

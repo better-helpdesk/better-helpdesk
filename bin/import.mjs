@@ -12,7 +12,7 @@ import {
   importContacts,
   parseCsv,
 } from '../dist/import.js';
-import { postgresAdapter } from '../dist/index.js';
+import { createStore, postgresAdapter } from '../dist/index.js';
 
 const [kind, file, flag, value] = process.argv.slice(2);
 const run = { contacts: importContacts, canned: importCannedReplies }[kind];
@@ -54,7 +54,7 @@ const pool = new pg.Pool({
 
 try {
   const { created, updated, skipped, notes } = await run(
-    postgresAdapter({ pool }),
+    createStore(postgresAdapter({ pool })),
     rows,
     { leadStages }
   );

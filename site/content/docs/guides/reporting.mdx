@@ -65,10 +65,11 @@ A comment the customer added is in `rating_comment`.
 ## Most-used tags
 
 ```sql
-SELECT tag, count(*) AS conversations
-FROM helpdesk.conversation, unnest(tags) AS tag
-WHERE created_at > now() - interval '30 days' AND merged_into_id IS NULL
-GROUP BY tag
+SELECT t.tag, count(*) AS conversations
+FROM helpdesk.conversation c
+JOIN helpdesk.conversation_tag t ON t.conversation_id = c.id
+WHERE c.created_at > now() - interval '30 days' AND c.merged_into_id IS NULL
+GROUP BY t.tag
 ORDER BY conversations DESC
 LIMIT 10;
 ```

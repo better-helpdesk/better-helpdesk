@@ -76,7 +76,7 @@ database, its deploy and its design tokens.
   decides who someone is. Retention and rate limits are yours to set.
 - **English and German**, with every agent UI string overridable. Theming through
   `--helpdesk-*` CSS custom properties.
-- **TypeScript, ESM, four runtime dependencies**: `drizzle-orm`, `zod`,
+- **TypeScript, ESM, four runtime dependencies**: `kysely`, `zod`,
   `mailparser` and `mailauth`. Peer dependencies are `pg` and React 19.
 
 ## Compared with

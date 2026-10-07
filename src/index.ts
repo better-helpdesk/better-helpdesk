@@ -4,10 +4,23 @@ import { createHelpdesk } from './service';
 
 export type * from './config';
 export {
+  type AdapterInput,
+  type Capabilities,
+  createAdapter,
+  type DatabaseAdapter,
+  type FindQuery,
+  type Notification,
+  type OrderBy,
+  type Where,
+} from './db/adapter';
+export { kyselyAdapter, postgresAdapter } from './db/kysely';
+export { migrate } from './db/migrate';
+export { helpdeskModel } from './db/model';
+export {
   type Conversation,
+  createStore,
   type HelpdeskStore,
   type Message,
-  postgresAdapter,
 } from './db/store';
 export { formatReference, parseReference } from './domain';
 export type { HelpdeskEvent } from './events';

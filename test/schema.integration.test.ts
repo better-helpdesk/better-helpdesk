@@ -1,0 +1,45 @@
+import { afterAll, describe, expect, it } from 'vitest';
+
+import { tableName } from '../src/db/kysely';
+import { column, helpdeskModel, type ModelName } from '../src/db/model';
+import { testAdapter } from './database';
+
+const { builtIn, close } = testAdapter();
+afterAll(close);
+
+/** Columns a database keeps for itself, outside the model. */
+const EXTRA: Record<string, string[]> = {
+  // Postgres's full-text search.
+  'postgres:conversation': ['search'],
+  'postgres:message': ['search'],
+};
+
+// The migrations and the model describe the same tables; a change to one without the other fails here.
+describe('the migrated database', () => {
+  it('has every table and column of the model, nullable where the model says', async () => {
+    const tables = await builtIn.kysely.introspection.getTables();
+    const found = new Map(
+      tables.map(t => [t.schema ? `${t.schema}.${t.name}` : t.name, t])
+    );
+    for (const model of Object.keys(helpdeskModel) as ModelName[]) {
+      const table = found.get(tableName(builtIn.family, model));
+      expect(table, model).toBeDefined();
+      const fields = helpdeskModel[model].fields as Record<
+        string,
+        { nullable: boolean }
+      >;
+      const expected = Object.entries(fields)
+        .map(([field, spec]) => `${column(field)}${spec.nullable ? '?' : ''}`)
+        .concat(EXTRA[`${builtIn.family}:${model}`] ?? [])
+        .sort();
+      const actual = (table?.columns ?? [])
+        .map(c =>
+          (EXTRA[`${builtIn.family}:${model}`] ?? []).includes(c.name)
+            ? c.name
+            : `${c.name}${c.isNullable ? '?' : ''}`
+        )
+        .sort();
+      expect(actual, model).toEqual(expected);
+    }
+  });
+});

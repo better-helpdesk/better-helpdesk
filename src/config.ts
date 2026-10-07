@@ -1,7 +1,8 @@
 import type { DNSResolver } from 'mailauth';
 import { z } from 'zod';
 
-import type { HelpdeskStore } from './db/store';
+import type { DatabaseAdapter } from './db/adapter';
+import { createStore, type HelpdeskStore } from './db/store';
 import type { HelpdeskEvent } from './events';
 
 export type Locale = 'en' | 'de';
@@ -220,7 +221,8 @@ export type CustomFieldDef = {
 };
 
 export type HelpdeskConfig = {
-  db: HelpdeskStore;
+  /** Where the helpdesk keeps its data: `postgresAdapter({ pool })` or another adapter. */
+  db: DatabaseAdapter;
   /** Prefix of human-readable references, e.g. `DG` gives `DG-1042`. */
   referencePrefix: string;
   /** Who answers when more than one person does, e.g. "The Acme team"; the widget names the one person otherwise. */
@@ -299,6 +301,7 @@ export const DEFAULT_DEAL_STAGES = [
 ];
 
 export type ResolvedConfig = HelpdeskConfig & {
+  store: HelpdeskStore;
   basePath: string;
   types: string[];
   leadStages: string[];
@@ -329,6 +332,7 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
   }
   return {
     ...config,
+    store: createStore(config.db),
     basePath: (config.basePath ?? '/api/helpdesk').replace(/\/$/, ''),
     types: config.types ?? DEFAULT_TYPES,
     leadStages: config.leadStages ?? DEFAULT_LEAD_STAGES,
