@@ -69,4 +69,25 @@ describe('identifiers', () => {
       [first.id, true],
     ]);
   });
+
+  it('refuses an email longer than any address can be, and leaves out a host email that long', async () => {
+    const long = `${'a'.repeat(250)}@example.test`;
+    const res = await h.call('POST', 'widget/conversations', {
+      body: { inbox: 'sales', type: 'lead', body: 'Pricing?', email: long },
+    });
+    expect(res.status).toBe(400);
+    expect(await h.count('contact')).toBe(0);
+
+    h.addUser('long', { email: long });
+    expect(
+      (
+        await h.call('POST', 'widget/conversations', {
+          user: 'long',
+          body: { inbox: 'support', type: 'bug', body: 'Broken' },
+        })
+      ).status
+    ).toBe(201);
+    const [contact] = await h.find('contact');
+    expect(contact?.email).toBeNull();
+  });
 });

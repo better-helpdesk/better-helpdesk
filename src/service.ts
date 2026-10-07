@@ -98,7 +98,19 @@ export function ipBucket(ip: string) {
 
 const RATING_LINK_DAYS = 30;
 
-const MAX_ADDRESS = 254;
+/** No email address is longer (RFC 5321), and the columns that keep one are not. */
+export const MAX_ADDRESS = 254;
+
+/** The host's identity, without an email longer than any address can be. */
+function bounded(identity: Identity | null): Identity | null {
+  if (!identity?.user.email || identity.user.email.length <= MAX_ADDRESS) {
+    return identity;
+  }
+  return {
+    ...identity,
+    user: { ...identity.user, email: null, emailVerified: false },
+  };
+}
 const MAX_MESSAGE_ID = 255;
 
 /**
@@ -164,8 +176,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
     request: Request,
     { create }: { create: boolean }
   ): Promise<Customer> {
-    const identity =
-      (await config.identify(request)) ?? identityFromToken(request);
+    const identity = bounded(
+      (await config.identify(request)) ?? identityFromToken(request)
+    );
     if (identity) {
       const { user } = identity;
       let contact = await store.findContactByIdentity('host', user.id, {
@@ -270,7 +283,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   }
 
   async function requireAgent(request: Request) {
-    const identity = await config.identify(request);
+    const identity = bounded(await config.identify(request));
     if (!identity) throw new HelpdeskError(401, 'Unauthenticated');
     if (!identity.isAgent) throw new HelpdeskError(403, 'Forbidden');
     return store.touchAgent({
@@ -309,7 +322,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     orgId: z.string().optional(),
     sharedWithCompany: z.boolean().optional(),
     name: z.string().trim().max(200).optional(),
-    email: z.email().max(320).optional(),
+    email: z.email().max(MAX_ADDRESS).optional(),
     website: z.string().optional(),
   });
 
@@ -872,7 +885,6 @@ export function createHelpdesk(input: HelpdeskConfig) {
   }
 
   async function handleInbound(received: InboundMessage) {
-    // No address is longer (RFC 5321), and the columns that keep one are not.
     if (received.from.address.length > MAX_ADDRESS) return;
     const mail = {
       ...received,
