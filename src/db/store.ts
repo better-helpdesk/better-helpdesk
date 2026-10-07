@@ -628,7 +628,10 @@ export function createStore(adapter: DatabaseAdapter) {
       );
     },
 
-    /** Moves everything `sourceId` owns onto `targetId`, then deletes the source. */
+    /**
+     * Moves everything `sourceId` owns onto `targetId`, then deletes the source.
+     * The target keeps its own fields and takes the source's where it has none.
+     */
     async mergeContacts(targetId: string, sourceId: string) {
       if (targetId === sourceId) return;
       await adapter.transaction(async tx => {
@@ -713,16 +716,31 @@ export function createStore(adapter: DatabaseAdapter) {
         await tx.updateMany('identity', eq('contactId', sourceId), {
           contactId: targetId,
         });
+        // Read before the purge, which takes the source's tags with it.
+        const tagged = await withTags('contact', locked, tx);
         await purge('contact', [sourceId], tx);
         if (source && target) {
           await tx.updateMany('contact', eq('id', targetId), {
             email: target.email ?? source.email,
             name: target.name ?? source.name,
             companyId: target.companyId ?? source.companyId,
+            leadStage: target.leadStage ?? source.leadStage,
+            locale: target.locale ?? source.locale,
+            custom: { ...source.custom, ...target.custom },
             // A block on either side holds for the merged person.
             blocked: target.blocked || source.blocked,
             lastSeenAt: latest(target.lastSeenAt, source.lastSeenAt),
           });
+          const tagsOf = (id: string) =>
+            tagged.find(r => r.id === id)?.tags ?? [];
+          if (tagsOf(sourceId).length > 0) {
+            await setTags(
+              'contact',
+              targetId,
+              [...tagsOf(targetId), ...tagsOf(sourceId)],
+              tx
+            );
+          }
         }
       });
     },
