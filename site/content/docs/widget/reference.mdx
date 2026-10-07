@@ -121,12 +121,15 @@ Only the element the script creates comes alive. A `<helpdesk-widget>` already i
 
 | Method | What it does |
 | --- | --- |
-| `open({ type? })` | Opens the panel. With `type`, such as `'bug'`, it opens on that type's form when the inbox offers it, and on its first view otherwise; focus moves into the form. On a panel that is already open, it keeps a draft the customer is writing unless `type` names another form, and it never leaves a conversation the customer is replying in. |
+| `open({ type?, subject?, message? })` | Opens the panel. With `type`, such as `'bug'`, it opens on that type's form when the inbox offers it, and on its first view otherwise; focus moves into the form. `subject` and `message` start the form's fields, and the customer can change them before sending; the subject field shows on bug, feature and question forms. On a panel that is already open, it keeps a draft the customer is writing unless `type` names another form, and it never leaves a conversation the customer is replying in. |
 
 `<helpdesk-widget>` and `<helpdesk-conversations>` both have it. Code that holds the element calls it directly, for example from a button of the host's own:
 
 ```ts
-document.querySelector('helpdesk-widget')?.open({ type: 'bug' });
+document.querySelector('helpdesk-widget')?.open({
+  type: 'bug',
+  message: 'The export button did nothing.',
+});
 ```
 
 With the React wrapper, pass a `ref`:

@@ -2,7 +2,7 @@ import { createRoot, type Root } from 'react-dom/client';
 
 import { toLocale } from '../ui/i18n';
 import { inlineCss, widgetCss } from './styles';
-import { Widget, type WidgetEvent } from './widget';
+import { type OpenRequest, Widget, type WidgetEvent } from './widget';
 
 const MAX_ERRORS = 10;
 
@@ -12,10 +12,11 @@ export interface HelpdeskWidgetElement extends HTMLElement {
   context: Record<string, string>;
   /**
    * Opens the panel, on the form of `type` (such as `'bug'`) when the inbox
-   * offers it, on its first view otherwise. An open panel keeps a draft the
-   * customer is writing unless the host names another form.
+   * offers it, on its first view otherwise. `subject` and `message` start
+   * that form's fields. An open panel keeps a draft the customer is writing
+   * unless the host names another form.
    */
-  open(options?: { type?: string }): void;
+  open(options?: OpenRequest): void;
 }
 
 declare global {
@@ -31,7 +32,7 @@ declare global {
  * `inbox`, `locale`, `types` (comma list), `org`, `identity-token`,
  * `app-version`, `label`, and
  * `theme="auto"` to follow the OS dark mode. The `context` property carries
- * host context for new reports, and `open({ type })` opens the panel from
+ * host context for new reports, and `open({ type, subject, message })` opens the panel from
  * the host's own code. Emits `helpdesk:open` and `helpdesk:message-sent`.
  */
 export function defineHelpdeskWidget(
@@ -57,7 +58,7 @@ export function defineHelpdeskWidget(
     #root: Root | null = null;
     #context: Record<string, string> = {};
     #errors: string[] = [];
-    #openRequest: { type?: string } | undefined;
+    #openRequest: OpenRequest | undefined;
 
     #onError = (event: ErrorEvent) => this.#record(event.message);
     #onRejection = (event: PromiseRejectionEvent) =>
@@ -100,10 +101,11 @@ export function defineHelpdeskWidget(
 
     /**
      * Opens the panel, on the form of `type` (such as `'bug'`) when the inbox
-     * offers it, on its first view otherwise.
+     * offers it, on its first view otherwise; `subject` and `message` start
+     * the form's fields.
      */
-    open({ type }: { type?: string } = {}) {
-      this.#openRequest = { type };
+    open({ type, subject, message }: OpenRequest = {}) {
+      this.#openRequest = { type, subject, message };
       this.#render();
     }
 

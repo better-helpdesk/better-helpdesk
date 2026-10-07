@@ -33,6 +33,11 @@ export type WidgetEvent =
     }
   | { name: 'helpdesk:booking-clicked'; detail: { reference: string } };
 
+/** What a host passes to `open()`: the form, and text to start it with. */
+export type OpenRequest = { type?: string; subject?: string; message?: string };
+
+type Prefill = { subject?: string; message?: string };
+
 export type WidgetProps = {
   api: string;
   inbox: string;
@@ -50,7 +55,7 @@ export type WidgetProps = {
   /** In the page itself: always open, no launcher, the conversations first. */
   inline?: boolean;
   /** Set anew by the host to open the panel, on the form of `type` when the inbox offers it. */
-  openRequest?: { type?: string };
+  openRequest?: OpenRequest;
   errors: () => string[];
   onEvent?: (event: WidgetEvent) => void;
 };
@@ -101,7 +106,7 @@ type Session = {
 
 type View =
   | { name: 'home' }
-  | { name: 'form'; type: string }
+  | { name: 'form'; type: string; prefill?: Prefill }
   | { name: 'list' }
   | { name: 'thread'; id: string };
 
@@ -364,6 +369,7 @@ export function Widget(props: WidgetProps) {
   // A host's request waits for the session, which says what the inbox offers.
   const [requested, setRequested] = useState<{
     type: string;
+    prefill: Prefill;
     wasOpen: boolean;
   } | null>(null);
   const focusForm = useRef(false);
@@ -371,8 +377,10 @@ export function Widget(props: WidgetProps) {
   isOpen.current = open;
   useEffect(() => {
     if (!props.openRequest) return;
+    const { type, subject, message } = props.openRequest;
     setRequested({
-      type: props.openRequest.type ?? '',
+      type: type ?? '',
+      prefill: { subject, message },
       wasOpen: isOpen.current,
     });
     setMenuOpen(false);
@@ -389,7 +397,7 @@ export function Widget(props: WidgetProps) {
     focusForm.current = true;
     setView(
       offeredType
-        ? { name: 'form', type: requested.type }
+        ? { name: 'form', type: requested.type, prefill: requested.prefill }
         : single
           ? { name: 'form', type: single }
           : { name: 'home' }
@@ -591,6 +599,7 @@ export function Widget(props: WidgetProps) {
             <NewMessage
               {...props}
               type={formType}
+              prefill={view.name === 'form' ? view.prefill : undefined}
               api={api}
               t={t}
               session={data}
@@ -776,10 +785,12 @@ function NewMessage({
   locale,
   onToken,
   onCreated,
+  prefill,
 }: Omit<WidgetProps, 'api'> & {
   api: Api;
   t: Translate;
   type: string;
+  prefill?: Prefill;
   session: Session;
   onToken: (token: string) => void;
   onCreated: (
@@ -792,8 +803,8 @@ function NewMessage({
     }
   ) => void;
 }) {
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [subject, setSubject] = useState(prefill?.subject?.slice(0, 200) ?? '');
+  const [body, setBody] = useState(prefill?.message ?? '');
   const message = useRef<RichEditorHandle>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

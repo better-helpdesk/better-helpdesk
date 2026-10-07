@@ -11,7 +11,7 @@ import {
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { widgetCss } from './styles';
-import { Widget } from './widget';
+import { type OpenRequest, Widget } from './widget';
 
 // jsdom has no layout, so nothing can scroll.
 Element.prototype.scrollIntoView = () => {};
@@ -1412,7 +1412,7 @@ describe('Widget', () => {
 
 describe('opened by the host', () => {
   afterEach(cleanup);
-  const widget = (openRequest?: { type?: string }) => (
+  const widget = (openRequest?: OpenRequest) => (
     <Widget
       api="/api/support"
       inbox="support"
@@ -1461,5 +1461,27 @@ describe('opened by the host', () => {
     expect(
       screen.getByRole('textbox', { name: 'What happened?' }).textContent
     ).toBe('my long draft');
+  });
+
+  it('starts the form with the subject and message the host gives', async () => {
+    mockApi({ 'widget/session': session });
+    render(
+      widget({
+        type: 'bug',
+        subject: 'The broken button threw',
+        message: 'I pressed it and the page threw an error.',
+      })
+    );
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    await waitFor(() =>
+      expect(message.textContent).toBe(
+        'I pressed it and the page threw an error.'
+      )
+    );
+    expect(
+      screen.getByRole<HTMLInputElement>('textbox', { name: /Subject/ }).value
+    ).toBe('The broken button threw');
   });
 });
