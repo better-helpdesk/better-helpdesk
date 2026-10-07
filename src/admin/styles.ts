@@ -16,6 +16,7 @@ export const adminCss = `
   --a-focus: var(--helpdesk-focus, #f55068);
   --a-radius: var(--helpdesk-radius, 10px);
   --a-r-control: calc(var(--a-radius) - 2px);
+  --a-r-inset: calc(var(--a-radius) - 1px);
   --a-r-inner: calc(var(--a-radius) - 4px);
   --a-r-dialog: calc(var(--a-radius) + 4px);
   --a-shadow-color: color-mix(in srgb, var(--a-fg) 14%, transparent);
@@ -156,7 +157,7 @@ export const adminCss = `
 .sa-table-wrap { border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); overflow: hidden; }
 .sa-card .sa-table-wrap { border: 0; border-radius: 0; margin-inline: -16px; background: transparent; }
 /* The last row's own padding is the card's bottom edge. */
-.sa-card > .sa-table-wrap:last-child { margin-bottom: -14px; border-radius: 0 0 calc(var(--a-radius) - 1px) calc(var(--a-radius) - 1px); }
+.sa-card > .sa-table-wrap:last-child { margin-bottom: -14px; border-radius: 0 0 var(--a-r-inset) var(--a-r-inset); }
 .sa-card .sa-table th { background: transparent; }
 .sa-table { width: 100%; border-collapse: collapse; }
 .sa-table th { text-align: left; font-weight: 600; background: var(--a-subtle); color: var(--a-muted); padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
