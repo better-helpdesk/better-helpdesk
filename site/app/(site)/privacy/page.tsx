@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 
+import { pageMeta } from '../../../lib/seo';
 import { SiteFooter, SiteHeader } from '../components/site-chrome';
 
-export const metadata: Metadata = {
-  title: 'Privacy',
+export const metadata: Metadata = pageMeta({
+  title: 'Privacy · Better Helpdesk',
   description:
     'What this site collects when you write to us, why, where it is kept and how to have it deleted.',
-};
+  path: '/privacy/',
+});
 
 const SECTIONS: { title: string; text: string[] }[] = [
   {

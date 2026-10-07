@@ -5,14 +5,13 @@ import { source } from '../lib/source';
 
 export const dynamic = 'force-dynamic';
 
+// No lastmod: the build has no git history to date the pages from, and a
+// guessed date is worse than none. Search engines ignore changefreq and priority.
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
-    { url: `${siteUrl()}/`, changeFrequency: 'weekly', priority: 1 },
-    { url: `${siteUrl()}/demo/`, changeFrequency: 'monthly' },
-    { url: `${siteUrl()}/privacy/`, changeFrequency: 'yearly' },
-    ...source.getPages().map(page => ({
-      url: `${siteUrl()}${page.url}/`,
-      changeFrequency: 'monthly' as const,
-    })),
+    { url: `${siteUrl()}/` },
+    { url: `${siteUrl()}/demo/` },
+    { url: `${siteUrl()}/privacy/` },
+    ...source.getPages().map(page => ({ url: `${siteUrl()}${page.url}/` })),
   ];
 }

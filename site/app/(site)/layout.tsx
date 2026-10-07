@@ -1,17 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 
 import { API } from '../../lib/helpdesk';
+import { DESCRIPTION, ORIGIN, SITE_NAME } from '../../lib/seo';
 import { fontClasses } from '../fonts';
 import { SiteWidget } from './components/site-widget';
 import './site.css';
 
-const description =
-  'An open-source support inbox, ticketing and lightweight CRM you install from npm. It runs in your Next.js app, on your database, behind your login.';
+const description = DESCRIPTION;
 
-// Fixed rather than SITE_URL: the build has no environment, and reading it per
-// request would make every page dynamic and uncacheable.
 export const metadata: Metadata = {
-  metadataBase: new URL('https://better-helpdesk.com'),
+  metadataBase: new URL(ORIGIN),
   title: {
     default: 'Better Helpdesk: the open-source helpdesk for Next.js',
     template: '%s · Better Helpdesk',
@@ -21,7 +19,8 @@ export const metadata: Metadata = {
     title: 'Better Helpdesk: the open-source helpdesk for Next.js',
     description,
     type: 'website',
-    siteName: 'Better Helpdesk',
+    siteName: SITE_NAME,
+    images: ['/og.png'],
   },
   twitter: { card: 'summary_large_image' },
 };
