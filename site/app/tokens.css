@@ -1,0 +1,62 @@
+/* The site's tokens, shared by the marketing pages and the docs. */
+:root {
+  color-scheme: dark;
+  /* The real widget and agent UI on this site, themed through their own custom properties. */
+  --helpdesk-font: var(--font-rethink), ui-sans-serif, system-ui, sans-serif;
+  --helpdesk-bg: #171b19;
+  --helpdesk-fg: #eef3f0;
+  --helpdesk-muted: #a7b1ab;
+  --helpdesk-border: rgba(210, 240, 225, 0.15);
+  --helpdesk-subtle: #202623;
+  --helpdesk-accent: #9ad9b8;
+  --helpdesk-accent-hover: #c4eed8;
+  --helpdesk-accent-fg: #0b0d0c;
+  --helpdesk-focus: #9ad9b8;
+  --helpdesk-danger: #f0907f;
+  --helpdesk-radius: 0;
+  --helpdesk-shadow: none;
+  --helpdesk-panel-header-bg: #2a312d;
+  --helpdesk-panel-header-fg: #eef3f0;
+  --helpdesk-header-bg: #202623;
+  --helpdesk-warning: #f1d27a;
+  --helpdesk-note: rgba(241, 210, 122, 0.07);
+  --helpdesk-note-border: rgba(241, 210, 122, 0.2);
+  --bg: #0b0d0c;
+  --s1: #111413;
+  --s2: #171b19;
+  --s3: #202623;
+  --s4: #2a312d;
+  --line: rgba(210, 240, 225, 0.08);
+  --line-2: rgba(210, 240, 225, 0.15);
+  --fg: #eef3f0;
+  --fg-2: #a7b1ab;
+  --fg-3: #8b948f;
+  --mint: #9ad9b8;
+  --mint-2: #c4eed8;
+  --mint-dim: rgba(154, 217, 184, 0.13);
+  --wait: #f1d27a;
+  --late: #f0907f;
+  --f-dot: var(--font-doto), "Martian Mono", ui-monospace, monospace;
+  --f-b: var(--font-rethink), ui-sans-serif, system-ui, sans-serif;
+  --f-m: var(--font-martian), ui-monospace, Menlo, monospace;
+  --u: 8px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --g: clamp(16px, 4vw, 40px);
+}
+/* Per element, so each one cuts its notch with its own --n; on :root, var(--n) would resolve there, empty. */
+:where(*) {
+  --notch: polygon(
+    0 var(--n),
+    var(--n) var(--n),
+    var(--n) 0,
+    calc(100% - var(--n)) 0,
+    calc(100% - var(--n)) var(--n),
+    100% var(--n),
+    100% calc(100% - var(--n)),
+    calc(100% - var(--n)) calc(100% - var(--n)),
+    calc(100% - var(--n)) 100%,
+    var(--n) 100%,
+    var(--n) calc(100% - var(--n)),
+    0 calc(100% - var(--n))
+  );
+}

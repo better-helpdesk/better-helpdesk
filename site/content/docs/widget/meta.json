@@ -1,4 +1,5 @@
 {
   "title": "Widget",
+  "icon": "widget",
   "pages": ["add", "support-page", "---Reference---", "reference"]
 }

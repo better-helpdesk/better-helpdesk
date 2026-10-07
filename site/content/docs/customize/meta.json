@@ -1,4 +1,5 @@
 {
   "title": "Theming and languages",
+  "icon": "customize",
   "pages": ["theming", "languages", "---Reference---", "strings"]
 }

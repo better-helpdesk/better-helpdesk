@@ -1,63 +1,8 @@
+@import "../tokens.css";
+@import "../chrome.css";
+
 /* Layout: everything is cut from the mark's own cell, an 8px module. Notched corners, dot-matrix
    headlines, a wall of faces in the hero. Inside the product frame: no pixels, just the product. */
-:root {
-  color-scheme: dark;
-  /* The real widget and agent UI on this site, themed through their own custom properties. */
-  --helpdesk-font: var(--font-rethink), ui-sans-serif, system-ui, sans-serif;
-  --helpdesk-bg: #171b19;
-  --helpdesk-fg: #eef3f0;
-  --helpdesk-muted: #a7b1ab;
-  --helpdesk-border: rgba(210, 240, 225, 0.15);
-  --helpdesk-subtle: #202623;
-  --helpdesk-accent: #9ad9b8;
-  --helpdesk-accent-hover: #c4eed8;
-  --helpdesk-accent-fg: #0b0d0c;
-  --helpdesk-focus: #9ad9b8;
-  --helpdesk-danger: #f0907f;
-  --helpdesk-radius: 0;
-  --helpdesk-shadow: none;
-  --helpdesk-panel-header-bg: #2a312d;
-  --helpdesk-panel-header-fg: #eef3f0;
-  --helpdesk-header-bg: #202623;
-  --helpdesk-warning: #f1d27a;
-  --helpdesk-note: rgba(241, 210, 122, 0.07);
-  --helpdesk-note-border: rgba(241, 210, 122, 0.2);
-  --bg: #0b0d0c;
-  --s1: #111413;
-  --s2: #171b19;
-  --s3: #202623;
-  --s4: #2a312d;
-  --line: rgba(210, 240, 225, 0.08);
-  --line-2: rgba(210, 240, 225, 0.15);
-  --fg: #eef3f0;
-  --fg-2: #a7b1ab;
-  --fg-3: #8b948f;
-  --mint: #9ad9b8;
-  --mint-2: #c4eed8;
-  --mint-dim: rgba(154, 217, 184, 0.13);
-  --wait: #f1d27a;
-  --late: #f0907f;
-  --f-dot: var(--font-doto), "Martian Mono", ui-monospace, monospace;
-  --f-b: var(--font-rethink), ui-sans-serif, system-ui, sans-serif;
-  --f-m: var(--font-martian), ui-monospace, Menlo, monospace;
-  --u: 8px;
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --g: clamp(16px, 4vw, 40px);
-  --notch: polygon(
-    0 var(--n),
-    var(--n) var(--n),
-    var(--n) 0,
-    calc(100% - var(--n)) 0,
-    calc(100% - var(--n)) var(--n),
-    100% var(--n),
-    100% calc(100% - var(--n)),
-    calc(100% - var(--n)) calc(100% - var(--n)),
-    calc(100% - var(--n)) 100%,
-    var(--n) 100%,
-    var(--n) calc(100% - var(--n)),
-    0 calc(100% - var(--n))
-  );
-}
 *,
 *::before,
 *::after {
@@ -120,6 +65,13 @@ code {
   font-family: var(--f-m);
   font-size: 0.84em;
 }
+/* 20px past the content column on each side, but never closer than 12px to the screen's edge. */
+.nav {
+  --w: min(1256px, 100% + 2 * min(20px, var(--g) - 12px));
+  width: var(--w);
+  max-width: none;
+  margin-inline: calc((100% - var(--w)) / 2);
+}
 main,
 .foot {
   max-width: 1216px;
@@ -148,140 +100,6 @@ main,
   clip-path: var(--notch);
 }
 
-/* Nav */
-.nav {
-  position: sticky;
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
-  z-index: 30;
-  max-width: 1216px;
-  margin: 12px auto 0;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding: 0 8px 0 16px;
-  background: rgba(17, 20, 19, 0.82);
-  backdrop-filter: blur(12px);
-  --n: 6px;
-  clip-path: var(--notch);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font: 700 15px / 1 var(--f-b);
-}
-.brand svg {
-  width: 28px;
-  height: 28px;
-  display: block;
-}
-.nav-links {
-  display: flex;
-  gap: 2px;
-  font: 400 13px / 1 var(--f-m);
-  color: var(--fg-2);
-}
-.nav-links a {
-  padding: 10px 12px;
-  transition:
-    color 0.15s,
-    background 0.15s;
-}
-.nav-links a:hover {
-  color: var(--fg);
-  background: var(--s3);
-}
-.nav-end {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.nav-gh {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 12px;
-  font: 400 12px / 1 var(--f-m);
-  color: var(--fg-2);
-}
-.nav-gh:hover {
-  color: var(--fg);
-  background: var(--s3);
-}
-.nav-gh svg {
-  width: 16px;
-  height: 16px;
-}
-@media (max-width: 1000px) {
-  .nav-links,
-  .nav-gh span {
-    display: none;
-  }
-  .nav {
-    gap: 12px;
-  }
-}
-
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  height: 52px;
-  padding: 0 6px 0 22px;
-  border: 0;
-  cursor: pointer;
-  font: 600 15px / 1 var(--f-b);
-  --n: 5px;
-  clip-path: var(--notch);
-  transition:
-    background 0.15s,
-    transform 0.12s;
-  white-space: nowrap;
-}
-.btn:active {
-  transform: translateY(1px);
-}
-.btn-p {
-  background: var(--mint);
-  color: var(--bg);
-}
-.btn-p:hover {
-  background: var(--mint-2);
-}
-.btn:focus-visible {
-  outline: none;
-  box-shadow:
-    inset 0 0 0 2px var(--bg),
-    inset 0 0 0 4px var(--fg);
-}
-.btn .bi {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  background: var(--bg);
-  color: var(--mint);
-  font-family: var(--f-m);
-  --n: 3px;
-  clip-path: var(--notch);
-  transition: transform 0.2s steps(2);
-}
-.btn:hover .bi {
-  transform: translateX(4px);
-}
-.btn-sm {
-  height: 44px;
-  font-size: 14px;
-  padding-left: 16px;
-}
-.btn-sm .bi {
-  width: 32px;
-  height: 32px;
-}
 .inst {
   display: inline-flex;
   align-items: center;
@@ -2565,60 +2383,8 @@ dd.err {
   color: var(--fg-2);
 }
 
-/* ---- Pixel faces sit on whole-pixel cells: sizes are multiples of 6 (24, 48, 72, 96). */
-.mk {
-  display: block;
-  flex: none;
-}
-.mk svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-.mk-24 {
-  width: 24px;
-  height: 24px;
-}
-.mk-48 {
-  width: 48px;
-  height: 48px;
-}
-.mk-72 {
-  width: 72px;
-  height: 72px;
-}
-.mk-96 {
-  width: 96px;
-  height: 96px;
-}
 .mood {
   gap: 16px;
-}
-
-/* The mark over the package widget's launcher; see launcher-skin.tsx. */
-.skin {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 2147483001;
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  background: var(--mint);
-  --n: 4px;
-  clip-path: var(--notch);
-  pointer-events: none;
-}
-.skin svg {
-  width: 48px;
-  height: 48px;
-  display: block;
-}
-@media (max-width: 560px) {
-  .skin.open {
-    display: none;
-  }
 }
 
 /* Hero wall: fixed tiles so every identicon cell is whole pixels. */
@@ -3130,46 +2896,7 @@ kbd.on {
   }
 }
 
-/* Icons: one family, sized to the text beside them. */
-.bi {
-  position: relative;
-  overflow: hidden;
-}
-.bi svg {
-  width: 16px;
-  height: 16px;
-  position: relative;
-  z-index: 1;
-  transition: color 0s 0.1s;
-}
-.bi::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--fg);
-  transform: translateY(100%);
-  transition: transform 0.2s steps(4);
-}
-.btn:hover .bi,
-.btn:focus-visible .bi {
-  transform: none;
-}
-.btn:hover .bi::before,
-.btn:focus-visible .bi::before {
-  transform: none;
-}
-.btn:hover .bi svg,
-.btn:focus-visible .bi svg {
-  color: var(--bg);
-}
-.btn:active .bi {
-  transform: translateY(1px);
-}
 .cp svg {
-  width: 16px;
-  height: 16px;
-}
-.nav-gh svg {
   width: 16px;
   height: 16px;
 }
@@ -3511,42 +3238,11 @@ kbd.on {
   vertical-align: 0;
 }
 
-/* Nav: the section in view is marked. */
-.nav-links a {
-  position: relative;
-}
-.nav-links a[aria-current="true"],
-.nav-links a[aria-current="page"] {
-  color: var(--fg);
-  background: var(--s3);
-}
-.nav-links a[aria-current="true"]::after,
-.nav-links a[aria-current="page"]::after {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 4px;
-  height: 2px;
-  background: var(--mint);
-}
-.nav-links a,
-.brand {
-  white-space: nowrap;
-}
 .code-tabs {
   scrollbar-width: none;
 }
 .code-tabs::-webkit-scrollbar {
   display: none;
-}
-@media (max-width: 1100px) {
-  .nav-gh span {
-    display: none;
-  }
-  .nav {
-    gap: 16px;
-  }
 }
 .sg-index {
   display: flex;
@@ -3658,90 +3354,7 @@ kbd.on {
 .sg-demos > * {
   min-width: 0;
 }
-.nav-menu-btn {
-  all: unset;
-  cursor: pointer;
-  display: none;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 14px;
-  font: 400 12px / 1 var(--f-m);
-  color: var(--fg);
-  background: var(--s3);
-}
-.nav-menu-btn svg {
-  width: 16px;
-  height: 16px;
-}
-.nav-menu-btn:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--mint);
-}
-.nav-menu {
-  position: fixed;
-  /* The 8px is the body's default margin, which the nav sits inside too. */
-  inset: calc(env(safe-area-inset-top, 0px) + 84px) calc(var(--g) + 8px) auto;
-  width: auto;
-  margin: 0;
-  padding: 8px;
-  border: 0;
-  color: var(--fg);
-  background: var(--s2);
-  --n: 6px;
-  clip-path: var(--notch);
-  opacity: 0;
-  transform: translateY(-8px);
-  transition:
-    opacity 0.2s var(--ease),
-    transform 0.3s var(--ease),
-    display 0.3s allow-discrete,
-    overlay 0.3s allow-discrete;
-}
-.nav-menu:popover-open {
-  opacity: 1;
-  transform: none;
-}
-@starting-style {
-  .nav-menu:popover-open {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-}
-.nav-menu::backdrop {
-  background: rgba(11, 13, 12, 0.6);
-}
-.nav-menu nav {
-  display: grid;
-  gap: 2px;
-}
-.nav-menu a:not(.btn) {
-  display: flex;
-  align-items: center;
-  min-height: 48px;
-  padding: 0 14px;
-  font: 400 13px / 1 var(--f-m);
-  color: var(--fg-2);
-}
-.nav-menu a:not(.btn):hover,
-.nav-menu a:not(.btn):focus-visible {
-  color: var(--fg);
-  background: var(--s3);
-  outline: none;
-}
-.nav-menu .btn {
-  margin-top: 6px;
-  justify-content: center;
-}
-@media (max-width: 1000px) {
-  .nav-menu-btn {
-    display: inline-flex;
-  }
-}
 @media (max-width: 560px) {
-  .nav-gh,
-  .nav-cta {
-    display: none;
-  }
   .sc-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;

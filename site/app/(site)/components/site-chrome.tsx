@@ -10,14 +10,17 @@ const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 
 /**
  * The one header every page shares. On subpages the links lead back to the
- * home page's sections; `end` replaces them, as on the inbox.
+ * home page's sections; `end` replaces them, as on the inbox. `current` marks
+ * the Docs link on the docs.
  */
 export function SiteHeader({
   home = false,
   end,
+  current,
 }: {
   home?: boolean;
   end?: ReactNode;
+  current?: 'docs';
 }) {
   return (
     <header className="nav">
@@ -33,7 +36,10 @@ export function SiteHeader({
         <>
           <NavLinks base={home ? '' : '/'} />
           <div className="nav-end">
-            <a className="nav-gh" href="/docs/">
+            <a
+              className="nav-gh"
+              href="/docs/"
+              aria-current={current === 'docs' ? 'page' : undefined}>
               <PiBookOpenTextBold aria-hidden="true" />
               <span>Docs</span>
             </a>
