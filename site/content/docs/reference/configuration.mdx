@@ -25,12 +25,12 @@ export const helpdesk = buildHelpdesk({
     db: {
       type: 'DatabaseAdapter',
       required: true,
-      description: <>Where the helpdesk keeps its data. <code>postgresAdapter({'{ pool }'})</code> builds it over a <code>pg.Pool</code>.</>,
+      description: <>Where the helpdesk keeps its data. <code>postgresAdapter({'{ pool }'})</code> builds it over a <code>pg.Pool</code>; <code>mysqlAdapter</code>, <code>mssqlAdapter</code> and <code>sqliteAdapter</code> over the other databases, as <a href="/docs/guides/databases">Choose and connect a database</a> shows, and <code>createAdapter</code> over <a href="/docs/guides/own-adapter">an adapter of your own</a>.</>,
     },
     referencePrefix: {
       type: 'string',
       required: true,
-      description: <>Prefix of the human-readable reference, <code>PREFIX-number</code>. <code>ACME</code> gives <code>ACME-1042</code>. Numbers come from the <code>helpdesk.reference_seq</code> sequence, which starts at 1000.</>,
+      description: <>Prefix of the human-readable reference, <code>PREFIX-number</code>. <code>ACME</code> gives <code>ACME-1042</code>. Numbers come from the <a href="/docs/reference/database#counter"><code>counter</code></a> table and start at 1000.</>,
     },
     adminUrl: {
       type: 'string',

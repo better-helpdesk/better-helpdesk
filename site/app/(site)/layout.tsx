@@ -6,7 +6,7 @@ import { SiteWidget } from './components/site-widget';
 import './site.css';
 
 const description =
-  'An open-source support inbox, ticketing and lightweight CRM you install from npm. It runs in your Next.js app, on your Postgres, behind your login.';
+  'An open-source support inbox, ticketing and lightweight CRM you install from npm. It runs in your Next.js app, on your database, behind your login.';
 
 // Fixed rather than SITE_URL: the build has no environment, and reading it per
 // request would make every page dynamic and uncacheable.

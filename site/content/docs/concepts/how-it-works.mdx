@@ -27,11 +27,13 @@ The same object is also the helpdesk's API for your own server code. Functions s
 
 ## Your database
 
-Everything the helpdesk knows lives in a `helpdesk` schema in your Postgres: contacts, companies, conversations, messages, deals and settings. Even the job queue and the rate-limit counters are rows there, so every instance of your app sees the same ones.
+Everything the helpdesk knows lives in your own database, in a `helpdesk` schema on Postgres and SQL Server and in tables prefixed `helpdesk_` on MySQL and SQLite: contacts, companies, conversations, messages, deals and settings. Even the job queue and the rate-limit counters are rows there, so every instance of your app sees the same ones.
 
-The package ships its migrations, and `better-helpdesk-migrate` applies them. It opens one connection, brings the schema up to date and exits, so it fits into the release step that already runs your own migrations. Upgrading Better Helpdesk is updating the package and running the migrations again.
+The package ships its migrations, and `better-helpdesk-migrate` applies them. It opens one connection, brings the tables up to date and exits, so it fits into the release step that already runs your own migrations. Upgrading Better Helpdesk is updating the package and running the migrations again.
 
-Because the tables are in your database, they are also yours to read. Reports are SQL queries, dashboards can point at the same schema, and a backup of your database holds your support history, apart from the files in your storage. Postgres is the only database the package supports, and the schema is owned by its own migrations; that narrowness is what lets the code rely on the tables being exactly what its migrations made.
+Because the tables are in your database, they are also yours to read. Reports are SQL queries, dashboards can point at the same tables, and a backup of your database holds your support history, apart from the files in your storage.
+
+The helpdesk does not write SQL against those tables directly. It goes through a database adapter: a small contract to create, find, update and delete the rows of the tables the package describes, and to do some of that in a transaction. Built-in adapters cover Postgres, MySQL, SQL Server and SQLite, each with its own migrations, and a host on another database can [write one](/docs/guides/own-adapter). Whatever the database, the tables have the shape the package describes, and the code relies on that. [Choose and connect a database](/docs/guides/databases) says where the four differ, chiefly in search.
 
 ## Adapters for everything optional
 
@@ -62,6 +64,6 @@ A few hooks work the same way in the other direction, asking your app for what o
 
 ## What the shape costs
 
-An embedded helpdesk asks things of you that a hosted one does not. You write `identify`, because only your app knows who is signed in. You run the migrations and schedule the jobs, because there is no server of ours to do it. Updates arrive by polling, which is plain and dependable but not instant. And the package supports one database and leans on one framework first.
+An embedded helpdesk asks things of you that a hosted one does not. You write `identify`, because only your app knows who is signed in. You run the migrations and schedule the jobs, because there is no server of ours to do it. Updates arrive by polling, which is plain and dependable but not instant. And the package leans on one framework first, and on a database outside the four it knows, the adapter is yours to write.
 
 In return there is nothing to synchronize. The customer in the widget is the user in your session, and the conversation is a row next to your other rows.

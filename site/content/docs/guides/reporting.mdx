@@ -1,11 +1,13 @@
 ---
 title: Report from your own database
-description: Measure response times, volume and ratings with SQL over the helpdesk schema, and connect a dashboard tool with a read-only role.
+description: Measure response times, volume and ratings with SQL over the helpdesk's tables, and connect a dashboard tool with a read-only role.
 ---
 
-Every conversation, message and rating lives in the `helpdesk` schema of your own Postgres, so a report is a SQL query. [How it works](/docs/concepts/how-it-works#your-database) explains why the tables are yours to read. The agent UI's **Overview** covers the everyday numbers: volume, median first response and resolution times, and ratings, over the last 7, 30 or 90 days. For anything else, query the tables.
+Every conversation, message and rating lives in your own database, so a report is a SQL query. [How it works](/docs/concepts/how-it-works#your-database) explains why the tables are yours to read. The agent UI's **Overview** covers the everyday numbers: volume, median first response and resolution times, and ratings, over the last 7, 30 or 90 days. For anything else, query the tables.
 
 Each query below covers the last 30 days and leaves out conversations that were merged into another, so a merged duplicate is not counted twice.
+
+The queries are written for Postgres. On SQL Server the tables sit in the same `helpdesk` schema; on MySQL and SQLite they carry a prefix instead, so `helpdesk.conversation` is `helpdesk_conversation`. Medians, date arithmetic and `JOIN LATERAL` need each database's own SQL. On SQLite and SQL Server a boolean such as `internal` is stored as `1` or `0`, and on SQLite a time is ISO 8601 text in UTC.
 
 <Callout>
   Until version 1.0, a minor release can rename or drop a column. The release notes say when one does, so check them before you upgrade a helpdesk that reports depend on.
@@ -90,7 +92,7 @@ Every table and column is described in [Database](/docs/reference/database). Wit
 
 ## Connect a dashboard
 
-For Metabase, a PostHog data warehouse source or any other tool that reads Postgres, give it a role of its own that reads the `helpdesk` schema. Run this as the role that runs your migrations. The `ALTER DEFAULT PRIVILEGES` line grants every table a later migration adds as well, so when a release adds a table that holds secrets or personal data, add it to the `REVOKE` line:
+For Metabase, a PostHog data warehouse source or any other tool that reads your database, give it a role of its own that reads the helpdesk's tables. On Postgres, run this as the role that runs your migrations. The `ALTER DEFAULT PRIVILEGES` line grants every table a later migration adds as well, so when a release adds a table that holds secrets or personal data, add it to the `REVOKE` line:
 
 ```sql
 CREATE ROLE helpdesk_reports LOGIN PASSWORD 'change-me';
@@ -100,4 +102,4 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA helpdesk GRANT SELECT ON TABLES TO helpdesk_r
 REVOKE SELECT ON helpdesk.setting, helpdesk.identity, helpdesk.rate_limit FROM helpdesk_reports;
 ```
 
-The last line keeps three tables out of the dashboard that no report needs: `setting` holds the key that signs rating links, `identity` holds visitor token hashes and your users' ids, and `rate_limit` holds client IP addresses.
+The last line keeps three tables out of the dashboard that no report needs: `setting` holds the key that signs rating links, `identity` holds visitor token hashes and your users' ids, and `rate_limit` holds client IP addresses. On another database, grant read access in its own way and keep the same three tables out.

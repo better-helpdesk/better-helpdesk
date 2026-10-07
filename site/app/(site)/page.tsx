@@ -51,7 +51,7 @@ export default function Home() {
           <div className="hero-r">
             <p className="sub">
               An open-source support inbox, ticketing and lightweight CRM you
-              install from npm. It runs in your Next.js app, on your Postgres,
+              install from npm. It runs in your Next.js app, on your database,
               behind your login.
             </p>
             <Wall />
@@ -68,10 +68,8 @@ export default function Home() {
             <span>runtime dependencies</span>
           </div>
           <div>
-            <b>Postgres 14+</b>
-            <span>
-              a <code>helpdesk</code> schema in yours
-            </span>
+            <b>Your database</b>
+            <span>Postgres, MySQL, SQL Server or SQLite</span>
           </div>
           <div>
             <b>Next.js 15+</b>
@@ -307,7 +305,7 @@ export default function Home() {
                     ],
                     [
                       'Customer data',
-                      'your Postgres',
+                      'your database',
                       "the vendor's database",
                       'its own database',
                     ],
@@ -395,7 +393,7 @@ export default function Home() {
             <p>
               We're quietly exploring a managed standby that keeps your widget
               and inbox reachable while your app is down, then hands everything
-              back to your Postgres. Join the private list to hear about it
+              back to your database. Join the private list to hear about it
               first and help decide what it becomes.
             </p>
           </div>
@@ -420,9 +418,9 @@ export default function Home() {
                   </span>
                 </summary>
                 <p>
-                  It's MIT and lives in your repository and your Postgres, so
-                  your helpdesk keeps running and you can fork it. The schema is
-                  plain SQL in <code>migrations/</code>, and nothing calls home.
+                  It's MIT and lives in your repository and your database, so
+                  your helpdesk keeps running and you can fork it. The
+                  migrations ship in the package, and nothing calls home.
                 </p>
               </details>
               <details className="rv">

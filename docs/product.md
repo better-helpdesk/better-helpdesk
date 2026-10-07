@@ -9,7 +9,8 @@ Better Helpdesk is an open-source (MIT) support inbox, ticketing system and
 lightweight CRM that mounts into your own Next.js app instead of running as a
 separate service. You install one npm package, mount one route handler,
 render one React component for the agent UI and drop one widget onto your
-site. All data lives in a `helpdesk` schema inside your existing Postgres.
+site. All data lives in your existing database: Postgres, MySQL, SQL Server or
+SQLite through built-in adapters, or any other through an adapter you write.
 Everything else (file storage, outbound email, inbound email, AI, help-centre
 search, background jobs) is an optional adapter.
 
@@ -52,7 +53,7 @@ package.
 - Adapters for storage, AI (schema-typed prompts), help search and scheduled
   jobs. Data retention and anonymous rate limits are configurable.
 - English and German. Theming through CSS custom properties. Peer
-  dependencies are `pg` and React 19 on Node 22.19 or newer. A migrations CLI
+  dependencies are React 19 and your database's driver, on Node 22.19 or newer. A migrations CLI
   runs in your release step.
 
 ## Stage (October 2026)

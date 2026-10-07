@@ -6,7 +6,7 @@
 
 <p align="center">
   The open-source helpdesk that lives inside your Next.js app.<br>
-  Support inbox, ticketing and a lightweight CRM, in your Postgres, behind your login.
+  Support inbox, ticketing and a lightweight CRM, in your database, behind your login.
 </p>
 
 <p align="center">
@@ -27,9 +27,9 @@
 
 Better Helpdesk is an npm package, not a service. You mount one route
 handler, render one React component for your support team and drop one
-widget onto your site. Conversations, contacts and companies live in a
-`helpdesk` schema inside the Postgres you already run, and your app's own
-session decides who is a customer and who is on the team. There is no second
+widget onto your site. Conversations, contacts and companies live in the
+database you already run (Postgres, MySQL, SQL Server or SQLite), and your
+app's own session decides who is a customer and who is on the team. There is no second
 system to deploy, no users to sync and no per-seat bill.
 
 ```sh
@@ -47,7 +47,7 @@ database, its deploy and its design tokens.
 |                | Better Helpdesk              | Hosted (Intercom, Zendesk) | Self-hosted apps (Chatwoot, Libredesk) |
 | -------------- | ---------------------------- | -------------------------- | -------------------------------------- |
 | Runs           | inside your Next.js app      | on the vendor's servers    | as a separate app you operate          |
-| Customer data  | your Postgres                | the vendor's database      | its own database                       |
+| Customer data  | your database                | the vendor's database      | its own database                       |
 | Sign-in        | your existing session        | separate agent accounts    | separate agent accounts                |
 | Look and feel  | your CSS custom properties   | vendor theming             | vendor theming                         |
 | Cost           | MIT, free                    | per seat, per month        | free, plus the hosting                 |
@@ -90,7 +90,7 @@ deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk
 |                         | Better Helpdesk                                   | Chatwoot                                       | Libredesk                          | Intercom                                     | Zendesk                                       |
 | ----------------------- | ------------------------------------------------- | ---------------------------------------------- | ---------------------------------- | -------------------------------------------- | --------------------------------------------- |
 | Runs as                 | a library in your Next.js app                     | a Rails app you host, or Chatwoot Cloud  | a Go binary you host         | hosted                                 | hosted                                  |
-| Database                | your Postgres, `helpdesk` schema                  | its own Postgres and Redis               | its own Postgres and Redis   | the vendor's                           | the vendor's                            |
+| Database                | yours: Postgres, MySQL, SQL Server or SQLite      | its own Postgres and Redis               | its own Postgres and Redis   | the vendor's                           | the vendor's                            |
 | Identity                | your session or a signed token                    | own logins; SAML on Enterprise           | own logins, OIDC             | own logins; SSO on Expert              | own logins                              |
 | License                 | MIT                                               | MIT core, proprietary Enterprise         | AGPL-3.0                     | proprietary                             | proprietary                              |
 | Pricing                 | free                                              | free to $99, Cloud and self-hosted       | free                         | $29 / $85 / $132                       | $19 / $55 / $115                        |
@@ -137,7 +137,10 @@ AI; AI only ever produces a suggestion or a draft that a person reviews.
 
 - Node.js 22.19 or newer
 - A database: PostgreSQL 14, MySQL 8.4 or SQL Server 2022 or newer, or SQLite through Node's own `node:sqlite`
-- React 19, and the driver of your database (`pg` for Postgres), as peer dependencies
+- React 19, and the driver of your database (`pg` for Postgres), as peer dependencies.
+  [Choose and connect a database](https://better-helpdesk.com/docs/guides/databases)
+  covers each one, and [Write your own database adapter](https://better-helpdesk.com/docs/guides/own-adapter)
+  any other.
 - Next.js 15 or newer for the examples below. The handler is a plain
   function from `Request` to `Response`, so any server with that shape can
   mount it.
@@ -161,8 +164,10 @@ HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-migrate
 
 The CLI opens one connection, creates the `helpdesk` schema and its tables,
 and exits, so it fits into a release step next to your own migrations. It
-also reads `APP_DATABASE_URL`. `DATABASE_SSL=true` turns on TLS and verifies
-the server's certificate; `DATABASE_SSL=no-verify` encrypts without checking
+also reads `APP_DATABASE_URL`. The steps here use Postgres; on MySQL, SQL
+Server or SQLite the URL starts with `mysql://`, `mssql://` or `file:`. For
+Postgres, `DATABASE_SSL=true` turns on TLS and verifies the server's
+certificate; `DATABASE_SSL=no-verify` encrypts without checking
 it, for a database with a self-signed certificate. An `sslmode` in the
 connection string takes precedence over both.
 
@@ -308,7 +313,7 @@ Better Helpdesk is young and under active development. Until 1.0 a minor
 version may change the API, and every release's notes list the pull requests
 it contains. Releases are published to npm with provenance through trusted
 publishing. The architecture is settled, though: embedded in the host, Next.js
-first, Postgres only, the host owns identity. A standalone server, a hosted
+first, the host's own database through an adapter, the host owns identity. A standalone server, a hosted
 mode or its own login are not planned.
 [`ROADMAP.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md)
 lists what Better Helpdesk will not do and what comes next.

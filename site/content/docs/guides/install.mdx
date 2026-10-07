@@ -3,7 +3,7 @@ title: Install in an existing app
 description: Add Better Helpdesk to the Next.js app you already run, with its own schema in your database, one route handler, the agent UI and the widget.
 ---
 
-This guide adds Better Helpdesk to a Next.js app that already has users and a session. You need Node.js 22.19 or newer, PostgreSQL 14 or newer, React 19 and Next.js 15 or newer. To try the package in a new app first, follow the [Quickstart](/docs/quickstart).
+This guide adds Better Helpdesk to a Next.js app that already has users and a session. You need Node.js 22.19 or newer, React 19, Next.js 15 or newer, and a database: PostgreSQL 14, MySQL 8.4 or SQL Server 2022 or newer, or SQLite. The steps below use Postgres; [Choose and connect a database](/docs/guides/databases) has the driver, the connection and the migration URL for the other three. To try the package in a new app first, follow the [Quickstart](/docs/quickstart).
 
 ## Install the package
 
@@ -12,7 +12,7 @@ npm install better-helpdesk pg
 npm install --save-dev @types/pg
 ```
 
-`pg` is the Postgres driver the helpdesk uses. React and React DOM, its other peer dependencies, are already in your app.
+`pg` is the Postgres driver; on another database, install its driver instead, as [Choose and connect a database](/docs/guides/databases) lists. React and React DOM, the other peer dependencies, are already in your app.
 
 ## Create the schema
 
@@ -22,7 +22,7 @@ Point the migration command at the database your app uses:
 HELPDESK_DATABASE_URL=postgres://user:password@db.example.com:5432/app npx better-helpdesk-migrate
 ```
 
-It prints `helpdesk: migrations applied`. Everything the helpdesk stores lives in a `helpdesk` schema next to your own tables, and the command touches nothing outside it. It also reads `APP_DATABASE_URL` when `HELPDESK_DATABASE_URL` is not set. [Go to production](/docs/guides/production#migrate-before-you-deploy) shows where the command goes in a release.
+It prints the migrations it applied, such as `helpdesk: applied 0000_baseline, 0001_tags_and_counter`, and `helpdesk: up to date` when there are none left to run. Everything the helpdesk stores lives in a `helpdesk` schema next to your own tables, and the command touches nothing outside it. It also reads `APP_DATABASE_URL` when `HELPDESK_DATABASE_URL` is not set. [Go to production](/docs/guides/production#migrate-before-you-deploy) shows where the command goes in a release.
 
 Give your app the same connection string in `HELPDESK_DATABASE_URL`.
 

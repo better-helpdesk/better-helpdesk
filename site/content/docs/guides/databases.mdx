@@ -1,0 +1,179 @@
+---
+title: Choose and connect a database
+description: Install the driver, create the connection the adapter takes and run the migrations for Postgres, MySQL, SQL Server or SQLite, and know what differs between them.
+---
+
+Better Helpdesk keeps its data in the database your app already uses. It has a built-in adapter for each of four databases, and each adapter takes a connection your app creates: the helpdesk never opens one of its own. Pick the section for your database, then pass the adapter to `buildHelpdesk` as `db`, in place of the `postgresAdapter` line in [Install in an existing app](/docs/guides/install#build-the-helpdesk).
+
+| Database | Version | Install | Adapter | URL for the migrations |
+| --- | --- | --- | --- | --- |
+| [PostgreSQL](#postgresql) | 14 or newer | `pg` | `postgresAdapter({ pool })` | `postgres://` or `postgresql://` |
+| [MySQL](#mysql) | 8.4 or newer | `mysql2` 3.24 or newer | `mysqlAdapter({ pool })` | `mysql://` |
+| [SQL Server](#sql-server) | 2022 or newer | `tedious` 20 and `tarn` 3 | `mssqlAdapter(config)` | `mssql://` or `sqlserver://` |
+| [SQLite](#sqlite) | | nothing, or `better-sqlite3` | `sqliteAdapter({ database })` | `file:`, or a path ending in `.db`, `.sqlite` or `.sqlite3` |
+
+`pg`, `mysql2`, `tedious` and `tarn` are optional peer dependencies of `better-helpdesk`, so install only what your database needs; SQLite needs nothing beyond Node, or `better-sqlite3` if you prefer it. For a database that is not in the table, [write your own adapter](/docs/guides/own-adapter).
+
+## PostgreSQL
+
+```sh
+npm install better-helpdesk pg
+npm install --save-dev @types/pg
+```
+
+The adapter takes a `pg.Pool`:
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
+import pg from 'pg';
+
+const pool = new pg.Pool({ connectionString: process.env.HELPDESK_DATABASE_URL });
+
+export const helpdesk = buildHelpdesk({
+  db: postgresAdapter({ pool }),
+  // ...the rest of your configuration
+});
+```
+
+If your app already has a pool, pass that one. [Install in an existing app](/docs/guides/install#build-the-helpdesk) shows the pool kept on `globalThis` for `next dev`, with the `error` listeners production needs.
+
+```sh
+HELPDESK_DATABASE_URL=postgres://user:password@db.example.com:5432/app npx better-helpdesk-migrate
+```
+
+The tables go into a `helpdesk` schema next to your own. [Go to production](/docs/guides/production#connect-over-tls) covers TLS for the pool and for the command.
+
+## MySQL
+
+```sh
+npm install better-helpdesk mysql2
+```
+
+The adapter takes a pool from `mysql2`, the callback API rather than `mysql2/promise`, created with `timezone: 'Z'`:
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, mysqlAdapter } from 'better-helpdesk';
+import { createPool } from 'mysql2';
+
+const pool = createPool({ uri: process.env.HELPDESK_DATABASE_URL, timezone: 'Z' });
+
+export const helpdesk = buildHelpdesk({
+  db: mysqlAdapter({ pool }),
+  // ...the rest of your configuration
+});
+```
+
+The helpdesk stores times as UTC `DATETIME` values, and `timezone: 'Z'` makes `mysql2` read and write them in UTC. The adapter throws when the pool converts times in another zone, or when it was created with `dateStrings` or `jsonStrings`, rather than store times shifted by your server's offset.
+
+```sh
+HELPDESK_DATABASE_URL=mysql://user:password@db.example.com:3306/app npx better-helpdesk-migrate
+```
+
+The command creates its tables in the database the URL names, each with a `helpdesk_` prefix, such as `helpdesk_conversation`.
+
+## SQL Server
+
+```sh
+npm install better-helpdesk tedious tarn
+```
+
+`mssqlAdapter` takes what Kysely's `MssqlDialect` takes: the `tedious` and `tarn` modules, the pool's size, and a function that opens a connection.
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, mssqlAdapter } from 'better-helpdesk';
+import * as tarn from 'tarn';
+import * as tedious from 'tedious';
+
+export const helpdesk = buildHelpdesk({
+  db: mssqlAdapter({
+    tarn: { ...tarn, options: { min: 0, max: 10 } },
+    tedious: {
+      ...tedious,
+      connectionFactory: () =>
+        new tedious.Connection({
+          server: 'db.example.com',
+          authentication: {
+            type: 'default',
+            options: {
+              userName: process.env.HELPDESK_DATABASE_USER,
+              password: process.env.HELPDESK_DATABASE_PASSWORD,
+            },
+          },
+          options: { port: 1433, database: 'app' },
+        }),
+    },
+  }),
+  // ...the rest of your configuration
+});
+```
+
+```sh
+HELPDESK_DATABASE_URL='mssql://user:password@db.example.com:1433/app' npx better-helpdesk-migrate
+```
+
+The command encrypts the connection. Add `?trustServerCertificate=true` to the URL for a server with a self-signed certificate, or `?encrypt=false` to turn encryption off. The tables go into a `helpdesk` schema, which the command creates.
+
+A condition on more than 1,000 values goes to SQL Server as one JSON parameter that it reads with `openjson`, since SQL Server takes about 2,000 parameters per query. The helpdesk's own lists stay shorter; your code can pass longer ones to the store. SQL Server offers `openjson` only at database compatibility level 130 or higher, so check the level of a database restored from an older server:
+
+```sql
+SELECT compatibility_level FROM sys.databases WHERE name = DB_NAME();
+```
+
+## SQLite
+
+SQLite needs no driver: the adapter takes a database from Node's own `node:sqlite`.
+
+```ts title="lib/helpdesk.ts"
+import { DatabaseSync } from 'node:sqlite';
+import { buildHelpdesk, sqliteAdapter } from 'better-helpdesk';
+
+const database = new DatabaseSync('helpdesk.db');
+
+export const helpdesk = buildHelpdesk({
+  db: sqliteAdapter({ database }),
+  // ...the rest of your configuration
+});
+```
+
+A database opened with `better-sqlite3`, `new Database('helpdesk.db')`, works the same way. The adapter turns foreign keys on for each connection, throws on its first query if SQLite will not, and waits up to five seconds for a write another process holds.
+
+```sh
+HELPDESK_DATABASE_URL=file:./helpdesk.db npx better-helpdesk-migrate
+```
+
+A relative path is resolved from the directory you run the command in, so run it from the one your app starts in. The command opens the file with `node:sqlite`, whichever library your app uses. The tables carry a `helpdesk_` prefix, as on MySQL. Every instance of your app must reach the same file, because the job queue and the rate limits are rows in it.
+
+## Run the migrations from your own code
+
+`better-helpdesk-migrate` opens the database its URL names, with what a URL can carry. When the connection needs more, such as your provider's CA certificate or another kind of SQL Server authentication, build the adapter in a script of your own and pass it to `migrate`:
+
+```ts title="scripts/migrate-helpdesk.ts"
+import { migrate, postgresAdapter } from 'better-helpdesk';
+import pg from 'pg';
+
+const pool = new pg.Pool({
+  connectionString: process.env.HELPDESK_DATABASE_URL,
+  ssl: { ca: process.env.HELPDESK_DATABASE_CA },
+  max: 1,
+});
+try {
+  const applied = await migrate(postgresAdapter({ pool }));
+  console.log(applied.length > 0 ? `applied ${applied.join(', ')}` : 'up to date');
+} finally {
+  await pool.end();
+}
+```
+
+`migrate` takes any of the four built-in adapters, applies the migrations that have not run yet, and returns their names. Like the command, it is safe to run on every deploy. With the other three adapters, close the connection with `await adapter.kysely.destroy()` instead of `pool.end()`.
+
+## What differs between them
+
+The helpdesk behaves the same on all four databases, with these exceptions.
+
+**Where the tables live.** On Postgres and SQL Server they are in a `helpdesk` schema: `helpdesk.conversation`. MySQL and SQLite have no schemas in that sense, so the tables sit in your database with a prefix: `helpdesk_conversation`. [Database](/docs/reference/database) lists the tables without either.
+
+**Search.** On Postgres the inbox search box uses full-text search: it matches whole words, and it understands web-search syntax, such as a phrase in quotes or a word with a leading `-`. On the other three, each word of the query must appear somewhere in the conversation's title, its subject or one of its messages, ignoring case, so `inv` finds `invoice`. The possible duplicates that AI triage weighs are conversations whose title, subject or public messages contain any of up to twelve words longer than three letters from the new conversation's subject and message, the 50 latest of them, ranked by how many of those words their title and subject hold.
+
+**Identifiers compare exactly.** On every database, an id from your app is matched with its case intact, so `user-Ab` never opens the contact of `user-ab`. MySQL and SQL Server compare text without regard to case by default; the helpdesk's tables use a binary collation instead (`utf8mb4_bin` and `Latin1_General_100_BIN2`). A report of your own that compares text with `=` on those tables is case-sensitive as well.
+
+**Case on SQLite.** Where the helpdesk ignores case, as in search, SQLite folds ASCII letters only. A search for `über` does not find `Über` there; on the other databases it does.

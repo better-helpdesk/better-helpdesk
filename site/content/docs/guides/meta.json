@@ -3,6 +3,7 @@
   "pages": [
     "---Go live---",
     "install",
+    "databases",
     "sign-in",
     "production",
     "email",
@@ -26,6 +27,7 @@
     "own-code",
     "events",
     "crm",
-    "reporting"
+    "reporting",
+    "own-adapter"
   ]
 }

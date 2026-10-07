@@ -5,7 +5,7 @@ description: Build a Next.js app with Better Helpdesk inside it, write in as a v
 
 In this tutorial you build a small Next.js app with Better Helpdesk mounted in it. By the end you will have sent a message from the widget as a visitor, answered it from the agent UI as an agent, and read the answer back in the widget.
 
-You need Node.js 22.19 or newer and Docker, which runs the Postgres database.
+You need Node.js 22.19 or newer and Docker, which runs the Postgres database. Better Helpdesk also runs on MySQL, SQL Server and SQLite; this tutorial uses Postgres, and [Choose and connect a database](/docs/guides/databases) shows the others.
 
 ## 1. Create the app
 
@@ -40,7 +40,7 @@ npm install --save-dev @types/pg
 HELPDESK_DATABASE_URL=postgres://postgres@localhost:5432/helpdesk npx better-helpdesk-migrate
 ```
 
-The command prints `helpdesk: migrations applied`. Your database now has a `helpdesk` schema with every table the helpdesk needs.
+The command prints `helpdesk: applied 0000_baseline, 0001_tags_and_counter`. Your database now has a `helpdesk` schema with every table the helpdesk needs.
 
 Give the app the same connection string:
 
@@ -225,7 +225,7 @@ The output shows one row: number 1000, in the `support` inbox, with the status `
 
 ## What you built
 
-You have the full loop of Better Helpdesk: a widget that takes a message, a handler that stores it in your Postgres, and an agent UI where your team answers it. A real installation adds three things to this:
+You have the full loop of Better Helpdesk: a widget that takes a message, a handler that stores it in your own database, and an agent UI where your team answers it. A real installation adds three things to this:
 
 - An `identify` that reads your app's session instead of a cookie. [Identity and trust](/docs/concepts/identity) explains what it must return and why.
 - An email adapter, so customers hear about replies when they are not looking at the widget. See [Send email](/docs/guides/email).
