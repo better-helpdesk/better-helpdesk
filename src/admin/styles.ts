@@ -16,6 +16,7 @@ export const adminCss = `
   --a-focus: var(--helpdesk-focus, #f55068);
   --a-radius: var(--helpdesk-radius, 10px);
   --a-r-control: calc(var(--a-radius) - 2px);
+  --a-r-inset: calc(var(--a-radius) - 1px);
   --a-r-inner: calc(var(--a-radius) - 4px);
   --a-r-dialog: calc(var(--a-radius) + 4px);
   --a-shadow-color: color-mix(in srgb, var(--a-fg) 14%, transparent);
@@ -30,6 +31,17 @@ export const adminCss = `
   container-type: inline-size;
 }
 .sa * { box-sizing: border-box; }
+/* Safari ignores scrollbar-color and gets the pseudo-elements; elsewhere they would be ignored anyway. */
+@supports (scrollbar-color: auto) {
+  .sa { scrollbar-color: color-mix(in srgb, var(--a-fg) 22%, transparent) transparent; }
+  .sa, .sa * { scrollbar-width: thin; }
+}
+@supports not (scrollbar-color: auto) {
+  .sa ::-webkit-scrollbar { width: 10px; height: 10px; }
+  .sa ::-webkit-scrollbar-track { background: transparent; }
+  .sa ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--a-fg) 22%, transparent) padding-box; }
+  .sa ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--a-fg) 40%, transparent); }
+}
 .sa button, .sa input, .sa select, .sa textarea { font: inherit; color: inherit; }
 .sa button { cursor: pointer; }
 .sa a { color: inherit; }
@@ -87,8 +99,9 @@ export const adminCss = `
 .sa-props { margin: 0; min-width: 0; gap: 4px 12px; align-items: end; padding: 8px 12px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-subtle); }
 .sa-prop { display: grid; gap: 2px; min-width: 0; }
 .sa-eyebrow { font-size: 11px; font-weight: 600; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.sa-prop .sa-select { height: 32px; padding-left: 8px; margin-left: -8px; width: calc(100% + 8px); border-color: transparent; background-color: transparent; }
-.sa-prop .sa-select:hover { border-color: var(--a-border); background-color: var(--a-bg); }
+/* The properties card and the inbox's filter panel share one quiet control: text until hovered. */
+:is(.sa-prop, .sa-props, .sa-filters .sa-field) > :is(.sa-select, .sa-input) { height: 32px; padding-left: 8px; margin-left: -8px; width: calc(100% + 8px); border-color: transparent; background-color: transparent; }
+:is(.sa-prop, .sa-props, .sa-filters .sa-field) > :is(.sa-select, .sa-input):is(:hover, :focus) { border-color: var(--a-border); background-color: var(--a-bg); }
 .sa-input, .sa-select, .sa-textarea {
   height: 36px; padding: 0 12px; border: 1px solid var(--a-border); border-radius: var(--a-r-control);
   background: var(--a-bg); width: 100%; font-size: 14px;
@@ -129,6 +142,8 @@ export const adminCss = `
 .sa-pill[data-rating="bad"] { color: var(--a-danger); border-color: currentColor; background: transparent; }
 
 .sa .sa-danger { color: var(--a-danger); }
+.sa .sa-destructive { background: var(--a-danger); border-color: var(--a-danger); color: var(--a-bg); font-weight: 600; }
+.sa .sa-destructive:hover { background: color-mix(in srgb, var(--a-danger) 85%, var(--a-fg)); }
 
 /* 36px, not the app TabsList's 38: it shares a row with 36px inputs and selects. */
 .sa-seg { margin: 0; min-width: 0; display: inline-flex; align-items: center; gap: 3px; height: 36px; padding: 3px; border-radius: var(--a-radius); background: var(--a-bg); border: 1px solid var(--a-border); }
@@ -140,15 +155,18 @@ export const adminCss = `
 .sa-card > h3 { margin: 0; font-size: 11px; font-weight: 600; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .sa-table-wrap { border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); overflow: hidden; }
-.sa-card .sa-table-wrap { border: 0; border-radius: 0; }
+.sa-card .sa-table-wrap { border: 0; border-radius: 0; margin-inline: -16px; background: transparent; }
+/* The last row's own padding is the card's bottom edge. */
+.sa-card > .sa-table-wrap:last-child { margin-bottom: -14px; border-radius: 0 0 var(--a-r-inset) var(--a-r-inset); }
 .sa-card .sa-table th { background: transparent; }
 .sa-table { width: 100%; border-collapse: collapse; }
 .sa-table th { text-align: left; font-weight: 600; background: var(--a-subtle); color: var(--a-muted); padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
-.sa-table td { padding: 12px 16px; border-top: 1px solid var(--a-border); vertical-align: top; }
+.sa-table td { padding: 12px 16px; border-top: 1px solid var(--a-border); vertical-align: middle; }
+/* Inbox rows run to several lines; their pills sit on the first. */
+.sa-table:has(.sa-cell) td { vertical-align: top; }
 .sa-table tbody tr { cursor: pointer; }
 .sa-table tbody tr:hover td, .sa-table tbody tr:focus-within td { background: var(--a-subtle); }
 .sa-table tbody tr[data-active="true"] td { background: color-mix(in srgb, var(--a-accent) 7%, var(--a-bg)); }
-.sa-table tbody tr[data-active="true"] td:first-child { box-shadow: inset 3px 0 0 var(--a-accent); }
 .sa-table tbody tr[data-selected] td { background: color-mix(in srgb, var(--a-accent) 4%, var(--a-bg)); }
 .sa-table .sa-check { width: 1%; padding-right: 4px; cursor: default; }
 .sa-check input { display: block; width: 18px; height: 18px; margin: 0; accent-color: var(--a-accent); cursor: pointer; }
@@ -193,22 +211,56 @@ export const adminCss = `
 
 .sa-page-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .sa-page-head h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 32px; }
+/* A conversation's head: back, the title with its tags, and its actions together at the end. */
+.sa-convo-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 8px 12px; }
+.sa-convo-title { display: grid; gap: 2px; min-width: 0; }
+.sa-convo-title h2 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.sa-convo-title h2 > .num { flex: none; font-size: 14px; }
+.sa-convo-actions { display: flex; align-items: center; gap: 8px; }
+.sa-convo-actions .sa-btn { height: 32px; }
+@container (max-width: 560px) {
+  .sa-convo-head { grid-template-columns: auto minmax(0, 1fr); }
+  .sa-convo-actions { grid-column: 1 / -1; }
+}
 /* 32px, the h2's line box, so the button sits on the title's first line. */
 .sa .sa-back { height: 32px; padding: 0 10px 0 6px; flex: none; }
-.sa-split { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+.sa-split { display: grid; grid-template-columns: minmax(0, 1fr) clamp(260px, 30%, 320px); gap: 24px; align-items: start; }
 .sa-split > * { min-width: 0; grid-template-columns: minmax(0, 1fr); }
-@container (max-width: 900px) { .sa-split { grid-template-columns: 1fr; } }
+/* Details stay a column to the right until the thread itself would be too narrow. */
+@container (max-width: 640px) { .sa-split { grid-template-columns: 1fr; } }
 .sa-split > [hidden] { display: none; }
+.sa-thread-pane > .sa { min-height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
+.sa-thread-pane .sa-split { align-items: stretch; }
+.sa-thread-pane .sa-split > aside { align-self: start; }
+.sa-thread-pane .sa-split > .sa:first-child { display: flex; flex-direction: column; }
 /* The inbox list beside an open thread on a wide container; below it the thread replaces the list. */
 .sa-panes { display: grid; gap: 24px; align-items: start; }
 .sa-panes > * { min-width: 0; }
 .sa-panes[data-open] > .sa-list-pane { display: none; }
 @container (min-width: 960px) {
   .sa-panes[data-open] { grid-template-columns: 380px minmax(0, 1fr); }
+  /* Open details take their width from the list, not the thread. */
+  .sa-panes[data-open]:has(.sa-split > aside:not([hidden])) { grid-template-columns: 320px minmax(0, 1fr); }
   .sa-panes[data-open] > .sa-list-pane { display: block; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
   .sa-panes[data-open] .sa-back { display: none; }
 }
 .sa-split:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
+/* Beside an open thread the table's columns would squeeze the subject; each row stacks instead. */
+.sa-panes[data-open] .sa-table thead { display: none; }
+.sa-panes[data-open] :is(.sa-table, .sa-table tbody) { display: block; }
+.sa-panes[data-open] .sa-table tr { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 10px; padding: 12px 14px; border-top: 1px solid var(--a-border); }
+.sa-panes[data-open] .sa-table tbody tr:first-child { border-top: 0; }
+.sa-panes[data-open] .sa-list-pane .sa-table td { padding: 0; border: 0; background: none; box-shadow: none; }
+.sa-panes[data-open] .sa-table .sa-check { grid-row: 1 / span 2; width: auto; padding: 2px 0 0; }
+.sa-panes[data-open] .sa-col-main { grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
+.sa-panes[data-open] .sa-col-wait { grid-column: 3; grid-row: 1; justify-self: end; }
+.sa-panes[data-open] .sa-col-pri { grid-column: 3; grid-row: 2; justify-self: end; }
+.sa-panes[data-open] .sa-col-pri:empty { display: none; }
+.sa-panes[data-open] .sa-type { display: none; }
+.sa-panes[data-open] .sa-cell-title a { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sa-panes[data-open] .sa-table tbody tr:hover, .sa-panes[data-open] .sa-table tbody tr:focus-within { background: var(--a-subtle); }
+.sa-panes[data-open] .sa-table tbody tr[data-selected] { background: color-mix(in srgb, var(--a-accent) 4%, var(--a-bg)); }
+.sa-panes[data-open] .sa-table tbody tr:is([data-active="true"], [aria-current]) { background: color-mix(in srgb, var(--a-accent) 7%, var(--a-bg)); }
 .sa .sa-aside-toggle { height: 32px; margin-inline-start: auto; flex: none; }
 .sa-queue { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; flex: none; }
 .sa-queue .sa-btn { height: 32px; }
@@ -216,13 +268,17 @@ export const adminCss = `
 .sa-kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 13px; margin: 0; }
 .sa-kv dt { color: var(--a-muted); }
 .sa-kv dd { margin: 0; overflow-wrap: anywhere; }
+/* The details column is too narrow for two columns: each label sits above its value. */
+.sa-split > aside .sa-kv { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.sa-split > aside .sa-kv dt { font-size: 12px; }
+.sa-split > aside .sa-kv dd + dt { margin-top: 10px; }
 .sa-details > summary { cursor: pointer; color: var(--a-muted); font-size: 13px; list-style: none; display: flex; align-items: center; gap: 6px; }
 .sa-details > summary::-webkit-details-marker { display: none; }
 .sa-details > summary::before { content: ''; width: 6px; height: 6px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform 150ms; }
 .sa-details[open] > summary::before { transform: rotate(45deg); }
 .sa-details > pre { white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; font-size: 12px; max-height: 160px; overflow: auto; background: var(--a-subtle); padding: 8px; border-radius: var(--a-r-inner); }
 
-.sa-thread { display: grid; gap: 14px; }
+.sa-thread { display: grid; gap: 24px; padding-block: 8px; }
 .sa-event { margin: 0; text-align: center; color: var(--a-muted); font-size: 12px; text-wrap: balance; }
 .sa .rich { display: grid; gap: 6px; }
 .sa .rich p, .sa .rich ul, .sa .rich ol { margin: 0; }
@@ -235,13 +291,19 @@ export const adminCss = `
 .sa .code-bar { order: -1; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 4px 4px 0; font-size: 12px; }
 .sa .code-bar button { min-height: 24px; padding: 0 8px; border: 0; border-radius: var(--a-r-inner); background: transparent; color: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .sa .code-bar button:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
-.sa-details .code { margin-top: 8px; }
+.sa-details .code { position: relative; margin-top: 8px; }
+/* A host's own code styles would otherwise paint inside the block. */
+.sa .code code { padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; }
+/* In the details column the error wraps, and Copy sits in the corner instead of taking a row. */
+.sa-details .code pre { padding: 8px 52px 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.sa-details .code-bar { position: absolute; top: 4px; right: 4px; padding: 0; }
+.sa-details .code-bar [role="status"]:not(:empty) { position: absolute; right: 100%; padding-right: 6px; white-space: nowrap; }
 .sa .rt-toolbar { display: flex; gap: 2px; }
 .sa .rt-toolbar button { display: grid; place-items: center; width: 30px; height: 28px; border: 0; border-radius: var(--a-r-inner); background: transparent; color: var(--a-muted); cursor: pointer; }
 .sa .rt-toolbar button:hover { background: var(--a-subtle); color: var(--a-fg); }
 .sa .rt-toolbar svg { width: 16px; height: 16px; }
-.sa-msg { display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
-.sa-msg-body { border-radius: var(--a-radius); padding: 10px 14px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--a-border); background: var(--a-bg); }
+.sa-msg { display: grid; grid-template-columns: 28px 1fr; gap: 12px; }
+.sa-msg-body { border-radius: var(--a-radius); padding: 14px 18px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--a-border); background: var(--a-bg); }
 .sa-msg[data-author="agent"] .sa-msg-body { position: relative; background: var(--a-subtle); }
 .sa-msg[data-author="agent"] { grid-template-columns: 1fr 28px; }
 .sa-msg[data-author="agent"] > :first-child { order: 2; }
@@ -249,7 +311,7 @@ export const adminCss = `
 .sa-msg[data-author="agent"] > div { justify-items: end; }
 .sa-msg-body { max-width: min(100%, 65ch); }
 .sa-msg[data-internal="true"] .sa-msg-body { background: var(--a-note); border: 1px dashed var(--a-note-border); }
-.sa-msg header { font-size: 12px; color: var(--a-muted); margin-bottom: 4px; white-space: normal; }
+.sa-msg header { font-size: 12px; color: var(--a-muted); margin-bottom: 6px; white-space: normal; }
 .sa-msg header strong { color: var(--a-fg); font-weight: 600; }
 
 .sa-suggest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--a-radius); background: var(--a-subtle); border: 1px solid var(--a-border); font-size: 13px; }
@@ -258,7 +320,8 @@ export const adminCss = `
 .sa-suggest .sa-grow { flex: 1; min-width: 200px; display: grid; gap: 2px; }
 .sa-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.sa-composer { position: sticky; bottom: 0; z-index: 1; background: var(--a-subtle); border: 1px solid var(--a-border); border-radius: var(--a-radius); padding: 10px; display: grid; gap: 8px; box-shadow: 0 -8px 24px color-mix(in srgb, var(--a-bg) 80%, transparent); container-type: inline-size; }
+.sa-composer { position: sticky; bottom: 0; z-index: 1; margin-top: auto; background: var(--a-bg); border: 1px solid var(--a-border); border-radius: var(--a-radius); padding: 12px; display: grid; gap: 8px; box-shadow: var(--a-highlight), 0 -4px 24px -8px var(--a-shadow-color); container-type: inline-size; }
+.sa-composer:has(.rt-input:focus) { border-color: color-mix(in srgb, var(--a-focus) 60%, var(--a-border)); }
 .sa-composer[data-internal="true"] { background: var(--a-note); border-color: var(--a-note-border); }
 .sa .rt { display: grid; gap: 4px; min-width: 0; }
 .sa .rt-input { min-height: 90px; max-height: 400px; overflow-y: auto; padding: 6px 4px; line-height: 1.5; overflow-wrap: anywhere; cursor: text; outline: none; }
@@ -268,7 +331,8 @@ export const adminCss = `
 .sa .rt-dialog .rt-toolbar, .sa .rt-dialog .rt-link { padding: 4px 6px; border-top: 1px solid var(--a-border); }
 /* In the composer card the toolbar sits under a hairline, inside the box. */
 .sa .rt-composer .rt-toolbar, .sa .rt-composer .rt-link { padding-top: 6px; border-top: 1px solid var(--a-border); }
-.sa-composer .rt-input { background: var(--a-bg); border: 1px solid var(--a-border); border-radius: var(--a-r-inner); padding: 8px 10px; }
+.sa-composer .rt-input { background: transparent; border: 0; padding: 6px 2px; }
+.sa-composer-foot .sa-canned-pop { left: auto; right: 0; }
 .sa .rt-input[data-empty]::before { content: attr(data-placeholder); color: var(--a-muted); pointer-events: none; }
 .sa .rt-input[data-empty] > :first-child:is(br, div:only-child) { display: none; }
 .sa .rt-input ul { margin: 0; padding-left: 20px; list-style: disc; }
@@ -302,6 +366,7 @@ export const adminCss = `
 .sa-deal { background: var(--a-bg); border: 1px solid var(--a-border); border-radius: var(--a-r-control); padding: 10px 12px; display: grid; gap: 4px; cursor: grab; text-align: left; width: 100%; }
 .sa-deal:hover { border-color: var(--a-muted); }
 .sa-deal strong { font-weight: 600; }
+.sa-deal-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
 
 .sa-dialog { margin: auto; border: 1px solid var(--a-border); border-radius: var(--a-r-dialog); padding: 0; width: min(480px, calc(100vw - 32px)); background: var(--a-bg); color: var(--a-fg); box-shadow: var(--a-shadow-dialog); }
 .sa-dialog::backdrop { background: color-mix(in srgb, var(--a-fg) 45%, transparent); }
@@ -328,6 +393,8 @@ export const adminCss = `
 .sa-keys dd { margin: 0; font-size: 13px; }
 .sa-field { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
 .sa-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }
+/* Cancel, written first, takes the left edge; Delete and then Save close the row on the right. */
+.sa-dialog-foot > :first-child:not(:only-child) { margin-inline-end: auto; }
 .sa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .sa-error { color: var(--a-danger); }
 .sa-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--a-danger) 30%, var(--a-border)); border-radius: var(--a-radius); background: color-mix(in srgb, var(--a-danger) 6%, var(--a-bg)); color: var(--a-danger); }
@@ -349,21 +416,43 @@ export const adminCss = `
 .sa-hint { white-space: nowrap; }
 .sa-team { margin-left: 6px; }
 .sa-deal [data-stale] { color: var(--a-warn); font-weight: 600; }
-.sa .sa-title-edit { font: inherit; color: inherit; background: none; border: 0; padding: 0 4px; margin: 0 -4px; border-radius: var(--a-r-inner); cursor: text; text-align: left; }
+.sa .sa-title-edit { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; line-height: 32px; color: inherit; background: none; border: 0; padding: 0 4px; margin: 0 -4px; border-radius: var(--a-r-inner); cursor: text; text-align: left; }
 .sa .sa-title-edit:hover { background: var(--a-subtle); }
-.sa-title-input { font: inherit; width: min(640px, 100%); height: auto; padding: 2px 6px; }
-.sa-tags-input { display: block; width: min(640px, 100%); height: 28px; margin: 4px 0 0 -6px; padding: 0 6px; font-size: 13px; border-color: transparent; background: none; }
-.sa .sa-tags-input { color: var(--a-muted); }
-.sa .sa-tags-input:focus { color: var(--a-fg); }
-.sa-tags-input:hover { border-color: var(--a-border); }
+/* The same box as .sa-title-edit, so the title does not move when it turns into a field. */
+.sa .sa-title-input { flex: 1; min-width: 0; width: auto; height: 32px; padding: 0 4px; margin: 0 -4px; border: 0; border-radius: var(--a-r-inner); background: var(--a-bg); font: inherit; line-height: 32px; box-shadow: 0 0 0 1px var(--a-border); }
+.sa-tags-edit { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 24px; }
+.sa .sa-tag-chip { height: 24px; padding: 0 2px 0 9px; gap: 2px; color: var(--a-fg); }
+.sa .sa-tag-chip button { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--a-muted); }
+.sa .sa-tag-chip button:hover { background: color-mix(in srgb, var(--a-fg) 10%, transparent); color: var(--a-fg); }
+.sa .sa-tag-chip svg { width: 12px; height: 12px; }
+.sa .sa-tag-add { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px 0 6px; border: 1px dashed var(--a-border); border-radius: 999px; background: transparent; color: var(--a-muted); font-size: 12px; font-weight: 500; }
+.sa .sa-tag-add:hover { border-style: solid; color: var(--a-fg); }
+.sa .sa-tag-add svg { width: 12px; height: 12px; }
+.sa .sa-tag-new { width: 140px; height: 24px; padding: 0 9px; border: 1px solid var(--a-border); border-radius: 999px; background: var(--a-bg); font-size: 12px; }
+.sa .sa-tag-new:focus { outline: 2px solid var(--a-focus); outline-offset: -1px; }
 .sa-tag-filter { width: 160px; }
+.sa-row-actions { display: flex; justify-content: flex-end; gap: 4px; }
+.sa-row-actions .sa-btn { height: 32px; }
+/* The row's hover already tints the background, so the buttons lift to the card colour. */
+.sa-row-actions .sa-btn:hover { background: var(--a-bg); border-color: var(--a-border); }
+.sa-canned-table td:last-child { width: 1%; white-space: nowrap; }
+.sa-canned-table .sa-clamp { max-width: 60ch; }
+.sa-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 12px; padding: 8px 12px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-subtle); }
+.sa-filters[hidden] { display: none; }
+.sa-filters .sa-field { gap: 2px; margin: 0; color: var(--a-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+/* The controls inherit the label's type through ".sa select". */
+.sa-filters :is(.sa-select, .sa-input) { font-size: 14px; font-weight: 400; text-transform: none; letter-spacing: normal; color: var(--a-fg); }
+.sa-btn[aria-expanded="true"] { background: var(--a-subtle); }
+.sa-btn > .sa-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--a-accent); color: var(--a-accent-fg); font-size: 11px; line-height: 18px; text-align: center; }
 .sa-links { display: flex; flex-wrap: wrap; gap: 4px; }
 .sa-links .sa-btn svg { width: 12px; height: 12px; }
-.sa-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
-.sa-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.sa .sa-tag { height: 20px; padding: 0 7px; font-weight: 500; color: var(--a-muted); }
+.sa-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.sa-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.sa-meta .sa-viewers { margin: 0; }
+.sa .sa-tag { height: 20px; padding: 0 7px; font-size: 12px; font-weight: 500; color: var(--a-muted); }
 .sa button.sa-tag:hover { color: var(--a-fg); border-color: var(--a-muted); }
 .sa-chip-warn::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--a-warn); }
+.sa .sa-chip-warn[aria-pressed="true"]::before { background: currentColor; }
 .sa .sa-chip[aria-pressed="true"] { background: var(--a-accent); border-color: var(--a-accent); color: var(--a-accent-fg); }
 .sa-drop-hint { margin: 0; padding: 14px 8px; border: 1px dashed var(--a-border); border-radius: var(--a-radius); text-align: center; font-size: 12px; color: var(--a-muted); }
 @container (max-width: 1400px) { .sa-hint { display: none; } }

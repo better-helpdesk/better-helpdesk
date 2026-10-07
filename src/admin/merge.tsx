@@ -6,7 +6,7 @@ import {
   ConversationPicker,
   conversationOption,
 } from './pickers';
-import { Dialog } from './ui';
+import { Dialog, useConfirm } from './ui';
 
 export function MergeDialog({
   open,
@@ -24,6 +24,7 @@ export function MergeDialog({
   duplicates: { conversationId: string; reference: string }[];
 }) {
   const { api, t } = useAdmin();
+  const confirm = useConfirm(t);
   const [suggested, setSuggested] = useState<ConversationOption[]>([]);
   const [failed, setFailed] = useState(false);
 
@@ -63,7 +64,7 @@ export function MergeDialog({
       contactId && target.contactId !== contactId
         ? t('admin.confirmMergeOtherContact', { reference })
         : t('admin.confirmMergeConversation', { reference });
-    if (!window.confirm(message)) return;
+    if (!(await confirm.ask(message, t('admin.mergeAction')))) return;
     setFailed(false);
     try {
       await api(`agent/conversations/${conversationId}/merge`, {
@@ -107,6 +108,7 @@ export function MergeDialog({
           </button>
         </div>
       </div>
+      {confirm.node}
     </Dialog>
   );
 }

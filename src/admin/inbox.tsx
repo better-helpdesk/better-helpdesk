@@ -2,11 +2,11 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
-import { duration } from '../ui/i18n';
+import { duration, nextWorkday } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, useAdmin } from './context';
 import { NotificationBell } from './notifications';
-import { formatSnooze } from './snooze';
+import { formatSnooze, localInput } from './snooze';
 import {
   Avatar,
   Dialog,
@@ -68,6 +68,9 @@ export function Inbox() {
   const [query, setQuery] = useState(route.q ?? '');
   const [tag, setTag] = useState(route.tag ?? '');
   const tagListId = useId();
+  const tagInputId = useId();
+  const moreId = useId();
+  const [moreOpen, setMoreOpen] = useState(false);
   const filters = {
     inbox: route.inbox ?? '',
     status: route.status ?? 'open',
@@ -130,6 +133,17 @@ export function Inbox() {
     // Polling hands over new rows every time; only a changed order is news.
     setQueue(current => (key(current) === key(next) ? current : next));
   });
+  // Status, inbox, tag and sort sit behind one button, which opens when one of them is set.
+  const moreActive = [
+    filters.status !== 'open',
+    filters.inbox,
+    filters.tag,
+    filters.sort,
+  ].filter(Boolean).length;
+  const anyMore = moreActive > 0;
+  useEffect(() => {
+    if (anyMore) setMoreOpen(true);
+  }, [anyMore]);
   const visibleSelected = selected.filter(id => rows.some(r => r.id === id));
   const filtered =
     Boolean(
@@ -157,6 +171,7 @@ export function Inbox() {
             </button>
           ))}
         </fieldset>
+        <SavedViews filters={filters} canSave={filtered} />
         {(urgent.length > 0 || priority === 'high') && (
           <button
             type="button"
@@ -181,70 +196,16 @@ export function Inbox() {
             onChange={e => setQuery(e.target.value)}
           />
         </form>
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            set('tag', tag.trim().toLowerCase());
-          }}>
-          <input
-            type="search"
-            className="sa-input sa-tag-filter"
-            aria-label={t('admin.tag')}
-            placeholder={t('admin.tagFilter')}
-            list={tagListId}
-            value={tag}
-            onChange={e => setTag(e.target.value)}
-          />
-          <datalist id={tagListId}>
-            {(topTags.data?.tags ?? []).map(name => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </form>
-        <select
-          className="sa-select"
-          aria-label={t('admin.inboxLabel')}
-          value={filters.inbox}
-          onChange={e => set('inbox', e.target.value)}>
-          <option value="">{t('admin.allInboxes')}</option>
-          {me.inboxes.map(i => (
-            <option key={i} value={i}>
-              {inboxName(i)}
-            </option>
-          ))}
-        </select>
-        <select
-          className="sa-select"
-          aria-label={t('admin.status')}
-          value={filters.status}
-          onChange={e => set('status', e.target.value)}>
-          <option value="any">
-            {t('admin.status')}: {t('admin.all')}
-          </option>
-          {me.statuses.map(s => (
-            <option key={s} value={s}>
-              {t('admin.status')}: {t(`agentStatus.${s}`)}
-            </option>
-          ))}
-          <option value="snoozed">
-            {t('admin.status')}: {t('admin.snoozed')}
-          </option>
-          <option value="rated-bad">
-            {t('admin.status')}: {t('admin.ratedBad')}
-          </option>
-        </select>
-        <select
-          className="sa-select"
-          aria-label={t('admin.sort')}
-          value={filters.sort}
-          onChange={e => set('sort', e.target.value)}>
-          <option value="">
-            {t('admin.sort')}: {t('admin.sortWaiting')}
-          </option>
-          <option value="priority">
-            {t('admin.sort')}: {t('admin.sortPriority')}
-          </option>
-        </select>
+        <button
+          type="button"
+          className="sa-btn"
+          aria-expanded={moreOpen}
+          aria-controls={moreId}
+          onClick={() => setMoreOpen(!moreOpen)}>
+          <Svg d={paths.filter} />
+          {t('admin.filters')}
+          {moreActive > 0 && <span className="sa-count num">{moreActive}</span>}
+        </button>
         {!nav && <NotificationBell />}
         {!nav && <AwayControl />}
         <label className="sa-toggle">
@@ -272,7 +233,70 @@ export function Inbox() {
           )
         )}
       </div>
-      <SavedViews filters={filters} canSave={filtered} />
+      <div id={moreId} className="sa-filters" hidden={!moreOpen}>
+        <label className="sa-field">
+          {t('admin.status')}
+          <select
+            className="sa-select"
+            value={filters.status}
+            onChange={e => set('status', e.target.value)}>
+            <option value="any">{t('admin.all')}</option>
+            {me.statuses.map(s => (
+              <option key={s} value={s}>
+                {t(`agentStatus.${s}`)}
+              </option>
+            ))}
+            <option value="snoozed">{t('admin.snoozed')}</option>
+            <option value="rated-bad">{t('admin.ratedBad')}</option>
+          </select>
+        </label>
+        <label className="sa-field">
+          {t('admin.inboxLabel')}
+          <select
+            className="sa-select"
+            value={filters.inbox}
+            onChange={e => set('inbox', e.target.value)}>
+            <option value="">{t('admin.allInboxes')}</option>
+            {me.inboxes.map(i => (
+              <option key={i} value={i}>
+                {inboxName(i)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <form
+          className="sa-field"
+          onSubmit={e => {
+            e.preventDefault();
+            set('tag', tag.trim().toLowerCase());
+          }}>
+          <label htmlFor={tagInputId}>{t('admin.tag')}</label>
+          <input
+            id={tagInputId}
+            type="search"
+            className="sa-input"
+            placeholder={t('admin.tagFilter')}
+            list={tagListId}
+            value={tag}
+            onChange={e => setTag(e.target.value)}
+          />
+          <datalist id={tagListId}>
+            {(topTags.data?.tags ?? []).map(name => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </form>
+        <label className="sa-field">
+          {t('admin.sort')}
+          <select
+            className="sa-select"
+            value={filters.sort}
+            onChange={e => set('sort', e.target.value)}>
+            <option value="">{t('admin.sortWaiting')}</option>
+            <option value="priority">{t('admin.sortPriority')}</option>
+          </select>
+        </label>
+      </div>
       <p className="sa-sr-only" role="status">
         {visibleSelected.length > 0
           ? t('admin.selected', { count: String(visibleSelected.length) })
@@ -464,6 +488,13 @@ function BulkBar({
   );
 }
 
+/** Nine the next weekday morning: the usual answer to "back when?". */
+function nextMorning() {
+  const next = nextWorkday(new Date());
+  next.setHours(9, 0, 0, 0);
+  return next;
+}
+
 /** Setting yourself away changes what the widget and receipts promise. */
 export function AwayControl() {
   const { api, t, me, refreshMe, locale } = useAdmin();
@@ -483,9 +514,7 @@ export function AwayControl() {
         aria-pressed="true"
         title={t('admin.awayEnd')}
         onClick={() => save(null)}>
-        {t('admin.awayUntil', {
-          date: until.toLocaleDateString(locale === 'de' ? 'de-CH' : 'en-GB'),
-        })}
+        {t('admin.awayUntil', { date: formatSnooze(until, locale) })}
         <Svg d={paths.x} />
       </button>
     );
@@ -505,20 +534,21 @@ export function AwayControl() {
         <form
           onSubmit={e => {
             e.preventDefault();
-            const day = String(new FormData(e.currentTarget).get('until'));
-            // Away through the whole of that day, in the agent's own time zone.
-            void save(new Date(`${day}T23:59:59`).toISOString());
+            const back = String(new FormData(e.currentTarget).get('until'));
+            // A datetime-local value reads as the agent's own time zone.
+            void save(new Date(back).toISOString());
           }}>
           <h2>{t('admin.setAway')}</h2>
           <p className="sa-muted">{t('admin.awayHint')}</p>
           <label className="sa-field">
-            {t('admin.awayLastDay')}
+            {t('admin.awayBack')}
             <input
               className="sa-input"
-              type="date"
+              type="datetime-local"
               name="until"
               required
-              min={new Date().toISOString().slice(0, 10)}
+              min={localInput(new Date())}
+              defaultValue={localInput(nextMorning())}
             />
           </label>
           <div className="sa-dialog-foot">
@@ -706,7 +736,7 @@ export function ConversationTable({
                     />
                   </td>
                 )}
-                <td className="num">
+                <td className="num sa-col-wait">
                   {c.snoozedUntil &&
                   new Date(c.snoozedUntil).getTime() > Date.now() ? (
                     <span className="sa-pill">
@@ -722,7 +752,7 @@ export function ConversationTable({
                     <span className="sa-fine">—</span>
                   )}
                 </td>
-                <td>
+                <td className="sa-col-main">
                   <div className="sa-cell">
                     <span
                       className="sa-type"
@@ -754,36 +784,34 @@ export function ConversationTable({
                         !c.preview.startsWith(
                           (c.subject ?? '').replace(/…$/, '')
                         ) && <span className="sa-preview">{c.preview}</span>}
-                      <span className="sa-fine">
-                        {t(`agentType.${c.type}`)} · {inboxName(c.inbox)}
+                      <div className="sa-meta">
+                        <span className="sa-fine">
+                          {t(`agentType.${c.type}`)} · {inboxName(c.inbox)}
+                        </span>
                         {c.viewers?.length ? (
                           <ViewerStack t={t} viewers={c.viewers} />
                         ) : null}
                         {c.rating && <RatingChip t={t} rating={c.rating} />}
-                      </span>
-                      {c.tags.length > 0 && (
-                        <span className="sa-tags">
-                          {c.tags.map(name =>
-                            onTag ? (
-                              <button
-                                key={name}
-                                type="button"
-                                className="sa-pill sa-tag"
-                                aria-label={`${t('admin.tagFilter')}: ${name}`}
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  onTag(name);
-                                }}>
-                                {name}
-                              </button>
-                            ) : (
-                              <span key={name} className="sa-pill sa-tag">
-                                {name}
-                              </span>
-                            )
-                          )}
-                        </span>
-                      )}
+                        {c.tags.map(name =>
+                          onTag ? (
+                            <button
+                              key={name}
+                              type="button"
+                              className="sa-pill sa-tag"
+                              aria-label={`${t('admin.tagFilter')}: ${name}`}
+                              onClick={e => {
+                                e.stopPropagation();
+                                onTag(name);
+                              }}>
+                              {name}
+                            </button>
+                          ) : (
+                            <span key={name} className="sa-pill sa-tag">
+                              {name}
+                            </span>
+                          )
+                        )}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -805,7 +833,7 @@ export function ConversationTable({
                   </td>
                 )}
                 {showPriority && (
-                  <td>
+                  <td className="sa-col-pri">
                     {(c.priority === 'high' || c.priority === 'urgent') && (
                       <span className="sa-pill" data-tone={c.priority}>
                         {t(`priority.${c.priority}`)}

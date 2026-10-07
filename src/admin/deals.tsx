@@ -3,7 +3,15 @@ import { useState } from 'react';
 import { useResource } from '../ui/api';
 import { duration } from '../ui/i18n';
 import { useAdmin } from './context';
-import { CustomFields, Dialog, Empty, money, paths, Svg } from './ui';
+import {
+  CustomFields,
+  Dialog,
+  Empty,
+  money,
+  paths,
+  Svg,
+  useConfirm,
+} from './ui';
 
 /** A deal this long in one stage is flagged for a nudge. */
 const STALE_DAYS = 14;
@@ -132,8 +140,8 @@ export function DealsBoard() {
                         .join(' · ')}
                     </span>
                   )}
-                  <span className="sa-toolbar">
-                    <span className="num sa-grow">
+                  <span className="sa-deal-foot">
+                    <span className="num">
                       {money(d.value, d.currency, locale)}
                     </span>
                     <span
@@ -179,6 +187,7 @@ export function DealDialog({
 }) {
   const { api, t, me, locale } = useAdmin();
   const existing = deal && deal !== 'new' ? deal : null;
+  const confirm = useConfirm(t);
   const [custom, setCustom] = useState(existing?.custom ?? {});
   const [shown, setShown] = useState(deal);
   if (deal !== shown) {
@@ -280,27 +289,27 @@ export function DealDialog({
           )}
         </div>
         <div className="sa-dialog-foot">
+          <button type="button" className="sa-btn" onClick={onClose}>
+            {t('admin.cancel')}
+          </button>
           {existing && (
             <button
               type="button"
               className="sa-btn sa-danger"
-              style={{ marginRight: 'auto' }}
               onClick={async () => {
-                if (!window.confirm(t('admin.confirmDelete'))) return;
+                if (!(await confirm.ask())) return;
                 await api(`agent/deals/${existing.id}`, { method: 'DELETE' });
                 await onSaved();
               }}>
               {t('admin.delete')}
             </button>
           )}
-          <button type="button" className="sa-btn" onClick={onClose}>
-            {t('admin.cancel')}
-          </button>
           <button type="submit" className="sa-btn sa-primary">
             {t('admin.save')}
           </button>
         </div>
       </form>
+      {confirm.node}
     </Dialog>
   );
 }

@@ -248,7 +248,7 @@ export const WIDGET: Record<'en' | 'de', Strings> = {
     confirm: r =>
       `We'll get back to you as soon as possible. You'll be notified here, under ${r}.`,
     book: 'Book a 30-minute call',
-    waiting: n => `${n} conversations are waiting in the support inbox`,
+    waiting: n => `${n} conversations waiting`,
     openInbox: 'Open inbox',
   },
   de: {
@@ -295,7 +295,7 @@ export const WIDGET: Record<'en' | 'de', Strings> = {
     confirm: r =>
       `Wir melden uns so bald wie möglich. Sie werden hier benachrichtigt (Referenz ${r}).`,
     book: 'Buchen Sie ein 30-Minuten-Gespräch',
-    waiting: n => `${n} Unterhaltungen warten im Support-Posteingang`,
+    waiting: n => `${n} Unterhaltungen warten`,
     openInbox: 'Posteingang öffnen',
   },
 };

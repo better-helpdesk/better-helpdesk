@@ -1246,7 +1246,7 @@ describe('HelpdeskAdmin', () => {
     expect(window.location.pathname).toBe('/support/conversations/');
   });
 
-  it('saves the tags typed under the title as a list', async () => {
+  it('adds the tags typed under the title and removes one by its chip', async () => {
     const patches: unknown[] = [];
     vi.stubGlobal(
       'fetch',
@@ -1259,19 +1259,21 @@ describe('HelpdeskAdmin', () => {
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
-    const input = (await screen.findByRole('combobox', {
-      name: 'Tags',
-    })) as HTMLInputElement;
-    expect(input.value).toBe('billing');
+    const tags = await screen.findByRole('group', { name: 'Tags' });
+    expect(within(tags).getByText('billing')).toBeTruthy();
 
-    fireEvent.change(input, {
-      target: { value: 'billing, Refunds, BILLING,' },
-    });
-    fireEvent.blur(input);
-
+    fireEvent.click(within(tags).getByRole('button', { name: 'Add tag' }));
+    const input = within(tags).getByRole('combobox', { name: 'Add tag' });
+    fireEvent.change(input, { target: { value: 'Refunds, BILLING,' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() =>
       expect(patches).toEqual([{ tags: ['billing', 'refunds'] }])
     );
+
+    fireEvent.click(
+      within(tags).getByRole('button', { name: 'Remove tag billing' })
+    );
+    await waitFor(() => expect(patches.at(-1)).toEqual({ tags: [] }));
   });
 
   it('shows the saved tags and an error when saving them fails', async () => {
@@ -1288,17 +1290,18 @@ describe('HelpdeskAdmin', () => {
     );
     window.history.replaceState(null, '', '/support/conversations/c1/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
-    const input = (await screen.findByRole('combobox', {
-      name: 'Tags',
-    })) as HTMLInputElement;
-
-    fireEvent.change(input, {
-      target: { value: `billing, ${'x'.repeat(51)}` },
-    });
+    const tags = await screen.findByRole('group', { name: 'Tags' });
+    fireEvent.click(within(tags).getByRole('button', { name: 'Add tag' }));
+    const input = within(tags).getByRole('combobox', { name: 'Add tag' });
+    fireEvent.change(input, { target: { value: 'refunds' } });
     fireEvent.blur(input);
 
     expect(await screen.findByText('Something went wrong.')).toBeTruthy();
-    expect(input.value).toBe('billing');
+    expect(
+      within(tags)
+        .getAllByText(/./, { selector: '.sa-tag-chip' })
+        .map(chip => chip.textContent)
+    ).toEqual(['billing']);
   });
 
   it('snoozes a conversation until tomorrow morning and says until when', async () => {
@@ -2520,8 +2523,6 @@ describe('details sidebar', () => {
         return respond(url);
       })
     );
-    const confirm = vi.fn(() => true);
-    vi.stubGlobal('confirm', confirm);
     const { showModal, close } = HTMLDialogElement.prototype;
     HTMLDialogElement.prototype.showModal = function () {
       this.open = true;
@@ -2541,10 +2542,12 @@ describe('details sidebar', () => {
       await screen.findByRole('button', { name: 'DG-1001 CSV export' })
     );
 
+    const ask = await screen.findByRole('dialog', { name: 'Merge' });
+    expect(ask.textContent).toContain('DG-1001 belongs to another customer');
+    expect(posts).toHaveLength(0);
+    fireEvent.click(within(ask).getByRole('button', { name: 'Merge' }));
+
     await waitFor(() => expect(posts).toHaveLength(1));
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringContaining('DG-1001 belongs to another customer')
-    );
     expect(posts[0]?.url).toContain('agent/conversations/c1/merge');
     expect(posts[0]?.body).toEqual({ targetId: 'c2' });
   });

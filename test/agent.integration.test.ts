@@ -1589,6 +1589,41 @@ describe('settings', () => {
   });
 });
 
+describe('canned replies', () => {
+  it('adds, edits and deletes a canned reply', async () => {
+    h.addUser('agent', { isAgent: true });
+    const created = await h.call('POST', 'agent/canned', {
+      user: 'agent',
+      body: { title: 'Refund', body: 'We refunded you.', locale: 'en' },
+    });
+    expect(created.status).toBe(201);
+    const id = created.data.reply.id;
+
+    const edited = await h.call('PATCH', `agent/canned/${id}`, {
+      user: 'agent',
+      body: { title: 'Refund issued', body: 'Your refund is on its way.' },
+    });
+    expect(edited.status).toBe(200);
+    expect(await h.find('canned_reply', { id })).toEqual([
+      expect.objectContaining({
+        title: 'Refund issued',
+        body: 'Your refund is on its way.',
+        locale: null,
+      }),
+    ]);
+
+    const missing = await h.call(
+      'PATCH',
+      'agent/canned/00000000-0000-0000-0000-000000000000',
+      { user: 'agent', body: { title: 't', body: 'b' } }
+    );
+    expect(missing.status).toBe(404);
+
+    await h.call('DELETE', `agent/canned/${id}`, { user: 'agent' });
+    expect(await h.count('canned_reply')).toBe(0);
+  });
+});
+
 describe('away', () => {
   it('promises a return date while everyone who answers is away', async () => {
     h.addUser('agent', { isAgent: true });

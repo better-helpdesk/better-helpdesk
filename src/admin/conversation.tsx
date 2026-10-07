@@ -529,7 +529,7 @@ export function ConversationView({ id }: { id: string }) {
 
   return (
     <div className="sa" ref={root}>
-      <div className="sa-page-head">
+      <div className="sa-page-head sa-convo-head">
         <a
           className="sa-btn sa-back"
           href={href({ ...route, conversation: '' })}
@@ -540,9 +540,9 @@ export function ConversationView({ id }: { id: string }) {
           <Svg d={paths.back} />
           {t('admin.inbox')}
         </a>
-        <div>
+        <div className="sa-convo-title">
           <h2>
-            <span className="num sa-muted">{c.reference}</span>{' '}
+            <span className="num sa-muted">{c.reference}</span>
             <TitleEditor
               value={c.subject ?? ''}
               fallback={t(`agentType.${c.type}`)}
@@ -564,11 +564,7 @@ export function ConversationView({ id }: { id: string }) {
               {t('admin.customerSees', { subject: c.customerSubject })}
             </p>
           )}
-          <TagsEditor
-            key={c.tags.join()}
-            value={c.tags}
-            onSave={tags => patch({ tags })}
-          />
+          <TagsEditor value={c.tags} onSave={tags => patch({ tags })} />
           {mergedInto && (
             <p className="sa-fine" role="status">
               <a
@@ -582,41 +578,43 @@ export function ConversationView({ id }: { id: string }) {
             </p>
           )}
         </div>
-        {!c.mergedIntoId && (
-          <button
-            type="button"
-            className="sa-btn"
-            onClick={() => setMerging(true)}>
-            {t('admin.mergeInto')}
-          </button>
-        )}
-        {queueOn && position >= 0 && (
-          <span className="sa-queue">
-            <span className="sa-muted">
-              {t('admin.queuePosition', {
-                index: String(position + 1),
-                count: String(order.length),
-              })}
+        <div className="sa-convo-actions">
+          {queueOn && position >= 0 && (
+            <span className="sa-queue">
+              <span className="sa-muted">
+                {t('admin.queuePosition', {
+                  index: String(position + 1),
+                  count: String(order.length),
+                })}
+              </span>
+              <button
+                type="button"
+                className="sa-btn"
+                aria-keyshortcuts={keysOn ? 'S' : undefined}
+                onClick={advance}>
+                {t('admin.skip')}
+              </button>
             </span>
+          )}
+          {!c.mergedIntoId && (
             <button
               type="button"
               className="sa-btn"
-              aria-keyshortcuts={keysOn ? 'S' : undefined}
-              onClick={advance}>
-              {t('admin.skip')}
+              onClick={() => setMerging(true)}>
+              {t('admin.mergeInto')}
             </button>
-          </span>
-        )}
-        <button
-          ref={asideToggle}
-          type="button"
-          className="sa-btn sa-aside-toggle"
-          aria-expanded={!!aside}
-          aria-controls={asideId}
-          onClick={toggleAside}>
-          <Svg d={paths.panel} />
-          {t(aside ? 'admin.hideDetails' : 'admin.showDetails')}
-        </button>
+          )}
+          <button
+            ref={asideToggle}
+            type="button"
+            className="sa-btn sa-aside-toggle"
+            aria-expanded={!!aside}
+            aria-controls={asideId}
+            onClick={toggleAside}>
+            <Svg d={paths.panel} />
+            {t(aside ? 'admin.hideDetails' : 'admin.showDetails')}
+          </button>
+        </div>
       </div>
       <div className="sa-split">
         <div className="sa">
@@ -932,10 +930,30 @@ export function ConversationView({ id }: { id: string }) {
               </p>
             )}
             <div className="sa-composer-foot">
-              <CannedMenu
-                replies={replies}
-                onPick={text => insert(fill(text))}
-              />
+              <button
+                type="submit"
+                className="sa-btn sa-primary"
+                title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
+                disabled={busy !== null || !body.trim()}>
+                {busy === 'send' ? t('admin.sending') : t('admin.send')}
+              </button>
+              {!internal && c.status !== 'resolved' && (
+                <button
+                  type="button"
+                  className="sa-btn"
+                  title={isMac() ? '⌘ ⇧ ↵' : 'Ctrl ⇧ ↵'}
+                  aria-keyshortcuts={
+                    isMac() ? 'Meta+Shift+Enter' : 'Control+Shift+Enter'
+                  }
+                  disabled={busy !== null || !body.trim()}
+                  onClick={() => void send(true)}>
+                  {t('admin.sendResolve')}
+                </button>
+              )}
+              <span className="sa-kbd">
+                <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
+              </span>
+              <span className="sa-grow" />
               {me.ai && (
                 <button
                   type="button"
@@ -989,29 +1007,10 @@ export function ConversationView({ id }: { id: string }) {
                     {t(`admin.rewrite.${mode}`)}
                   </button>
                 ))}
-              <span className="sa-grow sa-kbd">
-                <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
-              </span>
-              {!internal && c.status !== 'resolved' && (
-                <button
-                  type="button"
-                  className="sa-btn"
-                  title={isMac() ? '⌘ ⇧ ↵' : 'Ctrl ⇧ ↵'}
-                  aria-keyshortcuts={
-                    isMac() ? 'Meta+Shift+Enter' : 'Control+Shift+Enter'
-                  }
-                  disabled={busy !== null || !body.trim()}
-                  onClick={() => void send(true)}>
-                  {t('admin.sendResolve')}
-                </button>
-              )}
-              <button
-                type="submit"
-                className="sa-btn sa-primary"
-                title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
-                disabled={busy !== null || !body.trim()}>
-                {busy === 'send' ? t('admin.sending') : t('admin.send')}
-              </button>
+              <CannedMenu
+                replies={replies}
+                onPick={text => insert(fill(text))}
+              />
             </div>
           </form>
         </div>
@@ -1279,7 +1278,8 @@ function TitleEditor({
       <button
         type="button"
         className="sa-title-edit"
-        title={t('admin.rename')}
+        title={value || fallback}
+        aria-description={t('admin.rename')}
         onClick={() => setDraft(value)}>
         {value || fallback}
       </button>
@@ -1321,56 +1321,83 @@ function TagsEditor({
 }) {
   const { api, t } = useAdmin();
   const listId = useId();
-  const [draft, setDraft] = useState(value.join(', '));
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
   const [failed, setFailed] = useState(false);
   const top = useResource(() => api<{ tags: string[] }>('agent/tags'), 'tags');
-  // A datalist completes the whole value, so each option carries what is already typed.
-  const head = draft.slice(0, draft.lastIndexOf(',') + 1);
-  const have = new Set(draft.split(',').map(s => s.trim().toLowerCase()));
-  const commit = async () => {
-    const next = [
-      ...new Set(
-        draft
-          .split(',')
-          .map(s => s.trim().toLowerCase())
-          .filter(Boolean)
-      ),
-    ];
-    setDraft(next.join(', '));
+  const save = async (next: string[]) => {
     setFailed(false);
-    if (next.join() === value.join()) return;
     try {
       await onSave(next);
     } catch {
-      setDraft(value.join(', '));
       setFailed(true);
       return;
     }
     await top.refresh();
   };
+  const add = async () => {
+    const names = draft
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+    setDraft('');
+    const next = [...new Set([...value, ...names])];
+    if (next.length > value.length) await save(next);
+  };
   return (
-    <>
-      <input
-        className="sa-input sa-tags-input"
-        aria-label={t('admin.tags')}
-        placeholder={t('admin.addTags')}
-        list={listId}
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => void commit()}
-        onKeyDown={e => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            setDraft(value.join(', '));
-          }
-        }}
-      />
+    <fieldset className="sa-tags-edit" aria-label={t('admin.tags')}>
+      {value.map(tag => (
+        <span key={tag} className="sa-pill sa-tag sa-tag-chip">
+          {tag}
+          <button
+            type="button"
+            aria-label={t('admin.removeTag', { tag })}
+            onClick={() => void save(value.filter(v => v !== tag))}>
+            <Svg d={paths.x} />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <input
+          className="sa-tag-new"
+          aria-label={t('admin.addTag')}
+          placeholder={t('admin.tag')}
+          // biome-ignore lint/a11y/noAutofocus: opened by the click that asked to add a tag.
+          autoFocus
+          list={listId}
+          maxLength={50}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={() => {
+            setAdding(false);
+            void add();
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void add();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setDraft('');
+              setAdding(false);
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="sa-tag-add"
+          onClick={() => setAdding(true)}>
+          <Svg d={paths.plus} />
+          {t('admin.addTag')}
+        </button>
+      )}
       <datalist id={listId}>
         {(top.data?.tags ?? [])
-          .filter(tag => !have.has(tag))
+          .filter(tag => !value.includes(tag))
           .map(tag => (
-            <option key={tag} value={`${head}${head ? ' ' : ''}${tag}`} />
+            <option key={tag} value={tag} />
           ))}
       </datalist>
       {failed && (
@@ -1378,7 +1405,7 @@ function TagsEditor({
           {t('admin.error')}
         </span>
       )}
-    </>
+    </fieldset>
   );
 }
 
