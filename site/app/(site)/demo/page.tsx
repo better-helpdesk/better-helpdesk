@@ -63,9 +63,9 @@ export default async function Demo() {
                 <div className="qs-body">
                   <h2>Write in</h2>
                   <p>
-                    Open the launcher at the bottom right and send a message.
-                    Press the broken button first and report a bug: the form
-                    offers the error it caught.
+                    Open the launcher at the bottom right and send a message. Or
+                    press the broken button: it throws an error, the widget
+                    opens, and its bug report offers the error it caught.
                   </p>
                   <div className="row-cta">
                     <BrokenButton />
