@@ -1,0 +1,72 @@
+---
+title: Add a support page
+description: Show a signed-in customer their conversations on a page of your app, with no launcher and nothing to close.
+---
+
+`HelpdeskConversations` is the widget's conversation list and threads, placed in the page itself. A signed-in customer sees their own conversations and the ones their company shares with them, as in the widget, and can open a new one from the same page. It uses the same routes as the widget, so the handler from the [quickstart](/docs/quickstart) is all it needs.
+
+## Render the page
+
+Put it on a page behind your app's login, so `identify` knows who is reading:
+
+```tsx title="app/support/page.tsx"
+import { HelpdeskConversations } from 'better-helpdesk/widget';
+
+export default function SupportPage() {
+  return (
+    <main>
+      <h1>Support</h1>
+      <HelpdeskConversations inbox="support" locale="en" />
+    </main>
+  );
+}
+```
+
+It takes the same props as `HelpdeskWidget` apart from `label`, which belongs to the launcher it does not have. `inbox` is where conversations opened from this page land. The [widget reference](/docs/widget/reference#react-props) lists the props, and [Identity and trust](/docs/identity/trust#organizations-companies-and-shared-conversations) explains which shared conversations a customer sees.
+
+## Size and style it
+
+It renders into its own shadow root, so your page's styles and its styles never meet. It reads the same `--helpdesk-*` custom properties as the widget, and two of them matter here: `--helpdesk-page-height` sets its height (640px by default) and `--helpdesk-panel-border` its border.
+
+```css title="app/globals.css"
+helpdesk-conversations {
+  --helpdesk-page-height: 720px;
+  --helpdesk-panel-border: none;
+}
+```
+
+[Theme the widget and the agent UI](/docs/customize/theming) covers the rest.
+
+## Hide the launcher on this page
+
+If your layout also renders `HelpdeskWidget`, the launcher floats over the support page as well. Leave it out there:
+
+```tsx title="app/support-widget.tsx"
+'use client';
+
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+import { usePathname } from 'next/navigation';
+
+export function SupportWidget() {
+  if (usePathname().startsWith('/support')) return null;
+  return <HelpdeskWidget inbox="support" locale="en" />;
+}
+```
+
+## Outside React
+
+`defineHelpdeskConversations()` registers `<helpdesk-conversations>`, with the same attributes as `<helpdesk-widget>`:
+
+```ts
+import { defineHelpdeskConversations } from 'better-helpdesk/widget';
+
+defineHelpdeskConversations();
+```
+
+```html
+<helpdesk-conversations inbox="support" locale="de"></helpdesk-conversations>
+```
+
+The standalone `widget.js` registers only `<helpdesk-widget>`, so this needs a bundler that can import the package.
+
+Of the widget's DOM events, `helpdesk:message-sent` and `helpdesk:booking-clicked` fire here too. `helpdesk:open` does not, since the page is never opened.

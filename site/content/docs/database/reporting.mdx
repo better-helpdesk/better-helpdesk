@@ -1,0 +1,105 @@
+---
+title: Report from your own database
+description: Measure response times, volume and ratings with SQL over the helpdesk's tables, and connect a dashboard tool with a read-only role.
+---
+
+Every conversation, message and rating lives in your own database, so a report is a SQL query. [How it works](/docs/how-it-works#your-database) explains why the tables are yours to read. The agent UI's **Overview** covers the everyday numbers: volume, median first response and resolution times, and ratings, over the last 7, 30 or 90 days. For anything else, query the tables.
+
+Each query below covers the last 30 days and leaves out conversations that were merged into another, so a merged duplicate is not counted twice.
+
+The queries are written for Postgres. On SQL Server the tables sit in the same `helpdesk` schema; on MySQL and SQLite they carry a prefix instead, so `helpdesk.conversation` is `helpdesk_conversation`. Medians, date arithmetic and `JOIN LATERAL` need each database's own SQL. On SQLite and SQL Server a boolean such as `internal` is stored as `1` or `0`, and on SQLite a time is ISO 8601 text in UTC.
+
+<Callout>
+  Until version 1.0, a minor release can rename or drop a column. The release notes say when one does, so check them before you upgrade a helpdesk that reports depend on.
+</Callout>
+
+## Median first response
+
+The time from a conversation's start to the first reply the customer could see. Internal notes do not count.
+
+```sql
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY first_reply - c.created_at)
+  AS median_first_response
+FROM helpdesk.conversation c
+JOIN LATERAL (
+  SELECT min(m.created_at) AS first_reply
+  FROM helpdesk.message m
+  WHERE m.conversation_id = c.id AND m.author_type = 'agent' AND NOT m.internal
+) r ON first_reply IS NOT NULL
+WHERE c.created_at > now() - interval '30 days' AND c.merged_into_id IS NULL;
+```
+
+## Median time to resolution
+
+```sql
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY resolved_at - created_at)
+  AS median_resolution
+FROM helpdesk.conversation
+WHERE status = 'resolved' AND resolved_at > now() - interval '30 days'
+  AND merged_into_id IS NULL;
+```
+
+These two count every hour on the clock. The Overview counts only open hours for an inbox with [business hours](/docs/inbox/setup#set-business-hours), so its numbers for such an inbox are usually lower than these.
+
+## Volume per inbox and type
+
+```sql
+SELECT inbox, type, count(*) AS conversations
+FROM helpdesk.conversation
+WHERE created_at > now() - interval '30 days' AND merged_into_id IS NULL
+GROUP BY inbox, type
+ORDER BY conversations DESC;
+```
+
+## Ratings
+
+A customer rates a resolved conversation as `good` or `bad`, from the widget or [from the reply email](/docs/email/send#let-customers-rate-from-the-email):
+
+```sql
+SELECT rating, count(*) AS conversations
+FROM helpdesk.conversation
+WHERE rated_at > now() - interval '30 days' AND merged_into_id IS NULL
+GROUP BY rating;
+```
+
+A comment the customer added is in `rating_comment`.
+
+## Most-used tags
+
+```sql
+SELECT t.tag, count(*) AS conversations
+FROM helpdesk.conversation c
+JOIN helpdesk.conversation_tag t ON t.conversation_id = c.id
+WHERE c.created_at > now() - interval '30 days' AND c.merged_into_id IS NULL
+GROUP BY t.tag
+ORDER BY conversations DESC
+LIMIT 10;
+```
+
+## Resolved per agent
+
+```sql
+SELECT coalesce(a.name, a.email, 'Unassigned') AS agent, count(*) AS resolved
+FROM helpdesk.conversation c
+LEFT JOIN helpdesk.agent a ON a.id = c.assignee_id
+WHERE c.status = 'resolved' AND c.resolved_at > now() - interval '30 days'
+  AND c.merged_into_id IS NULL
+GROUP BY 1
+ORDER BY resolved DESC;
+```
+
+Every table and column is described in [Database](/docs/database/tables). With [`retentionDays`](/docs/operations/jobs#delete-resolved-conversations-after-a-while) set, deleted conversations leave the reports too, so keep any history you need in a table of your own.
+
+## Connect a dashboard
+
+For Metabase, a PostHog data warehouse source or any other tool that reads your database, give it a role of its own that reads the helpdesk's tables. On Postgres, run this as the role that runs your migrations. The `ALTER DEFAULT PRIVILEGES` line grants every table a later migration adds as well, so when a release adds a table that holds secrets or personal data, add it to the `REVOKE` line:
+
+```sql
+CREATE ROLE helpdesk_reports LOGIN PASSWORD 'change-me';
+GRANT USAGE ON SCHEMA helpdesk TO helpdesk_reports;
+GRANT SELECT ON ALL TABLES IN SCHEMA helpdesk TO helpdesk_reports;
+ALTER DEFAULT PRIVILEGES IN SCHEMA helpdesk GRANT SELECT ON TABLES TO helpdesk_reports;
+REVOKE SELECT ON helpdesk.setting, helpdesk.identity, helpdesk.rate_limit FROM helpdesk_reports;
+```
+
+The last line keeps three tables out of the dashboard that no report needs: `setting` holds the key that signs rating links, `identity` holds visitor token hashes and your users' ids, and `rate_limit` holds client IP addresses. On another database, grant read access in its own way and keep the same three tables out.

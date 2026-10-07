@@ -1,13 +1,21 @@
 {
   "title": "Docs",
   "pages": [
+    "---Get started---",
     "index",
     "quickstart",
-    "---Guides---",
-    "...guides",
-    "---Concepts---",
-    "...concepts",
-    "---Reference---",
-    "...reference"
+    "installation",
+    "how-it-works",
+    "vocabulary",
+    "database",
+    "identity",
+    "widget",
+    "inbox",
+    "email",
+    "ai",
+    "app",
+    "customize",
+    "operations",
+    "reference"
   ]
 }

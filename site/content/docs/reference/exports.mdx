@@ -3,7 +3,7 @@ title: Package exports
 description: Each entry point of the better-helpdesk package and what it exports.
 ---
 
-The `better-helpdesk` package has eight entry points. Related guide: [Call the helpdesk from your own code](/docs/guides/own-code).
+The `better-helpdesk` package has eight entry points. Related guide: [Call the helpdesk from your own code](/docs/app/own-code).
 
 | Entry point | Runs on | Exports |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | `mssqlAdapter(config)` | function | The `DatabaseAdapter` over SQL Server 2022 or newer. `config` is what Kysely's `MssqlDialect` takes: the host's `tedious` and `tarn` modules and its connection. |
 | `sqliteAdapter({ database })` | function | The `DatabaseAdapter` over a SQLite database the host opened, from `node:sqlite` or `better-sqlite3`. It turns foreign keys on and refuses to start if they stay off. |
 | `kyselyAdapter({ dialect, family })` | function | A built-in adapter over any Kysely dialect of a family Better Helpdesk knows. `postgresAdapter` is this with Kysely's `PostgresDialect`. |
-| `migrate(adapter)` | function | Applies the migrations through a built-in adapter, as [`better-helpdesk-migrate`](/docs/reference/cli#better-helpdesk-migrate) does; returns the names of the ones it applied. |
+| `migrate(adapter)` | function | Applies the migrations through a built-in adapter, as [`better-helpdesk-migrate`](/docs/operations/cli#better-helpdesk-migrate) does; returns the names of the ones it applied. |
 | `createAdapter(input)` | function | Turns an `AdapterInput`, the contract a custom adapter implements, into a `DatabaseAdapter`: it sets ids and defaults and converts values to and from what the input supports. |
 | `createStore(adapter)` | function | The `HelpdeskStore` over an adapter, for code that runs without `buildHelpdesk`. |
 | `helpdeskModel` | object | Every table and field, with its kind, whether it may be null, its default and its references. |
@@ -38,10 +38,10 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | `parseReference(prefix, value)` | function | The number in a reference such as `ACME-1042`, matched case-insensitively, or `undefined`. |
 | `HelpdeskError` | class | An error with an HTTP `status` and, for a bulk change, the failed `ids`. The handler answers it with that status. |
 | `BuiltHelpdesk` | type | What `buildHelpdesk` returns. |
-| `Conversation`, `Message` | type | Rows of [`conversation`](/docs/reference/database#conversation) and [`message`](/docs/reference/database#message). |
+| `Conversation`, `Message` | type | Rows of [`conversation`](/docs/database/tables#conversation) and [`message`](/docs/database/tables#message). |
 | `HelpdeskStore` | type | The query layer, `buildHelpdesk(...).store`. |
 | `DatabaseAdapter`, `AdapterInput`, `Capabilities`, `Where`, `OrderBy`, `FindQuery`, `Notification` | type | The adapter contract. |
-| `HelpdeskEvent` | type | See [Events](/docs/reference/events). |
+| `HelpdeskEvent` | type | See [Events](/docs/app/events). |
 | `IdentityClaims` | type | The claims of an identity token. |
 
 Every type in the configuration module is exported as well: `HelpdeskConfig`, `InboxConfig`, `BusinessHours`, `Identity`, `HelpdeskUser`, `HelpdeskOrg`, `HostLink`, `LinkContact`, `LinkCompany`, `HelpdeskEmail`, `StorageAdapter`, `AiAdapter`, `HelpResult`, `InboundMessage`, `CustomFieldDef`, `Locale` and `ResolvedConfig`. The default lists, such as the statuses and the default types, are not exported.
@@ -97,7 +97,7 @@ Every type in the configuration module is exported as well: `HelpdeskConfig`, `I
 
 ### HelpdeskStore
 
-`helpdesk.store` holds the queries the routes run, over the `helpdesk` schema. These are the ones the [guides](/docs/guides/own-code) use. Rows use the column names of [Database](/docs/reference/database) in camel case.
+`helpdesk.store` holds the queries the routes run, over the `helpdesk` schema. These are the ones the [guides](/docs/app/own-code) use. Rows use the column names of [Database](/docs/database/tables) in camel case.
 
 <TypeTable
   type={{
@@ -107,7 +107,7 @@ Every type in the configuration module is exported as well: `HelpdeskConfig`, `I
     },
     findContactByIdentity: {
       type: "(channel: 'host' | 'email' | 'visitor' | 'github', externalId: string, options: { verifiedOnly: boolean }) => Promise<Contact | null>",
-      description: <>The contact that holds an <a href="/docs/reference/database#identity">identity</a>, a verified one first.</>,
+      description: <>The contact that holds an <a href="/docs/database/tables#identity">identity</a>, a verified one first.</>,
     },
     findContactByEmail: {
       type: '(email: string) => Promise<Contact | null>',
@@ -178,11 +178,11 @@ What a host needs to pick or write a database adapter, without the rest of the s
 
 ## better-helpdesk/widget
 
-`HelpdeskWidget`, `HelpdeskConversations`, `defineHelpdeskWidget` and `defineHelpdeskConversations`. See [Widget](/docs/reference/widget).
+`HelpdeskWidget`, `HelpdeskConversations`, `defineHelpdeskWidget` and `defineHelpdeskConversations`. See [Widget](/docs/widget/reference).
 
 ## better-helpdesk/admin
 
-`HelpdeskAdmin`, `HELPDESK_SECTIONS` and `HELPDESK_CHANGED`. See [Agent UI](/docs/reference/admin).
+`HelpdeskAdmin`, `HELPDESK_SECTIONS` and `HELPDESK_CHANGED`. See [Agent UI](/docs/inbox/agent-ui).
 
 ## better-helpdesk/rich
 
@@ -213,6 +213,6 @@ export default withHelpdesk({ trailingSlash: true });
 
 ## better-helpdesk/widget.js
 
-The minified standalone widget, the file `dist/widget.js`, for a page without React. See [Script tag](/docs/reference/widget#script-tag).
+The minified standalone widget, the file `dist/widget.js`, for a page without React. See [Script tag](/docs/widget/reference#script-tag).
 
 `better-helpdesk/package.json` is exported too.

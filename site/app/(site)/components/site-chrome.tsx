@@ -41,9 +41,7 @@ export function SiteHeader({
               <SiGithub aria-hidden="true" />
               <span>Source</span>
             </a>
-            <a
-              className="btn btn-p btn-sm nav-cta"
-              href="/docs/guides/install/">
+            <a className="btn btn-p btn-sm nav-cta" href="/docs/installation/">
               Get started
               <ButtonIcon />
             </a>

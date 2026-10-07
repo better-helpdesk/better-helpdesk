@@ -114,7 +114,9 @@ code already does. Concretely:
 - `site/content/docs/`: the documentation at `/docs`, MDX pages rendered
   with Fumadocs. Tailwind is allowed in `site/` (the docs use it) and never
   in the package. A change to an option, route, event, prop or column
-  updates the matching page under `reference/` in the same PR.
+  updates its reference page in the same PR: `reference/` for the
+  configuration, adapters, routes and exports, the `---Reference---` pages
+  of the topic's folder for the rest.
 - `scripts/build.mjs`: the esbuild and `tsc` build that `pnpm pack` runs.
   The published entry points are `package.json`'s `publishConfig.exports`.
 

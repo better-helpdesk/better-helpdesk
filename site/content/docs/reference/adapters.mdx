@@ -3,7 +3,7 @@ title: Adapters
 description: The interfaces the host implements for storage, email, AI, help search and DNS, with every method signature.
 ---
 
-Adapters are the interfaces the host implements for what is optional: storage, email, AI, help search and DNS. Each is an optional field of the [configuration](/docs/reference/configuration); the package calls it. `StorageAdapter`, `AiAdapter`, `HelpResult` and `HelpdeskEmail` are exported as types from `better-helpdesk`. Worked implementations are in [`examples/adapters`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/adapters). Related guides: [Store attachments](/docs/guides/attachments), [Send email](/docs/guides/email), [Add AI suggestions and drafts](/docs/guides/ai), [Search your own docs from the widget](/docs/guides/help-search).
+Adapters are the interfaces the host implements for what is optional: storage, email, AI, help search and DNS. Each is an optional field of the [configuration](/docs/reference/configuration); the package calls it. `StorageAdapter`, `AiAdapter`, `HelpResult` and `HelpdeskEmail` are exported as types from `better-helpdesk`. Worked implementations are in [`examples/adapters`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/adapters). Related guides: [Store attachments](/docs/inbox/attachments), [Send email](/docs/email/send), [Add AI suggestions and drafts](/docs/ai/suggestions), [Search your own docs from the widget](/docs/ai/help-search).
 
 | Field | Type | Unset |
 | --- | --- | --- |
@@ -71,7 +71,7 @@ Example: [`storage-s3.ts`](https://github.com/better-helpdesk/better-helpdesk/bl
 email: { send(message: HelpdeskEmail): Promise<void> }
 ```
 
-`send` receives one message at a time and renders and delivers it. It runs inside a job, so a throw makes the job retry. The five message kinds are on [Email messages](/docs/reference/emails).
+`send` receives one message at a time and renders and delivers it. It runs inside a job, so a throw makes the job retry. The five message kinds are on [Email messages](/docs/email/messages).
 
 Example: [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts).
 
@@ -106,7 +106,7 @@ type AiAdapter = {
 
 The triage result is stored as the conversation's `ai_suggestion`, which an agent accepts or dismisses. For a `lead`, triage suggests no type or priority. Triage jobs are capped at 100 an hour, counted apart for conversations from the host's signed-in users and from everyone else.
 
-Example: [Add AI suggestions and drafts](/docs/guides/ai).
+Example: [Add AI suggestions and drafts](/docs/ai/suggestions).
 
 ## Help search
 

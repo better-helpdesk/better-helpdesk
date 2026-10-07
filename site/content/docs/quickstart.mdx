@@ -5,7 +5,7 @@ description: Build a Next.js app with Better Helpdesk inside it, write in as a v
 
 In this tutorial you build a small Next.js app with Better Helpdesk mounted in it. By the end you will have sent a message from the widget as a visitor, answered it from the agent UI as an agent, and read the answer back in the widget.
 
-You need Node.js 22.19 or newer and Docker, which runs the Postgres database. Better Helpdesk also runs on MySQL, SQL Server and SQLite; this tutorial uses Postgres, and [Choose and connect a database](/docs/guides/databases) shows the others.
+You need Node.js 22.19 or newer and Docker, which runs the Postgres database. Better Helpdesk also runs on MySQL, SQL Server and SQLite; this tutorial uses Postgres, and [Choose and connect a database](/docs/database/connect) shows the others.
 
 ## 1. Create the app
 
@@ -66,7 +66,7 @@ export default withHelpdesk({
 });
 ```
 
-`withHelpdesk` lets Next.js compile the package. `trailingSlash: true` matters because the widget and the agent UI request every path with a trailing slash. It gives every other URL of the app a trailing slash too, which is harmless in a new app; [Install in an existing app](/docs/guides/install) shows the alternative for an app whose URLs must stay as they are.
+`withHelpdesk` lets Next.js compile the package. `trailingSlash: true` matters because the widget and the agent UI request every path with a trailing slash. It gives every other URL of the app a trailing slash too, which is harmless in a new app; [Install in an existing app](/docs/installation) shows the alternative for an app whose URLs must stay as they are.
 
 ## 6. Build the helpdesk
 
@@ -159,7 +159,7 @@ export default function Page() {
 }
 ```
 
-Anyone can load this page, but its data comes from the handler, which answers only an agent. A real app also puts the page behind its own agent check; [Install in an existing app](/docs/guides/install) shows one.
+Anyone can load this page, but its data comes from the handler, which answers only an agent. A real app also puts the page behind its own agent check; [Install in an existing app](/docs/installation) shows one.
 
 ## 10. Add the widget
 
@@ -227,8 +227,8 @@ The output shows one row: number 1000, in the `support` inbox, with the status `
 
 You have the full loop of Better Helpdesk: a widget that takes a message, a handler that stores it in your own database, and an agent UI where your team answers it. A real installation adds three things to this:
 
-- An `identify` that reads your app's session instead of a cookie. [Identity and trust](/docs/concepts/identity) explains what it must return and why.
-- An email adapter, so customers hear about replies when they are not looking at the widget. See [Send email](/docs/guides/email).
-- A schedule for background work such as reminders and outgoing mail. See [Run jobs and retention](/docs/guides/jobs).
+- An `identify` that reads your app's session instead of a cookie. [Identity and trust](/docs/identity/trust) explains what it must return and why.
+- An email adapter, so customers hear about replies when they are not looking at the widget. See [Send email](/docs/email/send).
+- A schedule for background work such as reminders and outgoing mail. See [Run jobs and retention](/docs/operations/jobs).
 
-To do that in your own app, follow [Install in an existing app](/docs/guides/install), then [Connect your sign-in](/docs/guides/sign-in), and [Go to production](/docs/guides/production) before customers see it. [How it works](/docs/concepts/how-it-works) describes what each piece you added does, and [Configuration](/docs/reference/configuration) lists every option `buildHelpdesk` accepts.
+To do that in your own app, follow [Install in an existing app](/docs/installation), then [Connect your sign-in](/docs/identity/sign-in), and [Go to production](/docs/operations/production) before customers see it. [How it works](/docs/how-it-works) describes what each piece you added does, and [Configuration](/docs/reference/configuration) lists every option `buildHelpdesk` accepts.

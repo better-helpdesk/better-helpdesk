@@ -3,7 +3,7 @@ title: Configuration
 description: Every field of HelpdeskConfig, the object buildHelpdesk takes, with its type and default.
 ---
 
-`HelpdeskConfig` is the one object that `buildHelpdesk(config)` from `better-helpdesk` takes. The fields below are grouped by what they serve; the order inside the type is different. Inboxes have [a page of their own](/docs/reference/inboxes), and the adapter interfaces are on [Adapters](/docs/reference/adapters).
+`HelpdeskConfig` is the one object that `buildHelpdesk(config)` from `better-helpdesk` takes. The fields below are grouped by what they serve; the order inside the type is different. Inboxes have [a page of their own](/docs/inbox/inboxes), and the adapter interfaces are on [Adapters](/docs/reference/adapters).
 
 ```ts title="lib/helpdesk.ts"
 import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
@@ -25,12 +25,12 @@ export const helpdesk = buildHelpdesk({
     db: {
       type: 'DatabaseAdapter',
       required: true,
-      description: <>Where the helpdesk keeps its data. <code>postgresAdapter({'{ pool }'})</code> builds it over a <code>pg.Pool</code>; <code>mysqlAdapter</code>, <code>mssqlAdapter</code> and <code>sqliteAdapter</code> over the other databases, as <a href="/docs/guides/databases">Choose and connect a database</a> shows, and <code>createAdapter</code> over <a href="/docs/guides/own-adapter">an adapter of your own</a>.</>,
+      description: <>Where the helpdesk keeps its data. <code>postgresAdapter({'{ pool }'})</code> builds it over a <code>pg.Pool</code>; <code>mysqlAdapter</code>, <code>mssqlAdapter</code> and <code>sqliteAdapter</code> over the other databases, as <a href="/docs/database/connect">Choose and connect a database</a> shows, and <code>createAdapter</code> over <a href="/docs/database/own-adapter">an adapter of your own</a>.</>,
     },
     referencePrefix: {
       type: 'string',
       required: true,
-      description: <>Prefix of the human-readable reference, <code>PREFIX-number</code>. <code>ACME</code> gives <code>ACME-1042</code>. Numbers come from the <a href="/docs/reference/database#counter"><code>counter</code></a> table and start at 1000.</>,
+      description: <>Prefix of the human-readable reference, <code>PREFIX-number</code>. <code>ACME</code> gives <code>ACME-1042</code>. Numbers come from the <a href="/docs/database/tables#counter"><code>counter</code></a> table and start at 1000.</>,
     },
     adminUrl: {
       type: 'string',
@@ -40,7 +40,7 @@ export const helpdesk = buildHelpdesk({
     inboxes: {
       type: 'Record<string, InboxConfig>',
       required: true,
-      description: <>The inboxes by key. See <a href="/docs/reference/inboxes">Inboxes</a>.</>,
+      description: <>The inboxes by key. See <a href="/docs/inbox/inboxes">Inboxes</a>.</>,
     },
     identify: {
       type: '(request: Request) => Promise<Identity | null>',
@@ -80,7 +80,7 @@ export const helpdesk = buildHelpdesk({
     },
     agentTitles: {
       type: 'Record<string, Partial<Record<Locale, string>>>',
-      description: <>Role shown under an agent's name where they sign an email, keyed by the agent's email address. Sent as <code>responderTitle</code> in <a href="/docs/reference/emails#customer-receipt"><code>customer-receipt</code></a>.</>,
+      description: <>Role shown under an agent's name where they sign an email, keyed by the agent's email address. Sent as <code>responderTitle</code> in <a href="/docs/email/messages#customer-receipt"><code>customer-receipt</code></a>.</>,
     },
   }}
 />
@@ -100,7 +100,7 @@ export const helpdesk = buildHelpdesk({
     },
     onEvent: {
       type: '(event: HelpdeskEvent) => Promise<void>',
-      description: <>Told about new conversations, new messages and conversation changes once they are stored. Awaited inside the request; what it throws is logged and never returned. See <a href="/docs/reference/events">Events</a>.</>,
+      description: <>Told about new conversations, new messages and conversation changes once they are stored. Awaited inside the request; what it throws is logged and never returned. See <a href="/docs/app/events">Events</a>.</>,
     },
     jobsSecret: {
       type: 'string',
@@ -115,7 +115,7 @@ export const helpdesk = buildHelpdesk({
   type={{
     email: {
       type: '{ send(message: HelpdeskEmail): Promise<void> }',
-      description: <>Outbound mail. Unset, no email is sent. See <a href="/docs/reference/emails">Email messages</a>.</>,
+      description: <>Outbound mail. Unset, no email is sent. See <a href="/docs/email/messages">Email messages</a>.</>,
     },
     replyToAddress: {
       type: '(reference: string) => string',
@@ -219,7 +219,7 @@ Fixed limits that are not configurable are listed under [HTTP routes](/docs/refe
 `buildHelpdesk` throws when:
 
 - `identityTokenSecret` is set and shorter than 32 bytes.
-- An inbox's `hours` fails validation; the message names the inbox. The rules are on [Inboxes](/docs/reference/inboxes#businesshours).
+- An inbox's `hours` fails validation; the message names the inbox. The rules are on [Inboxes](/docs/inbox/inboxes#businesshours).
 
 ## Identity
 

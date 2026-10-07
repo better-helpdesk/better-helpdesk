@@ -1,0 +1,12 @@
+{
+  "title": "Inbox and team",
+  "pages": [
+    "setup",
+    "team",
+    "blocking",
+    "attachments",
+    "---Reference---",
+    "inboxes",
+    "agent-ui"
+  ]
+}

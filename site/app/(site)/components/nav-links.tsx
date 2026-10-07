@@ -78,7 +78,7 @@ export function NavMenu({ base = '', repo }: { base?: string; repo: string }) {
           <a href={repo} onClick={close}>
             Source
           </a>
-          <a className="btn btn-p" href="/docs/guides/install/" onClick={close}>
+          <a className="btn btn-p" href="/docs/installation/" onClick={close}>
             Get started
           </a>
         </nav>

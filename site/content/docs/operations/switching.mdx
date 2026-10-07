@@ -1,0 +1,73 @@
+---
+title: Switch from another helpdesk
+description: Move a support team from Intercom, Zendesk, a shared Gmail inbox or Chatwoot, with contacts and canned replies imported and two tools side by side for a while.
+---
+
+This guide assumes the [quickstart](/docs/quickstart) is done and inbound email works as in [Receive email](/docs/email/receive). Better Helpdesk does not import conversation history. What moves over is contacts, companies and canned replies; the history stays readable in the old tool for as long as you keep it.
+
+## Run the two tools side by side
+
+Pick a cutover date. From that date every new conversation starts in Better Helpdesk, and the old tool stays open read-only for 60 to 90 days, so an agent can look up what a customer said last month. Once support@ points here, a reply to an old thread arrives as a new conversation; the earlier messages are in the old tool.
+
+## Import contacts, companies and canned replies
+
+Export what you have as CSV and run the import CLI against the same database as the migrations:
+
+```sh
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import contacts people.csv
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import canned replies.csv
+```
+
+It prints how many rows it created, updated and left alone, and a line for each value it had to leave out. The file needs a header row, and column names are read without regard to case. A quote that is never closed stops the import with its line number, before anything is written.
+
+A contacts file needs an `email` column and may add `name`, `tags`, `lead_stage`, and the company as `domain` or `company`. A canned replies file needs `title` and `body`, and may add `locale`. [CLI](/docs/operations/cli#contacts) lists every column and its limits.
+
+A missing company is created; an existing one is never renamed, and only gains a domain it did not have. The lead stages are the defaults, `lead`, `qualified`, `customer` and `churned`, unless you set `leadStages` in your config; then pass the same list:
+
+```sh
+npx better-helpdesk-import contacts people.csv --lead-stages Lead,Trial,Customer
+```
+
+When an agent inserts a canned reply, `{firstName}` and `{reference}` in it are filled in. Rewrite the old tool's placeholders to those two.
+
+Running the import again is safe, also after agents have started working. A contact whose email is already known only gains what it lacks: empty fields are filled and tags are added, and nothing an agent changed is undone. A canned reply whose title and locale exist is left alone. So fix the export and run the whole file again.
+
+An imported contact is not linked to anyone's login. When the same person later writes in or signs in, they may arrive as a second contact; open the older one and use **Merge another contact into this one**.
+
+## Move each tool over
+
+<Tabs items={['Intercom', 'Zendesk', 'Shared Gmail inbox', 'Chatwoot']}>
+<Tab value="Intercom">
+
+1. Export contacts from Intercom as CSV and import them as above.
+2. Copy the macros you still use into a CSV with `title` and `body`, replace `{{first_name}}` with `{firstName}`, and import it as canned replies.
+3. Re-point support@ from Intercom's forwarding address to your relay, as in [Receive email](/docs/email/receive).
+4. On the cutover date, replace the Messenger script with [the widget](/docs/widget/add).
+5. Where your backend signs `user_hash` for identity verification, sign an identity token with the same user id as `sub` instead, as in [Sign customers in from another origin](/docs/identity/other-origin). When the widget runs inside your own app, `identify` reads your session and no token is needed.
+
+</Tab>
+<Tab value="Zendesk">
+
+1. Export users and organizations through Zendesk's data export or its Users and Organizations APIs, and import them as contacts and companies.
+2. Fetch macros through the Macros API and import their comment text as canned replies. Replace `{{ticket.requester.first_name}}` with `{firstName}` and `{{ticket.id}}` with `{reference}`.
+3. Re-point support@ from Zendesk's support address to your relay, as in [Receive email](/docs/email/receive).
+
+Customers and agents who are used to quoting a ticket number keep doing so: every conversation has a reference such as `ACME-1042`, built from `referencePrefix`. The agent UI shows it, and every email message your adapter receives carries it.
+
+</Tab>
+<Tab value="Shared Gmail inbox">
+
+1. There is nothing to import; the mail stays in Gmail.
+2. For the side-by-side weeks, add a Gmail routing rule that delivers support@ to Gmail as before and also to your relay, as in the [Google Workspace recipe](https://github.com/better-helpdesk/better-helpdesk/blob/main/relays/README.md#google-workspace). Both get every message.
+3. From the cutover date the team answers in Better Helpdesk only and stops replying from Gmail, so no customer gets two answers. Once the weeks are over, cut over as the recipe describes.
+
+</Tab>
+<Tab value="Chatwoot">
+
+1. Chatwoot runs on Postgres too, so contacts can be read straight from its tables into a CSV and imported as above.
+2. Re-point support@ from Chatwoot's email inbox to your relay, as in [Receive email](/docs/email/receive).
+3. On the cutover date, replace the Chatwoot widget script with [the widget](/docs/widget/add).
+4. Where your backend computes `identifier_hash`, sign an identity token with the same user id as `sub` instead, as in [Sign customers in from another origin](/docs/identity/other-origin).
+
+</Tab>
+</Tabs>

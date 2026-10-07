@@ -138,8 +138,8 @@ AI; AI only ever produces a suggestion or a draft that a person reviews.
 - Node.js 22.19 or newer
 - A database: PostgreSQL 14, MySQL 8.4 or SQL Server 2022 or newer, or SQLite through Node's own `node:sqlite`
 - React 19, and the driver of your database (`pg` for Postgres), as peer dependencies.
-  [Choose and connect a database](https://better-helpdesk.com/docs/guides/databases)
-  covers each one, and [Write your own database adapter](https://better-helpdesk.com/docs/guides/own-adapter)
+  [Choose and connect a database](https://better-helpdesk.com/docs/database/connect)
+  covers each one, and [Write your own database adapter](https://better-helpdesk.com/docs/database/own-adapter)
   any other.
 - Next.js 15 or newer for the examples below. The handler is a plain
   function from `Request` to `Response`, so any server with that shape can
@@ -186,7 +186,7 @@ export default withHelpdesk({
 ```
 
 `trailingSlash` also adds a slash to every other URL of your app. The
-[install guide](https://better-helpdesk.com/docs/guides/install) shows how to
+[install guide](https://better-helpdesk.com/docs/installation) shows how to
 keep your own URLs as they are.
 
 ### 4. Build the helpdesk and mount the handler
@@ -269,7 +269,7 @@ export function Layout({ children }) {
 
 Send a message from the widget, open `/helpdesk` as an agent and answer it.
 That is the whole loop, and the
-[docs](https://better-helpdesk.com/docs/guides/production) take it from
+[docs](https://better-helpdesk.com/docs/operations/production) take it from
 there: sign-in, production, email, jobs, attachments, AI and theming.
 [`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
 has it wired up end to end.
@@ -278,8 +278,8 @@ has it wired up end to end.
 
 [better-helpdesk.com/docs](https://better-helpdesk.com/docs):
 [Quickstart](https://better-helpdesk.com/docs/quickstart) ·
-[Guides](https://better-helpdesk.com/docs/guides/install) ·
-[Concepts](https://better-helpdesk.com/docs/concepts/how-it-works) ·
+[Installation](https://better-helpdesk.com/docs/installation) ·
+[How it works](https://better-helpdesk.com/docs/how-it-works) ·
 [Reference](https://better-helpdesk.com/docs/reference/configuration).
 The pages are MDX in [`site/content/docs`](site/content/docs).
 

@@ -1,0 +1,175 @@
+---
+title: Sign customers in from another origin
+description: Let a widget on another origin know who your signed-in customer is, with a short-lived token your backend signs.
+---
+
+On its own origin, the widget's requests carry your session cookie and `identify` sees who is signed in. On another origin, including another subdomain of your domain, the browser sends no cookies with them, and every customer arrives as an anonymous visitor. An identity token closes that gap: your backend signs who the customer is, and the widget sends the token along with each request.
+
+This guide assumes the widget already runs on the other origin, as in [Add the widget](/docs/widget/add#on-another-origin).
+
+## Create the secret
+
+The helpdesk and the backend that signs tokens share one secret. Every signed-in customer holds a token signed with it, so it must resist offline guessing, and `buildHelpdesk` refuses one shorter than 32 bytes. Generate one:
+
+```sh
+openssl rand -base64 32
+```
+
+Store it as `HELPDESK_IDENTITY_SECRET` in both places, and hand it to the helpdesk as [`identityTokenSecret`](/docs/reference/configuration#routing-and-identity):
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  identityTokenSecret: process.env.HELPDESK_IDENTITY_SECRET,
+});
+```
+
+## Sign a token for the customer
+
+Wherever your backend renders the page that carries the widget, sign a token for the signed-in user:
+
+```ts title="lib/identity-token.ts"
+import { signIdentityToken } from 'better-helpdesk';
+
+export function identityTokenFor(user: {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  name: string;
+}) {
+  return signIdentityToken(
+    {
+      sub: user.id,
+      email: user.email,
+      email_verified: user.emailVerified,
+      name: user.name,
+    },
+    process.env.HELPDESK_IDENTITY_SECRET!,
+    { expiresInSeconds: 3600 }
+  );
+}
+```
+
+`sub` is the user's id in your app, the same id `identify` returns as `user.id`, so the customer keeps one contact whether they write in from your app or from the other origin. Set `email_verified` only when your app has proven the address. Add `orgs`, as `[{ id, name }]`, to let the customer pick their organization and share conversations with it; like `orgs` from `identify`, it must list only organizations the user is an active member of. `locale` is also accepted. Without `expiresInSeconds`, a token lasts an hour. [`signIdentityToken`](/docs/reference/exports#signidentitytoken) lists every claim and its limits.
+
+### Without the package
+
+A backend that does not have `better-helpdesk` installed can sign the same token with any JWT library. The token is HS256, and `sub` and `exp` are required. With `jose`:
+
+```ts
+import { SignJWT } from 'jose';
+
+const token = await new SignJWT({
+  email: user.email,
+  email_verified: user.emailVerified,
+  name: user.name,
+})
+  .setProtectedHeader({ alg: 'HS256' })
+  .setSubject(user.id)
+  .setExpirationTime('1h')
+  .sign(new TextEncoder().encode(process.env.HELPDESK_IDENTITY_SECRET!));
+```
+
+## Hand the token to the widget
+
+In React, pass it as `identityToken`. A server component can sign it while it renders:
+
+```tsx title="app/layout.tsx"
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+import type { ReactNode } from 'react';
+
+import { identityTokenFor } from '@/lib/identity-token';
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const user = await getCurrentUser(); // however your app does it
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <HelpdeskWidget
+          api="https://app.example.com/api/helpdesk"
+          inbox="support"
+          identityToken={user ? identityTokenFor(user) : undefined}
+        />
+      </body>
+    </html>
+  );
+}
+```
+
+With the script tag, add `data-identity-token="…"`. On the element itself, the attribute is `identity-token`.
+
+<Callout type="warn">
+  The token belongs to one customer, so a page that carries it must be rendered for each request and never cached. Reading the session makes Next.js render this layout, and every page under it, per request; make sure no CDN in front of the app caches those pages either, or one customer's token reaches the next visitor. A page that must stay cached leaves the token out of its HTML and fetches one, as in the next section.
+</Callout>
+
+## Refresh it before it expires
+
+The helpdesk refuses an expired or forged token with 401, and every request the widget makes with it fails. The widget reads the token afresh for each request, so replacing it is enough. Give the page a route on the signing site that returns a fresh token for whoever is signed in:
+
+```ts title="app/api/helpdesk-token/route.ts"
+import { identityTokenFor } from '@/lib/identity-token';
+
+export async function GET() {
+  const user = await getCurrentUser(); // however your app does it
+  if (!user) return new Response(null, { status: 401 });
+  return Response.json(
+    { token: identityTokenFor(user) },
+    { headers: { 'cache-control': 'private, no-store' } }
+  );
+}
+```
+
+The route is on the page's own origin, so the browser sends your session cookie with it. In React, fetch from it in a client component and pass the result as `identityToken`. This one refreshes every ten minutes and whenever the tab comes back into view, which covers a laptop that slept past the hour:
+
+```tsx title="app/support-widget.tsx"
+'use client';
+
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+import { useEffect, useState } from 'react';
+
+export function SupportWidget({ initialToken }: { initialToken?: string }) {
+  const [token, setToken] = useState(initialToken);
+
+  useEffect(() => {
+    const refresh = async () => {
+      const response = await fetch('/api/helpdesk-token', { cache: 'no-store' });
+      setToken(response.ok ? (await response.json()).token : undefined);
+    };
+    if (!initialToken) refresh();
+    const onVisible = () => document.visibilityState === 'visible' && refresh();
+    const timer = setInterval(refresh, 10 * 60 * 1000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [initialToken]);
+
+  return (
+    <HelpdeskWidget
+      api="https://app.example.com/api/helpdesk"
+      inbox="support"
+      identityToken={token}
+    />
+  );
+}
+```
+
+Render `<SupportWidget initialToken={…} />` where the layout above rendered `HelpdeskWidget`, or leave `initialToken` out on a cached page, and the component fetches the first token itself. Once the customer signs out, the next refresh gets 401 and the widget stops sending a token. A token already handed out stays valid until it expires, an hour by default, so keep `expiresInSeconds` short if a shared computer matters to you.
+
+With the script tag, fetch from the same route and set the attribute on the element:
+
+```ts
+fetch('/api/helpdesk-token', { cache: 'no-store' })
+  .then(response => (response.ok ? response.json() : { token: null }))
+  .then(({ token }) => {
+    const widget = document.querySelector('helpdesk-widget');
+    if (token) widget?.setAttribute('identity-token', token);
+    else widget?.removeAttribute('identity-token');
+  });
+```
+
+## What the token does not do
+
+The helpdesk looks at the token only when `identify` returns `null`, so on your own origin the session still decides. A token never grants the agent UI, whatever it contains: agents sign in through `identify` alone. [Identity and trust](/docs/identity/trust) explains how customers, visitors and agents are told apart.
