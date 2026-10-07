@@ -77,7 +77,7 @@ database, its deploy and its design tokens.
 - **English and German**, with every agent UI string overridable. Theming through
   `--helpdesk-*` CSS custom properties.
 - **TypeScript, ESM, four runtime dependencies**: `kysely`, `zod`,
-  `mailparser` and `mailauth`. Peer dependencies are `pg` and React 19.
+  `mailparser` and `mailauth`. Peer dependencies are React 19 and the driver of the host's database (`pg`, `mysql2`, or `tedious` and `tarn`; SQLite needs none).
 
 ## Compared with
 

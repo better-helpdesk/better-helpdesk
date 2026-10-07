@@ -3,11 +3,12 @@ title: Package exports
 description: Each entry point of the better-helpdesk package and what it exports.
 ---
 
-The `better-helpdesk` package has six entry points. Related guide: [Call the helpdesk from your own code](/docs/guides/own-code).
+The `better-helpdesk` package has seven entry points. Related guide: [Call the helpdesk from your own code](/docs/guides/own-code).
 
 | Entry point | Runs on | Exports |
 | --- | --- | --- |
 | [`better-helpdesk`](#better-helpdesk) | Server | `buildHelpdesk`, `postgresAdapter`, identity tokens, references, types |
+| [`better-helpdesk/adapters`](#better-helpdeskadapters) | Server | The database adapters, the adapter contract and `migrate` |
 | [`better-helpdesk/widget`](#better-helpdeskwidget) | Browser | The widget and the support page, for React and as custom elements |
 | [`better-helpdesk/admin`](#better-helpdeskadmin) | Browser | The agent UI |
 | [`better-helpdesk/rich`](#better-helpdeskrich) | Server or browser | The message format: parser and renderer |
@@ -165,6 +166,10 @@ The claims of the token:
 />
 
 The token is an HS256 JWT, so any JWT library that signs the same claims produces a valid one.
+
+## better-helpdesk/adapters
+
+What a host needs to pick or write a database adapter, without the rest of the server: `postgresAdapter`, `mysqlAdapter`, `mssqlAdapter`, `sqliteAdapter`, `kyselyAdapter`, `createAdapter`, `migrate` and `helpdeskModel`, with the contract's types. The same names are exported from `better-helpdesk`. None of them imports a database driver: the host passes its own connection.
 
 ## better-helpdesk/widget
 
