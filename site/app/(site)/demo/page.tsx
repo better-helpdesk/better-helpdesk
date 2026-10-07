@@ -8,16 +8,18 @@ import {
   newestRows,
   RESET_MINUTES,
 } from '../../../lib/demo';
+import { pageMeta } from '../../../lib/seo';
 import { ButtonIcon } from '../components/icons';
 import { SiteFooter, SiteHeader } from '../components/site-chrome';
 import { currentRole, RoleSwitcher } from './chrome';
 import { BrokenButton, ResetCountdown } from './parts';
 
-export const metadata: Metadata = {
-  title: 'Demo',
+export const metadata: Metadata = pageMeta({
+  title: 'Demo · Better Helpdesk',
   description:
     'Try Better Helpdesk without installing it: send a message from the widget, then answer it from the agent inbox.',
-};
+  path: '/demo/',
+});
 
 export default async function Demo() {
   const role = await currentRole();

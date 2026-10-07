@@ -9,9 +9,10 @@ import { LiveMark } from '../(site)/components/live-mark';
 import { SiteWidget } from '../(site)/components/site-widget';
 import { fontClasses } from '../fonts';
 import './docs.css';
+import { ORIGIN } from '../../lib/seo';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://better-helpdesk.com'),
+  metadataBase: new URL(ORIGIN),
   title: {
     default: 'Docs · Better Helpdesk',
     template: '%s · Better Helpdesk docs',

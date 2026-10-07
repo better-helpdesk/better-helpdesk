@@ -69,6 +69,13 @@ export default withMDX(
         })),
       ];
     },
+    // Each docs page as markdown at its own URL plus `.md`, as llms.txt links it.
+    async rewrites() {
+      return [
+        { source: '/docs.md', destination: '/llms.mdx/docs' },
+        { source: '/docs/:path*.md', destination: '/llms.mdx/docs/:path*' },
+      ];
+    },
     async headers() {
       return [
         {

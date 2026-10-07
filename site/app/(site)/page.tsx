@@ -1,4 +1,5 @@
 import helpdeskPackage from 'better-helpdesk/package.json';
+import type { Metadata } from 'next';
 import {
   PiArrowRightBold,
   PiArrowUpRightBold,
@@ -6,6 +7,15 @@ import {
 } from 'react-icons/pi';
 
 import { API } from '../../lib/helpdesk';
+import {
+  DESCRIPTION,
+  faqPage,
+  JsonLd,
+  organization,
+  pageMeta,
+  software,
+  website,
+} from '../../lib/seo';
 import { ContinuityForm } from './components/continuity-form';
 import { Install } from './components/copy';
 import { Cost } from './components/cost';
@@ -25,9 +35,82 @@ import { WidgetDemo } from './components/widget-demo';
 
 const REPO = 'https://github.com/better-helpdesk/better-helpdesk';
 
+/** The FAQ, once: it renders the list and the FAQPage structured data. */
+const FAQ: { question: string; answer: React.ReactNode; text: string }[] = [
+  {
+    question: 'What if the project stops?',
+    answer:
+      "It's MIT and lives in your repository and your database, so your helpdesk keeps running and you can fork it. The migrations ship in the package, and nothing calls home.",
+    text: "It's MIT and lives in your repository and your database, so your helpdesk keeps running and you can fork it. The migrations ship in the package, and nothing calls home.",
+  },
+  {
+    question: 'Can we move over from Intercom or Zendesk?',
+    answer: (
+      <>
+        Contacts, companies and canned replies come over from a CSV export with{' '}
+        <code>better-helpdesk-import</code>. Conversation history stays readable
+        in the old tool. The{' '}
+        <a href="/docs/operations/switching/">switching guide</a> covers
+        Intercom, Zendesk, Gmail and Chatwoot.
+      </>
+    ),
+    text: 'Contacts, companies and canned replies come over from a CSV export with better-helpdesk-import. Conversation history stays readable in the old tool. The switching guide covers Intercom, Zendesk, Gmail and Chatwoot.',
+  },
+  {
+    question: 'Does it work outside Next.js?',
+    answer: (
+      <>
+        The handler is a plain function from <code>Request</code> to{' '}
+        <code>Response</code>, so any server with that shape can mount it.
+        Next.js is the one the examples and CI cover.
+      </>
+    ),
+    text: 'The handler is a plain function from Request to Response, so any server with that shape can mount it. Next.js is the one the examples and CI cover.',
+  },
+  {
+    question: 'Is the AI an agent?',
+    answer:
+      'No. Here an agent is a person on your support team. AI only suggests a triage or drafts a reply, and a person decides what is sent.',
+    text: 'No. Here an agent is a person on your support team. AI only suggests a triage or drafts a reply, and a person decides what is sent.',
+  },
+  {
+    question: 'What does the license allow?',
+    answer:
+      'MIT. Use it commercially, change it, ship it inside your product. There are no paid features in the package.',
+    text: 'MIT. Use it commercially, change it, ship it inside your product. There are no paid features in the package.',
+  },
+  {
+    question: 'Is this site running it?',
+    answer: (
+      <>
+        Yes. The launcher in the corner and the supporter form both write into
+        this site's own <code>helpdesk</code> schema, and we answer from{' '}
+        <code>&lt;HelpdeskAdmin /&gt;</code>.
+      </>
+    ),
+    text: "Yes. The launcher in the corner and the supporter form both write into this site's own helpdesk schema, and we answer from <HelpdeskAdmin />.",
+  },
+];
+
+export const metadata: Metadata = pageMeta({
+  title: 'Better Helpdesk: the open-source helpdesk for Next.js',
+  description: DESCRIPTION,
+  path: '/',
+});
+
 export default function Home() {
   return (
     <>
+      <JsonLd
+        schema={[
+          organization(),
+          website(),
+          software(),
+          faqPage(
+            FAQ.map(({ question, text }) => ({ question, answer: text }))
+          ),
+        ]}
+      />
       <a className="skip" href="#top">
         Skip to content
       </a>
@@ -410,85 +493,17 @@ export default function Home() {
           </div>
           <div className="faq-grid">
             <div className="qa">
-              <details className="rv">
-                <summary>
-                  <span>What if the project stops?</span>
-                  <span className="qa-i" aria-hidden="true">
-                    <PiPlusBold />
-                  </span>
-                </summary>
-                <p>
-                  It's MIT and lives in your repository and your database, so
-                  your helpdesk keeps running and you can fork it. The
-                  migrations ship in the package, and nothing calls home.
-                </p>
-              </details>
-              <details className="rv">
-                <summary>
-                  <span>Can we move over from Intercom or Zendesk?</span>
-                  <span className="qa-i" aria-hidden="true">
-                    <PiPlusBold />
-                  </span>
-                </summary>
-                <p>
-                  Contacts, companies and canned replies come over from a CSV
-                  export with <code>better-helpdesk-import</code>. Conversation
-                  history stays readable in the old tool. The{' '}
-                  <a href="/docs/operations/switching/">switching guide</a>{' '}
-                  covers Intercom, Zendesk, Gmail and Chatwoot.
-                </p>
-              </details>
-              <details className="rv">
-                <summary>
-                  <span>Does it work outside Next.js?</span>
-                  <span className="qa-i" aria-hidden="true">
-                    <PiPlusBold />
-                  </span>
-                </summary>
-                <p>
-                  The handler is a plain function from <code>Request</code> to{' '}
-                  <code>Response</code>, so any server with that shape can mount
-                  it. Next.js is the one the examples and CI cover.
-                </p>
-              </details>
-              <details className="rv">
-                <summary>
-                  <span>Is the AI an agent?</span>
-                  <span className="qa-i" aria-hidden="true">
-                    <PiPlusBold />
-                  </span>
-                </summary>
-                <p>
-                  No. Here an agent is a person on your support team. AI only
-                  suggests a triage or drafts a reply, and a person decides what
-                  is sent.
-                </p>
-              </details>
-              <details className="rv">
-                <summary>
-                  <span>What does the license allow?</span>
-                  <span className="qa-i" aria-hidden="true">
-                    <PiPlusBold />
-                  </span>
-                </summary>
-                <p>
-                  MIT. Use it commercially, change it, ship it inside your
-                  product. There are no paid features in the package.
-                </p>
-              </details>
-              <details className="rv">
-                <summary>
-                  <span>Is this site running it?</span>
-                  <span className="qa-i" aria-hidden="true">
-                    <PiPlusBold />
-                  </span>
-                </summary>
-                <p>
-                  Yes. The launcher in the corner and the supporter form both
-                  write into this site's own <code>helpdesk</code> schema, and
-                  we answer from <code>&lt;HelpdeskAdmin /&gt;</code>.
-                </p>
-              </details>
+              {FAQ.map(({ question, answer }) => (
+                <details className="rv" key={question}>
+                  <summary>
+                    <span>{question}</span>
+                    <span className="qa-i" aria-hidden="true">
+                      <PiPlusBold />
+                    </span>
+                  </summary>
+                  <p>{answer}</p>
+                </details>
+              ))}
             </div>
             <FaqAside />
           </div>
