@@ -1,4 +1,5 @@
 {
   "title": "Email",
+  "icon": "email",
   "pages": ["send", "receive", "---Reference---", "messages"]
 }

@@ -1,4 +1,5 @@
 {
   "title": "Reference",
+  "icon": "reference",
   "pages": ["configuration", "adapters", "routes", "exports"]
 }

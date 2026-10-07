@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { API } from '../../lib/helpdesk';
 import { source } from '../../lib/source';
 import { LiveMark } from '../(site)/components/live-mark';
+import { SiteHeader } from '../(site)/components/site-chrome';
 import { SiteWidget } from '../(site)/components/site-widget';
 import { fontClasses } from '../fonts';
 import './docs.css';
@@ -37,6 +38,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             defaultTheme: 'dark',
             enableSystem: false,
           }}>
+          <SiteHeader current="docs" />
           <DocsLayout
             tree={source.getPageTree()}
             nav={{
@@ -50,14 +52,18 @@ export default function Layout({ children }: { children: ReactNode }) {
               ),
               url: '/',
             }}
-            links={[
-              { text: 'Live demo', url: '/demo/' },
-              {
-                text: 'GitHub',
-                url: 'https://github.com/better-helpdesk/better-helpdesk',
-                external: true,
-              },
-            ]}
+            sidebar={{
+              collapsible: false,
+              footer: (
+                <nav className="docs-phone-links" aria-label="Site">
+                  <a href="/">Home</a>
+                  <a href="/demo/">Live demo</a>
+                  <a href="https://github.com/better-helpdesk/better-helpdesk">
+                    Source
+                  </a>
+                </nav>
+              ),
+            }}
             themeSwitch={{ enabled: false }}>
             {children}
           </DocsLayout>
