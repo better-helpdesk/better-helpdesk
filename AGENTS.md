@@ -2,8 +2,8 @@
 
 Better Helpdesk is an npm package (`better-helpdesk`, MIT) that puts a support
 inbox, ticketing and a lightweight CRM inside a host's Next.js app: one route
-handler, one React component for the agent UI, one widget, and a `helpdesk`
-schema in the host's own Postgres. It is a library the host mounts, never a
+handler, one React component for the agent UI, one widget, and its tables
+in the host's own database (Postgres, MySQL, SQLite or MS SQL). It is a library the host mounts, never a
 service the host runs next to its product. `docs/product.md` has the
 positioning and the stage the project is at. `CONTEXT.md` has the words; read
 it before touching `src/`, starting with the first entry: an *agent* is a
@@ -11,8 +11,9 @@ support team member here, never an AI.
 
 ## The architecture is settled
 
-The repository as it stood on 28 September 2026 is the architecture. Extend
-it; do not re-platform it, and do not add a second way of doing something the
+The repository as it stood on 28 September 2026 is the architecture, with
+one decision taken since: on 7 October 2026 the maintainer opened it to
+more databases than Postgres (epic #171). Extend it; do not re-platform it, and do not add a second way of doing something the
 code already does. Concretely:
 
 - **Embedded, Next.js first.** The handler is a plain `Request → Response`
@@ -22,14 +23,33 @@ code already does. Concretely:
   to.
 - **TypeScript strict, ESM, Node 22.19 or newer, React 19** for the agent UI and
   the widget alike. pnpm with a frozen lockfile.
-- **Postgres only, and Drizzle owns the schema.** Tables live in
-  `src/db/schema.ts` under the `helpdesk` schema. Migrations are SQL that
-  `pnpm db:generate` writes into `migrations/` and `better-helpdesk-migrate`
-  (`bin/migrate.mjs`) applies. A schema change is: edit `schema.ts`, run
-  `pnpm db:generate`, commit the generated SQL and snapshot untouched, run
-  the integration tests. Hand-written or hand-edited migration SQL is a bug.
-- **Four runtime dependencies**: `drizzle-orm`, `zod`, `mailparser`,
-  `mailauth`. Adding one needs a stated reason in the PR and an
+- **The database is an adapter, in two layers.** `DatabaseAdapter` is a
+  small public contract: CRUD, a required `transaction`, and optional named
+  capabilities (claiming jobs, references, rate limits, search, the inbox
+  and overview reads), each with a portable fallback written over the CRUD
+  methods. `createStore(adapter)` is the one implementation of every
+  `HelpdeskStore` method over that contract. No SQL crosses the store
+  boundary: `service.ts` and `http.ts` speak to the store in domain terms,
+  and the store takes the time from the app, never the database's `now()`.
+- **Built-in adapters on Kysely** for Postgres, MySQL 8.4+, SQLite and
+  MS SQL 2022+. The host owns the connection and passes it in
+  (`postgresAdapter({ pool })` and its siblings); drivers are optional peer
+  dependencies. Tables live under the `helpdesk` schema on Postgres and
+  MS SQL and carry a `helpdesk_` prefix on MySQL and SQLite. Identifier
+  columns compare case-sensitively on every database. A host on another
+  database implements the contract and proves it with
+  `better-helpdesk/testing`.
+- **Migrations are versioned Kysely migrations per database family**, which
+  `better-helpdesk-migrate` (`bin/migrate.mjs`) applies. The SQL files in
+  `migrations/` are the Postgres baseline that existing installs already
+  ran: they are never edited. A CI check migrates each database and fails
+  when the result drifts from the committed model. A schema change is: edit
+  the model, add a migration for every family, run the integration tests on
+  every database.
+- **Four runtime dependencies**: `kysely`, `zod`, `mailparser`, `mailauth`.
+  Until the store moves to Kysely (#175), `drizzle-orm` holds `kysely`'s
+  place and the Postgres schema is still `src/db/schema.ts` with
+  `pnpm db:generate`. Adding one needs a stated reason in the PR and an
   MIT-compatible licence (MIT, BSD, Apache 2.0, ISC).
 - **Everything optional is an adapter.** Storage, email, AI and help search
   are interfaces in `src/config.ts` that the host implements; inbound email
@@ -55,7 +75,8 @@ code already does. Concretely:
   approval in the current conversation.
 - Anything that makes Better Helpdesk its own instance: a standalone server,
   a Docker image run beside the app, a hosted or cloud mode, its own login,
-  its own database. Swapping Drizzle or adding a second ORM.
+  its own database. A second query layer beside the adapter contract, or a
+  feature that works on one database and not the others without a fallback.
 - Changing `.github/workflows/ci.yml`, `release.yml` or the npm publishing
   setup outside a PR the maintainer approved.
 - Secrets or tokens anywhere in the repository or in CI configuration.
@@ -78,8 +99,9 @@ code already does. Concretely:
   `src/ui/`: shared i18n, the API client and rich text.
 - `src/inbound/`: parsing and DKIM verification of inbound email. `relays/`:
   an example relay (a Cloudflare Email Worker) that forwards to `/inbound`.
-- `test/`: integration tests against a real Postgres through
-  `createHarness`. Unit tests sit next to their source as `*.test.ts(x)`.
+- `test/`: integration tests against a real database through
+  `createHarness`; they reach the database only through the harness, so the
+  same suite runs on every built-in adapter. Unit tests sit next to their source as `*.test.ts(x)`.
 - `examples/demo`: "Harbor", a Next.js app with the package installed the
   way the README describes; its README says how to run it. It is a workspace
   package, so a root `pnpm install` also downloads its Next.js, which is why
@@ -107,7 +129,11 @@ TEST_DATABASE_URL=postgres://postgres@localhost:5432/db pnpm test:integration
 
 The integration tests create a `helpdesk_test` database next to the one the
 URL names and migrate it; a `postgres:18-alpine` container started with
-`POSTGRES_HOST_AUTH_METHOD=trust` is enough. Green means all three passed.
+`POSTGRES_HOST_AUTH_METHOD=trust` is enough. The suite also runs on SQLite
+in-process, and on MySQL and SQL Server when `TEST_MYSQL_URL` and
+`TEST_MSSQL_URL` name a server (`mysql:8.4`, `mcr.microsoft.com/mssql/server:2022-latest`);
+a change to the store or the schema is green only once every database
+passed. Green means all three passed.
 When a change touches `package.json` exports, `scripts/build.mjs` or `bin/`,
 also do what CI's smoke test does: `pnpm pack`, then `npm install` the
 tarball into a scratch directory outside the repository and import it.
