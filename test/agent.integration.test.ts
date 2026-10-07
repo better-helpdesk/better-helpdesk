@@ -1238,6 +1238,51 @@ describe('AI', () => {
     ).toMatchObject({ title: 'Agent title', type: 'bug' });
   });
 
+  it('looks for duplicates by what the customer wrote, not by the transcript labels', async () => {
+    const asked: string[] = [];
+    const ai = createHarness({
+      ai: {
+        async generate<T>({
+          schema,
+          prompt,
+        }: {
+          schema: z.ZodType<T>;
+          prompt: string;
+        }) {
+          const shape = (
+            schema as unknown as { shape: Record<string, unknown> }
+          ).shape;
+          if ('duplicates' in shape) {
+            asked.push(prompt);
+            return { duplicates: [] } as T;
+          }
+          return {
+            type: 'bug',
+            priority: 'normal',
+            title: 't',
+            summary: 's',
+          } as T;
+        },
+      },
+    });
+    try {
+      ai.addUser('ada');
+      const post = (subject: string, body: string) =>
+        ai.call('POST', 'widget/conversations', {
+          user: 'ada',
+          body: { inbox: 'support', type: 'question', subject, body },
+        });
+      await post('Customer support hours', 'When is customer support open?');
+      await ai.runDueJobs();
+      await post('CSV export fails', 'The export button errors');
+      await ai.runDueJobs();
+      // Nothing in common but the words a transcript puts before each message.
+      expect(asked).toEqual([]);
+    } finally {
+      await ai.close();
+    }
+  });
+
   it('finds a duplicate candidate by full-text search', async () => {
     h.addUser('ada');
     const first = await open('ada', {

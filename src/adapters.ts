@@ -2,6 +2,7 @@ export {
   type AdapterInput,
   type Capabilities,
   createAdapter,
+  type Data,
   type DatabaseAdapter,
   type FindQuery,
   type Notification,
