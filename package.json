@@ -97,7 +97,7 @@
     "tarn": "^3.1.2",
     "tedious": "^20.3.3",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   },
   "dependencies": {
     "kysely": "~0.29.6",
@@ -112,7 +112,7 @@
     "react-dom": "^19.0.0",
     "tarn": "^3.0.0",
     "tedious": "^20.0.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0 || ^5.0.0"
   },
   "peerDependenciesMeta": {
     "mysql2": {
