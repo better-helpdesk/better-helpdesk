@@ -73,7 +73,7 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/smoke" && cd "$RUNNER_TEMP/smoke"
           npm init -y > /dev/null
-          npm install --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz pg react react-dom
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/pack/*.tgz pg react react-dom vitest@4
           HELPDESK_DATABASE_URL="$TEST_DATABASE_URL" node "$GITHUB_WORKSPACE/scripts/smoke.mjs"
 
   # Divio deploys site/ from main, and nothing else here compiles it.
