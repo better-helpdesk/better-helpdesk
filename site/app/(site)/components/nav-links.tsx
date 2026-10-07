@@ -5,8 +5,8 @@ import { PiListBold } from 'react-icons/pi';
 
 const LINKS: [string, string][] = [
   ['product', 'Product'],
+  // Also covers the widget section after it, until the features start.
   ['pieces', 'How it works'],
-  ['widget', 'Customers'],
   ['box', 'Features'],
   ['compare', 'Compare'],
   ['faq', 'FAQ'],
