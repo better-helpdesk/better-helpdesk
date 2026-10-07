@@ -186,7 +186,7 @@ runAdapterTests({
 npx vitest run lib/my-adapter.test.ts
 ```
 
-The tests write rows and read them back: every kind of value, NULL comparisons, exact and case-insensitive text, literal search characters, ordering with NULLs, paging, conditions through another table, counted updates and concurrent increments, one winner among simultaneous compare-and-swap updates, locked reads, whole transactions, a repeated primary key refused, and the partial verified-identity key held. The in-memory example's own test is [`database-memory.test.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/database-memory.test.ts).
+The tests write rows and read them back: every kind of value, NULL comparisons, exact and case-insensitive text, literal search characters, times and numbers compared and ordered by value, ordering with NULLs, paging, conditions through another table, counted updates and concurrent increments, one winner among simultaneous compare-and-swap updates, locked reads, whole transactions, a repeated primary key refused, and the partial verified-identity key held. The in-memory example's own test is [`database-memory.test.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/database-memory.test.ts).
 
 ## Use it
 
