@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { PRIORITIES } from '../config';
-import type { DatabaseAdapter, Where } from './adapter';
+import { clock, type DatabaseAdapter, type Where } from './adapter';
 import {
   type ConversationContext,
   helpdeskModel,
@@ -285,10 +285,10 @@ export function createStore(adapter: DatabaseAdapter) {
       where: eq('name', 'reference'),
       forUpdate: true,
     });
+    // The built-in migrations seed it; an adapter of your own may start without.
     if (!counter) {
-      throw new Error(
-        'helpdesk: the reference counter is missing; run the migrations'
-      );
+      await db.create('counter', { name: 'reference', value: 1001 });
+      return 1000;
     }
     await db.updateMany('counter', eq('name', 'reference'), {
       value: { increment: 1 },
@@ -457,7 +457,7 @@ export function createStore(adapter: DatabaseAdapter) {
       await adapter.updateMany(
         'identity',
         and(eq('id', identity.id), lt('lastUsedAt', ago(HOUR))),
-        { lastUsedAt: new Date() }
+        { lastUsedAt: clock() }
       );
       return get('contact', identity.contactId);
     },
@@ -470,7 +470,7 @@ export function createStore(adapter: DatabaseAdapter) {
           eq('id', id),
           or(eq('lastSeenAt', null), lt('lastSeenAt', ago(5 * MINUTE)))
         ),
-        { lastSeenAt: new Date() }
+        { lastSeenAt: clock() }
       );
     },
 
@@ -823,7 +823,7 @@ export function createStore(adapter: DatabaseAdapter) {
       await upsert(
         'agent',
         eq('externalUserId', user.externalUserId),
-        { ...profile, lastSeenAt: new Date(), deactivatedAt: null },
+        { ...profile, lastSeenAt: clock(), deactivatedAt: null },
         { externalUserId: user.externalUserId, ...profile }
       );
       const agent = await adapter.findOne<Agent>('agent', {
@@ -863,7 +863,7 @@ export function createStore(adapter: DatabaseAdapter) {
         });
         if (!agent) return;
         await tx.updateMany('agent', eq('id', agent.id), {
-          deactivatedAt: new Date(),
+          deactivatedAt: clock(),
         });
         const assigned = await tx.findMany<{ id: string }>('conversation', {
           where: eq('assigneeId', agent.id),
@@ -899,7 +899,7 @@ export function createStore(adapter: DatabaseAdapter) {
       await upsert(
         'setting',
         eq('key', key),
-        { value, updatedAt: new Date() },
+        { value, updatedAt: clock() },
         { key, value }
       );
     },
@@ -929,12 +929,16 @@ export function createStore(adapter: DatabaseAdapter) {
     ): Promise<{ conversation: Conversation; message: Message }> {
       return adapter.transaction(async tx => {
         const { tags = [], ...rest } = values;
+        // The conversation, its first message and its wait start together.
+        const now = clock();
         const conversation = await tx.create<Row<'conversation'>>(
           'conversation',
           {
             ...rest,
             number: await nextReference(tx),
-            waitingSince: new Date(),
+            createdAt: now,
+            lastMessageAt: now,
+            waitingSince: now,
           }
         );
         if (tags.length > 0) {
@@ -1012,7 +1016,7 @@ export function createStore(adapter: DatabaseAdapter) {
         await tx.updateMany('conversation', eq('id', sourceId), {
           mergedIntoId: targetId,
           status: 'resolved',
-          resolvedAt: source.resolvedAt ?? new Date(),
+          resolvedAt: source.resolvedAt ?? clock(),
           waitingSince: null,
           snoozedUntil: null,
         });
@@ -1030,7 +1034,7 @@ export function createStore(adapter: DatabaseAdapter) {
           waitingSince: waiting,
           ...(reopen ? { status: source.status, resolvedAt: null } : {}),
         });
-        const now = new Date();
+        const now = clock();
         await tx.create('conversation_event', {
           conversationId: sourceId,
           agentId,
@@ -1072,7 +1076,7 @@ export function createStore(adapter: DatabaseAdapter) {
 
     async recordEvents(values: Insert<'conversation_event'>[]) {
       // One time for the batch, so their order stays the order of `kind`.
-      const now = new Date();
+      const now = clock();
       for (const value of values) {
         await adapter.create('conversation_event', {
           createdAt: now,
@@ -1220,7 +1224,7 @@ export function createStore(adapter: DatabaseAdapter) {
     async markViewing(agentId: string, conversationId: string) {
       await adapter.updateMany('agent', eq('id', agentId), {
         viewingId: conversationId,
-        viewingAt: new Date(),
+        viewingAt: clock(),
       });
     },
 
@@ -1495,7 +1499,7 @@ export function createStore(adapter: DatabaseAdapter) {
     async markNotificationsSeen(agentId: string) {
       await store.setSetting(
         `notifications-seen:${agentId}`,
-        new Date().toISOString()
+        clock().toISOString()
       );
     },
 
@@ -1824,13 +1828,13 @@ export function createStore(adapter: DatabaseAdapter) {
       await adapter.create('job', {
         kind,
         payload,
-        runAt: opts.runAt ?? new Date(),
+        runAt: opts.runAt ?? clock(),
       });
     },
 
     /** Claims due jobs; a claim expires, so a crashed run's jobs come back. */
     async claimJobs(limit: number): Promise<Job[]> {
-      const now = new Date();
+      const now = clock();
       const lockedUntil = new Date(now.getTime() + 2 * MINUTE);
       const claimed: Job[] = [];
       const lost: string[] = [];
@@ -1914,7 +1918,7 @@ export function createStore(adapter: DatabaseAdapter) {
      */
     async wakeSnoozed() {
       const due = await adapter.findMany<Row<'conversation'>>('conversation', {
-        where: lte('snoozedUntil', new Date()),
+        where: lte('snoozedUntil', clock()),
       });
       const woken: {
         row: Conversation;
@@ -1977,7 +1981,7 @@ export function createStore(adapter: DatabaseAdapter) {
             ne('status', 'resolved'),
             eq('snoozedUntil', null)
           ),
-          { remindedAt: new Date() }
+          { remindedAt: clock() }
         );
         if (won !== 1) continue;
         const updated = await get('conversation', row.id);

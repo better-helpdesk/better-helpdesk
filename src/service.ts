@@ -17,6 +17,7 @@ import {
   type ResolvedConfig,
   resolveConfig,
 } from './config';
+import { clock } from './db/adapter';
 import type { Insert } from './db/model';
 import type {
   Company,
@@ -287,7 +288,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   function reopensAt(inbox: string, awayUntil: Date | null) {
     const hours = config.inboxes[inbox]?.hours;
     if (!hours) return null;
-    const now = new Date();
+    const now = clock();
     const opens = nextOpening(awayUntil ?? now, hours);
     return opens && opens > now ? opens : null;
   }
@@ -380,7 +381,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
             locale: data.context?.locale ?? null,
             leadStage:
               data.inbox === 'sales' ? (config.leadStages[0] ?? null) : null,
-            lastSeenAt: new Date(),
+            lastSeenAt: clock(),
           },
           {
             channel: 'visitor',
@@ -887,7 +888,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         inbox,
         settings.reminderAfterHours,
         settings.hours &&
-          openCutoff(new Date(), settings.reminderAfterHours, settings.hours)
+          openCutoff(clock(), settings.reminderAfterHours, settings.hours)
       );
       for (const conversation of due) {
         await store.enqueueJob('agent-reminder', {
@@ -1364,7 +1365,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     rating: 'good' | 'bad',
     comment?: string
   ) {
-    const now = new Date();
+    const now = clock();
     const patch: Partial<Conversation> = {
       rating,
       ratingComment: comment || null,

@@ -7,7 +7,8 @@ import pg from 'pg';
 import * as tarn from 'tarn';
 import * as tedious from 'tedious';
 
-import { createAdapter } from '../src/db/adapter';
+import { memoryAdapter } from '../examples/adapters/database-memory';
+import { createAdapter, type DatabaseAdapter } from '../src/db/adapter';
 import {
   type Family,
   type KyselyAdapter,
@@ -16,10 +17,13 @@ import {
   postgresAdapter,
   sqliteAdapter,
 } from '../src/db/kysely';
+import type { ModelName } from '../src/db/model';
 import { testDatabaseUrl } from './database-url';
 
 /** The database the integration suite runs on: `TEST_DB`, Postgres by default. */
-export const testFamily = (process.env.TEST_DB || 'postgres') as Family;
+export const testFamily = (process.env.TEST_DB || 'postgres') as
+  | Family
+  | 'memory';
 
 const name = `helpdesk_test${process.env.TEST_DB_PREFIX ? `_${process.env.TEST_DB_PREFIX}` : ''}`;
 
@@ -103,7 +107,18 @@ function open(): {
  * `TEST_PORTABLE` set, its capabilities are left out, so every query takes
  * the fallback a custom adapter gets.
  */
+// One store for every harness of the run, as a database would be.
+const memory = createAdapter(memoryAdapter());
+
 export function testAdapter() {
+  if (testFamily === 'memory') {
+    return {
+      adapter: memory,
+      builtIn: undefined,
+      pool: undefined,
+      close: async () => {},
+    };
+  }
   const { adapter, pool, close } = open();
   return {
     adapter: process.env.TEST_PORTABLE
@@ -115,4 +130,34 @@ export function testAdapter() {
     pool,
     close,
   };
+}
+
+// Children first, so no foreign key holds a delete up.
+const tables: ModelName[] = [
+  'conversation_tag',
+  'contact_tag',
+  'company_tag',
+  'attachment',
+  'conversation_event',
+  'participant',
+  'message',
+  'activity',
+  'deal',
+  'identity',
+  'conversation',
+  'agent',
+  'contact',
+  'company',
+  'job',
+  'rate_limit',
+  'setting',
+  'canned_reply',
+];
+
+/** Empties every table but the counter. */
+export async function emptyTables(adapter: DatabaseAdapter) {
+  // References between the tables go first; SQL Server has no `on delete` to clear them.
+  await adapter.updateMany('agent', undefined, { viewingId: null });
+  await adapter.updateMany('conversation', undefined, { mergedIntoId: null });
+  for (const table of tables) await adapter.deleteMany(table, undefined);
 }
