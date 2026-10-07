@@ -3893,3 +3893,66 @@ kbd.on {
 .demo-quiet:hover {
   background: var(--s4);
 }
+
+/* The broken button's glass (demo/glass.ts): the ground cracks behind the content, never over it. */
+body:has(> .glass) {
+  position: relative;
+  z-index: 0;
+}
+.glass {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  pointer-events: none;
+  contain: strict;
+}
+.glass path {
+  fill: none;
+  stroke: var(--fg);
+  stroke-opacity: var(--o);
+  stroke-linecap: square;
+}
+.glass circle {
+  fill: rgba(210, 240, 225, 0.14);
+}
+.glass-shards polygon {
+  fill: url(#glass-dots);
+  animation: glass-settle 1ms steps(1) 180ms both;
+}
+.glass-ring {
+  opacity: 0;
+  animation: glass-on 1ms steps(1) calc(var(--i) * 60ms) both;
+}
+.glass.clear {
+  will-change: opacity;
+  animation: glass-off 320ms steps(4) both;
+}
+.glass.clear .glass-shards {
+  animation: glass-fall 320ms steps(4) both;
+}
+@keyframes glass-on {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes glass-settle {
+  to {
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+@keyframes glass-off {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes glass-fall {
+  to {
+    transform: translateY(16px);
+  }
+}
+@media (forced-colors: active), print {
+  .glass {
+    display: none;
+  }
+}
