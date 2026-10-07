@@ -1,0 +1,155 @@
+---
+title: Connect your sign-in
+description: Write the identify function that tells the helpdesk who is calling, from your own session, Better Auth or Auth.js.
+---
+
+Better Helpdesk has no login of its own. On every request that needs to know who is calling, it calls `identify(request)`, a function you write, and your function answers from your app's session. This guide writes it in `lib/identify.ts` and passes it to `buildHelpdesk`. [Identity and trust](/docs/identity/trust) explains what the helpdesk does with the answer.
+
+## What identify returns
+
+`identify` returns `null` when nobody is signed in, and otherwise an identity:
+
+```ts
+type Identity = {
+  user: {
+    id: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    name?: string | null;
+    locale?: string | null;
+    image?: string | null;
+  };
+  orgs: { id: string; name?: string }[];
+  isAgent: boolean;
+};
+```
+
+Three fields carry trust, and each has to be honest:
+
+- `isAgent: true` opens the agent UI and every agent route. Nothing else in the helpdesk grants it, so set it from whatever marks your support team, such as a role.
+- `orgs` decides which shared conversations a customer can read. List only the organizations the user is an active member of: not one they were invited to and have not joined, and not one they have left.
+- `emailVerified: true` tells the helpdesk your app has proven the address. Set it only when that is so, because the helpdesk trusts a verified address: it can merge contacts that share it, and messages from it count as proven.
+
+[Identity](/docs/reference/configuration#identity) in the configuration reference describes every field.
+
+## Write identify
+
+<Tabs items={['Your own session', 'Better Auth', 'Auth.js']}>
+<Tab value="Your own session">
+
+Read the session the way the rest of your app does. This example assumes a `getSession` that returns the user, with a role and the time their address was confirmed, and their memberships:
+
+```ts title="lib/identify.ts"
+import type { Identity } from 'better-helpdesk';
+
+import { getSession } from '@/lib/session';
+
+export async function identify(request: Request): Promise<Identity | null> {
+  const session = await getSession(request);
+  if (!session) return null;
+  const { user } = session;
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      emailVerified: user.emailVerifiedAt !== null,
+      name: user.name,
+    },
+    orgs: session.memberships
+      .filter(membership => membership.status === 'active')
+      .map(membership => ({ id: membership.orgId, name: membership.orgName })),
+    isAgent: user.role === 'support',
+  };
+}
+```
+
+`user.id` should be the id your app already uses for the person. The helpdesk keys their contact to it, so their conversations follow them from device to device.
+
+</Tab>
+<Tab value="Better Auth">
+
+With Better Auth's [organization](https://www.better-auth.com/docs/plugins/organization) and [admin](https://www.better-auth.com/docs/plugins/admin) plugins, where `auth` is your Better Auth instance:
+
+```ts title="lib/identify.ts"
+import type { Identity } from 'better-helpdesk';
+
+import { auth } from '@/lib/auth';
+
+export async function identify(request: Request): Promise<Identity | null> {
+  const { headers } = request;
+  const session = await auth.api.getSession({ headers });
+  if (!session) return null;
+  const orgs = await auth.api.listOrganizations({ headers });
+  const { user } = session;
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      name: user.name,
+      image: user.image,
+    },
+    orgs: orgs.map(org => ({ id: org.id, name: org.name })),
+    // The admin plugin keeps several roles as a comma-separated list.
+    isAgent: user.role?.split(',').includes('support') ?? false,
+  };
+}
+```
+
+`listOrganizations` returns the organizations the user has a membership in. An invitation becomes a membership only when it is accepted, and removing a member deletes the membership, so the list is the active ones. `emailVerified` is Better Auth's own flag, set when the user confirms their address. Give your support team the `support` role, or test for whichever role you use.
+
+</Tab>
+<Tab value="Auth.js">
+
+Auth.js (NextAuth v5) has no organizations and no roles, so both come from your own tables. Here `membershipsOf` and `isSupportStaff` stand for your own queries:
+
+```ts title="lib/identify.ts"
+import type { Identity } from 'better-helpdesk';
+
+import { auth } from '@/auth';
+import { isSupportStaff, membershipsOf } from '@/lib/members';
+
+export async function identify(): Promise<Identity | null> {
+  const session = await auth();
+  const user = session?.user;
+  if (!user?.id) return null;
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      // Only if every provider you enable proves the address, as email links do.
+      emailVerified: true,
+      name: user.name,
+      image: user.image,
+    },
+    orgs: await membershipsOf(user.id),
+    isAgent: await isSupportStaff(user.id),
+  };
+}
+```
+
+`auth()` reads the session from the request Next.js is handling, so this `identify` takes no argument. The session has no flag for a verified address. `emailVerified: true` is honest when every provider you enable proves the address, as an email link does. If you also let people sign in with a provider that does not, set it to `false` for them, or look the address up in your own records. `membershipsOf` must return active memberships only, as `{ id, name }`.
+
+</Tab>
+</Tabs>
+
+## Pass it to the helpdesk
+
+```ts title="lib/helpdesk.ts"
+import { identify } from '@/lib/identify';
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  identify,
+});
+```
+
+The helpdesk calls `identify` on every agent request and on nearly every widget request, so keep it to the lookups your own pages do. A change in your app, such as someone leaving an organization or the support team, takes effect on their next request.
+
+## Check it
+
+Open the widget while signed in as a customer and send a message. The agent UI shows the conversation under that customer's name and the address `identify` returned. Then open `/helpdesk/` as someone your `identify` makes an agent; anyone else gets no agent UI.
+
+## On another origin
+
+`identify` sees your session because the widget's requests carry your session cookie. On another origin they do not, and `identify` returns `null` there. To let the widget know a signed-in customer on a marketing site or a separate frontend, follow [Sign customers in from another origin](/docs/identity/other-origin).

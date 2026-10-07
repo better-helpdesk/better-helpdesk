@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: What Better Helpdesk is, the four pieces it is made of, and where to start reading.
+description: What Better Helpdesk is, the four pieces it is made of, and how these docs are arranged.
 ---
 
 Better Helpdesk is an open-source (MIT) support inbox, ticketing system and lightweight CRM that you install into your own Next.js app as an npm package, `better-helpdesk`. It is a library, not a service: nothing runs beside your app, and there is no second login, database or deploy to look after. Your customers write in through a widget on your site, your support team answers them from a page inside your app, and every conversation is stored in the database you already run: Postgres, MySQL, SQL Server or SQLite.
@@ -24,24 +24,60 @@ Everything else is optional and arrives as an adapter you pass in: sending email
 
 ## Who it is for
 
-Better Helpdesk suits a team that already has a Next.js app with its own login and database, and wants support to live inside that product rather than next to it. It needs Next.js 15 or newer, Node.js 22.19 or newer, React 19, and PostgreSQL 14, MySQL 8.4 or SQL Server 2022 or newer, or SQLite. On another database, you can [write your own adapter](/docs/guides/own-adapter). Both interfaces ship in English and German. It is not built for support by phone or on social channels, or for a team that wants a hosted tool with its own logins.
+Better Helpdesk suits a team that already has a Next.js app with its own login and database, and wants support to live inside that product rather than next to it. It needs Next.js 15 or newer, Node.js 22.19 or newer, React 19, and PostgreSQL 14, MySQL 8.4 or SQL Server 2022 or newer, or SQLite. On another database, you can [write your own adapter](/docs/database/own-adapter). Both interfaces ship in English and German. It is not built for support by phone or on social channels, or for a team that wants a hosted tool with its own logins.
 
-## Where to go next
+## Get started
+
+The pages under **Get started** are the ones every installation needs. Read them in order the first time; after that, you will mostly be in the topics below.
 
 <Cards>
   <Card title="Quickstart" href="/docs/quickstart">
     Start from an empty Next.js app and answer your first conversation.
   </Card>
-  <Card title="Install in an existing app" href="/docs/guides/install">
+  <Card title="Install in an existing app" href="/docs/installation">
     Add the handler, the agent UI and the widget to the app you already have.
   </Card>
-  <Card title="Guides" href="/docs/guides/sign-in">
-    Add email, attachments, AI, events and the rest to a working installation.
+  <Card title="How it works" href="/docs/how-it-works">
+    Why the package runs inside your app instead of beside it, and what each part does once it is there.
   </Card>
-  <Card title="Concepts" href="/docs/concepts/how-it-works">
-    Why the package is shaped the way it is, and whom it trusts.
+  <Card title="Vocabulary" href="/docs/vocabulary">
+    The words these docs give a fixed meaning, starting with *agent*.
+  </Card>
+</Cards>
+
+## Topics
+
+Everything after a working installation is arranged by the part of the helpdesk it concerns, not by the kind of page. Within a topic the tasks come first, then the concepts behind them where a topic has any, then the reference you consult while you work. You don't need to read a topic before you need what it covers.
+
+<Cards>
+  <Card title="Database" href="/docs/database/connect">
+    Connect Postgres, MySQL, SQL Server or SQLite, write an adapter for another database, and report from the tables.
+  </Card>
+  <Card title="Sign-in and identity" href="/docs/identity/sign-in">
+    Tell the helpdesk who is asking, from your own session or with a signed token on another origin.
+  </Card>
+  <Card title="Widget" href="/docs/widget/add">
+    Put the launcher on your pages, or show a customer their conversations on a page of your app.
+  </Card>
+  <Card title="Inbox and team" href="/docs/inbox/setup">
+    Set up inboxes, add and remove agents, block a sender and store attachments.
+  </Card>
+  <Card title="Email" href="/docs/email/send">
+    Send replies and receipts through your own mail provider, and turn incoming mail into conversations.
+  </Card>
+  <Card title="AI and help search" href="/docs/ai/suggestions">
+    Suggestions and draft replies from a language model you connect, and articles from your own documentation while a customer types.
+  </Card>
+  <Card title="Your app and CRM" href="/docs/app/own-code">
+    Call the helpdesk from your server code, run your own code on its events, and track companies and deals.
+  </Card>
+  <Card title="Theming and languages" href="/docs/customize/theming">
+    Your colors, corners and dark mode, and the wording in English and German.
+  </Card>
+  <Card title="Operations" href="/docs/operations/production">
+    Go to production, schedule the jobs, move over from another helpdesk, and read what the helpdesk defends against.
   </Card>
   <Card title="Reference" href="/docs/reference/configuration">
-    Every option, route, prop, event and table.
+    Every option of `HelpdeskConfig`, every adapter interface, route and package export.
   </Card>
 </Cards>

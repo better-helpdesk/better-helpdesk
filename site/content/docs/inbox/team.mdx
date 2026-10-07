@@ -1,0 +1,66 @@
+---
+title: Add and remove agents
+description: Give someone the agent UI, and when they leave, stop their agent email, hand their conversations back to the team, and make sure they lose access.
+---
+
+Two things make someone an agent. Your app grants access: `identify` returns `isAgent: true` for them. The helpdesk keeps a record: the first time they open the agent UI, they join its team, and from then on they receive agent email and can be assigned conversations. Adding an agent takes the first; removing one means undoing both.
+
+## Add an agent
+
+Return `isAgent: true` from `identify` for the user, by whatever role or flag your app keeps:
+
+```ts title="lib/helpdesk.ts"
+identify: async request => {
+  const user = await getSessionUser(request); // however your app does it
+  if (!user) return null;
+  return {
+    user: { id: user.id, email: user.email, name: user.name, image: user.avatarUrl },
+    orgs: [],
+    isAgent: user.role === 'support',
+  };
+},
+```
+
+Nothing else is needed. Their first request to the agent UI adds them to the team with the name, email address and image `identify` gives, and every later request brings those up to date. Until then they are not in the Team list and cannot be assigned. [Connect your sign-in](/docs/identity/sign-in) covers `identify` as a whole.
+
+## Take away access in your app
+
+Stop returning `isAgent: true` for the user, by whatever role or flag your `identify` reads. From their next request on, the agent API refuses them with 403. Nothing in the helpdesk can take this step for you, because only your app knows who is on the team.
+
+## Remove them from the helpdesk's team
+
+Call [`removeAgent`](/docs/reference/exports#what-buildhelpdesk-returns) with the user's id in your app, where you take the role away:
+
+```ts title="app/admin/team/actions.ts"
+'use server';
+
+import { helpdesk } from '@/lib/helpdesk';
+
+export async function revokeSupportRole(userId: string) {
+  const me = await requireAdmin(); // your app's own check
+  if (!me) throw new Error('Forbidden');
+  await setUserRole(userId, 'member'); // however your app does it
+  await helpdesk.removeAgent(userId);
+}
+```
+
+A server action is a public POST endpoint that anyone can call with any `userId`, so it has to check who is calling before it changes a role.
+
+An agent can do the same for a colleague in the agent UI: under Settings, in the Team list, choose Remove next to their name, then confirm with "Remove and unassign?". Agents cannot remove themselves there.
+
+Removing someone:
+
+- hands every conversation assigned to them back to the team, and records the change in each conversation's history;
+- stops the emails about new conversations, reminders and mentions;
+- takes them out of the Team list and the choices for assignee and deal owner;
+- takes them out of the agents the widget and the receipt email show to customers.
+
+It is safe to call for a user who never was an agent, or was removed already; nothing happens.
+
+## If they come back
+
+Removal holds only while your app agrees. The next time the person makes a request to the agent UI with `isAgent: true`, they rejoin the team and start receiving agent email again. That is why taking away access in your app matters: `removeAgent` alone does not lock anyone out. [Identity and trust](/docs/identity/trust#agents-isagent-and-nothing-else) explains why your app, not the helpdesk, decides who is an agent.
+
+## Someone who quietly stopped
+
+A host cannot always tell that someone has stopped answering. As a backstop, an agent who has not opened the agent UI for 30 days receives no emails about new conversations or reminders until they open it again, and no longer appears to customers as one of the team. Mentions still reach them.

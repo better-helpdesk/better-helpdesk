@@ -1,0 +1,77 @@
+---
+title: Theme the widget and the agent UI
+description: Give the widget and the agent UI your app's colors, corners and dark mode through CSS custom properties.
+---
+
+The widget and the agent UI take their look from `--helpdesk-*` CSS custom properties. Custom properties inherit, so the ones you set on `:root` reach into the widget's shadow root as well as into the agent UI. The config has no theme option. [How it works](/docs/how-it-works#what-runs-where) explains why the widget lives in a shadow root.
+
+## Set your brand colors
+
+```css title="app/globals.css"
+:root {
+  --helpdesk-accent: #0f766e;
+  --helpdesk-accent-hover: #115e59;
+  --helpdesk-accent-fg: #ffffff;
+  --helpdesk-radius: 8px;
+}
+```
+
+The accent colors buttons, links, the launcher and the widget's header; `--helpdesk-accent-fg` is the text on top of it. `--helpdesk-bg`, `--helpdesk-fg`, `--helpdesk-muted`, `--helpdesk-border` and `--helpdesk-subtle` set the surfaces and the text, and `--helpdesk-danger` the destructive actions. `--helpdesk-focus` colors the focus ring and nothing else.
+
+To style one of the two UIs only, set the properties closer to it instead of on `:root`: on `helpdesk-widget` for the widget, or on an element that wraps `HelpdeskAdmin` for the agent UI. The [widget reference](/docs/widget/reference#css-custom-properties) and the [agent UI reference](/docs/inbox/agent-ui#css-custom-properties) list every property with its default.
+
+## Round the corners
+
+`--helpdesk-radius` drives every corner. Cards and panels take it as given, controls and the elements inside them step down from it, and dialogs step up, so the corners stay concentric at any value.
+
+## Adjust the widget
+
+The launcher and the panel header default to the accent. Give them their own colors, move the launcher up from the bottom edge, or remove the shadows:
+
+```css
+helpdesk-widget {
+  --helpdesk-launcher-bg: #111827;
+  --helpdesk-launcher-fg: #ffffff;
+  --helpdesk-panel-header-bg: #111827;
+  --helpdesk-panel-header-fg: #ffffff;
+  --helpdesk-offset-bottom: 88px;
+  --helpdesk-shadow: none;
+}
+```
+
+The widget brings its own system font stack rather than taking your page's font; `--helpdesk-font` replaces it, for example with `var(--font-sans)` or a family name. `--helpdesk-panel-border` takes a whole `border` value. Shadows are tinted from `--helpdesk-fg`, so they follow your text color without a property of their own.
+
+## Adjust the agent UI
+
+The agent UI renders in your page, not in a shadow root, so it uses your page's font. Four properties belong to it alone: `--helpdesk-header-bg` for the initials avatars of contacts and companies, `--helpdesk-note` and `--helpdesk-note-border` for internal notes, and `--helpdesk-warning` for amber states such as a high priority. Without `--helpdesk-note`, the note's background is mixed from `--helpdesk-note-border` and the background.
+
+## Add a dark theme
+
+Set the same properties again under your own dark-mode selector:
+
+```css
+@media (prefers-color-scheme: dark) {
+  :root {
+    --helpdesk-bg: #0f172a;
+    --helpdesk-fg: #e2e8f0;
+    --helpdesk-muted: #94a3b8;
+    --helpdesk-border: #334155;
+    --helpdesk-subtle: #1e293b;
+    --helpdesk-accent: #5eead4;
+    --helpdesk-accent-hover: #99f6e4;
+    --helpdesk-accent-fg: #0f172a;
+    --helpdesk-panel-header-bg: #1e293b;
+    --helpdesk-panel-header-fg: #e2e8f0;
+  }
+}
+```
+
+Set the panel header in a dark theme too. A light accent reads well on buttons and links, but not as the background of the widget's header.
+
+The widget can also follow the operating system without any of this: `theme="auto"` switches it to a built-in dark palette when the system is dark. Properties you have set still win over that palette.
+
+```tsx
+<HelpdeskWidget inbox="support" theme="auto" />
+```
+
+`HelpdeskConversations` takes the same prop. With the script tag, set `data-theme="auto"`.

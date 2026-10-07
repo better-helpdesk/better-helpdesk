@@ -1,0 +1,56 @@
+---
+title: Search your own docs from the widget
+description: Let the widget suggest articles from your documentation while a customer types, before they send their question.
+---
+
+With a `help` adapter, the widget searches your own documentation while a customer writes and lists what it finds under the message. Someone whose question is already answered can follow the link instead of waiting for a reply.
+
+## Write the adapter
+
+The adapter is one function, [`search(query, locale)`](/docs/reference/adapters#help-search), that returns results with a `title`, a `url` and, optionally, an `excerpt`. Behind it can be any search you already have. This one reads a JSON index that your docs build writes, with entries of the shape `{ title, url, locale, text }`:
+
+```ts title="lib/helpdesk-help.ts"
+import type { HelpResult, Locale } from 'better-helpdesk';
+
+import pages from '@/public/help-index.json';
+
+export const help = {
+  async search(query: string, locale: Locale): Promise<HelpResult[]> {
+    const words = query.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+    const terms = words.filter(word => word.length > 2);
+    return pages
+      .filter(page => page.locale === locale)
+      .map(page => {
+        const haystack = `${page.title} ${page.text}`.toLowerCase();
+        return { page, hits: terms.filter(t => haystack.includes(t)).length };
+      })
+      .filter(({ hits }) => hits > 0)
+      .sort((a, b) => b.hits - a.hits)
+      .slice(0, 5)
+      .map(({ page }) => ({
+        title: page.title,
+        url: page.url,
+        excerpt: page.text.slice(0, 160),
+      }));
+  },
+};
+```
+
+```ts title="lib/helpdesk.ts"
+import { help } from './helpdesk-help';
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  help,
+});
+```
+
+A result opens in a new tab, and a relative URL resolves against the page the widget is on. Return absolute URLs when that page is not on your docs' site.
+
+## When it searches
+
+The widget searches once the subject or the message has four characters or more, half a second after the customer stops typing, with the subject when there is one and the message otherwise. It searches for questions, bug reports and feature requests, and not for other types such as `lead`. The query is cut to 200 characters, `locale` is `en` or `de`, and the widget shows the first five results under "These articles might answer it".
+
+The same adapter feeds [AI drafts](/docs/ai/suggestions): when an agent asks for a draft, the conversation's subject, or the start of the conversation when it has none, is searched and the results go into the prompt, so the draft can point to the right page.
+
+The route the widget calls is `GET {basePath}/widget/help`, in [HTTP routes](/docs/reference/routes).

@@ -20,7 +20,7 @@ function fields(source: string, type: string) {
 
 // The TypeTable keys between two headings of a reference page.
 function documented(page: string, from: string, to: string) {
-  const mdx = read(`site/content/docs/reference/${page}`);
+  const mdx = read(`site/content/docs/${page}`);
   const start = mdx.indexOf(`\n${from}\n`);
   const end = mdx.indexOf(`\n${to}\n`, start);
   if (start < 0 || end < 0) throw new Error(`${from} or ${to} not in ${page}`);
@@ -33,8 +33,13 @@ describe('the reference documents every field', () => {
   const config = read('src/config.ts');
 
   it.each([
-    ['HelpdeskConfig', 'configuration.mdx', '## Required', '## Identity'],
-    ['InboxConfig', 'inboxes.mdx', '## InboxConfig', '## BusinessHours'],
+    [
+      'HelpdeskConfig',
+      'reference/configuration.mdx',
+      '## Required',
+      '## Identity',
+    ],
+    ['InboxConfig', 'inbox/inboxes.mdx', '## InboxConfig', '## BusinessHours'],
   ])('%s in %s', (type, page, from, to) => {
     const names = fields(config, type);
     expect(names.length).toBeGreaterThan(0);
@@ -42,7 +47,7 @@ describe('the reference documents every field', () => {
     const missing = names.filter(name => !listed.has(name));
     expect(
       missing,
-      `${type} fields missing from site/content/docs/reference/${page}: ${missing.join(', ')}`
+      `${type} fields missing from site/content/docs/${page}: ${missing.join(', ')}`
     ).toEqual([]);
   });
 });

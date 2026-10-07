@@ -3,10 +3,10 @@ title: HTTP routes
 description: Every route the handler serves under basePath, with its method, who may call it, and what it does.
 ---
 
-`helpdesk.handler(request: Request): Promise<Response>` serves every route below under `basePath` (`/api/helpdesk` by default). Paths match with or without a trailing slash; the widget and the agent UI request them with one. Ids are UUIDs. Request and response bodies are JSON unless a row says otherwise. Related guides: [Receive email](/docs/guides/inbound-email), [Run jobs and retention](/docs/guides/jobs).
+`helpdesk.handler(request: Request): Promise<Response>` serves every route below under `basePath` (`/api/helpdesk` by default). Paths match with or without a trailing slash; the widget and the agent UI request them with one. Ids are UUIDs. Request and response bodies are JSON unless a row says otherwise. Related guides: [Receive email](/docs/email/receive), [Run jobs and retention](/docs/operations/jobs).
 
 <Callout type="warn">
-  The `widget/*` and `agent/*` routes are the contract between the handler and the widget and agent UI that ship with it. They can change in any minor release and are not an API for other callers. Host code calls the helpdesk through the functions `buildHelpdesk` returns, as in [Call the helpdesk from your own code](/docs/guides/own-code). `inbound`, `jobs` and `rate` are the routes meant for callers outside the package.
+  The `widget/*` and `agent/*` routes are the contract between the handler and the widget and agent UI that ship with it. They can change in any minor release and are not an API for other callers. Host code calls the helpdesk through the functions `buildHelpdesk` returns, as in [Call the helpdesk from your own code](/docs/app/own-code). `inbound`, `jobs` and `rate` are the routes meant for callers outside the package.
 </Callout>
 
 ```ts title="app/api/helpdesk/[...slug]/route.ts"
@@ -144,7 +144,7 @@ Every route here requires an agent.
 | `GET` | `rate` | Email link | An HTML page that asks the customer to confirm the rating in the link, with a button. |
 | `POST` | `rate` | Email link | Records the rating and answers an HTML page. A `bad` rating opens the conversation again. |
 
-The links come in a [`customer-reply`](/docs/reference/emails#customer-reply). A forged or expired link answers 404. A conversation already rated answers 200 and records nothing; one that is no longer resolved, or was merged, answers 409.
+The links come in a [`customer-reply`](/docs/email/messages#customer-reply). A forged or expired link answers 404. A conversation already rated answers 200 and records nothing; one that is no longer resolved, or was merged, answers 409.
 
 ## Inbound
 
@@ -175,7 +175,7 @@ Without `jobsSecret`, or with another bearer token, it answers 401.
   }}
 />
 
-A failed job runs again after 2, 4, 8 and 16 minutes, and is kept with its last error after the fifth attempt. The job kinds are on [Database](/docs/reference/database#job).
+A failed job runs again after 2, 4, 8 and 16 minutes, and is kept with its last error after the fifth attempt. The job kinds are on [Database](/docs/database/tables#job).
 
 ## Origins and CORS
 
