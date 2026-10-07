@@ -107,7 +107,7 @@ Without `insensitive`, text compares exactly, case included. That matters most f
 
 `updateMany(model, where, set)` returns the number of rows it changed, and `deleteMany(model, where)` the number it removed. With `where` left out, both apply to every row. In `set`, a value of `{ increment: n }` means: add `n` to the stored number, in place.
 
-Both must be atomic per row. The store claims jobs and counts rate limits with an `updateMany` whose `where` checks the row's current value, and when several of those race for one row, exactly one may change it.
+Both must be atomic per row. The store claims jobs with an `updateMany` whose `where` checks the row's current value: when several of those race for one row, exactly one may change it. It counts rate limits with `{ increment: 1 }`: when several of those race, every one must count.
 
 ### Transactions
 
@@ -186,7 +186,7 @@ runAdapterTests({
 npx vitest run lib/my-adapter.test.ts
 ```
 
-The tests write rows and read them back: every kind of value, NULL comparisons, exact and case-insensitive text, literal search characters, ordering with NULLs, paging, conditions through another table, counted updates and concurrent increments, one winner among simultaneous compare-and-swap updates, locked reads, whole transactions, and the unique keys, the verified identity key among them. The in-memory example's own test is [`database-memory.test.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/database-memory.test.ts).
+The tests write rows and read them back: every kind of value, NULL comparisons, exact and case-insensitive text, literal search characters, ordering with NULLs, paging, conditions through another table, counted updates and concurrent increments, one winner among simultaneous compare-and-swap updates, locked reads, whole transactions, a repeated primary key refused, and the partial verified-identity key held. The in-memory example's own test is [`database-memory.test.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/database-memory.test.ts).
 
 ## Use it
 
