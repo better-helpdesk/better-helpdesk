@@ -12,7 +12,7 @@ Better Helpdesk keeps its data in the database your app already uses. It has a b
 | [SQL Server](#sql-server) | 2022 or newer | `tedious` 20 and `tarn` 3 | `mssqlAdapter(config)` | `mssql://` or `sqlserver://` |
 | [SQLite](#sqlite) | | nothing, or `better-sqlite3` | `sqliteAdapter({ database })` | `file:`, or a path ending in `.db`, `.sqlite` or `.sqlite3` |
 
-The drivers are optional peer dependencies of `better-helpdesk`, so install only the one your database needs. For a database that is not in the table, [write your own adapter](/docs/guides/own-adapter).
+`pg`, `mysql2`, `tedious` and `tarn` are optional peer dependencies of `better-helpdesk`, so install only what your database needs; SQLite needs nothing beyond Node, or `better-sqlite3` if you prefer it. For a database that is not in the table, [write your own adapter](/docs/guides/own-adapter).
 
 ## PostgreSQL
 
@@ -113,7 +113,7 @@ HELPDESK_DATABASE_URL='mssql://user:password@db.example.com:1433/app' npx better
 
 The command encrypts the connection. Add `?trustServerCertificate=true` to the URL for a server with a self-signed certificate, or `?encrypt=false` to turn encryption off. The tables go into a `helpdesk` schema, which the command creates.
 
-The helpdesk sends a list of more than 1,000 values, such as the ids of a large bulk change, as one JSON parameter that it reads with `openjson`. SQL Server offers `openjson` only at database compatibility level 130 or higher, so check the level of a database restored from an older server:
+A condition on more than 1,000 values goes to SQL Server as one JSON parameter that it reads with `openjson`, since SQL Server takes about 2,000 parameters per query. The helpdesk's own lists stay shorter; your code can pass longer ones to the store. SQL Server offers `openjson` only at database compatibility level 130 or higher, so check the level of a database restored from an older server:
 
 ```sql
 SELECT compatibility_level FROM sys.databases WHERE name = DB_NAME();
@@ -135,7 +135,7 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-A database opened with `better-sqlite3`, `new Database('helpdesk.db')`, works the same way. The adapter turns foreign keys on for each connection, and refuses to start if SQLite will not, and waits up to five seconds for a write another process holds.
+A database opened with `better-sqlite3`, `new Database('helpdesk.db')`, works the same way. The adapter turns foreign keys on for each connection, throws on its first query if SQLite will not, and waits up to five seconds for a write another process holds.
 
 ```sh
 HELPDESK_DATABASE_URL=file:./helpdesk.db npx better-helpdesk-migrate
@@ -172,7 +172,7 @@ The helpdesk behaves the same on all four databases, with these exceptions.
 
 **Where the tables live.** On Postgres and SQL Server they are in a `helpdesk` schema: `helpdesk.conversation`. MySQL and SQLite have no schemas in that sense, so the tables sit in your database with a prefix: `helpdesk_conversation`. [Database](/docs/reference/database) lists the tables without either.
 
-**Search.** On Postgres the inbox search box uses full-text search: it matches whole words, and it understands web-search syntax, such as a phrase in quotes or a word with a leading `-`. On the other three, each word of the query must appear somewhere in the conversation's title, its subject or one of its messages, ignoring case, so `inv` finds `invoice`. The possible duplicates that AI triage weighs are found the same way.
+**Search.** On Postgres the inbox search box uses full-text search: it matches whole words, and it understands web-search syntax, such as a phrase in quotes or a word with a leading `-`. On the other three, each word of the query must appear somewhere in the conversation's title, its subject or one of its messages, ignoring case, so `inv` finds `invoice`. The possible duplicates that AI triage weighs are conversations whose title, subject or public messages contain any of up to twelve words longer than three letters from the new conversation's subject and message, the 50 latest of them, ranked by how many of those words their title and subject hold.
 
 **Identifiers compare exactly.** On every database, an id from your app is matched with its case intact, so `user-Ab` never opens the contact of `user-ab`. MySQL and SQL Server compare text without regard to case by default; the helpdesk's tables use a binary collation instead (`utf8mb4_bin` and `Latin1_General_100_BIN2`). A report of your own that compares text with `=` on those tables is case-sensitive as well.
 

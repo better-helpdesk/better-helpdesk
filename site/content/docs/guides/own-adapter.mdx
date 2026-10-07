@@ -144,7 +144,7 @@ With the CRUD methods alone, the helpdesk works, and some reads cost more querie
 | Capability | Without it |
 | --- | --- |
 | `searchConversations(query)` | The inbox search matches each word anywhere in the title, the subject or a message, ignoring case. The capability returns a `Where`, which may be `{ native }`. |
-| `duplicateCandidates(exceptId, words)` | Possible duplicates for AI triage are found the same way, then ranked by how many of the words the title and subject hold. |
+| `duplicateCandidates(exceptId, words)` | Possible duplicates for AI triage are the 50 latest conversations whose title, subject or public messages contain any of the words, of which the five whose title and subject hold the most of them are kept. |
 | `lastMessages(conversationIds)` | The previews in conversation lists take one query per conversation. |
 | `topTags(limit)` | Tags are counted in memory, over the conversations active in the last 90 days. |
 | `contactIdsByActivity(where, limit)` | The contacts list shows the newest contacts first, not the most recently active. |
