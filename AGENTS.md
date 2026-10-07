@@ -46,11 +46,12 @@ code already does. Concretely:
   when the result drifts from the committed model. A schema change is: edit
   the model, add a migration for every family, run the integration tests on
   every database.
-- **Four runtime dependencies**: `kysely`, `zod`, `mailparser`, `mailauth`.
-  Until the store moves to Kysely (#175), `drizzle-orm` holds `kysely`'s
-  place and the Postgres schema is still `src/db/schema.ts` with
-  `pnpm db:generate`. Adding one needs a stated reason in the PR and an
-  MIT-compatible licence (MIT, BSD, Apache 2.0, ISC).
+- **Four runtime dependencies**: `drizzle-orm`, `zod`, `mailparser`,
+  `mailauth`. #175 replaces `drizzle-orm` with `kysely` (MIT, no
+  dependencies), so the count stays at four; until then the Postgres schema
+  is `src/db/schema.ts` with `pnpm db:generate`. Adding one needs a stated
+  reason in the PR and an MIT-compatible licence (MIT, BSD, Apache 2.0,
+  ISC).
 - **Everything optional is an adapter.** Storage, email, AI and help search
   are interfaces in `src/config.ts` that the host implements; inbound email
   and jobs are routes the host's relay and scheduler call, each behind a
@@ -75,8 +76,7 @@ code already does. Concretely:
   approval in the current conversation.
 - Anything that makes Better Helpdesk its own instance: a standalone server,
   a Docker image run beside the app, a hosted or cloud mode, its own login,
-  its own database. A second query layer beside the adapter contract, or a
-  feature that works on one database and not the others without a fallback.
+  its own database. Adding a second ORM or query layer beside Kysely.
 - Changing `.github/workflows/ci.yml`, `release.yml` or the npm publishing
   setup outside a PR the maintainer approved.
 - Secrets or tokens anywhere in the repository or in CI configuration.
@@ -129,11 +129,11 @@ TEST_DATABASE_URL=postgres://postgres@localhost:5432/db pnpm test:integration
 
 The integration tests create a `helpdesk_test` database next to the one the
 URL names and migrate it; a `postgres:18-alpine` container started with
-`POSTGRES_HOST_AUTH_METHOD=trust` is enough. The suite also runs on SQLite
-in-process, and on MySQL and SQL Server when `TEST_MYSQL_URL` and
-`TEST_MSSQL_URL` name a server (`mysql:8.4`, `mcr.microsoft.com/mssql/server:2022-latest`);
-a change to the store or the schema is green only once every database
-passed. Green means all three passed.
+`POSTGRES_HOST_AUTH_METHOD=trust` is enough. Green means lint, unit and
+integration tests passed. The suite also runs on SQLite in-process, and on
+MySQL and SQL Server when `TEST_MYSQL_URL` and `TEST_MSSQL_URL` name a
+server (`mysql:8.4`, `mcr.microsoft.com/mssql/server:2022-latest`); a change
+to the store or the schema is green only once every database passed.
 When a change touches `package.json` exports, `scripts/build.mjs` or `bin/`,
 also do what CI's smoke test does: `pnpm pack`, then `npm install` the
 tarball into a scratch directory outside the repository and import it.
