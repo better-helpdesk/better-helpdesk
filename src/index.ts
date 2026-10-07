@@ -13,7 +13,12 @@ export {
   type OrderBy,
   type Where,
 } from './db/adapter';
-export { kyselyAdapter, postgresAdapter } from './db/kysely';
+export {
+  kyselyAdapter,
+  postgresAdapter,
+  type SqliteDatabaseInput,
+  sqliteAdapter,
+} from './db/kysely';
 export { migrate } from './db/migrate';
 export { helpdeskModel } from './db/model';
 export {

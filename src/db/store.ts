@@ -1,11 +1,12 @@
 import { PRIORITIES } from '../config';
 import type { DatabaseAdapter, Where } from './adapter';
-import type {
-  ConversationContext,
-  IdentityChannel,
-  Insert,
-  ModelName,
-  Row,
+import {
+  type ConversationContext,
+  helpdeskModel,
+  type IdentityChannel,
+  type Insert,
+  type ModelName,
+  type Row,
 } from './model';
 
 export type Contact = Row<'contact'> & { tags: string[] };
@@ -144,6 +145,27 @@ function chunks<T>(items: T[]) {
     out.push(items.slice(i, i + CHUNK));
   }
   return out;
+}
+
+/** For each model, the fields elsewhere that point at it, and what a delete does to them. */
+const REFERENCES = new Map<
+  ModelName,
+  { model: ModelName; field: string; onDelete: 'cascade' | 'set null' }[]
+>();
+for (const [model, table] of Object.entries(helpdeskModel)) {
+  for (const [field, spec] of Object.entries(
+    table.fields as Record<
+      string,
+      { references?: { model: string; onDelete: 'cascade' | 'set null' } }
+    >
+  )) {
+    if (!spec.references) continue;
+    const target = spec.references.model as ModelName;
+    REFERENCES.set(target, [
+      ...(REFERENCES.get(target) ?? []),
+      { model: model as ModelName, field, onDelete: spec.references.onDelete },
+    ]);
+  }
 }
 
 function latest<T extends Date | null>(a: T, b: Date | null): T {
@@ -351,6 +373,43 @@ export function createStore(adapter: DatabaseAdapter) {
     { field: 'waitingSince', direction: 'asc', nulls: 'last' },
     { field: 'lastMessageAt', direction: 'desc' },
   ] as const;
+
+  /**
+   * Deletes rows and what hangs off them, children first, as the foreign
+   * keys say. The store never leans on the database's cascades: SQL Server
+   * refuses some of them and SQLite runs without them unless asked.
+   */
+  async function purge(model: ModelName, ids: string[], db: DatabaseAdapter) {
+    for (const part of chunks(ids)) {
+      for (const ref of REFERENCES.get(model) ?? []) {
+        const pointing = oneOf(ref.field, part);
+        if (ref.onDelete === 'set null') {
+          await db.updateMany(ref.model, pointing, { [ref.field]: null });
+        } else if ('id' in helpdeskModel[ref.model].fields) {
+          const children = await db.findMany<{ id: string }>(ref.model, {
+            where: pointing,
+            select: ['id'],
+          });
+          await purge(
+            ref.model,
+            children.map(c => c.id),
+            db
+          );
+        } else {
+          await db.deleteMany(ref.model, pointing);
+        }
+      }
+      await db.deleteMany(model, oneOf('id', part));
+    }
+  }
+
+  async function idsOf(model: ModelName, where: Where, db = adapter) {
+    const rows = await db.findMany<{ id: string }>(model, {
+      where,
+      select: ['id'],
+    });
+    return rows.map(r => r.id);
+  }
 
   async function conversationIdsWhere(where: Where) {
     const rows = await adapter.findMany<{ id: string }>('conversation', {
@@ -652,7 +711,7 @@ export function createStore(adapter: DatabaseAdapter) {
         await tx.updateMany('identity', eq('contactId', sourceId), {
           contactId: targetId,
         });
-        await tx.deleteMany('contact', eq('id', sourceId));
+        await purge('contact', [sourceId], tx);
         if (source && target) {
           await tx.updateMany('contact', eq('id', targetId), {
             email: target.email ?? source.email,
@@ -1716,7 +1775,7 @@ export function createStore(adapter: DatabaseAdapter) {
     },
 
     async deleteDeal(id: string) {
-      await adapter.deleteMany('deal', eq('id', id));
+      await adapter.transaction(tx => purge('deal', [id], tx));
     },
 
     async createActivity(values: Insert<'activity'>) {
@@ -1963,12 +2022,12 @@ export function createStore(adapter: DatabaseAdapter) {
 
     async deleteConversations(ids: string[]) {
       for (const part of chunks(ids)) {
-        await adapter.deleteMany('conversation', oneOf('id', part));
+        await adapter.transaction(tx => purge('conversation', part, tx));
       }
     },
 
     async deleteContact(id: string) {
-      await adapter.deleteMany('contact', eq('id', id));
+      await adapter.transaction(tx => purge('contact', [id], tx));
     },
 
     /** Contacts of the company that `deleteCompany` will drop: those without a conversation of their own. */
@@ -1988,18 +2047,20 @@ export function createStore(adapter: DatabaseAdapter) {
       await adapter.transaction(async tx => {
         for (const part of chunks(contactIds)) {
           // One may have opened a conversation since; that one stays.
-          await tx.deleteMany(
+          await purge(
             'contact',
-            and(
-              oneOf('id', part),
-              notInSelect('id', 'conversation', 'contactId')
-            )
+            await idsOf(
+              'contact',
+              and(
+                oneOf('id', part),
+                notInSelect('id', 'conversation', 'contactId')
+              ),
+              tx
+            ),
+            tx
           );
         }
-        await tx.updateMany('contact', eq('companyId', id), {
-          companyId: null,
-        });
-        await tx.deleteMany('company', eq('id', id));
+        await purge('company', [id], tx);
       });
     },
 
@@ -2036,7 +2097,13 @@ export function createStore(adapter: DatabaseAdapter) {
     },
 
     async deleteMessagesBy(contactId: string) {
-      await adapter.deleteMany('message', eq('contactId', contactId));
+      await adapter.transaction(async tx =>
+        purge(
+          'message',
+          await idsOf('message', eq('contactId', contactId), tx),
+          tx
+        )
+      );
     },
 
     async findDuplicateCandidates(conversation: Conversation, text: string) {

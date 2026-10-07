@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import { type Migration, Migrator } from 'kysely/migration';
 
+import { createBaseline } from './baseline';
 import type { Family, KyselyAdapter } from './kysely';
 import { postgresBaseline } from './postgres-baseline';
 
@@ -85,7 +86,9 @@ const postgres: Record<string, Migration> = {
 export const migrations: Record<Family, Record<string, Migration>> = {
   postgres,
   mysql: {},
-  sqlite: {},
+  sqlite: {
+    '0000_baseline': { up: (db: Db) => createBaseline(db, 'sqlite') },
+  },
   mssql: {},
 };
 
