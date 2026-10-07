@@ -97,8 +97,8 @@ export default async function Demo() {
                   <h2>Look at the rows</h2>
                   <p>
                     It all lives in a <code>helpdesk</code> schema in the host's
-                    own Postgres, as plain tables. These are the newest
-                    messages, read with this query when the page loaded:
+                    own database, Postgres here, as plain tables. These are the
+                    newest messages, read with this query when the page loaded:
                   </p>
                   <pre>
                     <code>{NEWEST_ROWS_SQL}</code>

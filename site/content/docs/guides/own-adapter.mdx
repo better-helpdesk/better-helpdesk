@@ -1,0 +1,206 @@
+---
+title: Write your own database adapter
+description: Run Better Helpdesk on a database the built-in adapters do not cover, by implementing the adapter contract or passing a Kysely dialect, and prove the adapter with better-helpdesk/testing.
+---
+
+The helpdesk's store never writes SQL. It asks a database adapter to create, find, count, update and delete rows of the tables `helpdeskModel` describes, and to run some of that in a transaction. The four [built-in adapters](/docs/guides/databases) answer those requests in SQL; an adapter of yours can answer them however your database does.
+
+There are two ways to write one. If your database speaks the SQL of Postgres, MySQL, SQL Server or SQLite and has a Kysely dialect, pass the dialect to `kyselyAdapter`. Otherwise, implement the contract.
+
+## Pass a Kysely dialect
+
+`kyselyAdapter` is what the built-in adapters are made of: `postgresAdapter({ pool })` is `kyselyAdapter` with Kysely's `PostgresDialect`. Give it another dialect and the family whose SQL it should write:
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, kyselyAdapter } from 'better-helpdesk';
+
+import { dialect } from './dialect'; // a Kysely Dialect for your driver
+
+export const db = kyselyAdapter({ dialect, family: 'postgres' });
+
+export const helpdesk = buildHelpdesk({
+  db,
+  // ...the rest of your configuration
+});
+```
+
+`family` is `'postgres'`, `'mysql'`, `'mssql'` or `'sqlite'`. It decides the SQL the adapter writes, the tables' names, and which [capabilities](#add-capabilities) come with it: all six for Postgres, `lastMessages`, `topTags` and `contactIdsByActivity` for the others. The built-in migrations work too. `better-helpdesk-migrate` opens only the URLs it knows, so call `migrate(db)` from a script, as in [Run the migrations from your own code](/docs/guides/databases#run-the-migrations-from-your-own-code).
+
+The checks the named adapters make are not part of `kyselyAdapter`. `sqliteAdapter` turns on `pragma foreign_keys` and sets `pragma busy_timeout = 5000` on each connection, and `mysqlAdapter` refuses a pool that does not keep times in UTC. Do the same in your dialect's connection setup.
+
+## Implement the contract
+
+An adapter of your own is an object of type `AdapterInput`:
+
+```ts title="lib/my-adapter.ts"
+import type { AdapterInput } from 'better-helpdesk/adapters';
+
+export function myAdapter(): AdapterInput {
+  const adapter: AdapterInput = {
+    id: 'my-database',
+    supports: { dates: false, booleans: true, json: true },
+    async create(model, data) {},
+    async findMany(model, query) { return []; },
+    async count(model, where) { return 0; },
+    async updateMany(model, where, set) { return 0; },
+    async deleteMany(model, where) { return 0; },
+    async transaction(fn) { return fn(adapter); },
+  };
+  return adapter;
+}
+```
+
+You do not pass it to `buildHelpdesk` directly. `createAdapter` wraps it in the `DatabaseAdapter` the store uses, and does a share of the work for you:
+
+- `create` receives every field of the model. `createAdapter` has filled in what the store left out: a random UUID for `id`, the app's clock for a `now` default, the model's other defaults, and `null` for the rest.
+- Values reach you in the forms `supports` declares and come back to the store in its own: a `Date` for a time, a boolean, parsed JSON, a number for an integer and a string for a decimal.
+- An `in` or `notIn` with an empty list never reaches you; it arrives as an empty `or` or an empty `and`.
+
+### Rows and values
+
+Rows are plain objects keyed by the model's field names, in camel case: `contactId`, `lastMessageAt`. How you name the stored columns is up to you; the built-in adapters use snake case.
+
+`supports` says which values your database keeps natively:
+
+| Flag | `true` | `false` |
+| --- | --- | --- |
+| `dates` | `Date` objects in and out | ISO 8601 strings in UTC, such as `2026-03-04T05:06:07.089Z` |
+| `booleans` | `true` and `false` | `1` and `0` |
+| `json` | Objects, arrays and other JSON values | JSON text |
+
+Times must keep their milliseconds, and compare and sort as times. ISO strings from `createAdapter` all have the same length, so they sort correctly as text. A decimal arrives as a string, such as `'1234.50'`, and must be stored exactly.
+
+### Conditions
+
+`Where` is a tree. Its leaf is `{ field, op, value }`, and `op` is `eq` when left out.
+
+| Condition | Matches |
+| --- | --- |
+| `eq`, `ne` with `null` | The field is, or is not, NULL. |
+| `eq`, `ne`, `lt`, `lte`, `gt`, `gte` | As in SQL: a NULL field matches none of them. Times and numbers compare by value. |
+| `in`, `notIn` with `value` | The field is, or is not, one of the values. |
+| `in`, `notIn` with `select` | The field is, or is not, among the values of `select.field` in the rows of `select.model` that match `select.where`. |
+| `contains`, `startsWith` | The value appears in the text, or begins it. `%`, `_`, `[` and every other character in the value are literal. |
+| `insensitive: true` | On `eq`, `ne`, `in`, `notIn`, `contains` and `startsWith`: compare both sides lower-cased. |
+| `{ and: [...] }`, `{ or: [...] }`, `{ not }` | As their names say. An empty `and` holds; an empty `or` does not. |
+| `{ native }` | A condition only your adapter understands. The store passes it back only when your own `searchConversations` returned it. |
+
+Without `insensitive`, text compares exactly, case included. That matters most for identifiers: two users of your app whose ids differ only in case are two people.
+
+### Finding rows
+
+`findMany(model, query)` takes a `FindQuery`:
+
+| Field | Meaning |
+| --- | --- |
+| `where` | The condition. Every row when left out. |
+| `orderBy` | A list of `{ field, direction, nulls }`. `direction` is `asc` when left out. `nulls` is `first` or `last`; when left out, NULLs sort wherever your database puts them. |
+| `limit`, `offset` | Paging. |
+| `select` | Only these fields. All of them when left out. |
+| `forUpdate` | Lock the rows found until the transaction ends. |
+
+`count(model, where)` returns the number of rows that match.
+
+### Changing rows
+
+`create` stores one row and returns nothing. It must throw when the row would repeat a primary key or a unique key of the model: the store relies on that to refuse duplicates.
+
+`updateMany(model, where, set)` returns the number of rows it changed, and `deleteMany(model, where)` the number it removed. With `where` left out, both apply to every row. In `set`, a value of `{ increment: n }` means: add `n` to the stored number, in place.
+
+Both must be atomic per row. The store claims jobs and counts rate limits with an `updateMany` whose `where` checks the row's current value, and when several of those race for one row, exactly one may change it.
+
+### Transactions
+
+`transaction(fn)` calls `fn` with an adapter whose every call is part of one transaction, and returns what `fn` returns. When `fn` throws, nothing it wrote stays, and the error reaches the caller. The store also calls `transaction` on the adapter it was handed inside a transaction; that call must run as part of the transaction already open, as it does in the in-memory example.
+
+A row read with `forUpdate` stays locked until its transaction ends. The store numbers conversations that way: it reads the reference counter for update, then writes the next value, and two conversations opened at once must not get the same number.
+
+## Create the tables
+
+The built-in migrations create tables only through the built-in adapters. With an adapter of your own, the tables are yours to create, from `helpdeskModel`:
+
+```ts
+import { helpdeskModel } from 'better-helpdesk/adapters';
+
+for (const [model, table] of Object.entries(helpdeskModel)) {
+  console.log(model, table.primaryKey, table.unique, Object.keys(table.fields));
+}
+```
+
+Each table lists its fields, each with a `kind` (`uuid`, `string`, `text`, `integer`, `boolean`, `date`, `json` or `decimal`), whether it may be null, its default, and the table it references. `string` is short text that is indexed or compared exactly; `text` is long text.
+
+Create every key the model declares, because the store relies on them. One of them holds only for some rows: `identity` has `{ fields: ['channel', 'externalId'], where: 'verified' }`, so a verified email address or host user id belongs to one contact, while unverified copies of it may sit with several. Where your database has no partial unique index, the built-in MySQL migration shows one way round it: a unique key over expressions that are NULL unless `verified` is true.
+
+Foreign keys are yours to add or leave out. The store deletes what hangs off a row itself, as the references in the model say, and never relies on the database to cascade. Indexes are a matter of speed, and the built-in migrations are a guide to which ones the queries use.
+
+The built-in migrations also seed the reference counter. Without that row, the first conversation creates it and takes the number 1000.
+
+When an upgrade changes `helpdeskModel`, your tables must follow it.
+
+## Add capabilities
+
+With the CRUD methods alone, the helpdesk works, and some reads cost more queries or more memory than they would in one query written for your database. `capabilities` is where you supply those queries. Each is optional:
+
+| Capability | Without it |
+| --- | --- |
+| `searchConversations(query)` | The inbox search matches each word anywhere in the title, the subject or a message, ignoring case. The capability returns a `Where`, which may be `{ native }`. |
+| `duplicateCandidates(exceptId, words)` | Possible duplicates for AI triage are found the same way, then ranked by how many of the words the title and subject hold. |
+| `lastMessages(conversationIds)` | The previews in conversation lists take one query per conversation. |
+| `topTags(limit)` | Tags are counted in memory, over the conversations active in the last 90 days. |
+| `contactIdsByActivity(where, limit)` | The contacts list shows the newest contacts first, not the most recently active. |
+| `notificationsFor(agentId, since, limit)` | An agent's notifications are worked out in memory from the last 30 days of events. |
+
+`DatabaseAdapter`, `Capabilities` and `Notification` in `better-helpdesk/adapters` give the exact signatures. The Postgres adapter implements all six, in `src/db/kysely.ts`.
+
+## Start from the in-memory example
+
+[`examples/adapters/database-memory.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/database-memory.ts) is a complete adapter. It keeps its rows in memory, so it is no use in production, but it implements every rule on this page against the contract alone, without capabilities: conditions, NULL ordering, keys, increments, and transactions that run one at a time and roll back on a throw. Copy it, and replace its arrays with your database.
+
+## Prove it with the conformance tests
+
+`better-helpdesk/testing` holds the tests every built-in adapter passes. They run on vitest 4:
+
+```sh
+npm install --save-dev vitest
+```
+
+Point `runAdapterTests` at your adapter. `adapter` returns it, over a database that already has the tables; `reset` empties them before each test:
+
+```ts title="lib/my-adapter.test.ts"
+import { runAdapterTests } from 'better-helpdesk/testing';
+
+import { myAdapter } from './my-adapter';
+
+const adapter = myAdapter();
+
+runAdapterTests({
+  name: 'my database',
+  adapter: () => adapter,
+  reset: async () => {
+    // Delete every row of every helpdesk table.
+  },
+});
+```
+
+```sh
+npx vitest run lib/my-adapter.test.ts
+```
+
+The tests write rows and read them back: every kind of value, NULL comparisons, exact and case-insensitive text, literal search characters, ordering with NULLs, paging, conditions through another table, counted updates and concurrent increments, one winner among simultaneous compare-and-swap updates, locked reads, whole transactions, and the unique keys, the verified identity key among them. The in-memory example's own test is [`database-memory.test.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/database-memory.test.ts).
+
+## Use it
+
+Wrap your adapter in `createAdapter` and pass it as `db`:
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, createAdapter } from 'better-helpdesk';
+
+import { myAdapter } from './my-adapter';
+
+export const helpdesk = buildHelpdesk({
+  db: createAdapter(myAdapter()),
+  // ...the rest of your configuration
+});
+```
+
+[Package exports](/docs/reference/exports#better-helpdeskadapters) lists everything `better-helpdesk/adapters` exports.

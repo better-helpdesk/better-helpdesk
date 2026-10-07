@@ -14,7 +14,7 @@ const STEPS = [
 const LAYERS: [string, string, string][] = [
   ['widget', '<HelpdeskWidget />', 'widget/*'],
   ['handler', 'route.ts', 'inbound · jobs'],
-  ['db', 'helpdesk', 'schema in your Postgres'],
+  ['db', 'helpdesk', 'tables in your database'],
   ['admin', '<HelpdeskAdmin />', 'agent/*'],
 ];
 const STEP_MS = 1400;

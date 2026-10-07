@@ -160,4 +160,10 @@ export async function emptyTables(adapter: DatabaseAdapter) {
   await adapter.updateMany('agent', undefined, { viewingId: null });
   await adapter.updateMany('conversation', undefined, { mergedIntoId: null });
   for (const table of tables) await adapter.deleteMany(table, undefined);
+  // The reference counter stays; counters the tests make go.
+  await adapter.deleteMany('counter', {
+    field: 'name',
+    op: 'ne',
+    value: 'reference',
+  });
 }

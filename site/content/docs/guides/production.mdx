@@ -19,7 +19,7 @@ The order matters: migrate first, then deploy. The new version's queries expect 
 
 ## Connect over TLS
 
-The migration command and your app open their connections separately, and each has its own setting.
+The migration command and your app open their connections separately, and each has its own setting. The settings below are for Postgres. On SQL Server the command encrypts by default, as [SQL Server](/docs/guides/databases#sql-server) describes. On MySQL, turn TLS on in the pool your app creates, and run the migrations through that pool, as in [Run the migrations from your own code](/docs/guides/databases#run-the-migrations-from-your-own-code).
 
 For the command, `DATABASE_SSL=true` turns on TLS and checks the server's certificate. `DATABASE_SSL=no-verify` encrypts without checking it, for a database with a self-signed certificate. A `sslmode` in the connection string replaces what `DATABASE_SSL` sets.
 
@@ -40,7 +40,7 @@ new pg.Pool({
 
 ## Keep the pool alive
 
-Use the pool from [Build the helpdesk](/docs/guides/install#build-the-helpdesk): one pool kept on `globalThis`, with `error` listeners on the pool and on each connection. Without the listeners, the first restart or failover of your database ends a connection with an error nobody handles, and Node.js stops your app.
+On Postgres, use the pool from [Build the helpdesk](/docs/guides/install#build-the-helpdesk): one pool kept on `globalThis`, with `error` listeners on the pool and on each connection. Without the listeners, the first restart or failover of your database ends a connection with an error nobody handles, and Node.js stops your app.
 
 ## Set the production URLs
 
@@ -110,7 +110,7 @@ Generate each one with `openssl rand -base64 32`. Here is every variable a produ
 | --- | --- | --- |
 | `HELPDESK_DATABASE_URL` | The migration command and `lib/helpdesk.ts` | The connection string. |
 | `APP_DATABASE_URL` | The migration command | Used when `HELPDESK_DATABASE_URL` is unset. |
-| `DATABASE_SSL` | The migration and import commands | `true` turns on TLS and checks the certificate; `no-verify` skips the check. |
+| `DATABASE_SSL` | The migration and import commands | Postgres only. `true` turns on TLS and checks the certificate; `no-verify` skips the check. |
 | `HELPDESK_ADMIN_URL` | `adminUrl` | The URL your team opens the agent UI at. |
 | `HELPDESK_IDENTITY_SECRET` | `identityTokenSecret` | Signs identity tokens for a widget on another origin. `buildHelpdesk` throws on a secret shorter than 32 bytes. See [Sign customers in from another origin](/docs/guides/identity-token). |
 | `HELPDESK_INBOUND_SECRET` | `inboundWebhookSecret` | The bearer token your mail relay sends to the inbound route. See [Receive email](/docs/guides/inbound-email). |
