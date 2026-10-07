@@ -119,13 +119,72 @@ export function runAdapterTests({
       expect(await names({ or: [] })).toEqual([]);
     });
 
-    it('compares text exactly unless asked to ignore case', async () => {
+    it('compares identifiers exactly, and other text ignoring case only when asked', async () => {
+      // Two users whose ids differ only in case are two people.
+      for (const externalUserId of ['user-Ab', 'user-ab']) {
+        await db().create('agent', { externalUserId, name: externalUserId });
+      }
+      const agents = await db().findMany<{ name: string }>('agent', {
+        where: { field: 'externalUserId', value: 'user-ab' },
+      });
+      expect(agents.map(a => a.name)).toEqual(['user-ab']);
       await contact({ name: 'Ab' });
       await contact({ name: 'ab' });
       expect(await names({ field: 'name', value: 'ab' })).toEqual(['ab']);
       expect(
         (await names({ field: 'name', value: 'AB', insensitive: true })).sort()
       ).toEqual(['Ab', 'ab']);
+    });
+
+    it('compares and orders times and numbers by value, not as text', async () => {
+      const times = [
+        '2026-12-31T23:59:59.999Z',
+        '2027-01-01T00:00:00.000Z',
+        '2026-02-28T09:00:00.000Z',
+        '2026-02-28T09:00:00.001Z',
+      ].map(t => new Date(t));
+      for (const [i, lastSeenAt] of times.entries()) {
+        await contact({ name: `t${i}`, lastSeenAt });
+      }
+      const order = async (direction: 'asc' | 'desc') =>
+        (
+          await db().findMany<{ name: string }>('contact', {
+            orderBy: [{ field: 'lastSeenAt', direction }],
+          })
+        ).map(c => c.name);
+      expect(await order('asc')).toEqual(['t2', 't3', 't0', 't1']);
+      expect(await order('desc')).toEqual(['t1', 't0', 't3', 't2']);
+      const at = (op: 'lt' | 'lte' | 'gt' | 'gte', value: Date) =>
+        names({ field: 'lastSeenAt', op, value });
+      expect(await at('lt', times[1] as Date)).toEqual(['t0', 't2', 't3']);
+      expect(await at('lte', times[0] as Date)).toEqual(['t0', 't2', 't3']);
+      expect(await at('gt', times[0] as Date)).toEqual(['t1']);
+      expect(await at('gte', times[3] as Date)).toEqual(['t0', 't1', 't3']);
+      // The store treats a one-millisecond range as "the same instant".
+      expect(
+        await names({
+          and: [
+            { field: 'lastSeenAt', op: 'gte', value: times[2] },
+            {
+              field: 'lastSeenAt',
+              op: 'lt',
+              value: new Date((times[2] as Date).getTime() + 1),
+            },
+          ],
+        })
+      ).toEqual(['t2']);
+      for (const attempts of [9, 10, 2]) {
+        await db().create('job', {
+          kind: `k${attempts}`,
+          payload: {},
+          attempts,
+        });
+      }
+      const jobs = await db().findMany<{ attempts: number }>('job', {
+        where: { field: 'attempts', op: 'gt', value: 2 },
+        orderBy: [{ field: 'attempts', direction: 'desc' }],
+      });
+      expect(jobs.map(j => j.attempts)).toEqual([10, 9]);
     });
 
     it('takes the characters of a search literally', async () => {
@@ -251,6 +310,28 @@ export function runAdapterTests({
         );
       const won = await Promise.all(Array.from({ length: 10 }, claim));
       expect(won.reduce((a, b) => a + b, 0)).toBe(1);
+    });
+
+    it('holds a row read for update until its transaction ends', async () => {
+      await db().create('counter', { name: 'race', value: 0 });
+      const where = { field: 'name', value: 'race' };
+      await Promise.all(
+        Array.from({ length: 10 }, () =>
+          db().transaction(async tx => {
+            const row = await tx.findOne<{ value: number }>('counter', {
+              where,
+              forUpdate: true,
+            });
+            await tx.updateMany('counter', where, {
+              value: (row?.value ?? 0) + 1,
+            });
+          })
+        )
+      );
+      const [row] = await db().findMany<{ value: number }>('counter', {
+        where,
+      });
+      expect(row?.value).toBe(10);
     });
 
     it('keeps all of a transaction, or none of it', async () => {

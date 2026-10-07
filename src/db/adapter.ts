@@ -147,15 +147,18 @@ export type DatabaseAdapter = {
 };
 
 let last = 0;
+let lastReal = 0;
 
 /**
  * The app's time, later than the time it gave before, so rows written one
- * after the other keep their order within a millisecond. A clock set back by
- * more than a second, as by NTP or a test, is followed rather than outrun.
+ * after the other keep their order within a millisecond. When the system
+ * clock itself is set back by more than a second, as by NTP or a test, this
+ * follows it; running ahead of it by its own count never makes it jump back.
  */
 export function clock() {
   const now = Date.now();
-  last = now < last - 1000 ? now : Math.max(now, last + 1);
+  last = now < lastReal - 1000 ? now : Math.max(now, last + 1);
+  lastReal = now;
   return new Date(last);
 }
 
