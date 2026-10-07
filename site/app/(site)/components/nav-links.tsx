@@ -55,7 +55,7 @@ export function NavLinks({ base = '' }: { base?: string }) {
   );
 }
 
-/** The section links on phones, in a popover so the nav's clip-path cannot cut it off. */
+/** The section links on phones, in a popover. */
 export function NavMenu({ base = '', repo }: { base?: string; repo: string }) {
   const menu = useRef<HTMLDivElement>(null);
   const close = () => menu.current?.hidePopover();

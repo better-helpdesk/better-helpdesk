@@ -44,8 +44,6 @@
   padding: 0 8px 0 16px;
   background: rgba(17, 20, 19, 0.82);
   backdrop-filter: blur(12px);
-  --n: 6px;
-  clip-path: var(--notch);
 }
 .brand {
   display: flex;
@@ -117,8 +115,6 @@
   border: 0;
   cursor: pointer;
   font: 600 15px / 1 var(--f-b);
-  --n: 5px;
-  clip-path: var(--notch);
   transition:
     background 0.15s,
     transform 0.12s;
@@ -148,8 +144,6 @@
   background: var(--bg);
   color: var(--mint);
   font-family: var(--f-m);
-  --n: 3px;
-  clip-path: var(--notch);
   transition: transform 0.2s steps(2);
 }
 .btn:hover .bi {
@@ -277,8 +271,6 @@
   border: 0;
   color: var(--fg);
   background: var(--s2);
-  --n: 6px;
-  clip-path: var(--notch);
   opacity: 0;
   transform: translateY(-8px);
   transition:
@@ -371,8 +363,6 @@
   display: grid;
   place-items: center;
   background: var(--mint);
-  --n: 4px;
-  clip-path: var(--notch);
   pointer-events: none;
 }
 .skin svg {

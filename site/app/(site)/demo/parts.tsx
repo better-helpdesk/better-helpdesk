@@ -21,8 +21,15 @@ export function ResetCountdown({ minutes }: { minutes: number }) {
 
 let pressedUntil = 0;
 
+const BUG_REPORT = {
+  type: 'bug',
+  subject: 'The broken button threw an error',
+  message:
+    'I pressed the broken button on the demo page, and it threw an error.',
+};
+
 function openBugReport() {
-  document.querySelector('helpdesk-widget')?.open({ type: 'bug' });
+  document.querySelector('helpdesk-widget')?.open(BUG_REPORT);
 }
 
 /**

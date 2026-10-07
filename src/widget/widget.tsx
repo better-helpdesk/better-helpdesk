@@ -33,6 +33,11 @@ export type WidgetEvent =
     }
   | { name: 'helpdesk:booking-clicked'; detail: { reference: string } };
 
+/** What a host passes to `open()`: the form, and text to start it with. */
+export type OpenRequest = { type?: string; subject?: string; message?: string };
+
+type Prefill = { subject?: string; message?: string };
+
 export type WidgetProps = {
   api: string;
   inbox: string;
@@ -50,7 +55,7 @@ export type WidgetProps = {
   /** In the page itself: always open, no launcher, the conversations first. */
   inline?: boolean;
   /** Set anew by the host to open the panel, on the form of `type` when the inbox offers it. */
-  openRequest?: { type?: string };
+  openRequest?: OpenRequest;
   errors: () => string[];
   onEvent?: (event: WidgetEvent) => void;
 };
@@ -101,7 +106,7 @@ type Session = {
 
 type View =
   | { name: 'home' }
-  | { name: 'form'; type: string }
+  | { name: 'form'; type: string; prefill?: Prefill }
   | { name: 'list' }
   | { name: 'thread'; id: string };
 
@@ -364,6 +369,7 @@ export function Widget(props: WidgetProps) {
   // A host's request waits for the session, which says what the inbox offers.
   const [requested, setRequested] = useState<{
     type: string;
+    prefill: Prefill;
     wasOpen: boolean;
   } | null>(null);
   const focusForm = useRef(false);
@@ -371,8 +377,10 @@ export function Widget(props: WidgetProps) {
   isOpen.current = open;
   useEffect(() => {
     if (!props.openRequest) return;
+    const { type, subject, message } = props.openRequest;
     setRequested({
-      type: props.openRequest.type ?? '',
+      type: type ?? '',
+      prefill: { subject, message },
       wasOpen: isOpen.current,
     });
     setMenuOpen(false);
@@ -382,16 +390,18 @@ export function Widget(props: WidgetProps) {
   useEffect(() => {
     if (requested === null || !data) return;
     setRequested(null);
-    const offeredType = offeredKey.split(',').includes(requested.type);
+    // An inbox with one form names it for the host.
+    const type = requested.type || single || '';
+    const offeredType = offeredKey.split(',').includes(type);
     // An open panel keeps what the customer is writing: only a form the host
     // names replaces it, and never a thread with its reply.
     if (requested.wasOpen && (!offeredType || view.name === 'thread')) return;
     focusForm.current = true;
     setView(
       offeredType
-        ? { name: 'form', type: requested.type }
+        ? { name: 'form', type, prefill: requested.prefill }
         : single
-          ? { name: 'form', type: single }
+          ? { name: 'form', type: single, prefill: requested.prefill }
           : { name: 'home' }
     );
   }, [requested, data, offeredKey, single, view.name]);
@@ -589,8 +599,10 @@ export function Widget(props: WidgetProps) {
           )}
           {data && formType && (
             <NewMessage
+              key={formType}
               {...props}
               type={formType}
+              prefill={view.name === 'form' ? view.prefill : undefined}
               api={api}
               t={t}
               session={data}
@@ -776,10 +788,12 @@ function NewMessage({
   locale,
   onToken,
   onCreated,
+  prefill,
 }: Omit<WidgetProps, 'api'> & {
   api: Api;
   t: Translate;
   type: string;
+  prefill?: Prefill;
   session: Session;
   onToken: (token: string) => void;
   onCreated: (
@@ -794,6 +808,13 @@ function NewMessage({
 }) {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  // A host's text goes into the fields the customer has left empty, so it
+  // never replaces what they wrote.
+  useEffect(() => {
+    if (!prefill) return;
+    setSubject(s => s || (prefill.subject?.slice(0, 200) ?? ''));
+    setBody(b => (b.trim() ? b : (prefill.message ?? b)));
+  }, [prefill]);
   const message = useRef<RichEditorHandle>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
