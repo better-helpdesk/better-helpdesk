@@ -1,60 +1,30 @@
-import {
-  and,
-  arrayContains,
-  asc,
-  desc,
-  eq,
-  getTableColumns,
-  gt,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  ne,
-  or,
-  type SQL,
-  sql,
-} from 'drizzle-orm';
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
-import type { Pool } from 'pg';
-
 import { PRIORITIES } from '../config';
-import type { ConversationContext } from './schema';
-import * as schema from './schema';
+import type { DatabaseAdapter, Where } from './adapter';
+import type {
+  ConversationContext,
+  IdentityChannel,
+  Insert,
+  ModelName,
+  Row,
+} from './model';
 
-const {
-  activities,
-  agents,
-  attachments,
-  cannedReplies,
-  companies,
-  contacts,
-  conversationEvents,
-  conversations,
-  deals,
-  identities,
-  jobs,
-  messages,
-  participants,
-  rateLimits,
-  settings,
-} = schema;
-
-export type Db = NodePgDatabase<typeof schema>;
-export type Contact = typeof contacts.$inferSelect;
-export type Company = typeof companies.$inferSelect;
-export type Agent = typeof agents.$inferSelect;
-export type Conversation = typeof conversations.$inferSelect;
-export type Message = typeof messages.$inferSelect;
-export type Attachment = typeof attachments.$inferSelect;
-export type Deal = typeof deals.$inferSelect;
-export type Activity = typeof activities.$inferSelect;
-export type Job = typeof jobs.$inferSelect;
+export type Contact = Row<'contact'> & { tags: string[] };
+export type Company = Row<'company'> & { tags: string[] };
+export type Conversation = Row<'conversation'> & { tags: string[] };
+export type Agent = Row<'agent'>;
+export type Message = Row<'message'>;
+export type Attachment = Row<'attachment'>;
+export type Deal = Row<'deal'>;
+export type Activity = Row<'activity'>;
+export type Job = Row<'job'>;
+export type ConversationEvent = Row<'conversation_event'>;
 export type IdentityInput = {
-  channel: schema.IdentityChannel;
+  channel: IdentityChannel;
   externalId: string;
   verified: boolean;
+};
+type Tagged<M extends 'contact' | 'company' | 'conversation'> = Insert<M> & {
+  tags?: string[];
 };
 
 export type InboxFilter = {
@@ -79,96 +49,326 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const ago = (ms: number) => new Date(Date.now() - ms);
+/** Long `in` lists go in pieces; SQL Server takes about 2000 parameters per query. */
+const CHUNK = 500;
 
-const notBlocked = sql`${conversations.contactId} NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)`;
+const eq = (field: string, value: unknown): Where => ({ field, value });
+const ne = (field: string, value: unknown): Where => ({
+  field,
+  op: 'ne',
+  value,
+});
+const lt = (field: string, value: unknown): Where => ({
+  field,
+  op: 'lt',
+  value,
+});
+const lte = (field: string, value: unknown): Where => ({
+  field,
+  op: 'lte',
+  value,
+});
+const gt = (field: string, value: unknown): Where => ({
+  field,
+  op: 'gt',
+  value,
+});
+const gte = (field: string, value: unknown): Where => ({
+  field,
+  op: 'gte',
+  value,
+});
+const oneOf = (field: string, value: unknown[]): Where => ({
+  field,
+  op: 'in',
+  value,
+});
+const contains = (field: string, value: string): Where => ({
+  field,
+  op: 'contains',
+  value,
+  insensitive: true,
+});
+const and = (...parts: (Where | false | undefined | null | '')[]): Where => ({
+  and: parts.filter((p): p is Where => Boolean(p)),
+});
+const or = (...parts: (Where | false | undefined | null | '')[]): Where => ({
+  or: parts.filter((p): p is Where => Boolean(p)),
+});
+const inSelect = (
+  field: string,
+  model: ModelName,
+  selectField: string,
+  where?: Where
+): Where => ({
+  field,
+  op: 'in',
+  select: { model, field: selectField, where },
+});
+const notInSelect = (
+  field: string,
+  model: ModelName,
+  selectField: string,
+  where?: Where
+): Where => ({
+  field,
+  op: 'notIn',
+  select: { model, field: selectField, where },
+});
+/**
+ * The same instant as a time read back from the row. A database may keep
+ * microseconds that a `Date` drops, so equality is a one-millisecond range.
+ */
+const at = (field: string, value: Date | null): Where =>
+  value === null
+    ? eq(field, null)
+    : and(gte(field, value), lt(field, new Date(value.getTime() + 1)));
 
-/** The filters of the agent inbox, shared by its list and its counts. */
-function inboxConditions(filter: InboxFilter) {
-  const q = filter.query?.trim();
-  const conditions: (SQL | undefined)[] = [
-    filter.inbox ? eq(conversations.inbox, filter.inbox) : undefined,
-    filter.status === 'snoozed'
-      ? and(
-          eq(conversations.status, 'pending'),
-          isNotNull(conversations.snoozedUntil)
-        )
-      : filter.status === 'rated-bad'
-        ? eq(conversations.rating, 'bad')
-        : filter.status
-          ? eq(conversations.status, filter.status)
-          : undefined,
-    filter.assigneeId === null
-      ? isNull(conversations.assigneeId)
-      : filter.assigneeId
-        ? eq(conversations.assigneeId, filter.assigneeId)
-        : undefined,
-    filter.contactId
-      ? eq(conversations.contactId, filter.contactId)
-      : undefined,
-    filter.companyId
-      ? eq(conversations.companyId, filter.companyId)
-      : undefined,
-    filter.tag ? arrayContains(conversations.tags, [filter.tag]) : undefined,
-    filter.priority === 'high'
-      ? inArray(conversations.priority, ['high', 'urgent'])
-      : undefined,
-    // A blocked sender's conversations stay on their contact page only.
-    filter.contactId ? undefined : notBlocked,
-  ];
-  if (q) {
-    const number = Number(q.replace(/^\D+-/, ''));
-    conditions.push(
-      or(
-        sql`${conversations.search} @@ websearch_to_tsquery('simple', ${q})`,
-        sql`${conversations.id} IN (SELECT conversation_id FROM helpdesk.message WHERE search @@ websearch_to_tsquery('simple', ${q}))`,
-        // `number` is an int4; a longer digit run is text, not a reference.
-        Number.isSafeInteger(number) && number <= 2_147_483_647
-          ? eq(conversations.number, number)
-          : undefined
-      )
-    );
+const notBlocked = notInSelect(
+  'contactId',
+  'contact',
+  'id',
+  eq('blocked', true)
+);
+
+const TAGS = {
+  conversation: ['conversation_tag', 'conversationId'],
+  contact: ['contact_tag', 'contactId'],
+  company: ['company_tag', 'companyId'],
+} as const;
+type TaggedModel = keyof typeof TAGS;
+
+function chunks<T>(items: T[]) {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += CHUNK) {
+    out.push(items.slice(i, i + CHUNK));
   }
-  return conditions;
+  return out;
 }
 
-/** The Postgres adapter. It shares the host's pool and never opens its own. */
-export function postgresAdapter({ pool }: { pool: Pool }) {
-  return createStore(drizzle(pool, { schema }));
+function latest<T extends Date | null>(a: T, b: Date | null): T {
+  return (b && (!a || b > a) ? b : a) as T;
 }
 
 export type HelpdeskStore = ReturnType<typeof createStore>;
 
-export function createStore(db: Db) {
-  async function conversationIdsWhere(where: SQL | undefined) {
-    const rows = await db
-      .select({ id: conversations.id })
-      .from(conversations)
-      .where(where);
+/** Every query Better Helpdesk makes, written once over the adapter contract. */
+export function createStore(adapter: DatabaseAdapter) {
+  const caps = adapter.capabilities;
+
+  async function withTags<R extends { id: string }>(
+    model: TaggedModel,
+    rows: R[],
+    db = adapter
+  ): Promise<(R & { tags: string[] })[]> {
+    if (rows.length === 0) return [];
+    const [tagModel, owner] = TAGS[model];
+    const byOwner = new Map<string, string[]>();
+    for (const ids of chunks(rows.map(r => r.id))) {
+      const tags = await db.findMany<Record<string, string>>(tagModel, {
+        where: oneOf(owner, ids),
+        orderBy: [{ field: 'position' }],
+      });
+      for (const t of tags) {
+        const id = t[owner] as string;
+        byOwner.set(id, [...(byOwner.get(id) ?? []), t.tag as string]);
+      }
+    }
+    return rows.map(r => ({ ...r, tags: byOwner.get(r.id) ?? [] }));
+  }
+
+  async function oneWithTags<R extends { id: string }>(
+    model: TaggedModel,
+    row: R | null,
+    db = adapter
+  ) {
+    if (!row) return null;
+    const [tagged] = await withTags(model, [row], db);
+    return tagged ?? null;
+  }
+
+  async function setTags(
+    model: TaggedModel,
+    id: string,
+    tags: string[],
+    db = adapter
+  ) {
+    const [tagModel, owner] = TAGS[model];
+    await db.deleteMany(tagModel, eq(owner, id));
+    for (const [position, tag] of [...new Set(tags)].entries()) {
+      await db.create(tagModel, { [owner]: id, tag, position });
+    }
+  }
+
+  async function get<M extends TaggedModel>(
+    model: M,
+    id: string,
+    db = adapter
+  ): Promise<(Row<M> & { tags: string[] }) | null> {
+    const row = await db.findOne<Row<M> & { id: string }>(model, {
+      where: eq('id', id),
+    });
+    return oneWithTags(model, row, db);
+  }
+
+  /** Writes a patch that may carry tags; true when the row matched. */
+  async function patchTagged(
+    model: TaggedModel,
+    where: Where,
+    id: string,
+    patch: Record<string, unknown>,
+    db = adapter
+  ) {
+    const { tags, ...rest } = patch;
+    const columns = Object.values(rest).some(v => v !== undefined);
+    const matched = columns
+      ? (await db.updateMany(model, where, rest)) > 0
+      : (await db.count(model, where)) > 0;
+    if (matched && tags) await setTags(model, id, tags as string[], db);
+    return matched;
+  }
+
+  /** Writes `set` to the row `key` names, or creates it. Outside a transaction: a lost race retries. */
+  async function upsert(
+    model: ModelName,
+    key: Where,
+    set: Record<string, unknown>,
+    create: Record<string, unknown>
+  ) {
+    if (Object.keys(set).length > 0) {
+      if ((await adapter.updateMany(model, key, set)) > 0) return;
+    } else if ((await adapter.count(model, key)) > 0) return;
+    try {
+      await adapter.create(model, create);
+    } catch (error) {
+      if ((await adapter.count(model, key)) === 0) throw error;
+      if (Object.keys(set).length > 0) {
+        await adapter.updateMany(model, key, set);
+      }
+    }
+  }
+
+  async function nextReference(db: DatabaseAdapter) {
+    const counter = await db.findOne<Row<'counter'>>('counter', {
+      where: eq('name', 'reference'),
+      forUpdate: true,
+    });
+    if (!counter) {
+      throw new Error(
+        'helpdesk: the reference counter is missing; run the migrations'
+      );
+    }
+    await db.updateMany('counter', eq('name', 'reference'), {
+      value: { increment: 1 },
+    });
+    return counter.value;
+  }
+
+  async function namesOf(model: 'agent' | 'contact', ids: (string | null)[]) {
+    const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+    const names = new Map<
+      string,
+      { name: string | null; email: string | null }
+    >();
+    for (const part of chunks(wanted)) {
+      for (const row of await adapter.findMany<{
+        id: string;
+        name: string | null;
+        email: string | null;
+      }>(model, {
+        where: oneOf('id', part),
+        select: ['id', 'name', 'email'],
+      })) {
+        names.set(row.id, row);
+      }
+    }
+    return names;
+  }
+
+  function search(query: string): Where {
+    if (caps.searchConversations) return caps.searchConversations(query);
+    // ponytail: a LIKE scan per word; native full-text search when an inbox gets slow.
+    return and(
+      ...query
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(word =>
+          or(
+            contains('title', word),
+            contains('subject', word),
+            inSelect('id', 'message', 'conversationId', contains('body', word))
+          )
+        )
+    );
+  }
+
+  /** The filters of the agent inbox, shared by its list and its counts. */
+  function inboxWhere(filter: InboxFilter): Where {
+    const q = filter.query?.trim();
+    const number = q ? Number(q.replace(/^\D+-/, '')) : Number.NaN;
+    return and(
+      filter.inbox && eq('inbox', filter.inbox),
+      filter.status === 'snoozed'
+        ? and(eq('status', 'pending'), ne('snoozedUntil', null))
+        : filter.status === 'rated-bad'
+          ? eq('rating', 'bad')
+          : filter.status && eq('status', filter.status),
+      filter.assigneeId === null
+        ? eq('assigneeId', null)
+        : filter.assigneeId && eq('assigneeId', filter.assigneeId),
+      filter.contactId && eq('contactId', filter.contactId),
+      filter.companyId && eq('companyId', filter.companyId),
+      filter.tag &&
+        inSelect(
+          'id',
+          'conversation_tag',
+          'conversationId',
+          eq('tag', filter.tag)
+        ),
+      filter.priority === 'high' && oneOf('priority', ['high', 'urgent']),
+      // A blocked sender's conversations stay on their contact page only.
+      !filter.contactId && notBlocked,
+      q &&
+        or(
+          search(q),
+          // `number` is an int4; a longer digit run is text, not a reference.
+          Number.isSafeInteger(number) &&
+            number <= 2_147_483_647 &&
+            eq('number', number)
+        )
+    );
+  }
+
+  const inboxOrder = [
+    { field: 'waitingSince', direction: 'asc', nulls: 'last' },
+    { field: 'lastMessageAt', direction: 'desc' },
+  ] as const;
+
+  async function conversationIdsWhere(where: Where) {
+    const rows = await adapter.findMany<{ id: string }>('conversation', {
+      where,
+      select: ['id'],
+    });
     return rows.map(r => r.id);
   }
 
   const store = {
-    db,
+    adapter,
 
     async findContactByIdentity(
-      channel: schema.IdentityChannel,
+      channel: IdentityChannel,
       externalId: string,
       { verifiedOnly }: { verifiedOnly: boolean }
     ): Promise<Contact | null> {
-      const [row] = await db
-        .select({ contact: contacts })
-        .from(identities)
-        .innerJoin(contacts, eq(contacts.id, identities.contactId))
-        .where(
-          and(
-            eq(identities.channel, channel),
-            eq(identities.externalId, externalId),
-            verifiedOnly ? eq(identities.verified, true) : undefined
-          )
-        )
-        .orderBy(desc(identities.verified))
-        .limit(1);
-      return row?.contact ?? null;
+      const identity = await adapter.findOne<Row<'identity'>>('identity', {
+        where: and(
+          eq('channel', channel),
+          eq('externalId', externalId),
+          verifiedOnly && eq('verified', true)
+        ),
+        orderBy: [{ field: 'verified', direction: 'desc' }],
+      });
+      return identity ? get('contact', identity.contactId) : null;
     },
 
     /**
@@ -176,128 +376,107 @@ export function createStore(db: Db) {
      * each use keeps it alive for another `idleDays`.
      */
     async findVisitor(tokenHash: string, idleDays: number) {
-      const [row] = await db
-        .select({ identity: identities, contact: contacts })
-        .from(identities)
-        .innerJoin(contacts, eq(contacts.id, identities.contactId))
-        .where(
-          and(
-            eq(identities.channel, 'visitor'),
-            eq(identities.externalId, tokenHash),
-            gt(identities.lastUsedAt, ago(idleDays * DAY))
-          )
-        )
-        .limit(1);
-      if (!row) return null;
+      const identity = await adapter.findOne<Row<'identity'>>('identity', {
+        where: and(
+          eq('channel', 'visitor'),
+          eq('externalId', tokenHash),
+          gt('lastUsedAt', ago(idleDays * DAY))
+        ),
+      });
+      if (!identity) return null;
       // The widget polls; one write an hour is enough to measure idleness.
-      await db
-        .update(identities)
-        .set({ lastUsedAt: new Date() })
-        .where(
-          and(
-            eq(identities.id, row.identity.id),
-            lt(identities.lastUsedAt, ago(HOUR))
-          )
-        );
-      return row.contact;
+      await adapter.updateMany(
+        'identity',
+        and(eq('id', identity.id), lt('lastUsedAt', ago(HOUR))),
+        { lastUsedAt: new Date() }
+      );
+      return get('contact', identity.contactId);
     },
 
     /** The widget polls; one write every few minutes is enough for "last seen". */
     async markContactSeen(id: string) {
-      await db
-        .update(contacts)
-        .set({ lastSeenAt: new Date() })
-        .where(
-          and(
-            eq(contacts.id, id),
-            or(
-              isNull(contacts.lastSeenAt),
-              lt(contacts.lastSeenAt, ago(5 * MINUTE))
-            )
-          )
-        );
+      await adapter.updateMany(
+        'contact',
+        and(
+          eq('id', id),
+          or(eq('lastSeenAt', null), lt('lastSeenAt', ago(5 * MINUTE)))
+        ),
+        { lastSeenAt: new Date() }
+      );
     },
 
     async createContact(
-      values: typeof contacts.$inferInsert,
+      values: Tagged<'contact'>,
       identity?: IdentityInput
     ): Promise<Contact> {
-      return db.transaction(async tx => {
-        const contact = first(
-          await tx.insert(contacts).values(values).returning()
-        );
+      return adapter.transaction(async tx => {
+        const { tags = [], ...rest } = values;
+        const contact = await tx.create<Row<'contact'>>('contact', rest);
+        if (tags.length > 0) await setTags('contact', contact.id, tags, tx);
         if (identity) {
-          await tx
-            .insert(identities)
-            .values({ ...identity, contactId: contact.id });
+          await tx.create('identity', { ...identity, contactId: contact.id });
         }
-        return contact;
+        return { ...contact, tags: [...new Set(tags)] };
       });
     },
 
     /** Whether a blocked contact holds this address, as its email or as one merged into it. */
     async isEmailBlocked(email: string) {
-      const result = await db.execute(sql`
-        SELECT 1 FROM helpdesk.contact c
-        WHERE c.blocked AND (
-          c.email = ${email}
-          OR EXISTS (
-            SELECT 1 FROM helpdesk.identity i
-            WHERE i.contact_id = c.id AND i.channel = 'email' AND i.external_id = ${email}
+      return (
+        (await adapter.count(
+          'contact',
+          and(
+            eq('blocked', true),
+            or(
+              eq('email', email),
+              inSelect(
+                'id',
+                'identity',
+                'contactId',
+                and(eq('channel', 'email'), eq('externalId', email))
+              )
+            )
           )
-        )
-        LIMIT 1`);
-      return result.rows.length > 0;
+        )) > 0
+      );
     },
 
     /** The oldest contact with this address, however it was proven. */
     async findContactByEmail(email: string) {
-      const [row] = await db
-        .select()
-        .from(contacts)
-        .where(eq(contacts.email, email))
-        .orderBy(asc(contacts.createdAt))
-        .limit(1);
-      return row ?? null;
+      const row = await adapter.findOne<Row<'contact'>>('contact', {
+        where: eq('email', email),
+        orderBy: [{ field: 'createdAt' }],
+      });
+      return oneWithTags('contact', row);
     },
 
     async addIdentity(contactId: string, identity: IdentityInput) {
-      const insert = db.insert(identities).values({ ...identity, contactId });
       // Proving an address the contact already holds unverified upgrades it.
-      await (identity.verified
-        ? insert.onConflictDoUpdate({
-            target: [
-              identities.channel,
-              identities.externalId,
-              identities.contactId,
-            ],
-            set: { verified: true },
-          })
-        : insert.onConflictDoNothing());
+      await upsert(
+        'identity',
+        and(
+          eq('channel', identity.channel),
+          eq('externalId', identity.externalId),
+          eq('contactId', contactId)
+        ),
+        identity.verified ? { verified: true } : {},
+        { ...identity, contactId }
+      );
     },
 
     async listIdentities(contactId: string) {
-      return db
-        .select()
-        .from(identities)
-        .where(eq(identities.contactId, contactId));
+      return adapter.findMany<Row<'identity'>>('identity', {
+        where: eq('contactId', contactId),
+      });
     },
 
     async getContact(id: string) {
-      const [row] = await db.select().from(contacts).where(eq(contacts.id, id));
-      return row ?? null;
+      return get('contact', id);
     },
 
-    async updateContact(
-      id: string,
-      patch: Partial<typeof contacts.$inferInsert>
-    ) {
-      const [row] = await db
-        .update(contacts)
-        .set(patch)
-        .where(eq(contacts.id, id))
-        .returning();
-      return row ?? null;
+    async updateContact(id: string, patch: Partial<Contact>) {
+      const found = await patchTagged('contact', eq('id', id), id, patch);
+      return found ? get('contact', id) : null;
     },
 
     async listContacts(filter: {
@@ -307,132 +486,174 @@ export function createStore(db: Db) {
       limit?: number;
     }) {
       const q = filter.query?.trim();
-      return db
-        .select({
-          ...getTableColumns(contacts),
-          conversationCount: sql<number>`(SELECT count(*)::int FROM helpdesk.conversation c WHERE c.contact_id = "contact"."id")`,
-          lastMessageAt: sql<
-            string | null
-          >`(SELECT max(c.last_message_at) FROM helpdesk.conversation c WHERE c.contact_id = "contact"."id")`,
-          isTeam: sql<boolean>`EXISTS (SELECT 1 FROM helpdesk.agent a WHERE lower(a.email) = lower("contact"."email"))`,
-          firstContext: sql<ConversationContext | null>`(SELECT c.context FROM helpdesk.conversation c WHERE c.contact_id = "contact"."id" ORDER BY c.created_at LIMIT 1)`,
-        })
-        .from(contacts)
-        .where(
-          and(
-            q
-              ? or(
-                  ilike(contacts.name, `%${escapeLike(q)}%`),
-                  ilike(contacts.email, `%${escapeLike(q)}%`)
-                )
-              : undefined,
-            filter.leadStage
-              ? eq(contacts.leadStage, filter.leadStage)
-              : undefined,
-            filter.companyId
-              ? eq(contacts.companyId, filter.companyId)
-              : undefined
+      const where = and(
+        q && or(contains('name', q), contains('email', q)),
+        filter.leadStage && eq('leadStage', filter.leadStage),
+        filter.companyId && eq('companyId', filter.companyId)
+      );
+      const limit = filter.limit ?? 100;
+      const ids = caps.contactIdsByActivity
+        ? await caps.contactIdsByActivity(where, limit)
+        : // ponytail: newest first without the capability, not most recently active.
+          (
+            await adapter.findMany<{ id: string }>('contact', {
+              where,
+              orderBy: [{ field: 'createdAt', direction: 'desc' }],
+              limit,
+              select: ['id'],
+            })
+          ).map(r => r.id);
+      if (ids.length === 0) return [];
+      const contacts = new Map(
+        (
+          await withTags(
+            'contact',
+            await adapter.findMany<Row<'contact'>>('contact', {
+              where: oneOf('id', ids),
+            })
           )
-        )
-        .orderBy(
-          sql`(SELECT max(c.last_message_at) FROM helpdesk.conversation c WHERE c.contact_id = "contact"."id") DESC NULLS LAST`,
-          desc(contacts.createdAt)
-        )
-        .limit(filter.limit ?? 100);
+        ).map(c => [c.id, c])
+      );
+      const conversations = await adapter.findMany<{
+        contactId: string;
+        lastMessageAt: Date;
+        createdAt: Date;
+        context: ConversationContext;
+      }>('conversation', {
+        where: oneOf('contactId', ids),
+        select: ['contactId', 'lastMessageAt', 'createdAt', 'context'],
+        orderBy: [{ field: 'createdAt' }],
+      });
+      const team = new Set(
+        (
+          await adapter.findMany<{ email: string | null }>('agent', {
+            select: ['email'],
+          })
+        ).flatMap(a => (a.email ? [a.email.toLowerCase()] : []))
+      );
+      return ids.flatMap(id => {
+        const contact = contacts.get(id);
+        if (!contact) return [];
+        const own = conversations.filter(c => c.contactId === id);
+        return [
+          {
+            ...contact,
+            conversationCount: own.length,
+            lastMessageAt: own.reduce<Date | null>(
+              (max, c) => latest(max, c.lastMessageAt),
+              null
+            ),
+            isTeam: Boolean(
+              contact.email && team.has(contact.email.toLowerCase())
+            ),
+            firstContext: own[0]?.context ?? null,
+          },
+        ];
+      });
     },
 
-    async removeIdentities(contactId: string, channel: schema.IdentityChannel) {
-      await db
-        .delete(identities)
-        .where(
-          and(
-            eq(identities.contactId, contactId),
-            eq(identities.channel, channel)
-          )
-        );
+    async removeIdentities(contactId: string, channel: IdentityChannel) {
+      await adapter.deleteMany(
+        'identity',
+        and(eq('contactId', contactId), eq('channel', channel))
+      );
     },
 
     /** Moves everything `sourceId` owns onto `targetId`, then deletes the source. */
     async mergeContacts(targetId: string, sourceId: string) {
       if (targetId === sourceId) return;
-      await db.transaction(async tx => {
-        await tx
-          .update(conversations)
-          .set({ contactId: targetId })
-          .where(eq(conversations.contactId, sourceId));
-        await tx
-          .update(messages)
-          .set({ contactId: targetId })
-          .where(eq(messages.contactId, sourceId));
-        await tx
-          .update(activities)
-          .set({ contactId: targetId })
-          .where(eq(activities.contactId, sourceId));
-        await tx
-          .update(deals)
-          .set({ contactId: targetId })
-          .where(eq(deals.contactId, sourceId));
-        await tx.execute(sql`
-          INSERT INTO helpdesk.participant (conversation_id, contact_id)
-          SELECT conversation_id, ${targetId}::uuid FROM helpdesk.participant
-          WHERE contact_id = ${sourceId}::uuid
-          ON CONFLICT DO NOTHING`);
-        await tx.execute(sql`
-          UPDATE helpdesk.conversation_event
-          SET data = jsonb_set(data, '{contactId}', to_jsonb(${targetId}::text))
-          WHERE kind = 'participant.added' AND data->>'contactId' = ${sourceId}`);
+      await adapter.transaction(async tx => {
+        const locked = await tx.findMany<Row<'contact'>>('contact', {
+          where: oneOf('id', [sourceId, targetId]),
+          orderBy: [{ field: 'id' }],
+          forUpdate: true,
+        });
+        const source = locked.find(r => r.id === sourceId);
+        const target = locked.find(r => r.id === targetId);
+        for (const model of [
+          'conversation',
+          'message',
+          'activity',
+          'deal',
+        ] as const) {
+          await tx.updateMany(model, eq('contactId', sourceId), {
+            contactId: targetId,
+          });
+        }
+        const sourceIn = await tx.findMany<Row<'participant'>>('participant', {
+          where: eq('contactId', sourceId),
+        });
+        for (const { conversationId } of sourceIn) {
+          const already = await tx.count(
+            'participant',
+            and(eq('conversationId', conversationId), eq('contactId', targetId))
+          );
+          if (!already) {
+            await tx.create('participant', {
+              conversationId,
+              contactId: targetId,
+            });
+          }
+        }
+        for (const part of chunks(sourceIn.map(p => p.conversationId))) {
+          const events = await tx.findMany<ConversationEvent>(
+            'conversation_event',
+            {
+              where: and(
+                eq('kind', 'participant.added'),
+                oneOf('conversationId', part)
+              ),
+            }
+          );
+          for (const event of events) {
+            if (event.data.contactId !== sourceId) continue;
+            await tx.updateMany('conversation_event', eq('id', event.id), {
+              data: { ...event.data, contactId: targetId },
+            });
+          }
+        }
         // Identities move rather than copy: a copied verified row would collide
         // with its own original and be skipped. No visitor token survives a
         // merge on either side: it proves nothing about the merged person.
-        await tx.execute(sql`
-          DELETE FROM helpdesk.identity
-          WHERE contact_id IN (${sourceId}::uuid, ${targetId}::uuid)
-            AND channel = 'visitor'`);
-        const shared = await tx.execute<{
-          channel: string;
-          external_id: string;
-        }>(sql`
-          DELETE FROM helpdesk.identity s
-          WHERE s.contact_id = ${sourceId}::uuid AND EXISTS (
-            SELECT 1 FROM helpdesk.identity t
-            WHERE t.contact_id = ${targetId}::uuid
-              AND t.channel = s.channel AND t.external_id = s.external_id)
-          RETURNING channel, external_id, verified`);
-        for (const row of shared.rows as {
-          channel: string;
-          external_id: string;
-          verified: boolean;
-        }[]) {
-          if (!row.verified) continue;
-          await tx.execute(sql`
-            UPDATE helpdesk.identity SET verified = true
-            WHERE contact_id = ${targetId}::uuid
-              AND channel = ${row.channel} AND external_id = ${row.external_id}`);
+        await tx.deleteMany(
+          'identity',
+          and(
+            oneOf('contactId', [sourceId, targetId]),
+            eq('channel', 'visitor')
+          )
+        );
+        const held = await tx.findMany<Row<'identity'>>('identity', {
+          where: eq('contactId', targetId),
+        });
+        for (const identity of await tx.findMany<Row<'identity'>>('identity', {
+          where: eq('contactId', sourceId),
+        })) {
+          const twin = held.find(
+            t =>
+              t.channel === identity.channel &&
+              t.externalId === identity.externalId
+          );
+          if (!twin) continue;
+          await tx.deleteMany('identity', eq('id', identity.id));
+          if (identity.verified && !twin.verified) {
+            await tx.updateMany('identity', eq('id', twin.id), {
+              verified: true,
+            });
+          }
         }
-        await tx.execute(sql`
-          UPDATE helpdesk.identity SET contact_id = ${targetId}::uuid
-          WHERE contact_id = ${sourceId}::uuid`);
-        const rows = await tx
-          .select()
-          .from(contacts)
-          .where(inArray(contacts.id, [sourceId, targetId]))
-          .orderBy(asc(contacts.id))
-          .for('update');
-        const source = rows.find(r => r.id === sourceId);
-        const target = rows.find(r => r.id === targetId);
-        await tx.delete(contacts).where(eq(contacts.id, sourceId));
+        await tx.updateMany('identity', eq('contactId', sourceId), {
+          contactId: targetId,
+        });
+        await tx.deleteMany('contact', eq('id', sourceId));
         if (source && target) {
-          await tx
-            .update(contacts)
-            .set({
-              email: target.email ?? source.email,
-              name: target.name ?? source.name,
-              companyId: target.companyId ?? source.companyId,
-              // A block on either side holds for the merged person.
-              blocked: target.blocked || source.blocked,
-              lastSeenAt: latest(target.lastSeenAt, source.lastSeenAt),
-            })
-            .where(eq(contacts.id, targetId));
+          await tx.updateMany('contact', eq('id', targetId), {
+            email: target.email ?? source.email,
+            name: target.name ?? source.name,
+            companyId: target.companyId ?? source.companyId,
+            // A block on either side holds for the merged person.
+            blocked: target.blocked || source.blocked,
+            lastSeenAt: latest(target.lastSeenAt, source.lastSeenAt),
+          });
         }
       });
     },
@@ -442,68 +663,60 @@ export function createStore(db: Db) {
       externalOrgId: string,
       name: string | null
     ): Promise<Company> {
-      return first(
-        await db
-          .insert(companies)
-          .values({ externalOrgId, name: name ?? externalOrgId })
-          .onConflictDoUpdate({
-            target: companies.externalOrgId,
-            set: { name: name ?? sql`${companies.name}` },
-          })
-          .returning()
+      await upsert(
+        'company',
+        eq('externalOrgId', externalOrgId),
+        name ? { name } : {},
+        { externalOrgId, name: name ?? externalOrgId }
       );
+      const row = await adapter.findOne<Row<'company'>>('company', {
+        where: eq('externalOrgId', externalOrgId),
+      });
+      const company = await oneWithTags('company', row);
+      if (!company) throw new Error('Expected the company');
+      return company;
     },
 
-    async createCompany(values: typeof companies.$inferInsert) {
-      return first(await db.insert(companies).values(values).returning());
+    async createCompany(values: Tagged<'company'>): Promise<Company> {
+      const { tags = [], ...rest } = values;
+      const company = await adapter.create<Row<'company'>>('company', rest);
+      if (tags.length > 0) await setTags('company', company.id, tags);
+      return { ...company, tags: [...new Set(tags)] };
     },
 
     async companiesByExternalOrgIds(ids: string[]): Promise<Company[]> {
       if (ids.length === 0) return [];
-      return db
-        .select()
-        .from(companies)
-        .where(inArray(companies.externalOrgId, ids));
+      return withTags(
+        'company',
+        await adapter.findMany<Row<'company'>>('company', {
+          where: oneOf('externalOrgId', ids),
+        })
+      );
     },
 
     async getCompany(id: string) {
-      const [row] = await db
-        .select()
-        .from(companies)
-        .where(eq(companies.id, id));
-      return row ?? null;
+      return get('company', id);
     },
 
     /** The oldest company with this name, ignoring case. */
     async findCompanyByName(name: string) {
-      const [row] = await db
-        .select()
-        .from(companies)
-        .where(sql`lower(${companies.name}) = lower(${name})`)
-        .orderBy(asc(companies.createdAt))
-        .limit(1);
-      return row ?? null;
+      const row = await adapter.findOne<Row<'company'>>('company', {
+        where: { field: 'name', value: name, insensitive: true },
+        orderBy: [{ field: 'createdAt' }],
+      });
+      return oneWithTags('company', row);
     },
 
     async findCompanyByDomain(domain: string) {
-      const [row] = await db
-        .select()
-        .from(companies)
-        .where(eq(companies.domain, domain))
-        .limit(1);
-      return row ?? null;
+      const row = await adapter.findOne<Row<'company'>>('company', {
+        where: eq('domain', domain),
+      });
+      return oneWithTags('company', row);
     },
 
-    async updateCompany(
-      id: string,
-      patch: Partial<typeof companies.$inferInsert>
-    ) {
-      const [row] = await db
-        .update(companies)
-        .set(patch)
-        .where(eq(companies.id, id))
-        .returning();
-      return row ?? null;
+    async updateCompany(id: string, patch: Partial<Company>) {
+      const found = await patchTagged('company', eq('id', id), id, patch);
+      return found ? get('company', id) : null;
     },
 
     async listCompanies(filter: {
@@ -512,24 +725,17 @@ export function createStore(db: Db) {
       limit?: number;
     }) {
       const q = filter.query?.trim();
-      return db
-        .select()
-        .from(companies)
-        .where(
-          and(
-            q
-              ? or(
-                  ilike(companies.name, `%${escapeLike(q)}%`),
-                  ilike(companies.domain, `%${escapeLike(q)}%`)
-                )
-              : undefined,
-            filter.leadStage
-              ? eq(companies.leadStage, filter.leadStage)
-              : undefined
-          )
-        )
-        .orderBy(asc(companies.name))
-        .limit(filter.limit ?? 100);
+      return withTags(
+        'company',
+        await adapter.findMany<Row<'company'>>('company', {
+          where: and(
+            q && or(contains('name', q), contains('domain', q)),
+            filter.leadStage && eq('leadStage', filter.leadStage)
+          ),
+          orderBy: [{ field: 'name' }],
+          limit: filter.limit ?? 100,
+        })
+      );
     },
 
     async touchAgent(user: {
@@ -538,125 +744,111 @@ export function createStore(db: Db) {
       email?: string | null;
       avatarUrl?: string | null;
     }): Promise<Agent> {
-      const row = first(
-        await db
-          .insert(agents)
-          .values({
-            externalUserId: user.externalUserId,
-            name: user.name ?? null,
-            email: user.email ?? null,
-            avatarUrl: user.avatarUrl ?? null,
-          })
-          .onConflictDoUpdate({
-            target: agents.externalUserId,
-            set: {
-              name: user.name ?? null,
-              email: user.email ?? null,
-              avatarUrl: user.avatarUrl ?? null,
-              lastSeenAt: new Date(),
-              deactivatedAt: null,
-            },
-          })
-          .returning()
+      const profile = {
+        name: user.name ?? null,
+        email: user.email ?? null,
+        avatarUrl: user.avatarUrl ?? null,
+      };
+      await upsert(
+        'agent',
+        eq('externalUserId', user.externalUserId),
+        { ...profile, lastSeenAt: new Date(), deactivatedAt: null },
+        { externalUserId: user.externalUserId, ...profile }
       );
-      return row;
+      const agent = await adapter.findOne<Agent>('agent', {
+        where: eq('externalUserId', user.externalUserId),
+      });
+      if (!agent) throw new Error('Expected the agent');
+      return agent;
     },
 
     async listAgents() {
-      return db
-        .select()
-        .from(agents)
-        .where(isNull(agents.deactivatedAt))
-        .orderBy(asc(agents.name));
+      return adapter.findMany<Agent>('agent', {
+        where: eq('deactivatedAt', null),
+        orderBy: [{ field: 'name', nulls: 'last' }],
+      });
     },
 
     /** Agents still mailed: not removed, and in the agent UI within `idleDays`. */
     async mailableAgents(idleDays: number) {
-      return db
-        .select()
-        .from(agents)
-        .where(
-          and(
-            isNull(agents.deactivatedAt),
-            gt(agents.lastSeenAt, ago(idleDays * DAY))
-          )
-        )
-        .orderBy(asc(agents.name));
+      return adapter.findMany<Agent>('agent', {
+        where: and(
+          eq('deactivatedAt', null),
+          gt('lastSeenAt', ago(idleDays * DAY))
+        ),
+        orderBy: [{ field: 'name', nulls: 'last' }],
+      });
     },
 
     /** Deactivates the agent and hands their conversations back to the team. */
     async deactivateAgent(externalUserId: string) {
-      await db.transaction(async tx => {
-        const removed = await tx
-          .update(agents)
-          .set({ deactivatedAt: new Date() })
-          .where(
-            and(
-              eq(agents.externalUserId, externalUserId),
-              isNull(agents.deactivatedAt)
-            )
-          )
-          .returning({ id: agents.id });
-        const [agent] = removed;
+      await adapter.transaction(async tx => {
+        const agent = await tx.findOne<Agent>('agent', {
+          where: and(
+            eq('externalUserId', externalUserId),
+            eq('deactivatedAt', null)
+          ),
+          forUpdate: true,
+        });
         if (!agent) return;
-        const unassigned = await tx
-          .update(conversations)
-          .set({ assigneeId: null })
-          .where(eq(conversations.assigneeId, agent.id))
-          .returning({ id: conversations.id });
-        if (unassigned.length === 0) return;
-        await tx.insert(conversationEvents).values(
-          unassigned.map(c => ({
-            conversationId: c.id,
+        await tx.updateMany('agent', eq('id', agent.id), {
+          deactivatedAt: new Date(),
+        });
+        const assigned = await tx.findMany<{ id: string }>('conversation', {
+          where: eq('assigneeId', agent.id),
+          select: ['id'],
+          forUpdate: true,
+        });
+        for (const { id } of assigned) {
+          await tx.updateMany('conversation', eq('id', id), {
+            assigneeId: null,
+          });
+          await tx.create('conversation_event', {
+            conversationId: id,
             kind: 'assigneeId',
             data: { from: agent.id, to: null },
-          }))
-        );
+          });
+        }
       });
     },
 
     async getSetting<T>(key: string): Promise<T | null> {
-      const [row] = await db
-        .select({ value: settings.value })
-        .from(settings)
-        .where(eq(settings.key, key));
+      const row = await adapter.findOne<Row<'setting'>>('setting', {
+        where: eq('key', key),
+      });
       return (row?.value as T | undefined) ?? null;
     },
 
     /** Stores the value unless the key already has one. */
     async addSetting(key: string, value: unknown) {
-      await db.insert(settings).values({ key, value }).onConflictDoNothing();
+      await upsert('setting', eq('key', key), {}, { key, value });
     },
 
     async setSetting(key: string, value: unknown) {
-      await db
-        .insert(settings)
-        .values({ key, value })
-        .onConflictDoUpdate({
-          target: settings.key,
-          set: { value, updatedAt: new Date() },
-        });
+      await upsert(
+        'setting',
+        eq('key', key),
+        { value, updatedAt: new Date() },
+        { key, value }
+      );
     },
 
     async setAgentAway(id: string, awayUntil: Date | null) {
-      await db.update(agents).set({ awayUntil }).where(eq(agents.id, id));
+      await adapter.updateMany('agent', eq('id', id), { awayUntil });
     },
 
     async getAgent(id: string) {
-      const [row] = await db.select().from(agents).where(eq(agents.id, id));
-      return row ?? null;
+      return adapter.findOne<Agent>('agent', { where: eq('id', id) });
     },
 
     async getActiveAgent(id: string) {
-      const [row] = await db
-        .select()
-        .from(agents)
-        .where(and(eq(agents.id, id), isNull(agents.deactivatedAt)));
-      return row ?? null;
+      return adapter.findOne<Agent>('agent', {
+        where: and(eq('id', id), eq('deactivatedAt', null)),
+      });
     },
 
     async createConversation(
-      values: Omit<typeof conversations.$inferInsert, 'number'>,
+      values: Omit<Tagged<'conversation'>, 'number'>,
       firstMessage: {
         body: string;
         contactId: string;
@@ -664,44 +856,44 @@ export function createStore(db: Db) {
         emailMessageId?: string;
       }
     ): Promise<{ conversation: Conversation; message: Message }> {
-      return db.transaction(async tx => {
-        const conversation = first(
-          await tx
-            .insert(conversations)
-            .values({ ...values, waitingSince: new Date() })
-            .returning()
+      return adapter.transaction(async tx => {
+        const { tags = [], ...rest } = values;
+        const conversation = await tx.create<Row<'conversation'>>(
+          'conversation',
+          {
+            ...rest,
+            number: await nextReference(tx),
+            waitingSince: new Date(),
+          }
         );
-        const message = first(
-          await tx
-            .insert(messages)
-            .values({
-              conversationId: conversation.id,
-              authorType: 'contact',
-              contactId: firstMessage.contactId,
-              body: firstMessage.body,
-              verified: firstMessage.verified,
-              emailMessageId: firstMessage.emailMessageId ?? null,
-            })
-            .returning()
-        );
-        return { conversation, message };
+        if (tags.length > 0) {
+          await setTags('conversation', conversation.id, tags, tx);
+        }
+        const message = await tx.create<Message>('message', {
+          conversationId: conversation.id,
+          authorType: 'contact',
+          contactId: firstMessage.contactId,
+          body: firstMessage.body,
+          verified: firstMessage.verified,
+          emailMessageId: firstMessage.emailMessageId ?? null,
+          createdAt: conversation.createdAt,
+        });
+        return {
+          conversation: { ...conversation, tags: [...new Set(tags)] },
+          message,
+        };
       });
     },
 
     async getConversation(id: string) {
-      const [row] = await db
-        .select()
-        .from(conversations)
-        .where(eq(conversations.id, id));
-      return row ?? null;
+      return get('conversation', id);
     },
 
     async getConversationByNumber(number: number) {
-      const [row] = await db
-        .select()
-        .from(conversations)
-        .where(eq(conversations.number, number));
-      return row ?? null;
+      const row = await adapter.findOne<Row<'conversation'>>('conversation', {
+        where: eq('number', number),
+      });
+      return oneWithTags('conversation', row);
     },
 
     /**
@@ -714,42 +906,45 @@ export function createStore(db: Db) {
       agentId: string,
       references: { source: string; target: string }
     ) {
-      return db.transaction(async tx => {
-        const rows = await tx
-          .select()
-          .from(conversations)
-          .where(inArray(conversations.id, [sourceId, targetId]))
-          .orderBy(asc(conversations.id))
-          .for('update');
+      return adapter.transaction(async tx => {
+        const rows = await tx.findMany<Row<'conversation'>>('conversation', {
+          where: oneOf('id', [sourceId, targetId]),
+          orderBy: [{ field: 'id' }],
+          forUpdate: true,
+        });
         const source = rows.find(r => r.id === sourceId);
         const target = rows.find(r => r.id === targetId);
         if (!source || !target || source.mergedIntoId || target.mergedIntoId) {
           return false;
         }
-        await tx
-          .update(messages)
-          .set({ conversationId: targetId })
-          .where(eq(messages.conversationId, sourceId));
-        await tx
-          .update(attachments)
-          .set({ conversationId: targetId })
-          .where(eq(attachments.conversationId, sourceId));
+        await tx.updateMany('message', eq('conversationId', sourceId), {
+          conversationId: targetId,
+        });
+        await tx.updateMany('attachment', eq('conversationId', sourceId), {
+          conversationId: targetId,
+        });
         if (source.contactId !== target.contactId) {
-          await tx
-            .insert(participants)
-            .values({ conversationId: targetId, contactId: source.contactId })
-            .onConflictDoNothing();
+          const already = await tx.count(
+            'participant',
+            and(
+              eq('conversationId', targetId),
+              eq('contactId', source.contactId)
+            )
+          );
+          if (!already) {
+            await tx.create('participant', {
+              conversationId: targetId,
+              contactId: source.contactId,
+            });
+          }
         }
-        await tx
-          .update(conversations)
-          .set({
-            mergedIntoId: targetId,
-            status: 'resolved',
-            resolvedAt: source.resolvedAt ?? new Date(),
-            waitingSince: null,
-            snoozedUntil: null,
-          })
-          .where(eq(conversations.id, sourceId));
+        await tx.updateMany('conversation', eq('id', sourceId), {
+          mergedIntoId: targetId,
+          status: 'resolved',
+          resolvedAt: source.resolvedAt ?? new Date(),
+          waitingSince: null,
+          snoozedUntil: null,
+        });
         // An unanswered customer message moves with the source, so the target
         // takes over its wait, reopening if it was resolved.
         const waiting =
@@ -759,85 +954,99 @@ export function createStore(db: Db) {
             : target.waitingSince;
         const reopen =
           source.status !== 'resolved' && target.status === 'resolved';
-        await tx
-          .update(conversations)
-          .set({
-            lastMessageAt: latest(target.lastMessageAt, source.lastMessageAt),
-            waitingSince: waiting,
-            ...(reopen ? { status: source.status, resolvedAt: null } : {}),
-          })
-          .where(eq(conversations.id, targetId));
-        await tx.insert(conversationEvents).values([
-          {
-            conversationId: sourceId,
-            agentId,
-            kind: 'merged.into',
-            data: { conversationId: targetId, reference: references.target },
-          },
-          {
-            conversationId: targetId,
-            agentId,
-            kind: 'merged.from',
-            data: { conversationId: sourceId, reference: references.source },
-          },
-        ]);
+        await tx.updateMany('conversation', eq('id', targetId), {
+          lastMessageAt: latest(target.lastMessageAt, source.lastMessageAt),
+          waitingSince: waiting,
+          ...(reopen ? { status: source.status, resolvedAt: null } : {}),
+        });
+        const now = new Date();
+        await tx.create('conversation_event', {
+          conversationId: sourceId,
+          agentId,
+          kind: 'merged.into',
+          data: { conversationId: targetId, reference: references.target },
+          createdAt: now,
+        });
+        await tx.create('conversation_event', {
+          conversationId: targetId,
+          agentId,
+          kind: 'merged.from',
+          data: { conversationId: sourceId, reference: references.source },
+          createdAt: now,
+        });
         return true;
       });
     },
 
     async isParticipant(conversationId: string, contactId: string) {
-      const [row] = await db
-        .select()
-        .from(participants)
-        .where(
-          and(
-            eq(participants.conversationId, conversationId),
-            eq(participants.contactId, contactId)
-          )
-        );
-      return Boolean(row);
+      return (
+        (await adapter.count(
+          'participant',
+          and(eq('conversationId', conversationId), eq('contactId', contactId))
+        )) > 0
+      );
     },
 
     /** True when the contact was not a participant before. */
     async addParticipant(conversationId: string, contactId: string) {
-      const added = await db
-        .insert(participants)
-        .values({ conversationId, contactId })
-        .onConflictDoNothing()
-        .returning({ contactId: participants.contactId });
-      return added.length > 0;
+      if (await store.isParticipant(conversationId, contactId)) return false;
+      try {
+        await adapter.create('participant', { conversationId, contactId });
+        return true;
+      } catch (error) {
+        if (await store.isParticipant(conversationId, contactId)) return false;
+        throw error;
+      }
     },
 
-    async recordEvents(values: (typeof conversationEvents.$inferInsert)[]) {
-      if (values.length === 0) return;
-      await db.insert(conversationEvents).values(values);
+    async recordEvents(values: Insert<'conversation_event'>[]) {
+      // One time for the batch, so their order stays the order of `kind`.
+      const now = new Date();
+      for (const value of values) {
+        await adapter.create('conversation_event', {
+          createdAt: now,
+          ...value,
+        });
+      }
     },
 
     async listEvents(conversationId: string) {
-      return db
-        .select({
-          id: conversationEvents.id,
-          kind: conversationEvents.kind,
-          data: conversationEvents.data,
-          agentId: conversationEvents.agentId,
-          agentName: agents.name,
-          createdAt: conversationEvents.createdAt,
-        })
-        .from(conversationEvents)
-        .leftJoin(agents, eq(agents.id, conversationEvents.agentId))
-        .where(eq(conversationEvents.conversationId, conversationId))
-        .orderBy(
-          asc(conversationEvents.createdAt),
-          asc(conversationEvents.kind)
-        );
+      const events = await adapter.findMany<ConversationEvent>(
+        'conversation_event',
+        {
+          where: eq('conversationId', conversationId),
+          orderBy: [{ field: 'createdAt' }, { field: 'kind' }],
+        }
+      );
+      const agents = await namesOf(
+        'agent',
+        events.map(e => e.agentId)
+      );
+      return events.map(e => ({
+        id: e.id,
+        kind: e.kind,
+        data: e.data,
+        agentId: e.agentId,
+        agentName: (e.agentId && agents.get(e.agentId)?.name) ?? null,
+        createdAt: e.createdAt,
+      }));
     },
 
     async listParticipants(conversationId: string) {
-      return db
-        .select({ contact: contacts })
-        .from(participants)
-        .innerJoin(contacts, eq(contacts.id, participants.contactId))
-        .where(eq(participants.conversationId, conversationId));
+      const rows = await adapter.findMany<Row<'participant'>>('participant', {
+        where: eq('conversationId', conversationId),
+      });
+      if (rows.length === 0) return [];
+      const contacts = await withTags(
+        'contact',
+        await adapter.findMany<Row<'contact'>>('contact', {
+          where: oneOf(
+            'id',
+            rows.map(r => r.contactId)
+          ),
+        })
+      );
+      return contacts.map(contact => ({ contact }));
     },
 
     /** Conversations a customer may see: their own, ones they were added to, ones shared with their companies. */
@@ -846,104 +1055,125 @@ export function createStore(db: Db) {
       companyIds: string[]
     ) {
       if (!contactId && companyIds.length === 0) return [];
-      const shared =
-        companyIds.length > 0
-          ? and(
-              eq(conversations.sharedWithCompany, true),
-              inArray(conversations.companyId, companyIds)
-            )
-          : undefined;
-      return db
-        .select()
-        .from(conversations)
-        .where(
-          or(
-            contactId ? eq(conversations.contactId, contactId) : undefined,
-            contactId
-              ? sql`${conversations.id} IN (SELECT conversation_id FROM helpdesk.participant WHERE contact_id = ${contactId}::uuid)`
-              : undefined,
-            shared
-          )
-        )
-        .orderBy(desc(conversations.lastMessageAt))
-        .limit(100);
+      return withTags(
+        'conversation',
+        await adapter.findMany<Row<'conversation'>>('conversation', {
+          where: or(
+            contactId && eq('contactId', contactId),
+            contactId &&
+              inSelect(
+                'id',
+                'participant',
+                'conversationId',
+                eq('contactId', contactId)
+              ),
+            companyIds.length > 0 &&
+              and(eq('sharedWithCompany', true), oneOf('companyId', companyIds))
+          ),
+          orderBy: [{ field: 'lastMessageAt', direction: 'desc' }],
+          limit: 100,
+        })
+      );
     },
 
     async listInbox(filter: InboxFilter) {
-      const conditions = inboxConditions(filter);
-      return db
-        .select({ conversation: conversations, contact: contacts })
-        .from(conversations)
-        .innerJoin(contacts, eq(contacts.id, conversations.contactId))
-        .where(and(...conditions))
-        .orderBy(
-          ...(filter.sort === 'priority'
-            ? [
-                sql`array_position(ARRAY[${sql.join(
-                  [...PRIORITIES].reverse().map(p => sql`${p}`),
-                  sql`, `
-                )}]::text[], ${conversations.priority})`,
-              ]
-            : []),
-          sql`${conversations.waitingSince} ASC NULLS LAST`,
-          desc(conversations.lastMessageAt)
-        )
-        .limit(filter.limit ?? 200);
+      const where = inboxWhere(filter);
+      const limit = filter.limit ?? 200;
+      let rows: Row<'conversation'>[] = [];
+      if (filter.sort === 'priority') {
+        // One query per priority, most urgent first, until the page is full.
+        const ranked = [...PRIORITIES].reverse();
+        const buckets: Where[] = [
+          ...ranked.map(p => eq('priority', p)),
+          { field: 'priority', op: 'notIn', value: ranked },
+        ];
+        for (const bucket of buckets) {
+          if (rows.length >= limit) break;
+          rows = rows.concat(
+            await adapter.findMany<Row<'conversation'>>('conversation', {
+              where: and(where, bucket),
+              orderBy: [...inboxOrder],
+              limit: limit - rows.length,
+            })
+          );
+        }
+      } else {
+        rows = await adapter.findMany<Row<'conversation'>>('conversation', {
+          where,
+          orderBy: [...inboxOrder],
+          limit,
+        });
+      }
+      if (rows.length === 0) return [];
+      const conversations = await withTags('conversation', rows);
+      const contacts = new Map(
+        (
+          await withTags(
+            'contact',
+            await adapter.findMany<Row<'contact'>>('contact', {
+              where: oneOf('id', [...new Set(rows.map(r => r.contactId))]),
+            })
+          )
+        ).map(c => [c.id, c])
+      );
+      return conversations.flatMap(conversation => {
+        const contact = contacts.get(conversation.contactId);
+        return contact ? [{ conversation, contact }] : [];
+      });
     },
 
     async countInbox(filter: InboxFilter) {
-      const [row] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(conversations)
-        .where(and(...inboxConditions(filter)));
-      return row?.count ?? 0;
+      return adapter.count('conversation', inboxWhere(filter));
     },
 
     /** The newest public message of each conversation, for list previews. */
     async lastMessages(conversationIds: string[]) {
-      if (conversationIds.length === 0) return new Map<string, Message>();
-      const rows = await db
-        .selectDistinctOn([messages.conversationId])
-        .from(messages)
-        .where(
-          and(
-            inArray(messages.conversationId, conversationIds),
-            eq(messages.internal, false)
-          )
-        )
-        .orderBy(messages.conversationId, desc(messages.createdAt));
-      return new Map(rows.map(r => [r.conversationId, r]));
+      const byConversation = new Map<string, Message>();
+      if (conversationIds.length === 0) return byConversation;
+      const rows = caps.lastMessages
+        ? ((await caps.lastMessages(conversationIds)) as Message[])
+        : (
+            await Promise.all(
+              conversationIds.map(id =>
+                adapter.findOne<Message>('message', {
+                  where: and(eq('conversationId', id), eq('internal', false)),
+                  orderBy: [{ field: 'createdAt', direction: 'desc' }],
+                })
+              )
+            )
+          ).filter((m): m is Message => m !== null);
+      for (const row of rows) byConversation.set(row.conversationId, row);
+      return byConversation;
     },
 
     async markViewing(agentId: string, conversationId: string) {
-      await db
-        .update(agents)
-        .set({ viewingId: conversationId, viewingAt: new Date() })
-        .where(eq(agents.id, agentId));
+      await adapter.updateMany('agent', eq('id', agentId), {
+        viewingId: conversationId,
+        viewingAt: new Date(),
+      });
     },
 
     /** Other agents with each conversation open, keyed by conversation id. */
     async viewers(conversationIds: string[], exceptAgentId: string) {
       const byConversation = new Map<string, { id: string; name: string }[]>();
       if (conversationIds.length === 0) return byConversation;
-      const rows = await db
-        .select({
-          id: agents.id,
-          name: sql<string>`coalesce(${agents.name}, ${agents.email})`,
-          viewingId: agents.viewingId,
-        })
-        .from(agents)
-        .where(
-          and(
-            inArray(agents.viewingId, conversationIds),
-            // Sized against the conversation view's 5-second poll; change the two together.
-            gt(agents.viewingAt, ago(15_000)),
-            ne(agents.id, exceptAgentId),
-            isNull(agents.deactivatedAt)
-          )
-        )
-        .orderBy(sql`coalesce(${agents.name}, ${agents.email})`);
-      for (const { viewingId, ...agent } of rows) {
+      const rows = await adapter.findMany<Agent>('agent', {
+        where: and(
+          oneOf('viewingId', conversationIds),
+          // Sized against the conversation view's 5-second poll; change the two together.
+          gt('viewingAt', ago(15_000)),
+          ne('id', exceptAgentId),
+          eq('deactivatedAt', null)
+        ),
+      });
+      const named = rows
+        .map(a => ({
+          id: a.id,
+          name: (a.name ?? a.email ?? '') as string,
+          viewingId: a.viewingId,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      for (const { viewingId, ...agent } of named) {
         if (!viewingId) continue;
         byConversation.set(viewingId, [
           ...(byConversation.get(viewingId) ?? []),
@@ -954,82 +1184,107 @@ export function createStore(db: Db) {
     },
 
     async recentAgents(limit: number) {
-      return db
-        .select({
-          name: agents.name,
-          email: agents.email,
-          avatarUrl: agents.avatarUrl,
-          awayUntil: agents.awayUntil,
-        })
-        .from(agents)
-        .where(
-          and(
-            gt(agents.lastSeenAt, ago(30 * DAY)),
-            isNull(agents.deactivatedAt)
-          )
-        )
-        .orderBy(desc(agents.lastSeenAt))
-        .limit(limit);
+      const rows = await adapter.findMany<Agent>('agent', {
+        where: and(gt('lastSeenAt', ago(30 * DAY)), eq('deactivatedAt', null)),
+        orderBy: [{ field: 'lastSeenAt', direction: 'desc' }],
+        limit,
+      });
+      return rows.map(a => ({
+        name: a.name,
+        email: a.email,
+        avatarUrl: a.avatarUrl,
+        awayUntil: a.awayUntil,
+      }));
     },
 
-    // Counts over every conversation; window it on last_message_at if that slows the inbox.
     async topTags() {
-      const result = await db.execute<{ tag: string }>(
-        sql`SELECT tag FROM ${conversations}, unnest(${conversations.tags}) AS tag GROUP BY tag ORDER BY count(*) DESC, tag LIMIT 15`
-      );
-      return result.rows.map(r => r.tag);
+      if (caps.topTags) return caps.topTags(15);
+      // ponytail: counts the tags of the last 90 days in memory.
+      const rows = await adapter.findMany<{ tag: string }>('conversation_tag', {
+        where: inSelect(
+          'conversationId',
+          'conversation',
+          'id',
+          gt('lastMessageAt', ago(90 * DAY))
+        ),
+        select: ['tag'],
+      });
+      const uses = new Map<string, number>();
+      for (const { tag } of rows) uses.set(tag, (uses.get(tag) ?? 0) + 1);
+      return [...uses]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 15)
+        .map(([tag]) => tag);
     },
 
     /** Conversations opened, resolved or rated in the last `sinceDays`, with their first public agent reply; merged-away ones are left out. */
     async overview(sinceDays: number) {
-      const since = ago(sinceDays * DAY).toISOString();
-      const result = await db.execute<{
-        inbox: string;
-        assignee_id: string | null;
-        agent_name: string | null;
-        agent_email: string | null;
-        tags: string[];
-        rating: 'good' | 'bad' | null;
-        rated_at: string | null;
-        created_at: string;
-        first_reply_at: string | null;
-        resolved_at: string | null;
-      }>(sql`
-        SELECT c.inbox, c.assignee_id, a.name AS agent_name, a.email AS agent_email, c.tags,
-          c.rating, c.rated_at, c.created_at, c.resolved_at,
-          (SELECT min(m.created_at) FROM ${messages} m
-            WHERE m.conversation_id = c.id AND m.author_type = 'agent' AND NOT m.internal) AS first_reply_at
-        FROM ${conversations} c LEFT JOIN ${agents} a ON a.id = c.assignee_id
-        WHERE c.merged_into_id IS NULL
-          AND (c.created_at >= ${since} OR c.resolved_at >= ${since} OR c.rated_at >= ${since})`);
-      return result.rows.map(r => ({
-        inbox: r.inbox,
-        assigneeId: r.assignee_id,
-        agentName: r.agent_name ?? r.agent_email,
-        tags: r.tags,
-        rating: r.rating,
-        ratedAt: r.rated_at ? new Date(r.rated_at) : null,
-        createdAt: new Date(r.created_at),
-        firstReplyAt: r.first_reply_at ? new Date(r.first_reply_at) : null,
-        resolvedAt: r.resolved_at ? new Date(r.resolved_at) : null,
-      }));
+      const since = ago(sinceDays * DAY);
+      const inWindow = and(
+        eq('mergedIntoId', null),
+        or(
+          gte('createdAt', since),
+          gte('resolvedAt', since),
+          gte('ratedAt', since)
+        )
+      );
+      const conversations = await withTags(
+        'conversation',
+        await adapter.findMany<Row<'conversation'>>('conversation', {
+          where: inWindow,
+        })
+      );
+      const firstReply = new Map<string, Date>();
+      for (const m of await adapter.findMany<{
+        conversationId: string;
+        createdAt: Date;
+      }>('message', {
+        where: and(
+          inSelect('conversationId', 'conversation', 'id', inWindow),
+          eq('authorType', 'agent'),
+          eq('internal', false)
+        ),
+        select: ['conversationId', 'createdAt'],
+      })) {
+        const known = firstReply.get(m.conversationId);
+        if (!known || m.createdAt < known) {
+          firstReply.set(m.conversationId, m.createdAt);
+        }
+      }
+      const agents = await namesOf(
+        'agent',
+        conversations.map(c => c.assigneeId)
+      );
+      return conversations.map(c => {
+        const agent = c.assigneeId ? agents.get(c.assigneeId) : undefined;
+        return {
+          inbox: c.inbox,
+          assigneeId: c.assigneeId,
+          agentName: agent ? (agent.name ?? agent.email) : null,
+          tags: c.tags,
+          rating: c.rating,
+          ratedAt: c.ratedAt,
+          createdAt: c.createdAt,
+          firstReplyAt: firstReply.get(c.id) ?? null,
+          resolvedAt: c.resolvedAt,
+        };
+      });
     },
 
     // Copies `last_message_at`, not the current time: a customer message committing
     // concurrently could carry an earlier time and never read as unread.
     async markAgentSeen(id: string) {
-      await db
-        .update(conversations)
-        .set({ agentSeenAt: sql`${conversations.lastMessageAt}` })
-        .where(
-          and(
-            eq(conversations.id, id),
-            or(
-              isNull(conversations.agentSeenAt),
-              lt(conversations.agentSeenAt, conversations.lastMessageAt)
-            )
-          )
-        );
+      const row = await adapter.findOne<Row<'conversation'>>('conversation', {
+        where: eq('id', id),
+      });
+      if (!row || (row.agentSeenAt && row.agentSeenAt >= row.lastMessageAt)) {
+        return;
+      }
+      await adapter.updateMany(
+        'conversation',
+        and(eq('id', id), at('lastMessageAt', row.lastMessageAt)),
+        { agentSeenAt: row.lastMessageAt }
+      );
     },
 
     /**
@@ -1038,51 +1293,129 @@ export function createStore(db: Db) {
      * they got them. Derived from events and messages, newest first.
      */
     async notificationsFor(agentId: string, limit = 30) {
-      const since = ago(30 * DAY).toISOString();
-      const result = await db.execute<{
+      const since = ago(30 * DAY);
+      type Note = {
         kind: 'assigned' | 'mentioned' | 'reply';
         conversation_id: string;
-        number: number;
-        subject: string | null;
         who: string | null;
-        at: string;
-      }>(sql`
-        WITH n AS (
-          SELECT 'assigned' AS kind, e.conversation_id, e.created_at AS at, a.name AS who
-          FROM helpdesk.conversation_event e
-          LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
-          WHERE e.kind = 'assigneeId' AND e.data->>'to' = ${agentId}
-            AND e.agent_id IS DISTINCT FROM ${agentId}::uuid
-            AND e.created_at > ${since}
-          UNION ALL
-          SELECT 'mentioned', e.conversation_id, e.created_at, a.name
-          FROM helpdesk.conversation_event e
-          LEFT JOIN helpdesk.agent a ON a.id = e.agent_id
-          WHERE e.kind = 'mentioned' AND e.data->'agentIds' ? ${agentId}
-            AND e.created_at > ${since}
-          UNION ALL
-          SELECT 'reply', m.conversation_id, m.created_at, coalesce(ct.name, ct.email)
-          FROM helpdesk.message m
-          JOIN helpdesk.conversation c ON c.id = m.conversation_id
-          LEFT JOIN helpdesk.contact ct ON ct.id = m.contact_id
-          WHERE m.author_type = 'contact' AND NOT m.internal
-            AND c.assignee_id = ${agentId}::uuid
-            AND m.created_at > ${since}
-            AND m.created_at > coalesce(
-              (SELECT max(created_at) FROM helpdesk.conversation_event
-                WHERE conversation_id = c.id AND kind = 'assigneeId' AND data->>'to' = ${agentId}),
-              c.created_at)
-        )
-        SELECT n.kind, n.conversation_id, c.number, coalesce(c.title, c.subject) AS subject,
-          n.who, to_char(n.at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
-        FROM n JOIN helpdesk.conversation c ON c.id = n.conversation_id
-        ORDER BY n.at DESC
-        LIMIT ${limit}`);
-      return result.rows;
+        at: Date;
+      };
+      const notes: Note[] = [];
+      // ponytail: the JSON payloads are filtered in memory over 30 days of events.
+      const events = await adapter.findMany<ConversationEvent>(
+        'conversation_event',
+        {
+          where: and(
+            oneOf('kind', ['assigneeId', 'mentioned']),
+            gt('createdAt', since)
+          ),
+        }
+      );
+      const agents = await namesOf(
+        'agent',
+        events.map(e => e.agentId)
+      );
+      for (const e of events) {
+        const who = (e.agentId && agents.get(e.agentId)?.name) ?? null;
+        const note = {
+          conversation_id: e.conversationId,
+          who,
+          at: e.createdAt,
+        };
+        if (
+          e.kind === 'assigneeId' &&
+          e.data.to === agentId &&
+          e.agentId !== agentId
+        ) {
+          notes.push({ kind: 'assigned', ...note });
+        } else if (
+          e.kind === 'mentioned' &&
+          Array.isArray(e.data.agentIds) &&
+          e.data.agentIds.includes(agentId)
+        ) {
+          notes.push({ kind: 'mentioned', ...note });
+        }
+      }
+      const theirs = eq('assigneeId', agentId);
+      const assignedSince = new Map<string, Date>();
+      for (const c of await adapter.findMany<{ id: string; createdAt: Date }>(
+        'conversation',
+        { where: theirs, select: ['id', 'createdAt'] }
+      )) {
+        assignedSince.set(c.id, c.createdAt);
+      }
+      for (const e of await adapter.findMany<ConversationEvent>(
+        'conversation_event',
+        {
+          where: and(
+            eq('kind', 'assigneeId'),
+            inSelect('conversationId', 'conversation', 'id', theirs)
+          ),
+        }
+      )) {
+        const known = assignedSince.get(e.conversationId);
+        if (e.data.to === agentId && known && e.createdAt > known) {
+          assignedSince.set(e.conversationId, e.createdAt);
+        }
+      }
+      const replies = await adapter.findMany<Message>('message', {
+        where: and(
+          eq('authorType', 'contact'),
+          eq('internal', false),
+          gt('createdAt', since),
+          inSelect('conversationId', 'conversation', 'id', theirs)
+        ),
+      });
+      const contacts = await namesOf(
+        'contact',
+        replies.map(m => m.contactId)
+      );
+      for (const m of replies) {
+        const from = assignedSince.get(m.conversationId);
+        if (!from || m.createdAt <= from) continue;
+        const contact = m.contactId ? contacts.get(m.contactId) : undefined;
+        notes.push({
+          kind: 'reply',
+          conversation_id: m.conversationId,
+          who: contact ? (contact.name ?? contact.email) : null,
+          at: m.createdAt,
+        });
+      }
+      notes.sort((a, b) => b.at.getTime() - a.at.getTime());
+      const page = notes.slice(0, limit);
+      if (page.length === 0) return [];
+      const conversations = new Map(
+        (
+          await adapter.findMany<{
+            id: string;
+            number: number;
+            title: string | null;
+            subject: string | null;
+          }>('conversation', {
+            where: oneOf('id', [...new Set(page.map(n => n.conversation_id))]),
+            select: ['id', 'number', 'title', 'subject'],
+          })
+        ).map(c => [c.id, c])
+      );
+      return page.flatMap(n => {
+        const c = conversations.get(n.conversation_id);
+        return c
+          ? [
+              {
+                kind: n.kind,
+                conversation_id: n.conversation_id,
+                number: c.number,
+                subject: c.title ?? c.subject,
+                who: n.who,
+                at: n.at.toISOString(),
+              },
+            ]
+          : [];
+      });
     },
 
     async notificationsSeenAt(agentId: string) {
-      return this.getSetting<string>(`notifications-seen:${agentId}`);
+      return store.getSetting<string>(`notifications-seen:${agentId}`);
     },
 
     async markNotificationsSeen(agentId: string) {
@@ -1093,69 +1426,56 @@ export function createStore(db: Db) {
     },
 
     async countOpen(agentId: string) {
-      const [row] = await db
-        .select({
-          all: sql<number>`count(*)::int`,
-          mine: sql<number>`(count(*) FILTER (WHERE ${conversations.assigneeId} = ${agentId}))::int`,
-          unassigned: sql<number>`(count(*) FILTER (WHERE ${conversations.assigneeId} IS NULL))::int`,
-        })
-        .from(conversations)
-        .where(and(eq(conversations.status, 'open'), notBlocked));
-      return row ?? { all: 0, mine: 0, unassigned: 0 };
+      const open = and(eq('status', 'open'), notBlocked);
+      const [all, mine, unassigned] = await Promise.all([
+        adapter.count('conversation', open),
+        adapter.count('conversation', and(open, eq('assigneeId', agentId))),
+        adapter.count('conversation', and(open, eq('assigneeId', null))),
+      ]);
+      return { all, mine, unassigned };
     },
 
     async countWaiting() {
-      const [row] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(conversations)
-        .where(
-          and(
-            isNotNull(conversations.waitingSince),
-            ne(conversations.status, 'resolved'),
-            isNull(conversations.snoozedUntil),
-            notBlocked
-          )
-        );
-      return row?.count ?? 0;
+      return adapter.count(
+        'conversation',
+        and(
+          ne('waitingSince', null),
+          ne('status', 'resolved'),
+          eq('snoozedUntil', null),
+          notBlocked
+        )
+      );
     },
 
     /** With `unlessResolved`, a thread already resolved is left alone and the result is null. */
     async updateConversation(
       id: string,
-      patch: Partial<typeof conversations.$inferInsert>,
+      patch: Partial<Conversation>,
       { unlessResolved = false } = {}
     ) {
-      const [row] = await db
-        .update(conversations)
-        .set(patch)
-        .where(
-          and(
-            eq(conversations.id, id),
-            unlessResolved ? ne(conversations.status, 'resolved') : undefined
-          )
-        )
-        .returning();
-      return row ?? null;
+      const found = await patchTagged(
+        'conversation',
+        and(eq('id', id), unlessResolved && ne('status', 'resolved')),
+        id,
+        patch
+      );
+      return found ? get('conversation', id) : null;
     },
 
     /** Rates a resolved conversation once; null when it is not resolved, merged away or already rated. */
-    async rateConversation(
-      id: string,
-      patch: Partial<typeof conversations.$inferInsert>
-    ) {
-      const [row] = await db
-        .update(conversations)
-        .set(patch)
-        .where(
-          and(
-            eq(conversations.id, id),
-            eq(conversations.status, 'resolved'),
-            isNull(conversations.mergedIntoId),
-            isNull(conversations.rating)
-          )
-        )
-        .returning();
-      return row ?? null;
+    async rateConversation(id: string, patch: Partial<Conversation>) {
+      const found = await patchTagged(
+        'conversation',
+        and(
+          eq('id', id),
+          eq('status', 'resolved'),
+          eq('mergedIntoId', null),
+          eq('rating', null)
+        ),
+        id,
+        patch
+      );
+      return found ? get('conversation', id) : null;
     },
 
     /**
@@ -1165,29 +1485,36 @@ export function createStore(db: Db) {
      */
     async updateConversations(
       ids: string[],
-      plan: (
-        conversation: Conversation
-      ) => Partial<typeof conversations.$inferInsert>
+      plan: (conversation: Conversation) => Partial<Conversation>
     ) {
-      return db.transaction(async tx => {
+      return adapter.transaction(async tx => {
         // Locked in id order, so overlapping batches cannot deadlock each other.
-        const rows = await tx
-          .select()
-          .from(conversations)
-          .where(inArray(conversations.id, ids))
-          .orderBy(conversations.id)
-          .for('update');
+        const rows = await withTags(
+          'conversation',
+          await tx.findMany<Row<'conversation'>>('conversation', {
+            where: oneOf('id', ids),
+            orderBy: [{ field: 'id' }],
+            forUpdate: true,
+          }),
+          tx
+        );
         const missing = ids.filter(id => !rows.some(r => r.id === id));
         if (missing.length > 0) return { missing, changes: [] };
         const changes = [];
         for (const before of rows) {
           const patch = plan(before);
-          const [updated] = await tx
-            .update(conversations)
-            .set(patch)
-            .where(eq(conversations.id, before.id))
-            .returning();
-          changes.push({ before, patch, updated: updated ?? null });
+          await patchTagged(
+            'conversation',
+            eq('id', before.id),
+            before.id,
+            patch,
+            tx
+          );
+          changes.push({
+            before,
+            patch,
+            updated: await get('conversation', before.id, tx),
+          });
         }
         return { missing, changes };
       });
@@ -1195,37 +1522,31 @@ export function createStore(db: Db) {
 
     /** Changes sharing only while the thread is still with `companyId`. */
     async setSharing(id: string, companyId: string, shared: boolean) {
-      const [row] = await db
-        .update(conversations)
-        .set({ sharedWithCompany: shared })
-        .where(
-          and(eq(conversations.id, id), eq(conversations.companyId, companyId))
-        )
-        .returning({ id: conversations.id });
-      return Boolean(row);
+      return patchTagged(
+        'conversation',
+        and(eq('id', id), eq('companyId', companyId)),
+        id,
+        { sharedWithCompany: shared }
+      );
     },
 
     /**
      * A customer message reopens a resolved thread and starts the waiting
      * clock; a public agent reply stops it.
      */
-    async appendMessage(
-      values: typeof messages.$inferInsert
-    ): Promise<Message> {
-      return db.transaction(async tx => {
-        const [conversation] = await tx
-          .select()
-          .from(conversations)
-          .where(eq(conversations.id, values.conversationId))
-          .for('update');
-        const message = first(
-          await tx.insert(messages).values(values).returning()
+    async appendMessage(values: Insert<'message'>): Promise<Message> {
+      return adapter.transaction(async tx => {
+        const conversation = await tx.findOne<Row<'conversation'>>(
+          'conversation',
+          { where: eq('id', values.conversationId), forUpdate: true }
         );
-        const now = new Date();
+        const message = await tx.create<Message>('message', values);
+        const now = message.createdAt;
         // A note is not a message to the customer: it must not mark their
         // thread unread or lift it in their list.
-        const patch: Partial<typeof conversations.$inferInsert> =
-          values.internal ? {} : { lastMessageAt: now };
+        const patch: Partial<Row<'conversation'>> = values.internal
+          ? {}
+          : { lastMessageAt: now };
         if (values.authorType === 'contact') {
           patch.waitingSince = conversation?.waitingSince ?? now;
           patch.status = 'open';
@@ -1237,99 +1558,85 @@ export function createStore(db: Db) {
           if (conversation?.status !== 'resolved') patch.status = 'pending';
         }
         if (Object.keys(patch).length > 0) {
-          await tx
-            .update(conversations)
-            .set(patch)
-            .where(eq(conversations.id, values.conversationId));
+          await tx.updateMany(
+            'conversation',
+            eq('id', values.conversationId),
+            patch
+          );
         }
         return message;
       });
     },
 
     async getMessage(id: string) {
-      const [row] = await db.select().from(messages).where(eq(messages.id, id));
-      return row ?? null;
+      return adapter.findOne<Message>('message', { where: eq('id', id) });
     },
 
     async findMessageByEmailId(emailMessageIds: string[]) {
       if (emailMessageIds.length === 0) return null;
-      const [row] = await db
-        .select()
-        .from(messages)
-        .where(inArray(messages.emailMessageId, emailMessageIds))
-        .limit(1);
-      return row ?? null;
+      return adapter.findOne<Message>('message', {
+        where: oneOf('emailMessageId', emailMessageIds),
+      });
     },
 
     async listMessages(
       conversationId: string,
       { includeInternal }: { includeInternal: boolean }
     ) {
-      return db
-        .select({
-          message: messages,
-          agentName: agents.name,
-          contactName: contacts.name,
-        })
-        .from(messages)
-        .leftJoin(agents, eq(agents.id, messages.agentId))
-        .leftJoin(contacts, eq(contacts.id, messages.contactId))
-        .where(
-          and(
-            eq(messages.conversationId, conversationId),
-            includeInternal ? undefined : eq(messages.internal, false)
-          )
-        )
-        .orderBy(asc(messages.createdAt));
+      const messages = await adapter.findMany<Message>('message', {
+        where: and(
+          eq('conversationId', conversationId),
+          !includeInternal && eq('internal', false)
+        ),
+        orderBy: [{ field: 'createdAt' }],
+      });
+      const [agents, contacts] = await Promise.all([
+        namesOf(
+          'agent',
+          messages.map(m => m.agentId)
+        ),
+        namesOf(
+          'contact',
+          messages.map(m => m.contactId)
+        ),
+      ]);
+      return messages.map(message => ({
+        message,
+        agentName:
+          (message.agentId && agents.get(message.agentId)?.name) ?? null,
+        contactName:
+          (message.contactId && contacts.get(message.contactId)?.name) ?? null,
+      }));
     },
 
-    async createAttachment(values: typeof attachments.$inferInsert) {
-      return first(await db.insert(attachments).values(values).returning());
+    async createAttachment(values: Insert<'attachment'>) {
+      return adapter.create<Attachment>('attachment', values);
     },
 
     async countAttachments(conversationId: string) {
-      const [row] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(attachments)
-        .where(eq(attachments.conversationId, conversationId));
-      return row?.count ?? 0;
+      return adapter.count('attachment', eq('conversationId', conversationId));
     },
 
     async getAttachment(id: string) {
-      const [row] = await db
-        .select()
-        .from(attachments)
-        .where(eq(attachments.id, id));
-      return row ?? null;
+      return adapter.findOne<Attachment>('attachment', { where: eq('id', id) });
     },
 
-    async updateAttachment(
-      id: string,
-      patch: Partial<typeof attachments.$inferInsert>
-    ) {
-      const [row] = await db
-        .update(attachments)
-        .set(patch)
-        .where(eq(attachments.id, id))
-        .returning();
-      return row ?? null;
+    async updateAttachment(id: string, patch: Partial<Attachment>) {
+      const n = await adapter.updateMany('attachment', eq('id', id), patch);
+      return n > 0 ? store.getAttachment(id) : null;
     },
 
     async listAttachments(conversationId: string) {
-      return db
-        .select()
-        .from(attachments)
-        .where(
-          and(
-            eq(attachments.conversationId, conversationId),
-            eq(attachments.uploaded, true)
-          )
-        )
-        .orderBy(asc(attachments.createdAt));
+      return adapter.findMany<Attachment>('attachment', {
+        where: and(eq('conversationId', conversationId), eq('uploaded', true)),
+        orderBy: [{ field: 'createdAt' }],
+      });
     },
 
     async listCannedReplies() {
-      return db.select().from(cannedReplies).orderBy(asc(cannedReplies.title));
+      return adapter.findMany<Row<'canned_reply'>>('canned_reply', {
+        orderBy: [{ field: 'title' }],
+      });
     },
 
     async createCannedReply(values: {
@@ -1337,61 +1644,72 @@ export function createStore(db: Db) {
       body: string;
       locale?: string | null;
     }) {
-      return first(await db.insert(cannedReplies).values(values).returning());
+      return adapter.create<Row<'canned_reply'>>('canned_reply', values);
     },
 
     async deleteCannedReply(id: string) {
-      await db.delete(cannedReplies).where(eq(cannedReplies.id, id));
+      await adapter.deleteMany('canned_reply', eq('id', id));
     },
 
     async listDeals(filter: { companyId?: string; contactId?: string }) {
-      return db
-        .select({
-          deal: deals,
-          companyName: companies.name,
-          contactName: sql<
-            string | null
-          >`coalesce(${contacts.name}, ${contacts.email})`,
-        })
-        .from(deals)
-        .leftJoin(companies, eq(companies.id, deals.companyId))
-        .leftJoin(contacts, eq(contacts.id, deals.contactId))
-        .where(
-          and(
-            filter.companyId
-              ? eq(deals.companyId, filter.companyId)
-              : undefined,
-            filter.contactId ? eq(deals.contactId, filter.contactId) : undefined
-          )
-        )
-        .orderBy(desc(deals.createdAt))
-        .limit(500);
+      const deals = await adapter.findMany<Deal>('deal', {
+        where: and(
+          filter.companyId && eq('companyId', filter.companyId),
+          filter.contactId && eq('contactId', filter.contactId)
+        ),
+        orderBy: [{ field: 'createdAt', direction: 'desc' }],
+        limit: 500,
+      });
+      const companies = new Map<string, string>();
+      const companyIds = [
+        ...new Set(
+          deals.map(d => d.companyId).filter((id): id is string => Boolean(id))
+        ),
+      ];
+      for (const part of chunks(companyIds)) {
+        for (const c of await adapter.findMany<{ id: string; name: string }>(
+          'company',
+          { where: oneOf('id', part), select: ['id', 'name'] }
+        )) {
+          companies.set(c.id, c.name);
+        }
+      }
+      const contacts = await namesOf(
+        'contact',
+        deals.map(d => d.contactId)
+      );
+      return deals.map(deal => {
+        const contact = deal.contactId
+          ? contacts.get(deal.contactId)
+          : undefined;
+        return {
+          deal,
+          companyName:
+            (deal.companyId && companies.get(deal.companyId)) ?? null,
+          contactName: contact ? (contact.name ?? contact.email) : null,
+        };
+      });
     },
 
-    async createDeal(values: typeof deals.$inferInsert) {
-      return first(await db.insert(deals).values(values).returning());
+    async createDeal(values: Insert<'deal'>) {
+      return adapter.create<Deal>('deal', values);
     },
 
-    async updateDeal(id: string, patch: Partial<typeof deals.$inferInsert>) {
-      const [row] = await db
-        .update(deals)
-        .set(patch)
-        .where(eq(deals.id, id))
-        .returning();
-      return row ?? null;
+    async updateDeal(id: string, patch: Partial<Deal>) {
+      const n = await adapter.updateMany('deal', eq('id', id), patch);
+      return n > 0 ? store.getDeal(id) : null;
     },
 
     async getDeal(id: string) {
-      const [row] = await db.select().from(deals).where(eq(deals.id, id));
-      return row ?? null;
+      return adapter.findOne<Deal>('deal', { where: eq('id', id) });
     },
 
     async deleteDeal(id: string) {
-      await db.delete(deals).where(eq(deals.id, id));
+      await adapter.deleteMany('deal', eq('id', id));
     },
 
-    async createActivity(values: typeof activities.$inferInsert) {
-      return first(await db.insert(activities).values(values).returning());
+    async createActivity(values: Insert<'activity'>) {
+      return adapter.create<Activity>('activity', values);
     },
 
     async listActivities(filter: {
@@ -1399,23 +1717,25 @@ export function createStore(db: Db) {
       companyId?: string;
       dealId?: string;
     }) {
-      return db
-        .select({ activity: activities, agentName: agents.name })
-        .from(activities)
-        .leftJoin(agents, eq(agents.id, activities.agentId))
-        .where(
-          or(
-            filter.contactId
-              ? eq(activities.contactId, filter.contactId)
-              : undefined,
-            filter.companyId
-              ? eq(activities.companyId, filter.companyId)
-              : undefined,
-            filter.dealId ? eq(activities.dealId, filter.dealId) : undefined
-          )
-        )
-        .orderBy(desc(activities.occurredAt))
-        .limit(200);
+      const conditions = [
+        filter.contactId && eq('contactId', filter.contactId),
+        filter.companyId && eq('companyId', filter.companyId),
+        filter.dealId && eq('dealId', filter.dealId),
+      ].filter((w): w is Where => Boolean(w));
+      const activities = await adapter.findMany<Activity>('activity', {
+        where: conditions.length > 0 ? or(...conditions) : undefined,
+        orderBy: [{ field: 'occurredAt', direction: 'desc' }],
+        limit: 200,
+      });
+      const agents = await namesOf(
+        'agent',
+        activities.map(a => a.agentId)
+      );
+      return activities.map(activity => ({
+        activity,
+        agentName:
+          (activity.agentId && agents.get(activity.agentId)?.name) ?? null,
+      }));
     },
 
     async enqueueJob(
@@ -1423,7 +1743,7 @@ export function createStore(db: Db) {
       payload: Record<string, unknown>,
       opts: { runAt?: Date } = {}
     ) {
-      await db.insert(jobs).values({
+      await adapter.create('job', {
         kind,
         payload,
         runAt: opts.runAt ?? new Date(),
@@ -1434,52 +1754,75 @@ export function createStore(db: Db) {
     async claimJobs(limit: number): Promise<Job[]> {
       const now = new Date();
       const lockedUntil = new Date(now.getTime() + 2 * MINUTE);
-      const result = await db.execute<Record<string, unknown>>(sql`
-        UPDATE helpdesk.job SET locked_until = ${lockedUntil.toISOString()}, attempts = attempts + 1
-        WHERE id IN (
-          SELECT id FROM helpdesk.job
-          WHERE run_at <= ${now.toISOString()} AND (locked_until IS NULL OR locked_until < ${now.toISOString()})
-          ORDER BY run_at
-          LIMIT ${limit}
-          FOR UPDATE SKIP LOCKED
-        )
-        RETURNING id, kind, payload, attempts`);
-      return result.rows.map(r => ({
-        id: r.id as string,
-        kind: r.kind as string,
-        payload: r.payload as Record<string, unknown>,
-        attempts: r.attempts as number,
-      })) as Job[];
+      const claimed: Job[] = [];
+      const lost: string[] = [];
+      // A run that loses a job to another moves on to the next due one.
+      while (claimed.length < limit) {
+        const due = await adapter.findMany<Job>('job', {
+          where: and(
+            lte('runAt', now),
+            or(eq('lockedUntil', null), lt('lockedUntil', now)),
+            lost.length > 0 && { field: 'id', op: 'notIn', value: lost }
+          ),
+          orderBy: [{ field: 'runAt' }],
+          limit: limit - claimed.length,
+        });
+        if (due.length === 0) break;
+        for (const job of due) {
+          const won = await adapter.updateMany(
+            'job',
+            and(
+              eq('id', job.id),
+              eq('attempts', job.attempts),
+              at('lockedUntil', job.lockedUntil)
+            ),
+            { lockedUntil, attempts: { increment: 1 } }
+          );
+          if (won === 1) {
+            claimed.push({ ...job, lockedUntil, attempts: job.attempts + 1 });
+          } else {
+            lost.push(job.id);
+          }
+        }
+      }
+      return claimed;
     },
 
     async completeJob(id: string) {
-      await db.delete(jobs).where(eq(jobs.id, id));
+      await adapter.deleteMany('job', eq('id', id));
     },
 
     async failJob(job: Pick<Job, 'id' | 'attempts'>, error: string) {
       const dead = job.attempts >= MAX_ATTEMPTS;
-      await db
-        .update(jobs)
-        .set({
-          lockedUntil: null,
-          lastError: error.slice(0, 2000),
-          runAt: dead
-            ? NEVER
-            : new Date(Date.now() + 2 ** job.attempts * MINUTE),
-        })
-        .where(eq(jobs.id, job.id));
+      await adapter.updateMany('job', eq('id', job.id), {
+        lockedUntil: null,
+        lastError: error.slice(0, 2000),
+        runAt: dead ? NEVER : new Date(Date.now() + 2 ** job.attempts * MINUTE),
+      });
     },
 
     /** Counts one hit; returns the total in the current hour for `key`. */
     async hitRateLimit(key: string): Promise<number> {
       const windowStart = new Date(Math.floor(Date.now() / HOUR) * HOUR);
-      const result = await db.execute<{ count: number }>(sql`
-        INSERT INTO helpdesk.rate_limit (key, window_start, count)
-        VALUES (${key}, ${windowStart.toISOString()}, 1)
-        ON CONFLICT (key, window_start) DO UPDATE SET count = helpdesk.rate_limit.count + 1
-        RETURNING count`);
-      await db.delete(rateLimits).where(lt(rateLimits.windowStart, ago(DAY)));
-      return Number(result.rows[0]?.count ?? 0);
+      const window = and(eq('key', key), eq('windowStart', windowStart));
+      for (;;) {
+        const counted = await adapter.updateMany('rate_limit', window, {
+          count: { increment: 1 },
+        });
+        if (counted > 0) break;
+        try {
+          await adapter.create('rate_limit', { key, windowStart, count: 1 });
+          break;
+        } catch (error) {
+          // Another hit created the window first; count on top of it.
+          if ((await adapter.count('rate_limit', window)) === 0) throw error;
+        }
+      }
+      await adapter.deleteMany('rate_limit', lt('windowStart', ago(DAY)));
+      const row = await adapter.findOne<Row<'rate_limit'>>('rate_limit', {
+        where: window,
+      });
+      return row?.count ?? 0;
     },
 
     /**
@@ -1487,34 +1830,34 @@ export function createStore(db: Db) {
      * time on any other status is only cleared. Concurrent runs never wake a row twice.
      */
     async wakeSnoozed() {
-      const result = await db.execute<{
-        id: string;
-        was_until: Date | string;
-      }>(sql`
-        WITH due AS (
-          SELECT id, status, snoozed_until FROM helpdesk.conversation
-          WHERE snoozed_until <= ${new Date().toISOString()}
-          FOR UPDATE SKIP LOCKED
-        ), cleared AS (
-          UPDATE helpdesk.conversation c
-          SET snoozed_until = NULL,
-            status = CASE WHEN due.status = 'pending' THEN 'open' ELSE c.status END
-          FROM due WHERE c.id = due.id
-          RETURNING c.id, due.status AS was_status, due.snoozed_until AS was_until
-        )
-        SELECT id, was_until FROM cleared WHERE was_status = 'pending'`);
-      if (result.rows.length === 0) return [];
-      const until = new Map(
-        result.rows.map(r => [r.id, new Date(r.was_until)])
-      );
-      const rows = await db
-        .select()
-        .from(conversations)
-        .where(inArray(conversations.id, [...until.keys()]));
-      return rows.map(row => ({
-        row,
-        before: { status: 'pending', snoozedUntil: until.get(row.id) ?? null },
-      }));
+      const due = await adapter.findMany<Row<'conversation'>>('conversation', {
+        where: lte('snoozedUntil', new Date()),
+      });
+      const woken: {
+        row: Conversation;
+        before: { status: string; snoozedUntil: Date | null };
+      }[] = [];
+      for (const row of due) {
+        const pending = row.status === 'pending';
+        const won = await adapter.updateMany(
+          'conversation',
+          and(
+            eq('id', row.id),
+            eq('status', row.status),
+            at('snoozedUntil', row.snoozedUntil)
+          ),
+          { snoozedUntil: null, ...(pending ? { status: 'open' } : {}) }
+        );
+        if (won !== 1 || !pending) continue;
+        const updated = await get('conversation', row.id);
+        if (updated) {
+          woken.push({
+            row: updated,
+            before: { status: 'pending', snoozedUntil: row.snoozedUntil },
+          });
+        }
+      }
+      return woken;
     },
 
     /**
@@ -1522,137 +1865,164 @@ export function createStore(db: Db) {
      * With `cutoff`, due means waiting since then or earlier instead of `afterHours` ago.
      */
     async claimReminders(inbox: string, afterHours: number, cutoff?: Date) {
-      const result = await db.execute<{ id: string }>(sql`
-        UPDATE helpdesk.conversation SET reminded_at = ${new Date().toISOString()}
-        WHERE inbox = ${inbox}
-          AND contact_id NOT IN (SELECT id FROM helpdesk.contact WHERE blocked)
-          AND status <> 'resolved'
-          AND snoozed_until IS NULL
-          AND waiting_since IS NOT NULL
-          AND ${
+      const candidates = await adapter.findMany<Row<'conversation'>>(
+        'conversation',
+        {
+          where: and(
+            eq('inbox', inbox),
+            notBlocked,
+            ne('status', 'resolved'),
+            eq('snoozedUntil', null),
+            ne('waitingSince', null),
             cutoff
-              ? sql`waiting_since <= ${cutoff.toISOString()}`
-              : sql`waiting_since < ${ago(afterHours * HOUR).toISOString()}`
-          }
-          AND (reminded_at IS NULL OR reminded_at < waiting_since)
-        RETURNING id`);
-      const ids = result.rows.map(r => r.id);
-      if (ids.length === 0) return [];
-      return db
-        .select()
-        .from(conversations)
-        .where(inArray(conversations.id, ids));
+              ? lte('waitingSince', cutoff)
+              : lt('waitingSince', ago(afterHours * HOUR))
+          ),
+        }
+      );
+      const claimed: Conversation[] = [];
+      for (const row of candidates) {
+        const waitingSince = row.waitingSince as Date;
+        if (row.remindedAt && row.remindedAt >= waitingSince) continue;
+        const won = await adapter.updateMany(
+          'conversation',
+          and(
+            eq('id', row.id),
+            at('waitingSince', waitingSince),
+            at('remindedAt', row.remindedAt)
+          ),
+          { remindedAt: new Date() }
+        );
+        if (won !== 1) continue;
+        const updated = await get('conversation', row.id);
+        if (updated) claimed.push(updated);
+      }
+      return claimed;
     },
 
     /** Storage keys of everything the given conversations hold. */
     async attachmentKeys(conversationIds: string[]) {
-      if (conversationIds.length === 0) return [];
-      const rows = await db
-        .select({ key: attachments.key })
-        .from(attachments)
-        .where(inArray(attachments.conversationId, conversationIds));
-      return rows.map(r => r.key);
+      const keys: string[] = [];
+      for (const part of chunks(conversationIds)) {
+        for (const a of await adapter.findMany<{ key: string }>('attachment', {
+          where: oneOf('conversationId', part),
+          select: ['key'],
+        })) {
+          keys.push(a.key);
+        }
+      }
+      return keys;
     },
 
     async resolvedConversationIdsBefore(cutoff: Date) {
       return conversationIdsWhere(
-        and(
-          eq(conversations.status, 'resolved'),
-          lt(conversations.resolvedAt, cutoff)
-        )
+        and(eq('status', 'resolved'), lt('resolvedAt', cutoff))
       );
     },
 
     async contactConversationIds(contactId: string) {
-      return conversationIdsWhere(eq(conversations.contactId, contactId));
+      return conversationIdsWhere(eq('contactId', contactId));
     },
 
     /** The company's conversations, and those of its contacts who wrote in for no other company. */
     async companyConversationIds(companyId: string) {
       return conversationIdsWhere(
-        sql`${conversations.companyId} = ${companyId}::uuid OR ${conversations.contactId} IN (SELECT id FROM helpdesk.contact WHERE company_id = ${companyId}::uuid AND id NOT IN (SELECT contact_id FROM helpdesk.conversation WHERE company_id IS DISTINCT FROM ${companyId}::uuid))`
+        or(
+          eq('companyId', companyId),
+          inSelect(
+            'contactId',
+            'contact',
+            'id',
+            and(
+              eq('companyId', companyId),
+              notInSelect(
+                'id',
+                'conversation',
+                'contactId',
+                or(ne('companyId', companyId), eq('companyId', null))
+              )
+            )
+          )
+        )
       );
     },
 
     async deleteConversations(ids: string[]) {
-      if (ids.length === 0) return;
-      await db.delete(conversations).where(inArray(conversations.id, ids));
+      for (const part of chunks(ids)) {
+        await adapter.deleteMany('conversation', oneOf('id', part));
+      }
     },
 
     async deleteContact(id: string) {
-      await db.delete(contacts).where(eq(contacts.id, id));
+      await adapter.deleteMany('contact', eq('id', id));
     },
 
     /** Contacts of the company that `deleteCompany` will drop: those without a conversation of their own. */
     async contactsLeftWithNothing(companyId: string) {
-      const rows = await db
-        .select({ id: contacts.id })
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.companyId, companyId),
-            sql`NOT EXISTS (SELECT 1 FROM helpdesk.conversation c WHERE c.contact_id = ${contacts.id})`
-          )
-        );
+      const rows = await adapter.findMany<{ id: string }>('contact', {
+        where: and(
+          eq('companyId', companyId),
+          notInSelect('id', 'conversation', 'contactId')
+        ),
+        select: ['id'],
+      });
       return rows.map(r => r.id);
     },
 
     /** Drops a company, the given contacts, and the link from the rest. */
     async deleteCompany(id: string, contactIds: string[]) {
-      await db.transaction(async tx => {
-        if (contactIds.length > 0) {
+      await adapter.transaction(async tx => {
+        for (const part of chunks(contactIds)) {
           // One may have opened a conversation since; that one stays.
-          await tx
-            .delete(contacts)
-            .where(
-              and(
-                inArray(contacts.id, contactIds),
-                sql`NOT EXISTS (SELECT 1 FROM helpdesk.conversation c WHERE c.contact_id = ${contacts.id})`
-              )
-            );
+          await tx.deleteMany(
+            'contact',
+            and(
+              oneOf('id', part),
+              notInSelect('id', 'conversation', 'contactId')
+            )
+          );
         }
-        await tx
-          .update(contacts)
-          .set({ companyId: null })
-          .where(eq(contacts.companyId, id));
-        await tx.delete(companies).where(eq(companies.id, id));
+        await tx.updateMany('contact', eq('companyId', id), {
+          companyId: null,
+        });
+        await tx.deleteMany('company', eq('id', id));
       });
     },
 
     async attachmentKeysBy(contactId: string) {
-      const rows = await db
-        .select({ key: attachments.key })
-        .from(attachments)
-        .where(
-          inArray(
-            attachments.messageId,
-            db
-              .select({ id: messages.id })
-              .from(messages)
-              .where(eq(messages.contactId, contactId))
-          )
-        );
+      const rows = await adapter.findMany<{ key: string }>('attachment', {
+        where: inSelect(
+          'messageId',
+          'message',
+          'id',
+          eq('contactId', contactId)
+        ),
+        select: ['key'],
+      });
       return rows.map(r => r.key);
     },
 
     /** Whether the contact wrote anything nobody proved was theirs. */
     async hasUnverifiedMessages(contactId: string) {
-      const [row] = await db
-        .select({ id: messages.id })
-        .from(messages)
-        .where(
+      // Written before this was recorded: proven if the contact is.
+      const proven =
+        (await adapter.count(
+          'identity',
+          and(eq('contactId', contactId), eq('verified', true))
+        )) > 0;
+      return (
+        (await adapter.count(
+          'message',
           and(
-            eq(messages.contactId, contactId),
-            // Written before this was recorded: proven if the contact is.
-            sql`(${messages.verified} IS FALSE OR (${messages.verified} IS NULL AND NOT EXISTS (SELECT 1 FROM helpdesk.identity i WHERE i.contact_id = ${contactId}::uuid AND i.verified)))`
+            eq('contactId', contactId),
+            or(eq('verified', false), !proven && eq('verified', null))
           )
-        )
-        .limit(1);
-      return Boolean(row);
+        )) > 0
+      );
     },
 
     async deleteMessagesBy(contactId: string) {
-      await db.delete(messages).where(eq(messages.contactId, contactId));
+      await adapter.deleteMany('message', eq('contactId', contactId));
     },
 
     async findDuplicateCandidates(conversation: Conversation, text: string) {
@@ -1665,42 +2035,46 @@ export function createStore(db: Db) {
         ),
       ].slice(0, 12);
       if (words.length === 0) return [];
-      const orQuery = words.join(' | ');
-      const result = await db.execute<{
-        id: string;
-        number: number;
-        subject: string | null;
-        title: string | null;
-        rank: number;
-      }>(sql`
-        SELECT c.id, c.number, c.subject, c.title,
-          max(ts_rank(m.search, q)) AS rank
-        FROM helpdesk.conversation c
-        JOIN helpdesk.message m ON m.conversation_id = c.id AND NOT m.internal,
-          to_tsquery('simple', ${orQuery}) q
-        WHERE c.id <> ${conversation.id}::uuid
-          AND (m.search @@ q OR c.search @@ q)
-        GROUP BY c.id
-        ORDER BY rank DESC
-        LIMIT 5`);
-      return result.rows;
+      if (caps.duplicateCandidates) {
+        return caps.duplicateCandidates(conversation.id, words);
+      }
+      // ponytail: LIKE per word, ranked by the words in the title and subject.
+      const rows = await adapter.findMany<Row<'conversation'>>('conversation', {
+        where: and(
+          ne('id', conversation.id),
+          or(
+            ...words.map(word =>
+              or(
+                contains('title', word),
+                contains('subject', word),
+                inSelect(
+                  'id',
+                  'message',
+                  'conversationId',
+                  and(contains('body', word), eq('internal', false))
+                )
+              )
+            )
+          )
+        ),
+        orderBy: [{ field: 'lastMessageAt', direction: 'desc' }],
+        limit: 50,
+      });
+      const rank = (r: Row<'conversation'>) => {
+        const known = `${r.title ?? ''} ${r.subject ?? ''}`.toLowerCase();
+        return words.filter(w => known.includes(w)).length;
+      };
+      return rows
+        .map(row => ({ row, rank: rank(row) }))
+        .sort((a, b) => b.rank - a.rank)
+        .slice(0, 5)
+        .map(({ row }) => ({
+          id: row.id,
+          number: row.number,
+          subject: row.subject,
+          title: row.title,
+        }));
     },
   };
   return store;
 }
-
-function first<T>(rows: T[]): T {
-  const row = rows[0];
-  if (row === undefined) throw new Error('Expected a returned row');
-  return row;
-}
-
-function latest<T extends Date | null>(a: T, b: Date | null): T {
-  return (b && (!a || b > a) ? b : a) as T;
-}
-
-function escapeLike(value: string) {
-  return value.replace(/[\\%_]/g, m => `\\${m}`);
-}
-
-export { schema };

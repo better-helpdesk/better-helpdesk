@@ -1,46 +1,16 @@
 import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNull,
-  type SQL,
-  sql,
-} from 'drizzle-orm';
-import pg from 'pg';
-
-import {
   buildHelpdesk,
   type HelpdeskConfig,
   type HelpdeskEmail,
   type Identity,
-  postgresAdapter,
   type StorageAdapter,
 } from '../src';
-import { schema } from '../src/db/store';
-import { testDatabaseUrl } from './database-url';
+import type { Where as AdapterWhere } from '../src/db/adapter';
+import type { ModelName, Row as ModelRow } from '../src/db/model';
+import { testAdapter } from './database';
 
-const tables = {
-  activity: schema.activities,
-  agent: schema.agents,
-  attachment: schema.attachments,
-  canned_reply: schema.cannedReplies,
-  company: schema.companies,
-  contact: schema.contacts,
-  conversation: schema.conversations,
-  conversation_event: schema.conversationEvents,
-  deal: schema.deals,
-  identity: schema.identities,
-  job: schema.jobs,
-  message: schema.messages,
-  participant: schema.participants,
-  rate_limit: schema.rateLimits,
-  setting: schema.settings,
-};
-
-export type Model = keyof typeof tables;
-export type Row<M extends Model> = (typeof tables)[M]['$inferSelect'];
+export type Model = ModelName;
+export type Row<M extends Model> = ModelRow<M>;
 /** Equality per field; `null` matches NULL and an array matches any of its values. */
 export type Where<M extends Model> = {
   [K in keyof Row<M>]?: Row<M>[K] | null | NonNullable<Row<M>[K]>[];
@@ -60,7 +30,7 @@ export const WWW_ORIGIN = 'https://www.test';
 export const IDENTITY_SECRET = 'identity-secret-for-the-test-harness';
 
 export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
-  const pool = new pg.Pool({ connectionString: testDatabaseUrl(), max: 4 });
+  const { adapter, pool, close } = testAdapter();
   const objects = new Map<string, Uint8Array>();
   const emails: HelpdeskEmail[] = [];
   const users = new Map<string, Identity>();
@@ -84,7 +54,7 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
   };
 
   const support = buildHelpdesk({
-    db: postgresAdapter({ pool }),
+    db: adapter,
     referencePrefix: 'DG',
     adminUrl: `${ADMIN_ORIGIN}/settings/admin/support/`,
     inboxes: {
@@ -161,42 +131,54 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
     });
   }
 
+  // Children first, so no foreign key holds a delete up.
+  const tables: Model[] = [
+    'conversation_tag',
+    'contact_tag',
+    'company_tag',
+    'attachment',
+    'conversation_event',
+    'participant',
+    'message',
+    'activity',
+    'deal',
+    'identity',
+    'conversation',
+    'agent',
+    'contact',
+    'company',
+    'job',
+    'rate_limit',
+    'setting',
+    'canned_reply',
+  ];
+
   async function reset() {
-    await support.store.db.execute(sql`
-      TRUNCATE helpdesk.activity, helpdesk.agent, helpdesk.attachment, helpdesk.canned_reply,
-        helpdesk.company, helpdesk.contact, helpdesk.conversation, helpdesk.deal,
-        helpdesk.identity, helpdesk.job, helpdesk.message,
-        helpdesk.participant, helpdesk.rate_limit, helpdesk.setting CASCADE`);
+    for (const table of tables) await adapter.deleteMany(table, undefined);
     objects.clear();
     emails.length = 0;
     users.clear();
   }
 
   async function runDueJobs() {
-    await support.store.db
-      .update(schema.jobs)
-      .set({ runAt: new Date() })
-      .where(sql`${schema.jobs.runAt} < '9999-01-01'`);
+    await adapter.updateMany(
+      'job',
+      { field: 'runAt', op: 'lt', value: new Date('9999-01-01') },
+      { runAt: new Date() }
+    );
     return support.runJobs();
   }
 
   // The tests reach the database only through these, so the same suite runs
   // on every adapter.
-  function condition<M extends Model>(model: M, where: Where<M> = {}) {
-    const table = tables[model] as unknown as Record<string, never>;
-    const parts: SQL[] = [];
-    for (const [key, value] of Object.entries(where)) {
-      const column = table[key];
-      if (!column) throw new Error(`No field ${key} on ${model}`);
-      parts.push(
-        value === null
-          ? isNull(column)
-          : Array.isArray(value)
-            ? inArray(column, value)
-            : eq(column, value)
-      );
-    }
-    return and(...parts);
+  function condition<M extends Model>(where: Where<M> = {}): AdapterWhere {
+    return {
+      and: Object.entries(where).map(([field, value]) =>
+        Array.isArray(value)
+          ? { field, op: 'in' as const, value }
+          : { field, value }
+      ),
+    };
   }
 
   async function find<M extends Model>(
@@ -204,17 +186,14 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
     where: Where<M> = {},
     { orderBy = {}, limit }: { orderBy?: OrderBy<M>; limit?: number } = {}
   ): Promise<Row<M>[]> {
-    const table = tables[model] as unknown as Record<string, never>;
-    const query = support.store.db
-      .select()
-      .from(tables[model] as typeof schema.jobs)
-      .where(condition(model, where))
-      .orderBy(
-        ...Object.entries(orderBy).map(([key, dir]) =>
-          dir === 'desc' ? desc(table[key] as never) : asc(table[key] as never)
-        )
-      );
-    return (await (limit ? query.limit(limit) : query)) as Row<M>[];
+    return adapter.findMany<Row<M>>(model, {
+      where: condition(where),
+      orderBy: Object.entries(orderBy).map(([field, direction]) => ({
+        field,
+        direction: direction as 'asc' | 'desc',
+      })),
+      limit,
+    });
   }
 
   async function findOne<M extends Model>(model: M, where: Where<M> = {}) {
@@ -223,7 +202,7 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
   }
 
   async function count<M extends Model>(model: M, where: Where<M> = {}) {
-    return (await find(model, where)).length;
+    return adapter.count(model, condition(where));
   }
 
   async function update<M extends Model>(
@@ -231,29 +210,23 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
     where: Where<M>,
     patch: Partial<Row<M>>
   ) {
-    await support.store.db
-      .update(tables[model])
-      .set(patch as never)
-      .where(condition(model, where));
+    await adapter.updateMany(model, condition(where), patch);
   }
 
   async function insert<M extends Model>(
     model: M,
     values: Partial<Row<M>>
   ): Promise<Row<M>> {
-    const [row] = await support.store.db
-      .insert(tables[model])
-      .values(values as never)
-      .returning();
-    return row as Row<M>;
+    return adapter.create<Row<M>>(model, values);
   }
 
   async function remove<M extends Model>(model: M, where: Where<M>) {
-    await support.store.db.delete(tables[model]).where(condition(model, where));
+    await adapter.deleteMany(model, condition(where));
   }
 
   return {
     support,
+    adapter,
     pool,
     storage,
     objects,
@@ -268,7 +241,7 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
     update,
     insert,
     remove,
-    close: () => pool.end(),
+    close,
   };
 }
 

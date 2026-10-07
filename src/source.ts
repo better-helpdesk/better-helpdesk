@@ -1,4 +1,4 @@
-import type { ConversationContext } from './db/schema';
+import type { ConversationContext } from './db/model';
 
 const NAMES: Record<string, string> = {
   google: 'Google',

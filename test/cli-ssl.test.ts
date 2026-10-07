@@ -23,7 +23,9 @@ const fakeDist = `
 export const parseCsv = () => [];
 export const importContacts = () => {};
 export const importCannedReplies = () => {};
-export const postgresAdapter = () => {};`;
+export const postgresAdapter = () => {};
+export const createStore = () => {};
+export const migrate = async () => [];`;
 const hooks = `
 import { registerHooks } from 'node:module';
 const module = source => ({ url: 'data:text/javascript,' + encodeURIComponent(source), shortCircuit: true });

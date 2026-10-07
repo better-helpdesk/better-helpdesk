@@ -192,7 +192,7 @@ describe('onEvent', () => {
     ]);
   });
 
-  it.each(['widget', 'agent'])(
+  it.skipIf(!h.pool).each(['widget', 'agent'])(
     'reports a resolve once when two %s requests race',
     async route => {
       const { id } = await open();
@@ -203,7 +203,8 @@ describe('onEvent', () => {
           body: { status: 'resolved' },
         });
       // Both requests read the open thread, then queue behind this row lock.
-      const lock = await h.pool.connect();
+      const pool = h.pool as NonNullable<typeof h.pool>;
+      const lock = await pool.connect();
       try {
         await lock.query('BEGIN');
         await lock.query(
@@ -212,7 +213,7 @@ describe('onEvent', () => {
         );
         const racing = Promise.all([resolve(), resolve()]);
         for (;;) {
-          const { rows } = await h.pool.query(
+          const { rows } = await pool.query(
             `SELECT count(*)::int AS n FROM pg_stat_activity
              WHERE wait_event_type = 'Lock' AND query LIKE 'update%'`
           );

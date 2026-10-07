@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 // Applies the support schema migrations. One connection, closed on exit, so it
 // can run next to `prisma migrate deploy` inside the environment's budget.
-import { fileURLToPath } from 'node:url';
-
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
+
+import { migrate, postgresAdapter } from '../dist/index.js';
 
 const connectionString =
   process.env.HELPDESK_DATABASE_URL || process.env.APP_DATABASE_URL;
@@ -24,12 +22,12 @@ const pool = new pg.Pool({
 });
 
 try {
-  await migrate(drizzle(pool), {
-    migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
-    migrationsSchema: 'helpdesk',
-    migrationsTable: '__migrations',
-  });
-  console.log('helpdesk: migrations applied');
+  const applied = await migrate(postgresAdapter({ pool }));
+  console.log(
+    applied.length > 0
+      ? `helpdesk: applied ${applied.join(', ')}`
+      : 'helpdesk: up to date'
+  );
 } finally {
   await pool.end();
 }

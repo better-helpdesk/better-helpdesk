@@ -21,7 +21,12 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | Export | Kind | What it is |
 | --- | --- | --- |
 | `buildHelpdesk(config)` | function | Builds the helpdesk from a [`HelpdeskConfig`](/docs/reference/configuration). Throws on [invalid configuration](/docs/reference/configuration#startup-checks). |
-| `postgresAdapter({ pool })` | function | The `HelpdeskStore` over a `pg.Pool`, for the `db` option. |
+| `postgresAdapter({ pool })` | function | The `DatabaseAdapter` over a `pg.Pool`, for the `db` option. |
+| `kyselyAdapter({ dialect, family })` | function | A built-in adapter over any Kysely dialect of a family Better Helpdesk knows. `postgresAdapter` is this with Kysely's `PostgresDialect`. |
+| `migrate(adapter)` | function | Applies the migrations through a built-in adapter, as [`better-helpdesk-migrate`](/docs/reference/cli#better-helpdesk-migrate) does; returns the names of the ones it applied. |
+| `createAdapter(input)` | function | Turns an `AdapterInput`, the contract a custom adapter implements, into a `DatabaseAdapter`: it sets ids and defaults and converts values to and from what the input supports. |
+| `createStore(adapter)` | function | The `HelpdeskStore` over an adapter, for code that runs without `buildHelpdesk`. |
+| `helpdeskModel` | object | Every table and field, with its kind, whether it may be null, its default and its references. |
 | `signIdentityToken(payload, secret, options?)` | function | Signs an identity token. |
 | `verifyIdentityToken(token, secret)` | function | Returns the `Identity` a token vouches for, with `isAgent: false`, or `null` when it is forged, malformed or expired. |
 | `formatReference(prefix, number)` | function | `formatReference('ACME', 1042)` is `ACME-1042`. |
@@ -29,7 +34,8 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | `HelpdeskError` | class | An error with an HTTP `status` and, for a bulk change, the failed `ids`. The handler answers it with that status. |
 | `BuiltHelpdesk` | type | What `buildHelpdesk` returns. |
 | `Conversation`, `Message` | type | Rows of [`conversation`](/docs/reference/database#conversation) and [`message`](/docs/reference/database#message). |
-| `HelpdeskStore` | type | The query layer. |
+| `HelpdeskStore` | type | The query layer, `buildHelpdesk(...).store`. |
+| `DatabaseAdapter`, `AdapterInput`, `Capabilities`, `Where`, `OrderBy`, `FindQuery` | type | The adapter contract. |
 | `HelpdeskEvent` | type | See [Events](/docs/reference/events). |
 | `IdentityClaims` | type | The claims of an identity token. |
 

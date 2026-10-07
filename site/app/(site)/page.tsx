@@ -238,7 +238,7 @@ export default function Home() {
             Stores no passwords and no sessions. Mutations are refused from any
             origin you haven't allowed. Inbound mail is checked against DKIM and
             marked verified or not. Identity tokens are signed and expire. Four
-            runtime dependencies: <code>drizzle-orm</code>, <code>zod</code>,{' '}
+            runtime dependencies: <code>kysely</code>, <code>zod</code>,{' '}
             <code>mailparser</code>, <code>mailauth</code>.
           </p>
           <div className="row-cta">

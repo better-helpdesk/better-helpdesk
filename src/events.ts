@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
-import type { HelpdeskConfig } from './config';
+import type { HelpdeskConfig, ResolvedConfig } from './config';
 import type { Conversation, Message } from './db/store';
 
 export type HelpdeskEvent =
@@ -44,7 +44,7 @@ const TRACKED = [
 
 /** Records and reports the `patch` keys whose stored value changed. */
 export async function emitUpdated(
-  config: HelpdeskConfig,
+  config: ResolvedConfig,
   old: Conversation,
   updated: Conversation | null,
   patch: Partial<Conversation>,
@@ -66,7 +66,7 @@ export async function emitUpdated(
     agentId,
   });
   try {
-    await config.db.recordEvents(
+    await config.store.recordEvents(
       TRACKED.filter(key => Object.hasOwn(before, key)).map(key => ({
         conversationId: updated.id,
         agentId,

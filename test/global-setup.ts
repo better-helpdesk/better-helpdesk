@@ -1,8 +1,7 @@
-import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-
 import pg from 'pg';
 
+import { migrate } from '../src/db/migrate';
+import { testAdapter } from './database';
 import { testDatabaseUrl } from './database-url';
 
 export async function setup() {
@@ -21,12 +20,10 @@ export async function setup() {
   } finally {
     await client.end();
   }
-  execFileSync(
-    'node',
-    [fileURLToPath(new URL('../bin/migrate.mjs', import.meta.url))],
-    {
-      stdio: 'inherit',
-      env: { ...process.env, HELPDESK_DATABASE_URL: url.toString() },
-    }
-  );
+  const { builtIn, close } = testAdapter();
+  try {
+    await migrate(builtIn);
+  } finally {
+    await close();
+  }
 }

@@ -17,13 +17,13 @@ import {
   type ResolvedConfig,
   resolveConfig,
 } from './config';
+import type { Insert } from './db/model';
 import type {
   Company,
   Contact,
   Conversation,
   IdentityInput,
   Message,
-  schema,
 } from './db/store';
 import { formatReference, parseReference } from './domain';
 import { emit, emitUpdated } from './events';
@@ -100,7 +100,7 @@ const RATING_LINK_DAYS = 30;
 
 export function createHelpdesk(input: HelpdeskConfig) {
   const config: ResolvedConfig = resolveConfig(input);
-  const store = config.db;
+  const { store } = config;
   const reference = (c: Pick<Conversation, 'number'>) =>
     formatReference(config.referencePrefix, c.number);
 
@@ -1027,8 +1027,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
    * would lose the files and the follow-ups for good.
    */
   async function uploadInbound(conversationId: string, mail: InboundMessage) {
-    const files: Omit<typeof schema.attachments.$inferInsert, 'messageId'>[] =
-      [];
+    const files: Omit<Insert<'attachment'>, 'messageId'>[] = [];
     if (!config.storage) return files;
     for (const file of mail.attachments.slice(0, MAX_ATTACHMENTS)) {
       if (file.content.byteLength > config.maxAttachmentBytes) continue;
