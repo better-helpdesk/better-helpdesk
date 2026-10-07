@@ -754,13 +754,15 @@ export function createStore(adapter: DatabaseAdapter) {
     },
 
     async companiesByExternalOrgIds(ids: string[]): Promise<Company[]> {
-      if (ids.length === 0) return [];
-      return withTags(
-        'company',
-        await adapter.findMany<Row<'company'>>('company', {
-          where: oneOf('externalOrgId', ids),
-        })
-      );
+      const rows: Row<'company'>[] = [];
+      for (const part of chunks(ids)) {
+        rows.push(
+          ...(await adapter.findMany<Row<'company'>>('company', {
+            where: oneOf('externalOrgId', part),
+          }))
+        );
+      }
+      return withTags('company', rows);
     },
 
     async getCompany(id: string) {
@@ -1645,10 +1647,14 @@ export function createStore(adapter: DatabaseAdapter) {
     },
 
     async findMessageByEmailId(emailMessageIds: string[]) {
-      if (emailMessageIds.length === 0) return null;
-      return adapter.findOne<Message>('message', {
-        where: oneOf('emailMessageId', emailMessageIds),
-      });
+      // A mail's References can name thousands of ids.
+      for (const part of chunks(emailMessageIds)) {
+        const found = await adapter.findOne<Message>('message', {
+          where: oneOf('emailMessageId', part),
+        });
+        if (found) return found;
+      }
+      return null;
     },
 
     async listMessages(
