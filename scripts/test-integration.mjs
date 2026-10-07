@@ -1,5 +1,6 @@
 // Runs the integration suite on every database it can reach: Postgres with
-// and without its native queries, and SQLite in-process. TEST_DB picks one.
+// and without its native queries, SQLite in-process, and MySQL when
+// TEST_MYSQL_URL names a server. TEST_DB picks one.
 import { spawnSync } from 'node:child_process';
 
 const runs = [
@@ -9,10 +10,13 @@ const runs = [
     env: {
       TEST_DB: 'postgres',
       TEST_PORTABLE: '1',
-      TEST_DB_PREFIX: 'portable',
+      TEST_DB_PREFIX: `${process.env.TEST_DB_PREFIX ?? ''}portable`,
     },
   },
   { name: 'sqlite', env: { TEST_DB: 'sqlite' } },
+  ...(process.env.TEST_MYSQL_URL
+    ? [{ name: 'mysql', env: { TEST_DB: 'mysql' } }]
+    : []),
 ];
 const only = process.env.TEST_DB;
 if (only && !runs.some(run => run.env.TEST_DB === only)) {

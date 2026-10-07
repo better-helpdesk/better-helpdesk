@@ -1,9 +1,10 @@
 import { rm } from 'node:fs/promises';
 
+import { createConnection } from 'mysql2/promise';
 import pg from 'pg';
 
 import { migrate } from '../src/db/migrate';
-import { sqlitePath, testAdapter, testFamily } from './database';
+import { mysqlUrls, sqlitePath, testAdapter, testFamily } from './database';
 import { testDatabaseUrl } from './database-url';
 
 /** Gives the run an empty database at the latest migration. */
@@ -12,6 +13,14 @@ export async function setup() {
     for (const suffix of ['', '-wal', '-shm']) {
       await rm(`${sqlitePath()}${suffix}`, { force: true });
     }
+  } else if (testFamily === 'mysql') {
+    const { server, name } = mysqlUrls();
+    const connection = await createConnection(server);
+    await connection.query(`DROP DATABASE IF EXISTS \`${name}\``);
+    await connection.query(
+      `CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`
+    );
+    await connection.end();
   } else {
     await createPostgresDatabase();
   }

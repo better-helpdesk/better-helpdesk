@@ -15,6 +15,7 @@ export {
 } from './db/adapter';
 export {
   kyselyAdapter,
+  mysqlAdapter,
   postgresAdapter,
   type SqliteDatabaseInput,
   sqliteAdapter,

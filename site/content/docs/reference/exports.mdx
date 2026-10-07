@@ -22,6 +22,7 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | --- | --- | --- |
 | `buildHelpdesk(config)` | function | Builds the helpdesk from a [`HelpdeskConfig`](/docs/reference/configuration). Throws on [invalid configuration](/docs/reference/configuration#startup-checks). |
 | `postgresAdapter({ pool })` | function | The `DatabaseAdapter` over a `pg.Pool`, for the `db` option. |
+| `mysqlAdapter({ pool })` | function | The `DatabaseAdapter` over the host's mysql2 pool, MySQL 8.4 or newer. The pool must be created with `timezone: 'Z'`; the adapter refuses one that converts times in another zone. |
 | `sqliteAdapter({ database })` | function | The `DatabaseAdapter` over a SQLite database the host opened, from `node:sqlite` or `better-sqlite3`. It turns foreign keys on and refuses to start if they stay off. |
 | `kyselyAdapter({ dialect, family })` | function | A built-in adapter over any Kysely dialect of a family Better Helpdesk knows. `postgresAdapter` is this with Kysely's `PostgresDialect`. |
 | `migrate(adapter)` | function | Applies the migrations through a built-in adapter, as [`better-helpdesk-migrate`](/docs/reference/cli#better-helpdesk-migrate) does; returns the names of the ones it applied. |

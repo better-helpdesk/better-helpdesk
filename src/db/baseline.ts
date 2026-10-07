@@ -19,6 +19,17 @@ const TYPES: Partial<Record<Family, Record<FieldKind | 'key', string>>> = {
     json: 'text',
     decimal: 'text',
   },
+  mysql: {
+    uuid: 'char(36)',
+    key: 'varchar(255)',
+    string: 'varchar(255)',
+    text: 'mediumtext',
+    integer: 'int',
+    boolean: 'boolean',
+    date: 'datetime(3)',
+    json: 'json',
+    decimal: 'decimal(14,2)',
+  },
 };
 
 type Column = [
@@ -39,6 +50,9 @@ export async function createBaseline(db: Db, family: Family) {
   const types = TYPES[family];
   if (!types) throw new Error(`helpdesk: no baseline for ${family}`);
   const table = (model: ModelName) => `helpdesk_${model}`;
+  const created = new Set<ModelName>();
+  // Foreign keys to a table not created yet: SQLite takes them anyway, MySQL needs them added after.
+  const later: (() => Promise<void>)[] = [];
 
   async function create(
     model: ModelName,
@@ -47,18 +61,45 @@ export async function createBaseline(db: Db, family: Family) {
   ) {
     let builder = db.schema.createTable(table(model));
     for (const [name, kind, options = {}] of columns) {
-      builder = builder.addColumn(name, sql.raw(types?.[kind] ?? 'text'), c => {
-        let col = options.null ? c : c.notNull();
-        if (options.references) {
-          const [target, onDelete] = options.references;
-          col = col.references(`${table(target)}.id`).onDelete(onDelete);
-        }
-        return col;
-      });
+      builder = builder.addColumn(name, sql.raw(types?.[kind] ?? 'text'), c =>
+        options.null ? c : c.notNull()
+      );
     }
-    await builder
-      .addPrimaryKeyConstraint(`helpdesk_${model}_pkey`, primaryKey as never)
-      .execute();
+    builder = builder.addPrimaryKeyConstraint(
+      `helpdesk_${model}_pkey`,
+      primaryKey as never
+    );
+    for (const [name, , options = {}] of columns) {
+      if (!options.references) continue;
+      const [target, onDelete] = options.references;
+      const key = `helpdesk_${model}_${name}_fkey`;
+      if (family === 'sqlite' || target === model || created.has(target)) {
+        builder = builder.addForeignKeyConstraint(
+          key,
+          [name] as never,
+          table(target),
+          ['id'],
+          fk => fk.onDelete(onDelete)
+        );
+      } else {
+        later.push(() =>
+          db.schema
+            .alterTable(table(model))
+            .addForeignKeyConstraint(key, [name], table(target), ['id'], fk =>
+              fk.onDelete(onDelete)
+            )
+            .execute()
+        );
+      }
+    }
+    if (family === 'mysql') {
+      // Binary collation: identifiers compare exactly, as on Postgres.
+      builder = builder.modifyEnd(
+        sql`engine = InnoDB default charset = utf8mb4 collate = utf8mb4_bin`
+      );
+    }
+    await builder.execute();
+    created.add(model);
   }
 
   async function index(
@@ -120,10 +161,20 @@ export async function createBaseline(db: Db, family: Family) {
     createdAt,
     ['last_used_at', 'date'],
   ]);
-  await index('identity', 'identity_verified_key', ['channel', 'external_id'], {
-    unique: true,
-    where: 'verified = 1',
-  });
+  if (family === 'mysql') {
+    // MySQL has no partial index; a key on expressions that are NULL unless verified does the same.
+    await sql`create unique index helpdesk_identity_verified_key on ${sql.table(table('identity'))}
+      ((if(verified, channel, null)), (if(verified, external_id, null)))`.execute(
+      db
+    );
+  } else {
+    await index(
+      'identity',
+      'identity_verified_key',
+      ['channel', 'external_id'],
+      { unique: true, where: 'verified = 1' }
+    );
+  }
   await index(
     'identity',
     'identity_contact_key',
@@ -361,6 +412,7 @@ export async function createBaseline(db: Db, family: Family) {
     ],
     ['name']
   );
+  for (const add of later) await add();
   await db
     .insertInto(table('counter'))
     .values({ name: 'reference', value: 1000 })
