@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { importCannedReplies, importContacts, parseCsv } from '../src/import';
@@ -9,14 +8,24 @@ const h = createHarness();
 beforeEach(() => h.reset());
 afterAll(() => h.close());
 
-async function rows<T>(query: ReturnType<typeof sql>) {
-  return (await h.support.store.db.execute(query)).rows as T[];
+async function contacts() {
+  const companies = await h.find('company');
+  return Promise.all(
+    (await h.find('contact', {}, { orderBy: { email: 'asc' } })).map(
+      async c => {
+        const company = companies.find(co => co.id === c.companyId);
+        return {
+          email: c.email,
+          name: c.name,
+          tags: (await h.support.store.getContact(c.id))?.tags,
+          leadStage: c.leadStage,
+          company: company?.name ?? null,
+          domain: company?.domain ?? null,
+        };
+      }
+    )
+  );
 }
-
-const contacts = () => sql`
-  SELECT c.email, c.name, c.tags, c.lead_stage, co.name AS company, co.domain
-  FROM helpdesk.contact c LEFT JOIN helpdesk.company co ON co.id = c.company_id
-  ORDER BY c.email`;
 
 describe('importContacts', () => {
   it('creates contacts with their companies, and on a rerun only adds what is missing', async () => {
@@ -33,11 +42,15 @@ not-an-email,Nobody,,,,
       skipped: 1,
     });
     // An agent edits Ada and renames her company before the rerun.
-    await store.db.execute(
-      sql`UPDATE helpdesk.contact SET name = 'Ada Lovelace (CTO)' WHERE email = 'ada@acme.test'`
+    await h.update(
+      'contact',
+      { email: 'ada@acme.test' },
+      { name: 'Ada Lovelace (CTO)' }
     );
-    await store.db.execute(
-      sql`UPDATE helpdesk.company SET name = 'Acme Corporation' WHERE domain = 'acme.test'`
+    await h.update(
+      'company',
+      { domain: 'acme.test' },
+      { name: 'Acme Corporation' }
     );
     const rerun = `email,name,company,domain,tags,lead_stage
 ada@acme.test,Ada,Acme,acme.test,churn-risk,lead
@@ -49,12 +62,12 @@ bob@acme.test,Bob,,acme.test,,
       skipped: 1,
     });
 
-    expect(await rows(contacts())).toEqual([
+    expect(await contacts()).toEqual([
       {
         email: 'ada@acme.test',
         name: 'Ada Lovelace (CTO)',
         tags: ['vip', 'beta', 'churn-risk'],
-        lead_stage: 'customer',
+        leadStage: 'customer',
         company: 'Acme Corporation',
         domain: 'acme.test',
       },
@@ -62,7 +75,7 @@ bob@acme.test,Bob,,acme.test,,
         email: 'bob@acme.test',
         name: 'Bob',
         tags: [],
-        lead_stage: null,
+        leadStage: null,
         company: 'Acme Corporation',
         domain: 'acme.test',
       },
@@ -70,7 +83,7 @@ bob@acme.test,Bob,,acme.test,,
         email: 'cleo@mail.test',
         name: 'Cleo',
         tags: [],
-        lead_stage: 'lead',
+        leadStage: 'lead',
         company: 'Cleo Ltd',
         domain: null,
       },
@@ -86,12 +99,7 @@ ben@gmail.test,Beta AG
 carl@gmail.test,alpha gmbh
 `)
     );
-    expect(
-      (await rows<{ email: string; company: string }>(contacts())).map(r => [
-        r.email,
-        r.company,
-      ])
-    ).toEqual([
+    expect((await contacts()).map(r => [r.email, r.company])).toEqual([
       ['ann@gmail.test', 'Alpha GmbH'],
       ['ben@gmail.test', 'Beta AG'],
       ['carl@gmail.test', 'Alpha GmbH'],
@@ -112,8 +120,8 @@ ada@acme.test,${'x'.repeat(201)},ok;${'t'.repeat(51)},prospect
       'row 2: lead stage "prospect" is not one of lead, customer, left out',
       'row 2: tags longer than 50 left out',
     ]);
-    expect(await rows(contacts())).toMatchObject([
-      { email: 'ada@acme.test', name: null, tags: ['ok'], lead_stage: null },
+    expect(await contacts()).toMatchObject([
+      { email: 'ada@acme.test', name: null, tags: ['ok'], leadStage: null },
     ]);
   });
 
@@ -127,12 +135,13 @@ ada@acme.test,${'x'.repeat(201)},ok;${'t'.repeat(51)},prospect
       'row 3: lead stage "Churned" is not one of Lead, Trial, left out',
     ]);
     expect(
-      await rows(
-        sql`SELECT email, lead_stage FROM helpdesk.contact ORDER BY email`
-      )
+      (await h.find('contact', {}, { orderBy: { email: 'asc' } })).map(r => ({
+        email: r.email,
+        leadStage: r.leadStage,
+      }))
     ).toEqual([
-      { email: 't@a.test', lead_stage: 'Trial' },
-      { email: 'u@a.test', lead_stage: null },
+      { email: 't@a.test', leadStage: 'Trial' },
+      { email: 'u@a.test', leadStage: null },
     ]);
   });
 
@@ -143,9 +152,9 @@ ada@acme.test,${'x'.repeat(201)},ok;${'t'.repeat(51)},prospect
         'email,company,domain\nann@gmail.test,Alpha,\nbob@alpha.test,Alpha,alpha.test\n'
       )
     );
-    expect(await rows(sql`SELECT name, domain FROM helpdesk.company`)).toEqual([
-      { name: 'Alpha', domain: 'alpha.test' },
-    ]);
+    expect(
+      (await h.find('company')).map(r => ({ name: r.name, domain: r.domain }))
+    ).toEqual([{ name: 'Alpha', domain: 'alpha.test' }]);
   });
 
   it('leaves out a company name or domain longer than the agent UI takes', async () => {
@@ -159,7 +168,7 @@ ada@acme.test,${'x'.repeat(201)},ok;${'t'.repeat(51)},prospect
       'row 2: domain longer than 200, left out',
       'row 2: company longer than 200, left out',
     ]);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.company`)).toEqual([]);
+    expect(await h.count('company')).toBe(0);
   });
 
   it('fills in a contact the host already identified instead of adding a second one', async () => {
@@ -173,10 +182,12 @@ ada@acme.test,${'x'.repeat(201)},ok;${'t'.repeat(51)},prospect
       parseCsv('email,name,lead_stage\nada@acme.test,Someone else,customer\n')
     );
     expect(
-      await rows(sql`SELECT email, name, lead_stage FROM helpdesk.contact`)
-    ).toEqual([
-      { email: 'ada@acme.test', name: 'ada', lead_stage: 'customer' },
-    ]);
+      (await h.find('contact')).map(r => ({
+        email: r.email,
+        name: r.name,
+        leadStage: r.leadStage,
+      }))
+    ).toEqual([{ email: 'ada@acme.test', name: 'ada', leadStage: 'customer' }]);
   });
 });
 
@@ -189,7 +200,7 @@ describe('importCannedReplies', () => {
       )
     );
     expect(report).toMatchObject({ created: 0, skipped: 2 });
-    expect(await rows(sql`SELECT 1 FROM helpdesk.canned_reply`)).toEqual([]);
+    expect(await h.count('canned_reply')).toBe(0);
   });
 
   it('adds each title and locale once', async () => {
@@ -205,8 +216,8 @@ Empty,,en
       await importCannedReplies(h.support.store, parseCsv(csv))
     ).toMatchObject({ created: 0, skipped: 3 });
     expect(
-      await rows(
-        sql`SELECT title, locale, body FROM helpdesk.canned_reply ORDER BY locale`
+      (await h.find('canned_reply', {}, { orderBy: { locale: 'asc' } })).map(
+        r => ({ title: r.title, locale: r.locale, body: r.body })
       )
     ).toEqual([
       {

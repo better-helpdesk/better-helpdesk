@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 
-import { sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { HelpdeskEvent } from '../src';
@@ -20,10 +19,6 @@ beforeEach(async () => {
   h.addUser('agent', { isAgent: true });
 });
 afterAll(() => h.close());
-
-async function rows<T>(query: ReturnType<typeof sql>) {
-  return (await h.support.store.db.execute(query)).rows as T[];
-}
 
 async function open(status = 'open') {
   const res = await h.call('POST', 'widget/conversations', {
@@ -51,22 +46,28 @@ const bulk = (
     ...options,
   });
 
-const state = (ids: string[]) =>
-  rows<{
-    id: string;
-    status: string;
-    priority: string;
-    assignee_id: string | null;
-    tags: string[];
-    resolved_at: Date | null;
-  }>(
-    sql`SELECT id, status, priority, assignee_id, tags, resolved_at FROM helpdesk.conversation WHERE id IN ${ids} ORDER BY id`
+const state = async (ids: string[]) =>
+  Promise.all(
+    (await h.find('conversation', { id: ids }, { orderBy: { id: 'asc' } })).map(
+      async r => ({
+        id: r.id,
+        status: r.status,
+        priority: r.priority,
+        assigneeId: r.assigneeId,
+        tags: (await h.support.store.getConversation(r.id))?.tags,
+        resolvedAt: r.resolvedAt,
+      })
+    )
   );
 
-const timeline = (id: string) =>
-  rows<{ kind: string; data: unknown }>(
-    sql`SELECT kind, data FROM helpdesk.conversation_event WHERE conversation_id = ${id}::uuid ORDER BY created_at, kind`
-  );
+const timeline = async (id: string) =>
+  (
+    await h.find(
+      'conversation_event',
+      { conversationId: id },
+      { orderBy: { createdAt: 'asc', kind: 'asc' } }
+    )
+  ).map(e => ({ kind: e.kind, data: e.data }));
 
 describe('bulk conversation changes', () => {
   it('resolves a mixed-status batch with the same rows and events as resolving each one', async () => {
@@ -96,8 +97,8 @@ describe('bulk conversation changes', () => {
       'resolved',
       'resolved',
     ]);
-    expect((await state([pairs[2]?.bulk ?? '']))[0]?.resolved_at).toEqual(
-      resolvedBefore[0]?.resolved_at
+    expect((await state([pairs[2]?.bulk ?? '']))[0]?.resolvedAt).toEqual(
+      resolvedBefore[0]?.resolvedAt
     );
     for (const { bulk: b, single } of pairs) {
       expect(await timeline(b)).toEqual(await timeline(single));
@@ -129,9 +130,7 @@ describe('bulk conversation changes', () => {
       user: 'agent',
       body: { tags: ['vip'] },
     });
-    const agent = await rows<{ id: string }>(
-      sql`SELECT id FROM helpdesk.agent`
-    );
+    const agent = await h.find('agent');
     const assigneeId = agent[0]?.id;
 
     const res = await bulk({
@@ -143,7 +142,7 @@ describe('bulk conversation changes', () => {
 
     expect(res.status).toBe(200);
     const after = await state([a, b]);
-    expect(after.map(r => [r.id, r.assignee_id, r.priority, r.tags])).toEqual(
+    expect(after.map(r => [r.id, r.assigneeId, r.priority, r.tags])).toEqual(
       [
         [a, assigneeId, 'high', ['vip', 'outage']],
         [b, assigneeId, 'high', ['outage']],
@@ -287,26 +286,30 @@ describe('bulk conversation changes', () => {
       });
     }
 
-    const waiting = await rows<{
-      id: string;
-      status: string;
-      waiting_since: Date | null;
-      last_at: Date;
-      last_author: string;
-    }>(
-      sql`SELECT c.id, c.status, c.waiting_since,
-            date_trunc('milliseconds', m.created_at) AS last_at, m.author_type AS last_author
-          FROM helpdesk.conversation c
-          JOIN LATERAL (SELECT created_at, author_type FROM helpdesk.message
-            WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) m ON true
-          WHERE c.id IN ${pairs.map(p => p.bulk)}`
+    const waiting = await Promise.all(
+      (await h.find('conversation', { id: pairs.map(p => p.bulk) })).map(
+        async c => {
+          const [last] = await h.find(
+            'message',
+            { conversationId: c.id },
+            { orderBy: { createdAt: 'desc' }, limit: 1 }
+          );
+          return {
+            id: c.id,
+            status: c.status,
+            waitingSince: c.waitingSince,
+            lastAt: last?.createdAt,
+            lastAuthor: last?.authorType,
+          };
+        }
+      )
     );
     expect(waiting).toHaveLength(pairs.length);
     // waitingSince passes through a JS Date, which keeps milliseconds.
     for (const row of waiting) {
       expect(row.status).toBe('open');
-      expect(row.last_author).toBe('contact');
-      expect(row.waiting_since).toEqual(row.last_at);
+      expect(row.lastAuthor).toBe('contact');
+      expect(row.waitingSince).toEqual(row.lastAt);
     }
     for (const { bulk: b, single } of pairs) {
       expect(await timeline(b)).toEqual(await timeline(single));

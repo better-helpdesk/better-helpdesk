@@ -1,6 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
 
-import { sql } from 'drizzle-orm';
 import { dkimSign } from 'mailauth';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -22,10 +21,6 @@ const h = createHarness({
 
 beforeEach(() => h.reset());
 afterAll(() => h.close());
-
-async function rows<T>(query: ReturnType<typeof sql>) {
-  return (await h.support.store.db.execute(query)).rows as T[];
-}
 
 async function email(to: string, text: string, { sign = true } = {}) {
   const raw = Buffer.from(
@@ -70,17 +65,13 @@ describe('inbound webhook', () => {
     expect(
       (await post(await email('support@devguard.test', 'hi'), 'nope')).status
     ).toBe(401);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      0
-    );
+    expect(await h.count('conversation')).toBe(0);
   });
 
   it('refuses a header block too large to parse safely', async () => {
     const huge = Buffer.from(`X-Filler: ${'a'.repeat(70_000)}\r\n\r\nhi\r\n`);
     expect((await post(huge)).status).toBe(413);
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      0
-    );
+    expect(await h.count('conversation')).toBe(0);
   });
 
   it('threads a signed reply into the sender’s conversation', async () => {
@@ -95,10 +86,11 @@ describe('inbound webhook', () => {
     );
     expect(res.status).toBe(202);
     expect(
-      await rows(
-        sql`SELECT 1 FROM helpdesk.message WHERE body = 'Thanks' AND conversation_id = ${created.data.conversation.id}::uuid`
-      )
-    ).toHaveLength(1);
+      await h.count('message', {
+        body: 'Thanks',
+        conversationId: created.data.conversation.id,
+      })
+    ).toBe(1);
   });
 
   it('opens a new conversation for an unsigned reply', async () => {
@@ -113,9 +105,7 @@ describe('inbound webhook', () => {
         sign: false,
       })
     );
-    expect(await rows(sql`SELECT 1 FROM helpdesk.conversation`)).toHaveLength(
-      2
-    );
+    expect(await h.count('conversation')).toBe(2);
   });
 });
 
