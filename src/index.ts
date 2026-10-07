@@ -9,6 +9,7 @@ export {
   createAdapter,
   type DatabaseAdapter,
   type FindQuery,
+  type Notification,
   type OrderBy,
   type Where,
 } from './db/adapter';

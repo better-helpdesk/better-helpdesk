@@ -47,3 +47,30 @@ describe('concurrency', () => {
     expect(new Set(numbers).size).toBe(20);
   });
 });
+
+describe('tags', () => {
+  it('keeps the tags of one writer whole when two write at once', async () => {
+    const contact = await h.support.store.createContact({ name: 'Ada' });
+    const { conversation } = await h.support.store.createConversation(
+      { inbox: 'support', type: 'question', contactId: contact.id },
+      { body: 'Hello', contactId: contact.id, verified: true }
+    );
+    for (let round = 0; round < 10; round++) {
+      const writes = await Promise.allSettled([
+        h.support.store.updateConversation(conversation.id, {
+          tags: ['a', 'b'],
+        }),
+        h.support.store.updateConversation(conversation.id, {
+          tags: ['a', 'c'],
+        }),
+      ]);
+      expect(writes.map(w => w.status)).toEqual(['fulfilled', 'fulfilled']);
+      const tags = (await h.support.store.getConversation(conversation.id))
+        ?.tags;
+      expect([
+        ['a', 'b'],
+        ['a', 'c'],
+      ]).toContainEqual(tags);
+    }
+  });
+});

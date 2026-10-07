@@ -82,6 +82,22 @@ export type Capabilities = {
   topTags?(limit: number): Promise<string[]>;
   /** Ids of contacts matching `where`, those with the latest conversation first. */
   contactIdsByActivity?(where: Where, limit: number): Promise<string[]>;
+  /** An agent's notifications since `since`, newest first; see `HelpdeskStore.notificationsFor`. */
+  notificationsFor?(
+    agentId: string,
+    since: Date,
+    limit: number
+  ): Promise<Notification[]>;
+};
+
+export type Notification = {
+  kind: 'assigned' | 'mentioned' | 'reply';
+  conversation_id: string;
+  number: number;
+  subject: string | null;
+  who: string | null;
+  /** ISO 8601, UTC. */
+  at: string;
 };
 
 /** What an adapter author implements. Values arrive and leave in the forms `supports` declares. */

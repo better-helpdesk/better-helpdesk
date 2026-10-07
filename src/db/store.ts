@@ -221,11 +221,19 @@ export function createStore(adapter: DatabaseAdapter) {
   ) {
     const { tags, ...rest } = patch;
     const columns = Object.values(rest).some(v => v !== undefined);
-    const matched = columns
-      ? (await db.updateMany(model, where, rest)) > 0
-      : (await db.count(model, where)) > 0;
-    if (matched && tags) await setTags(model, id, tags as string[], db);
-    return matched;
+    if (!tags) {
+      return columns
+        ? (await db.updateMany(model, where, rest)) > 0
+        : (await db.count(model, where)) > 0;
+    }
+    // The owner's row is locked so two tag writes take turns: the last one wins whole.
+    return db.transaction(async tx => {
+      const owner = await tx.findOne(model, { where, forUpdate: true });
+      if (!owner) return false;
+      if (columns) await tx.updateMany(model, eq('id', id), rest);
+      await setTags(model, id, tags as string[], tx);
+      return true;
+    });
   }
 
   /** Writes `set` to the row `key` names, or creates it. Outside a transaction: a lost race retries. */
@@ -1294,6 +1302,9 @@ export function createStore(adapter: DatabaseAdapter) {
      */
     async notificationsFor(agentId: string, limit = 30) {
       const since = ago(30 * DAY);
+      if (caps.notificationsFor) {
+        return caps.notificationsFor(agentId, since, limit);
+      }
       type Note = {
         kind: 'assigned' | 'mentioned' | 'reply';
         conversation_id: string;
@@ -1889,7 +1900,10 @@ export function createStore(adapter: DatabaseAdapter) {
           and(
             eq('id', row.id),
             at('waitingSince', waitingSince),
-            at('remindedAt', row.remindedAt)
+            at('remindedAt', row.remindedAt),
+            // Resolved or snoozed since it was read: no reminder.
+            ne('status', 'resolved'),
+            eq('snoozedUntil', null)
           ),
           { remindedAt: new Date() }
         );
