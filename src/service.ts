@@ -114,6 +114,7 @@ function fitsKey(value: string | undefined, what: string) {
 function bounded(identity: Identity | null): Identity | null {
   // A host's ids that long are its mistake: refused plainly, not by the database.
   fitsKey(identity?.user.id, 'the user id from identify');
+  fitsKey(identity?.user.locale ?? undefined, 'the locale from identify');
   for (const org of identity?.orgs ?? []) {
     fitsKey(org.id, 'an organization id from identify');
   }
