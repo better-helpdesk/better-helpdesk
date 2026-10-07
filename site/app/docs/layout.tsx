@@ -55,7 +55,10 @@ export default function Layout({ children }: { children: ReactNode }) {
             sidebar={{
               collapsible: false,
               footer: (
-                <nav className="docs-phone-links" aria-label="Site">
+                <nav
+                  key="phone-links"
+                  className="docs-phone-links"
+                  aria-label="Site">
                   <a href="/">Home</a>
                   <a href="/demo/">Live demo</a>
                   <a href="https://github.com/better-helpdesk/better-helpdesk">
