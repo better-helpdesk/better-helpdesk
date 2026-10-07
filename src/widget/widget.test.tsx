@@ -1503,6 +1503,26 @@ describe('opened by the host', () => {
     await waitFor(() => expect(message.textContent).toBe('Export failed.'));
   });
 
+  it('fills the open form of a one-type inbox when the host names no type', async () => {
+    mockApi({ 'widget/session': session });
+    const oneType = (openRequest: OpenRequest) => (
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        types={['bug']}
+        errors={() => []}
+        openRequest={openRequest}
+      />
+    );
+    const { rerender } = render(oneType({}));
+    const message = await screen.findByRole('textbox', {
+      name: 'What happened?',
+    });
+    rerender(oneType({ message: 'Later text.' }));
+    await waitFor(() => expect(message.textContent).toBe('Later text.'));
+  });
+
   it('opens another form named by the host with its text, not the old draft', async () => {
     mockApi({ 'widget/session': session });
     const { rerender } = render(widget({ type: 'question' }));

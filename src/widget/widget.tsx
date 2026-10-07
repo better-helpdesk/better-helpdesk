@@ -390,14 +390,16 @@ export function Widget(props: WidgetProps) {
   useEffect(() => {
     if (requested === null || !data) return;
     setRequested(null);
-    const offeredType = offeredKey.split(',').includes(requested.type);
+    // An inbox with one form names it for the host.
+    const type = requested.type || single || '';
+    const offeredType = offeredKey.split(',').includes(type);
     // An open panel keeps what the customer is writing: only a form the host
     // names replaces it, and never a thread with its reply.
     if (requested.wasOpen && (!offeredType || view.name === 'thread')) return;
     focusForm.current = true;
     setView(
       offeredType
-        ? { name: 'form', type: requested.type, prefill: requested.prefill }
+        ? { name: 'form', type, prefill: requested.prefill }
         : single
           ? { name: 'form', type: single, prefill: requested.prefill }
           : { name: 'home' }
