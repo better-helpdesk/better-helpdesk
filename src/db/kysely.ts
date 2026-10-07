@@ -1,4 +1,6 @@
 import {
+  CompiledQuery,
+  type DatabaseConnection,
   type Dialect,
   type Expression,
   type ExpressionBuilder,
@@ -6,6 +8,8 @@ import {
   PostgresDialect,
   type PostgresPool,
   type SqlBool,
+  type SqliteDatabase,
+  SqliteDialect,
   sql,
   type Transaction,
 } from 'kysely';
@@ -119,6 +123,7 @@ function build(
     }
     const op = where.op ?? 'eq';
     const { value } = where;
+    // ponytail: SQLite's lower() folds ASCII only, so "über" misses "Über" there; a lowercased copy of the searched text when that matters.
     const lower = (e: Expression<unknown>) =>
       where.insensitive ? eb.fn('lower', [e]) : e;
     const val = (v: unknown) =>
@@ -354,6 +359,21 @@ function build(
     },
     transaction(fn) {
       if (inTransaction) return fn(input);
+      // SQLite's default transaction takes its write lock only at the first
+      // write; two that read first then deadlock instead of waiting.
+      if (family === 'sqlite') {
+        return db.connection().execute(async conn => {
+          await sql`begin immediate`.execute(conn);
+          try {
+            const result = await fn(build(conn as AnyDb, family, true));
+            await sql`commit`.execute(conn);
+            return result;
+          } catch (error) {
+            await sql`rollback`.execute(conn);
+            throw error;
+          }
+        });
+      }
       return db
         .transaction()
         .execute(trx =>
@@ -370,5 +390,72 @@ export function postgresAdapter({ pool }: { pool: PostgresPool }) {
   return kyselyAdapter({
     dialect: new PostgresDialect({ pool }),
     family: 'postgres',
+  });
+}
+
+type NodeSqliteStatement = {
+  columns(): unknown[];
+  all(...parameters: unknown[]): unknown[];
+  run(...parameters: unknown[]): {
+    changes: number | bigint;
+    lastInsertRowid: number | bigint;
+  };
+  iterate(...parameters: unknown[]): IterableIterator<unknown>;
+};
+
+/** A database from `node:sqlite` or `better-sqlite3`. */
+export type SqliteDatabaseInput =
+  | SqliteDatabase
+  | { prepare(sql: string): NodeSqliteStatement; close(): void };
+
+// node:sqlite spreads parameters and has no `reader`; Kysely expects better-sqlite3's shape.
+function asSqliteDatabase(database: SqliteDatabaseInput): SqliteDatabase {
+  const probe = database.prepare('select 1') as { reader?: boolean };
+  if (typeof probe.reader === 'boolean') return database as SqliteDatabase;
+  const node = database as {
+    prepare(sql: string): NodeSqliteStatement;
+    close(): void;
+  };
+  return {
+    close: () => node.close(),
+    prepare(query) {
+      const statement = node.prepare(query);
+      return {
+        reader: statement.columns().length > 0,
+        all: parameters => statement.all(...parameters),
+        run: parameters => statement.run(...parameters),
+        iterate: parameters => statement.iterate(...parameters),
+      };
+    },
+  };
+}
+
+/**
+ * The SQLite adapter, over a database the host opened. It turns foreign keys
+ * on, so no row points at one that is gone, and waits up to five seconds for
+ * another process's write.
+ */
+export function sqliteAdapter({ database }: { database: SqliteDatabaseInput }) {
+  return kyselyAdapter({
+    dialect: new SqliteDialect({
+      database: asSqliteDatabase(database),
+      async onCreateConnection(connection: DatabaseConnection) {
+        await connection.executeQuery(
+          CompiledQuery.raw('pragma foreign_keys = on')
+        );
+        await connection.executeQuery(
+          CompiledQuery.raw('pragma busy_timeout = 5000')
+        );
+        const { rows } = await connection.executeQuery<{
+          foreign_keys: number;
+        }>(CompiledQuery.raw('pragma foreign_keys'));
+        if (Number(rows[0]?.foreign_keys) !== 1) {
+          throw new Error(
+            'helpdesk: SQLite refused to turn foreign keys on, so rows could point at ones that are gone'
+          );
+        }
+      },
+    }),
+    family: 'sqlite',
   });
 }
