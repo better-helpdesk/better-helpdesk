@@ -19,7 +19,8 @@
     "./widget": "./src/widget/index.ts",
     "./admin": "./src/admin/index.tsx",
     "./next": "./next.mjs",
-    "./rich": "./src/ui/rich.tsx"
+    "./rich": "./src/ui/rich.tsx",
+    "./adapters": "./src/adapters.ts"
   },
   "bin": {
     "better-helpdesk-import": "bin/import.mjs",
@@ -44,6 +45,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      },
+      "./adapters": {
+        "types": "./dist/adapters.d.ts",
+        "default": "./dist/adapters.js"
       },
       "./widget": {
         "types": "./dist/widget/index.d.ts",
@@ -105,6 +110,9 @@
   },
   "peerDependenciesMeta": {
     "mysql2": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     },
     "tarn": {

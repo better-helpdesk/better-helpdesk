@@ -5,14 +5,13 @@
 // Running it again adds what is new and changes nothing an agent edited.
 import { readFile } from 'node:fs/promises';
 
-import pg from 'pg';
-
 import {
   importCannedReplies,
   importContacts,
   parseCsv,
 } from '../dist/import.js';
-import { createStore, postgresAdapter } from '../dist/index.js';
+import { createStore } from '../dist/index.js';
+import { openDatabase } from './database.mjs';
 
 const [kind, file, flag, value] = process.argv.slice(2);
 const run = { contacts: importContacts, canned: importCannedReplies }[kind];
@@ -43,18 +42,17 @@ try {
   process.exit(1);
 }
 
-const pool = new pg.Pool({
-  connectionString,
-  max: 1,
-  ssl:
-    process.env.DATABASE_SSL === 'no-verify'
-      ? { rejectUnauthorized: false }
-      : process.env.DATABASE_SSL === 'true',
-});
+let database;
+try {
+  database = await openDatabase(connectionString);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 try {
   const { created, updated, skipped, notes } = await run(
-    createStore(postgresAdapter({ pool })),
+    createStore(database.adapter),
     rows,
     { leadStages }
   );
@@ -63,5 +61,5 @@ try {
     `helpdesk: ${created} created, ${updated} updated, ${skipped} unchanged or skipped`
   );
 } finally {
-  await pool.end();
+  await database.close();
 }
