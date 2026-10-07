@@ -14,6 +14,7 @@ export const paths = {
   sparkle:
     'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 3v4M21 5h-4',
   plus: 'M12 5v14M5 12h14',
+  filter: 'M4 6h16M7 12h10M10 18h4',
   back: 'M15 18l-6-6 6-6',
   check: 'M20 6 9 17l-5-5',
   x: 'M18 6 6 18M6 6l12 12',
@@ -292,6 +293,57 @@ export function Dialog({
       {open && children}
     </dialog>
   );
+}
+
+/**
+ * Asks a yes-or-no question in the agent UI's own modal, never the browser's
+ * `confirm()`. `ask` resolves true when the agent takes the action; render
+ * `node` once wherever the hook is used.
+ */
+export function useConfirm(t: Translate) {
+  const [request, setRequest] = useState<{
+    message: string;
+    action: string;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
+  const finish = (ok: boolean) => {
+    request?.resolve(ok);
+    setRequest(null);
+  };
+  /** Without an `action`, the question is a permanent delete. */
+  const ask = (
+    message = t('admin.confirmDelete'),
+    action = t('admin.delete')
+  ) =>
+    new Promise<boolean>(resolve => setRequest({ message, action, resolve }));
+  const node = (
+    <Dialog
+      open={request !== null}
+      title={request?.action ?? ''}
+      onClose={() => finish(false)}>
+      <div className="sa-dialog-body">
+        <h2>{request?.action}</h2>
+        <p className="sa-muted">{request?.message}</p>
+        <div className="sa-dialog-foot">
+          <button
+            type="button"
+            className="sa-btn"
+            // biome-ignore lint/a11y/noAutofocus: the safe choice takes focus when the modal opens.
+            autoFocus
+            onClick={() => finish(false)}>
+            {t('admin.cancel')}
+          </button>
+          <button
+            type="button"
+            className="sa-btn sa-destructive"
+            onClick={() => finish(true)}>
+            {request?.action}
+          </button>
+        </div>
+      </div>
+    </Dialog>
+  );
+  return { ask, node };
 }
 
 /** An agent's on/off preference, remembered in this browser. */

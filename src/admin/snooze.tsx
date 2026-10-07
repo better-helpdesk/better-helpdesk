@@ -37,7 +37,7 @@ export function formatSnooze(date: string | Date, locale: Locale) {
   }).format(new Date(date));
 }
 
-const localInput = (date: Date) =>
+export const localInput = (date: Date) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
     .toISOString()
     .slice(0, 16);

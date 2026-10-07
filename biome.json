@@ -73,7 +73,8 @@
         "noArrayIndexKey": "error",
         "noImplicitAnyLet": "error",
         "noDoubleEquals": "error",
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noAlert": "error"
       },
       "a11y": {
         "useButtonType": "error",

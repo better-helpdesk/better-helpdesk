@@ -167,6 +167,7 @@ const en = {
   'admin.newCompany': 'New company',
   'admin.newDeal': 'New deal',
   'admin.newCanned': 'New canned reply',
+  'admin.editCanned': 'Edit canned reply',
   'admin.createCompanyFrom': 'Create company {domain}',
   'admin.createDeal': 'Create deal',
   'admin.cancel': 'Cancel',
@@ -220,6 +221,7 @@ const en = {
   'admin.clearSelection': 'Clear selection',
   'admin.changeSelected': 'Change selected',
   'admin.addTag': 'Add tag',
+  'admin.removeTag': 'Remove tag {tag}',
   'admin.bulkError':
     'None of the selected conversations were changed. Try again.',
   'admin.bulkFailedOn':
@@ -266,6 +268,7 @@ const en = {
   'event.mergedInto': '{name} merged this into {reference}',
   'event.mergedFrom': '{name} merged {reference} into this',
   'admin.mergeInto': 'Merge into…',
+  'admin.mergeAction': 'Merge',
   'admin.mergeSearch': 'Search by reference or text',
   'admin.confirmMergeConversation':
     'Merge this conversation into {reference}? Its messages move there and this one is resolved. This cannot be undone.',
@@ -294,7 +297,7 @@ const en = {
   'event.unknownContact': 'a contact',
   'admin.awayUntil': 'Away until {date}',
   'admin.awayEnd': 'End away',
-  'admin.awayLastDay': 'Last day away',
+  'admin.awayBack': 'Back at',
   'admin.awayHint':
     'While everyone who answers is away, the widget and receipts say when you are back.',
   'admin.sort': 'Sort',
@@ -313,6 +316,7 @@ const en = {
     'No conversations yet. The first message from the widget or by email shows up here.',
   'admin.emptyFiltered': 'Nothing matches these filters.',
   'admin.clearFilters': 'Clear filters',
+  'admin.filters': 'Filters',
   'admin.notifications': 'Notifications',
   'admin.notificationsUnread': 'Notifications, {count} new',
   'admin.notificationsNone': 'Nothing new for you.',
@@ -420,7 +424,6 @@ const en = {
   'admin.tagsHint': 'Comma-separated',
   'admin.tag': 'Tag',
   'admin.tagFilter': 'Filter by tag',
-  'admin.addTags': 'Add tags, comma-separated',
   'admin.save': 'Save',
   'admin.saved': 'Saved',
   'admin.new': 'New',
@@ -641,6 +644,7 @@ const de: Record<MessageKey, string> = {
   'admin.newCompany': 'Neue Firma',
   'admin.newDeal': 'Neuer Deal',
   'admin.newCanned': 'Neuer Textbaustein',
+  'admin.editCanned': 'Textbaustein bearbeiten',
   'admin.createCompanyFrom': 'Firma {domain} erstellen',
   'admin.createDeal': 'Deal erstellen',
   'admin.cancel': 'Abbrechen',
@@ -694,6 +698,7 @@ const de: Record<MessageKey, string> = {
   'admin.clearSelection': 'Auswahl aufheben',
   'admin.changeSelected': 'Ausgewählte ändern',
   'admin.addTag': 'Tag hinzufügen',
+  'admin.removeTag': 'Tag {tag} entfernen',
   'admin.bulkError':
     'Keine der ausgewählten Unterhaltungen wurde geändert. Versuchen Sie es erneut.',
   'admin.bulkFailedOn':
@@ -741,6 +746,7 @@ const de: Record<MessageKey, string> = {
   'event.mergedInto': '{name} hat dies in {reference} zusammengeführt',
   'event.mergedFrom': '{name} hat {reference} hierher zusammengeführt',
   'admin.mergeInto': 'Zusammenführen in…',
+  'admin.mergeAction': 'Zusammenführen',
   'admin.mergeSearch': 'Nach Referenz oder Text suchen',
   'admin.confirmMergeConversation':
     'Diese Unterhaltung in {reference} zusammenführen? Ihre Nachrichten werden dorthin verschoben und diese wird als gelöst markiert. Das lässt sich nicht rückgängig machen.',
@@ -773,7 +779,7 @@ const de: Record<MessageKey, string> = {
   'event.unknownContact': 'ein Kontakt',
   'admin.awayUntil': 'Abwesend bis {date}',
   'admin.awayEnd': 'Abwesenheit beenden',
-  'admin.awayLastDay': 'Letzter Abwesenheitstag',
+  'admin.awayBack': 'Zurück am',
   'admin.awayHint':
     'Solange alle Antwortenden abwesend sind, nennen Widget und Eingangsbestätigung das Rückkehrdatum.',
   'admin.sort': 'Sortierung',
@@ -792,6 +798,7 @@ const de: Record<MessageKey, string> = {
     'Noch keine Unterhaltungen. Die erste Nachricht aus dem Widget oder per E-Mail erscheint hier.',
   'admin.emptyFiltered': 'Nichts passt zu diesen Filtern.',
   'admin.clearFilters': 'Filter zurücksetzen',
+  'admin.filters': 'Filter',
   'admin.notifications': 'Benachrichtigungen',
   'admin.notificationsUnread': 'Benachrichtigungen, {count} neu',
   'admin.notificationsNone': 'Nichts Neues für Sie.',
@@ -900,7 +907,6 @@ const de: Record<MessageKey, string> = {
   'admin.tagsHint': 'Durch Kommas getrennt',
   'admin.tag': 'Tag',
   'admin.tagFilter': 'Nach Tag filtern',
-  'admin.addTags': 'Tags hinzufügen, durch Kommas getrennt',
   'admin.save': 'Speichern',
   'admin.saved': 'Gespeichert',
   'admin.new': 'Neu',

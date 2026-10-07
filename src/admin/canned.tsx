@@ -4,25 +4,31 @@ import { useResource } from '../ui/api';
 import { RichText } from '../ui/rich';
 import { RichEditor, type RichEditorHandle } from '../ui/rich-editor';
 import { useAdmin } from './context';
-import { Dialog, Empty, paths, Svg } from './ui';
+import { Dialog, Empty, paths, Svg, useConfirm } from './ui';
+
+type Reply = {
+  id: string;
+  title: string;
+  body: string;
+  locale: string | null;
+};
 
 export function CannedReplies() {
   const { api, t } = useAdmin();
   const list = useResource(
-    () =>
-      api<{
-        replies: {
-          id: string;
-          title: string;
-          body: string;
-          locale: string | null;
-        }[];
-      }>('agent/canned'),
+    () => api<{ replies: Reply[] }>('agent/canned'),
     'canned'
   );
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Reply | 'new' | null>(null);
+  const existing = editing !== 'new' ? editing : null;
   const bodyRef = useRef<RichEditorHandle>(null);
   const [draft, setDraft] = useState('');
+  const open = (reply: Reply | 'new') => {
+    setDraft(reply === 'new' ? '' : reply.body);
+    setEditing(reply);
+  };
+  const heading = t(existing ? 'admin.editCanned' : 'admin.newCanned');
+  const confirmDelete = useConfirm(t);
 
   return (
     <div className="sa">
@@ -31,46 +37,89 @@ export function CannedReplies() {
         <button
           type="button"
           className="sa-btn sa-primary"
-          onClick={() => setCreating(true)}>
+          onClick={() => open('new')}>
           <Svg d={paths.plus} />
           {t('admin.newCanned')}
         </button>
       </div>
-      {list.data?.replies.length === 0 && (
+      {list.data && (
         <div className="sa-table-wrap">
-          <Empty text={t('admin.emptyCanned')} />
+          {list.data.replies.length === 0 ? (
+            <Empty text={t('admin.emptyCanned')} />
+          ) : (
+            <table className="sa-table sa-canned-table">
+              <thead>
+                <tr>
+                  <th>{t('admin.title')}</th>
+                  <th>{t('admin.body')}</th>
+                  <th>{t('admin.language')}</th>
+                  <th>
+                    <span className="sa-sr-only">{t('admin.edit')}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.data.replies.map(r => (
+                  <tr key={r.id} onClick={() => open(r)}>
+                    <td>
+                      <strong>{r.title}</strong>
+                    </td>
+                    <td className="sa-muted">
+                      <div className="sa-clamp">
+                        <RichText text={r.body} />
+                      </div>
+                    </td>
+                    <td>
+                      {r.locale ? (
+                        <span className="sa-pill">
+                          {r.locale.toUpperCase()}
+                        </span>
+                      ) : (
+                        <span className="sa-fine">
+                          {t('admin.anyLanguage')}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="sa-row-actions">
+                        <button
+                          type="button"
+                          className="sa-btn sa-ghost"
+                          onClick={e => {
+                            e.stopPropagation();
+                            open(r);
+                          }}>
+                          {t('admin.edit')}
+                        </button>
+                        <button
+                          type="button"
+                          className="sa-btn sa-ghost sa-danger"
+                          onClick={async e => {
+                            e.stopPropagation();
+                            if (!(await confirmDelete.ask())) return;
+                            await api(`agent/canned/${r.id}`, {
+                              method: 'DELETE',
+                            });
+                            await list.refresh();
+                          }}>
+                          {t('admin.delete')}
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
-      {list.data?.replies.map(r => (
-        <div key={r.id} className="sa-card">
-          <div className="sa-toolbar">
-            <strong className="sa-grow">
-              {r.title}{' '}
-              {r.locale && (
-                <span className="sa-pill">{r.locale.toUpperCase()}</span>
-              )}
-            </strong>
-            <button
-              type="button"
-              className="sa-btn sa-ghost sa-danger"
-              onClick={async () => {
-                if (!window.confirm(t('admin.confirmDelete'))) return;
-                await api(`agent/canned/${r.id}`, { method: 'DELETE' });
-                await list.refresh();
-              }}>
-              {t('admin.delete')}
-            </button>
-          </div>
-          <div className="sa-muted">
-            <RichText text={r.body} />
-          </div>
-        </div>
-      ))}
+      {confirmDelete.node}
       <Dialog
-        open={creating}
-        title={t('admin.newCanned')}
-        onClose={() => setCreating(false)}>
+        open={editing !== null}
+        title={heading}
+        onClose={() => setEditing(null)}>
         <form
+          key={existing?.id ?? 'new'}
           onSubmit={async e => {
             e.preventDefault();
             if (!draft.trim()) {
@@ -78,25 +127,38 @@ export function CannedReplies() {
               return;
             }
             const form = new FormData(e.currentTarget);
-            await api('agent/canned', {
-              body: {
-                title: String(form.get('title') ?? '').trim(),
-                body: draft.trim(),
-                locale: String(form.get('locale') ?? '') || null,
-              },
-            });
-            setCreating(false);
+            const reply = {
+              title: String(form.get('title') ?? '').trim(),
+              body: draft.trim(),
+              locale: String(form.get('locale') ?? '') || null,
+            };
+            await api(
+              existing ? `agent/canned/${existing.id}` : 'agent/canned',
+              {
+                method: existing ? 'PATCH' : 'POST',
+                body: reply,
+              }
+            );
+            setEditing(null);
             setDraft('');
             await list.refresh();
           }}>
-          <h2>{t('admin.newCanned')}</h2>
+          <h2>{heading}</h2>
           <label className="sa-field">
             {t('admin.title')}
-            <input className="sa-input" name="title" required />
+            <input
+              className="sa-input"
+              name="title"
+              required
+              defaultValue={existing?.title}
+            />
           </label>
           <label className="sa-field">
             {t('admin.language')}
-            <select className="sa-select" name="locale" defaultValue="">
+            <select
+              className="sa-select"
+              name="locale"
+              defaultValue={existing?.locale ?? ''}>
               <option value="">{t('admin.anyLanguage')}</option>
               <option value="en">English</option>
               <option value="de">Deutsch</option>
@@ -118,11 +180,11 @@ export function CannedReplies() {
             <button
               type="button"
               className="sa-btn"
-              onClick={() => setCreating(false)}>
+              onClick={() => setEditing(null)}>
               {t('admin.cancel')}
             </button>
             <button type="submit" className="sa-btn sa-primary">
-              {t('admin.create')}
+              {existing ? t('admin.save') : t('admin.create')}
             </button>
           </div>
         </form>

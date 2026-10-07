@@ -19,6 +19,7 @@ import {
   paths,
   Skeleton,
   Svg,
+  useConfirm,
 } from './ui';
 
 type Contact = {
@@ -304,6 +305,7 @@ export function ContactList() {
 
 export function ContactView({ id }: { id: string }) {
   const { api, t, me, navigate, href, locale } = useAdmin();
+  const confirm = useConfirm(t);
   const [editing, setEditing] = useState(false);
   const [merging, setMerging] = useState(false);
   const [newDeal, setNewDeal] = useState(false);
@@ -437,7 +439,7 @@ export function ContactView({ id }: { id: string }) {
               type="button"
               className="sa-btn sa-ghost sa-danger"
               onClick={async () => {
-                if (!window.confirm(t('admin.confirmDelete'))) return;
+                if (!(await confirm.ask())) return;
                 await api(`agent/contacts/${id}`, { method: 'DELETE' });
                 navigate({ view: 'contacts' });
               }}>
@@ -594,11 +596,12 @@ export function ContactView({ id }: { id: string }) {
             onPick={async source => {
               if (source.id === id) return;
               if (
-                !window.confirm(
+                !(await confirm.ask(
                   t('admin.confirmMerge', {
                     name: source.name ?? source.email ?? '',
-                  })
-                )
+                  }),
+                  t('admin.mergeAction')
+                ))
               )
                 return;
               await api(`agent/contacts/${id}/merge`, {
@@ -627,6 +630,7 @@ export function ContactView({ id }: { id: string }) {
           await detail.refresh();
         }}
       />
+      {confirm.node}
     </div>
   );
 }
