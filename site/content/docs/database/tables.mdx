@@ -51,9 +51,9 @@ The migrator records what it applied in `migration`, and takes `migration_lock` 
 | `name` | `text` | yes | | |
 | `email` | `text` | yes | | Lower-cased. Indexed. |
 | `company_id` | `uuid` | yes | | `company.id`; set to `null` when the company is deleted. |
-| `lead_stage` | `text` | yes | | One of `leadStages` when written; a stage the host later removed stays until an agent changes it. |
-| `custom` | `jsonb` | no | `{}` | Values of `customFields.contact`. |
-| `locale` | `text` | yes | | Decides the language of the customer's emails. |
+| `lead_stage` | `text` | yes | | One of `leadStages` when written; a stage the host later removed stays until an agent changes it. A merge keeps the target's stage, or takes the source's when it has none. |
+| `custom` | `jsonb` | no | `{}` | Values of `customFields.contact`. A merge keeps both contacts' fields, the target's value where both have one. |
+| `locale` | `text` | yes | | Decides the language of the customer's emails. A merge keeps the target's, or takes the source's when it has none. |
 | `blocked` | `boolean` | no | `false` | Refused as a sender, and their conversations left out of the inbox. Partially indexed. |
 | `created_at` | `timestamptz` | no | `now()` | |
 | `last_seen_at` | `timestamptz` | yes | | The last time the contact used the widget, signed in or as a visitor. Written at most once every 5 minutes. A merge keeps the later of the two values. |
@@ -277,7 +277,7 @@ The primary key is `(key, window_start)`. Windows older than a day are deleted a
 
 ## Tags
 
-`conversation_tag`, `contact_tag` and `company_tag` hold one row per tag, unique per owner. Conversation tags are lower-cased; a contact's include the answers to inbox qualifying questions.
+`conversation_tag`, `contact_tag` and `company_tag` hold one row per tag, unique per owner. Conversation tags are lower-cased; a contact's include the answers to inbox qualifying questions. A contact merge adds the source's tags after the target's.
 
 | Column | Type | Null | Default | Notes |
 | --- | --- | --- | --- | --- |

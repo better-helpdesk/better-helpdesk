@@ -1072,6 +1072,41 @@ describe('CRM', () => {
     expect(await h.count('contact')).toBe(1);
   });
 
+  it("keeps the source's tags, lead stage, custom values and locale on a contact merge", async () => {
+    h.addUser('agent', { isAgent: true });
+    const { store } = h.support;
+    const target = await store.createContact({
+      name: 'Kept',
+      tags: ['trial'],
+      custom: { plan: 'pro' },
+    });
+    const source = await store.createContact({
+      name: 'Imported',
+      tags: ['vip', 'trial'],
+      leadStage: 'qualified',
+      custom: { plan: 'free', seats: 5 },
+      locale: 'de',
+    });
+
+    await h.call('POST', `agent/contacts/${target.id}/merge`, {
+      user: 'agent',
+      body: { sourceId: source.id },
+    });
+
+    const merged = await store.getContact(target.id);
+    expect({
+      tags: merged?.tags,
+      leadStage: merged?.leadStage,
+      custom: merged?.custom,
+      locale: merged?.locale,
+    }).toEqual({
+      tags: ['trial', 'vip'],
+      leadStage: 'qualified',
+      custom: { plan: 'pro', seats: 5 },
+      locale: 'de',
+    });
+  });
+
   it('offers a filed contact its own company rather than one to create', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });
