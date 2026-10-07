@@ -58,6 +58,14 @@ All four exports come from `better-helpdesk/widget`, which starts with `'use cli
       type: 'string',
       description: <>Text beside the launcher icon, such as <code>Questions? Write to us</code>. Widget only.</>,
     },
+    theme: {
+      type: "'auto'",
+      description: <>Follows the operating system's dark mode, as the <code>theme</code> attribute does.</>,
+    },
+    ref: {
+      type: 'Ref<HelpdeskWidgetElement>',
+      description: <>The element, for its <a href="#element-methods"><code>open</code> method</a>.</>,
+    },
   }}
 />
 
@@ -81,7 +89,7 @@ import { HelpdeskWidget } from 'better-helpdesk/widget';
 | `identity-token` | `identityToken` | JWT |
 | `app-version` | `appVersion` | String |
 | `label` | `label` | String, `<helpdesk-widget>` only |
-| `theme` | none | `auto` follows the operating system's dark mode. The React wrappers have no prop for it. |
+| `theme` | none | `auto` follows the operating system's dark mode. The React wrappers take it as the `theme` prop. |
 
 The `context` property, not an attribute, carries the host context: `element.context = { plan: 'team' }`.
 
@@ -108,6 +116,31 @@ defineHelpdeskWidget();
 ```
 
 Only the element the script creates comes alive. A `<helpdesk-widget>` already in the page's markup stays inert. Loading the script again while its widget is still in the page adds no second one.
+
+## Element methods
+
+| Method | What it does |
+| --- | --- |
+| `open({ type? })` | Opens the panel. With `type`, such as `'bug'`, it opens on that type's form when the inbox offers it, and on its first view otherwise; focus moves into the form. On a panel that is already open, it keeps a draft the customer is writing unless `type` names another form, and it never leaves a conversation the customer is replying in. |
+
+`<helpdesk-widget>` and `<helpdesk-conversations>` both have it. Code that holds the element calls it directly, for example from a button of the host's own:
+
+```ts
+document.querySelector('helpdesk-widget')?.open({ type: 'bug' });
+```
+
+With the React wrapper, pass a `ref`:
+
+```tsx
+import { HelpdeskWidget, type HelpdeskWidgetElement } from 'better-helpdesk/widget';
+import { useRef } from 'react';
+
+const widget = useRef<HelpdeskWidgetElement>(null);
+// <HelpdeskWidget ref={widget} />
+// later: widget.current?.open({ type: 'bug' });
+```
+
+`HelpdeskWidgetElement` is the element's type; the package also registers both tags with TypeScript, so `document.querySelector('helpdesk-widget')` is typed without a cast.
 
 ## DOM events
 

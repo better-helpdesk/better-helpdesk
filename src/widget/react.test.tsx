@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, waitFor } from '@testing-library/react';
+import { createRef } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+import type { HelpdeskWidgetElement } from './element';
 import { HelpdeskConversations, HelpdeskWidget } from './react';
 
 afterEach(() => {
@@ -38,4 +40,37 @@ it.each([
   );
   const { container } = render(<Wrapper theme="auto" />);
   expect(container.querySelector(tag)?.getAttribute('theme')).toBe('auto');
+});
+
+it('hands the host a ref to the element, whose open() opens the bug form', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            identified: true,
+            name: 'Ada',
+            email: 'ada@example.test',
+            orgs: [],
+            types: ['question', 'bug'],
+            team: [],
+            inbox: null,
+            conversations: [],
+          })
+        )
+    )
+  );
+  const ref = createRef<HelpdeskWidgetElement>();
+  render(<HelpdeskWidget ref={ref} context={{ plan: 'pro' }} />);
+  expect(ref.current?.tagName).toBe('HELPDESK-WIDGET');
+  expect(ref.current?.context).toEqual({ plan: 'pro' });
+  ref.current?.open({ type: 'bug' });
+  await waitFor(() =>
+    expect(
+      ref.current?.shadowRoot
+        ?.querySelector('[role="dialog"]')
+        ?.getAttribute('aria-label')
+    ).toBe('Report a bug')
+  );
 });
