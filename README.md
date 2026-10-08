@@ -234,8 +234,9 @@ Two things to get right here:
   handler refuses mutations from any other origin, so a mismatch turns every
   reply into a 403.
 
-Worked `identify` functions for [Better Auth](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/identify-better-auth.ts)
-and [Auth.js](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/identify-nextauth.ts) are in `examples/adapters/`, next to
+Worked `identify` functions for [Better Auth](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/identify-better-auth.ts),
+[Auth.js](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/identify-nextauth.ts) and
+[Clerk](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/identify-clerk.ts) are in `examples/adapters/`, next to
 one for every other adapter below.
 
 ### 5. Render the agent UI

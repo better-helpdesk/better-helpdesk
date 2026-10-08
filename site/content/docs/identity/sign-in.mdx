@@ -1,6 +1,6 @@
 ---
 title: Connect your sign-in
-description: Write the identify function that tells the helpdesk who is calling, from your own session, Better Auth or Auth.js.
+description: Write the identify function that tells the helpdesk who is calling, from your own session, Better Auth, Auth.js or Clerk.
 ---
 
 Better Helpdesk has no login of its own. On every request that needs to know who is calling, it calls `identify(request)`, a function you write, and your function answers from your app's session. This guide writes it in `lib/identify.ts` and passes it to `buildHelpdesk`. [Identity and trust](/docs/identity/trust) explains what the helpdesk does with the answer.
@@ -34,7 +34,7 @@ Three fields carry trust, and each has to be honest:
 
 ## Write identify
 
-<Tabs items={['Your own session', 'Better Auth', 'Auth.js']}>
+<Tabs items={['Your own session', 'Better Auth', 'Auth.js', 'Clerk']}>
 <Tab value="Your own session">
 
 Read the session the way the rest of your app does. This example assumes a `getSession` that returns the user, with a role and the time their address was confirmed, and their memberships:
@@ -129,6 +129,49 @@ export async function identify(): Promise<Identity | null> {
 ```
 
 `auth()` reads the session from the request Next.js is handling, so this `identify` takes no argument. The session has no flag for a verified address. `emailVerified: true` is honest when every provider you enable proves the address, as an email link does. If you also let people sign in with a provider that does not, set it to `false` for them, or look the address up in your own records. `membershipsOf` must return active memberships only, as `{ id, name }`.
+
+</Tab>
+<Tab value="Clerk">
+
+Clerk's `currentUser()` reads the session from the request Next.js is handling, so this `identify` takes no argument. Organizations come from the Backend API:
+
+```ts title="lib/identify.ts"
+import { clerkClient, currentUser } from '@clerk/nextjs/server';
+import type { Identity } from 'better-helpdesk';
+
+export async function identify(): Promise<Identity | null> {
+  const user = await currentUser();
+  if (!user) return null;
+  const client = await clerkClient();
+  const { data: memberships } =
+    await client.users.getOrganizationMembershipList({
+      userId: user.id,
+      limit: 100,
+    });
+  const primary = user.emailAddresses.find(
+    address => address.id === user.primaryEmailAddressId
+  );
+  return {
+    user: {
+      id: user.id,
+      email: primary?.emailAddress,
+      emailVerified: primary?.verification?.status === 'verified',
+      name: user.fullName,
+      image: user.imageUrl,
+      locale: user.locale,
+    },
+    orgs: memberships.map(membership => ({
+      id: membership.organization.id,
+      name: membership.organization.name,
+    })),
+    isAgent: user.publicMetadata.support === true,
+  };
+}
+```
+
+`emailVerified` comes from the verification status of the user's primary address, which Clerk sets when the person confirms it. `getOrganizationMembershipList` returns accepted memberships only; an invitation is a separate object until it is accepted. It is paginated, ten per page by default, which is why the example asks for a hundred.
+
+`isAgent` reads the user's [public metadata](https://clerk.com/docs/users/metadata): give each support team member `{ "support": true }` in the Clerk dashboard under the user's **Metadata**, or through the Backend API. To grant the agent UI by organization role instead, test the memberships: `memberships.some(m => m.organization.slug === 'acme' && m.role === 'org:admin')`.
 
 </Tab>
 </Tabs>
