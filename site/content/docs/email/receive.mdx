@@ -38,9 +38,9 @@ A `202` means the message was taken. It shows up in the agent UI as a new conver
 
 ## Set up a relay
 
-The repository has two relays in [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays). Both forward the message unmodified, which keeps its DKIM signature intact.
+The repository has three relays in [`relays/`](https://github.com/better-helpdesk/better-helpdesk/tree/main/relays). Each forwards the message unmodified, which keeps its DKIM signature intact.
 
-<Tabs items={['Cloudflare Email Routing', 'Postmark']}>
+<Tabs items={['Cloudflare Email Routing', 'Postmark', 'Mailgun']}>
 <Tab value="Cloudflare Email Routing">
 
 For a domain whose DNS is on Cloudflare.
@@ -63,6 +63,18 @@ Without `FALLBACK_ADDRESS`, a message the app refuses is rejected back to its se
 4. Send a test to the relay address and check it lands in the agent UI.
 
 Postmark retries while the app is down. A message the helpdesk can never take stays in Postmark's inbound activity, where it can be retried by hand.
+
+</Tab>
+<Tab value="Mailgun">
+
+[`mailgun.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/relays/mailgun.ts) receives the form a Mailgun inbound route posts. It is a `fetch(request, env)` handler that deploys as a Cloudflare Worker and runs on Deno or Bun as it is.
+
+1. Deploy it with `HELPDESK_INBOUND_URL` (`https://app.example.com/api/helpdesk/inbound/`), `HELPDESK_INBOUND_SECRET` and `MAILGUN_WEBHOOK_SIGNING_KEY`, the **HTTP webhook signing key** under **API Security** in Mailgun's settings.
+2. In Mailgun, add a receiving domain such as `in.example.com`, then under **Receiving → Routes** create a route that matches `support(\+.*)?@in\.example\.com` and forwards to `https://relay.example.com/mime`. The URL has to end in `mime`, which makes Mailgun post the raw message.
+3. Use `support@in.example.com` as the relay address.
+4. Send a test to the relay address and check it lands in the agent UI.
+
+Mailgun retries for eight hours while the app is down. The relay answers 406 for a message the helpdesk can never take, which stops the retries.
 
 </Tab>
 </Tabs>
