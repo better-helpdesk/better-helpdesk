@@ -1,0 +1,29 @@
+---
+title: Community adapters
+description: Publish an adapter you wrote for Better Helpdesk, name it so others find it, and add it to the list of community adapters.
+---
+
+An adapter you wrote for your own app is likely useful to someone else on the same database or service. You do not need the maintainer to publish one: `better-helpdesk/testing` proves a database adapter the same way the built-in ones are proven, and the [examples](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/adapters) show the shape of every other kind.
+
+## Write and test it
+
+- **A database adapter** implements the contract in [Write your own database adapter](/docs/database/own-adapter) and passes `runAdapterTests` from `better-helpdesk/testing`. Run the tests in your package's CI, against a real instance of the database.
+- **A storage, email, AI or help-search adapter** implements its interface from [Adapters](/docs/reference/adapters). Start from the matching file in `examples/adapters`, and test what it does: the request it sends, the file it stores, the email the service received.
+
+Declare `better-helpdesk` as a peer dependency, with the range of versions you tested against, so the host's copy is the one your adapter uses. Do the same for the driver or SDK the host already owns, such as `pg` or the S3 client.
+
+## Name it
+
+- **npm:** `better-helpdesk-adapter-<name>`, such as `better-helpdesk-adapter-cockroachdb` or `better-helpdesk-adapter-postmark`. A scoped name, `@you/better-helpdesk-adapter-<name>`, works too.
+- **GitHub:** the topic `better-helpdesk-adapter` on the repository.
+- **npm keywords:** `better-helpdesk` and `better-helpdesk-adapter`.
+
+Better Helpdesk does not review, endorse or maintain community adapters. The name says what the package is for, not who stands behind it; say in its README who maintains it and which versions of Better Helpdesk it was tested with.
+
+## The list
+
+No community adapters are listed yet.
+
+## Add yours
+
+Open a pull request that adds yours to the list above, with its name, its kind (database, storage, email, AI or help search), its npm package and its maintainer, in [`site/content/docs/database/community-adapters.mdx`](https://github.com/better-helpdesk/better-helpdesk/blob/main/site/content/docs/database/community-adapters.mdx). The package must be published on npm, follow the naming above, and, for a database adapter, show `runAdapterTests` passing in its CI.
