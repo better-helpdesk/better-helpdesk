@@ -1,5 +1,5 @@
 {
   "title": "Database",
   "icon": "database",
-  "pages": ["connect", "own-adapter", "reporting", "---Reference---", "tables"]
+  "pages": ["connect", "own-adapter", "community-adapters", "reporting", "---Reference---", "tables"]
 }
