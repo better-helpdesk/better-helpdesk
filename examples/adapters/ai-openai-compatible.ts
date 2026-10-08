@@ -1,12 +1,12 @@
 // Any OpenAI-compatible chat endpoint over fetch: OpenAI with the default
 // base URL, or a local Ollama with OPENAI_BASE_URL=http://localhost:11434/v1.
-// The Zod schema goes along as the response format, and `schema.parse`
-// throws on a refusal or a cut-off reply.
+// The Zod schema goes along as the response format.
 import type { AiAdapter } from 'better-helpdesk';
 
 export const ai: AiAdapter = {
   async generate({ system, prompt, schema }) {
-    const baseUrl = process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1';
+    const baseUrl = (process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/
+, '');
     const { $schema: _, ...jsonSchema } = schema.toJSONSchema();
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',

@@ -74,7 +74,7 @@ test('asks the endpoint for the schema and returns the parsed answer', async () 
 });
 
 test('talks to a local Ollama when the base URL says so', async () => {
-  vi.stubEnv('OPENAI_BASE_URL', 'http://localhost:11434/v1');
+  vi.stubEnv('OPENAI_BASE_URL', 'http://localhost:11434/v1/');
   const fetch = modelAnswers(200, {
     choices: [
       {
