@@ -1,7 +1,23 @@
 {
   "name": "better-helpdesk",
   "version": "0.5.4",
-  "description": "Support inbox, ticketing and lightweight CRM that mounts into a Next.js app.",
+  "description": "Support inbox, ticketing and lightweight CRM that mounts into a Next.js app, on Postgres, MySQL, SQLite or SQL Server.",
+  "keywords": [
+    "helpdesk",
+    "support",
+    "ticketing",
+    "shared-inbox",
+    "live-chat",
+    "chat-widget",
+    "customer-support",
+    "crm",
+    "nextjs",
+    "react",
+    "web-component",
+    "kysely",
+    "intercom-alternative",
+    "zendesk-alternative"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
