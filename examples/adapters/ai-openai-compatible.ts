@@ -5,8 +5,9 @@ import type { AiAdapter } from 'better-helpdesk';
 
 export const ai: AiAdapter = {
   async generate({ system, prompt, schema }) {
-    const baseUrl = (process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/
-, '');
+    const baseUrl = (
+      process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
+    ).replace(/\/$/, '');
     const { $schema: _, ...jsonSchema } = schema.toJSONSchema();
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
