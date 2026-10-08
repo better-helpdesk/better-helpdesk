@@ -1,0 +1,11 @@
+{
+  "recipient": "support@harbor.test",
+  "sender": "mara.keller@customer.test",
+  "from": "Mara Keller <mara.keller@customer.test>",
+  "subject": "Grüezi, the export is empty",
+  "message-headers": "[[\"Return-Path\",\"<mara.keller@customer.test>\"],[\"Message-ID\",\"<a1b2c3@customer.test>\"]]",
+  "body-mime": "Return-Path: <mara.keller@customer.test>\r\nDKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=customer.test; s=mail; h=from:to:subject:date:message-id; bh=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=; b=dGVzdA==\r\nFrom: Mara Keller <mara.keller@customer.test>\r\nTo: support@harbor.test\r\nSubject: Grüezi, the export is empty\r\nDate: Mon, 05 Oct 2026 09:12:44 +0200\r\nMessage-ID: <a1b2c3@customer.test>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\nHello, the CSV export of last month is empty. Können Sie helfen?\r\n\r\nMara\r\n",
+  "timestamp": "1759648364",
+  "token": "0d3f6a1b9c2e4f7a8b5d6e1c2a3b4c5d6e7f8a9b0c1d2e3f",
+  "signature": "a506fa979ca641fb934ec8cba03a3ed454be3dbac947ddb14faac1ddbfe9ea28"
+}

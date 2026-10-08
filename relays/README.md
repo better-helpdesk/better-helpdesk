@@ -11,8 +11,8 @@ to:
 
 | support@ lives in    | Forward with                         | Relay                                            |
 | -------------------- | ------------------------------------ | ------------------------------------------------ |
-| Google Workspace     | [a Gmail routing rule](#google-workspace) | [Postmark](#postmark) or [Cloudflare](#cloudflare-email-routing) |
-| Microsoft 365        | [a mail flow rule](#microsoft-365)   | [Postmark](#postmark) or [Cloudflare](#cloudflare-email-routing) |
+| Google Workspace     | [a Gmail routing rule](#google-workspace) | [Postmark](#postmark), [Mailgun](#mailgun) or [Cloudflare](#cloudflare-email-routing) |
+| Microsoft 365        | [a mail flow rule](#microsoft-365)   | [Postmark](#postmark), [Mailgun](#mailgun) or [Cloudflare](#cloudflare-email-routing) |
 | A domain on Cloudflare | nothing                            | [Cloudflare](#cloudflare-email-routing)          |
 
 Every recipe below ends with the same cutover:
@@ -100,6 +100,35 @@ the helpdesk can never take it (Postmark then stops retrying) and 502
 otherwise, so Postmark retries while the app is down. Messages that failed
 for good stay in Postmark's inbound activity, where they can be retried by
 hand.
+
+Then forward support@ to the relay address with the Google Workspace or
+Microsoft 365 recipe above.
+
+## Mailgun
+
+About 30 minutes. *Not yet walked against a real Mailgun account.*
+
+[`mailgun.ts`](mailgun.ts) receives the form a Mailgun inbound route posts
+and POSTs the raw message to the helpdesk. It is a `fetch(request, env)`
+handler that deploys as a Cloudflare Worker (`wrangler deploy`) and runs on
+Deno or Bun unchanged.
+
+1. Deploy the relay with three variables: `HELPDESK_INBOUND_URL`
+   (`https://app.example.com/api/helpdesk/inbound/`),
+   `HELPDESK_INBOUND_SECRET` (the host's `inboundWebhookSecret`) and
+   `MAILGUN_WEBHOOK_SIGNING_KEY` (**Settings → Webhooks** in Mailgun).
+2. In Mailgun, add a receiving domain such as `in.example.com` with the MX
+   records it shows, then under **Receiving → Routes** create a route whose
+   filter matches `support(\+.*)?@in\.example\.com` and whose action is
+   **Forward** to `https://relay.example.com/mime`. The URL has to end in
+   `mime`: that is what makes Mailgun post the raw message.
+3. Use `support@in.example.com` as the relay address.
+4. Send a test to the relay address and check it lands in the helpdesk.
+
+The relay checks the signature on every post against the signing key,
+answers Mailgun 200 when the helpdesk took the message, 406 when the
+helpdesk can never take it (Mailgun then stops retrying) and 502 otherwise,
+so Mailgun retries for eight hours while the app is down.
 
 Then forward support@ to the relay address with the Google Workspace or
 Microsoft 365 recipe above.
