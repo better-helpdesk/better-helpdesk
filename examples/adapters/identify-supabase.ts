@@ -20,6 +20,8 @@ export async function identify(): Promise<Identity | null> {
     user: {
       id: user.id,
       email: user.email,
+      // Only while "Confirm email" is on in your project: with it off, Supabase
+      // sets this at sign-up without proof.
       emailVerified: Boolean(user.email_confirmed_at),
       name: user.user_metadata.full_name,
       image: user.user_metadata.avatar_url,
