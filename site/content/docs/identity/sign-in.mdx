@@ -189,11 +189,12 @@ export async function identify(): Promise<Identity | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: memberships } = await supabase
+  const { data: memberships, error } = await supabase
     .from('memberships')
     .select('org:orgs(id, name)')
     .eq('user_id', user.id)
     .eq('status', 'active');
+  if (error) throw error;
   return {
     user: {
       id: user.id,
@@ -210,7 +211,7 @@ export async function identify(): Promise<Identity | null> {
 }
 ```
 
-`getUser()` asks the Auth server, so the session is validated; `getSession()` only reads the cookie and is not to be trusted in server code. `emailVerified` is set when Supabase has confirmed the address, by link, code or a provider that vouched for it. That holds only while **Confirm email** is on in your project's Auth settings, which it is not by default on a self-hosted project: with it off, Supabase sets `email_confirmed_at` at sign-up without proof, so return `emailVerified: false` instead. The membership query runs as the signed-in user, so your row-level security policies must let people read their own memberships and the organizations they belong to; a row the policies hide comes back as `null` and is dropped.
+`getUser()` asks the Auth server, so the session is validated; `getSession()` only reads the cookie and is not to be trusted in server code. `emailVerified` is set when Supabase has confirmed the address, by link, code or a provider that vouched for it. That holds only while **Confirm email** is on in your project's Auth settings: with it off, Supabase sets `email_confirmed_at` at sign-up without proof, so return `emailVerified: false` instead. The membership query runs as the signed-in user, so your row-level security policies must let people read their own memberships and the organizations they belong to; a row the policies hide comes back as `null` and is dropped.
 
 `isAgent` reads `app_metadata`, which only the Admin API writes: `supabase.auth.admin.updateUserById(id, { app_metadata: { support: true } })` from a server with the secret key. `user_metadata` is editable by the user without any checks, so never decide `isAgent` from it.
 

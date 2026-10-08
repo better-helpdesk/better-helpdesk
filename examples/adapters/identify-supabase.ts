@@ -11,11 +11,12 @@ export async function identify(): Promise<Identity | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: memberships } = await supabase
+  const { data: memberships, error } = await supabase
     .from('memberships')
     .select('org:orgs(id, name)')
     .eq('user_id', user.id)
     .eq('status', 'active');
+  if (error) throw error;
   return {
     user: {
       id: user.id,
