@@ -1,6 +1,6 @@
 ---
 title: Connect your sign-in
-description: Write the identify function that tells the helpdesk who is calling, from your own session, Better Auth, Auth.js or Clerk.
+description: Write the identify function that tells the helpdesk who is calling, from your own session, Better Auth, Auth.js, Clerk or Supabase Auth.
 ---
 
 Better Helpdesk has no login of its own. On every request that needs to know who is calling, it calls `identify(request)`, a function you write, and your function answers from your app's session. This guide writes it in `lib/identify.ts` and passes it to `buildHelpdesk`. [Identity and trust](/docs/identity/trust) explains what the helpdesk does with the answer.
@@ -34,7 +34,7 @@ Three fields carry trust, and each has to be honest:
 
 ## Write identify
 
-<Tabs items={['Your own session', 'Better Auth', 'Auth.js', 'Clerk']}>
+<Tabs items={['Your own session', 'Better Auth', 'Auth.js', 'Clerk', 'Supabase Auth']}>
 <Tab value="Your own session">
 
 Read the session the way the rest of your app does. This example assumes a `getSession` that returns the user, with a role and the time their address was confirmed, and their memberships:
@@ -172,6 +172,48 @@ export async function identify(): Promise<Identity | null> {
 `emailVerified` comes from the verification status of the user's primary address, which Clerk sets when the person confirms it. `getOrganizationMembershipList` returns accepted memberships only; an invitation is a separate object until it is accepted. It is paginated, ten per page by default, which is why the example asks for a hundred.
 
 `isAgent` reads the user's [public metadata](https://clerk.com/docs/users/metadata): give each support team member `{ "support": true }` in the Clerk dashboard under the user's **Metadata**, or through the Backend API. To grant the agent UI by organization role instead, test the memberships: `memberships.some(m => m.organization.slug === 'acme' && m.role === 'org:admin')`.
+
+</Tab>
+<Tab value="Supabase Auth">
+
+With the server client from Supabase's Next.js setup as `createClient`. Supabase Auth has no organizations, so they come from your own tables; here `memberships` joined to `orgs` stands for yours:
+
+```ts title="lib/identify.ts"
+import type { Identity } from 'better-helpdesk';
+
+import { createClient } from '@/lib/supabase/server';
+
+export async function identify(): Promise<Identity | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: memberships, error } = await supabase
+    .from('memberships')
+    .select('org:orgs(id, name)')
+    .eq('user_id', user.id)
+    .eq('status', 'active');
+  if (error) throw error;
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      // Only while "Confirm email" is on in your project: with it off, Supabase
+      // sets this at sign-up without proof.
+      emailVerified: Boolean(user.email_confirmed_at),
+      name: user.user_metadata.full_name,
+      image: user.user_metadata.avatar_url,
+    },
+    orgs: (memberships ?? []).flatMap(row => row.org ?? []),
+    isAgent: user.app_metadata.support === true,
+  };
+}
+```
+
+`getUser()` asks the Auth server, so the session is validated; `getSession()` only reads the cookie and is not to be trusted in server code. `emailVerified` is set when Supabase has confirmed the address, by link, code or a provider that vouched for it. That holds only while **Confirm email** is on in your project's Auth settings: with it off, Supabase sets `email_confirmed_at` at sign-up without proof, so return `emailVerified: false` instead. The membership query runs as the signed-in user, so your row-level security policies must let people read their own memberships and the organizations they belong to; a row the policies hide comes back as `null` and is dropped.
+
+`isAgent` reads `app_metadata`, which only the Admin API writes: `supabase.auth.admin.updateUserById(id, { app_metadata: { support: true } })` from a server with the secret key. `user_metadata` is editable by the user without any checks, so never decide `isAgent` from it.
 
 </Tab>
 </Tabs>
