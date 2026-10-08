@@ -39,7 +39,7 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-Any provider works the same way: send `system` and `prompt`, ask for output in the shape of `schema`, and finish with `schema.parse` so a malformed answer throws instead of reaching the database. The prompts already treat the customer's text as data, not instructions; [Security model](/docs/operations/security#ai) says more. [AI](/docs/reference/adapters#ai) in the adapters reference lists each call and its result schema.
+Any provider works the same way: send `system` and `prompt`, ask for output in the shape of `schema`, and finish with `schema.parse` so a malformed answer throws instead of reaching the database. The adapter above is [`ai-anthropic.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/ai-anthropic.ts) in the repository's examples, and [`ai-openai-compatible.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/ai-openai-compatible.ts) does the same over `fetch` against any OpenAI-compatible chat endpoint that takes a JSON schema as its response format: OpenAI with the default base URL, or a local Ollama with `OPENAI_BASE_URL=http://localhost:11434/v1` and `OPENAI_MODEL` naming a model you have pulled. The prompts already treat the customer's text as data, not instructions; [Security model](/docs/operations/security#ai) says more. [AI](/docs/reference/adapters#ai) in the adapters reference lists each call and its result schema.
 
 ## What agents get
 
