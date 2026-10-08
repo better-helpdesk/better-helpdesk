@@ -6,7 +6,8 @@
  * runs on Deno or Bun as it is. Bind:
  *   HELPDESK_INBOUND_URL        e.g. https://app.example.com/api/helpdesk/inbound/
  *   HELPDESK_INBOUND_SECRET     the host's inboundWebhookSecret
- *   MAILGUN_WEBHOOK_SIGNING_KEY from Mailgun's Settings → Webhooks
+ *   MAILGUN_WEBHOOK_SIGNING_KEY the HTTP webhook signing key under API Security
+ *                               in Mailgun's settings
  * and point the route at https://relay.example.com/mime: without the
  * `mime` suffix Mailgun posts the parsed message and no raw copy.
  */

@@ -116,7 +116,8 @@ Deno or Bun unchanged.
 1. Deploy the relay with three variables: `HELPDESK_INBOUND_URL`
    (`https://app.example.com/api/helpdesk/inbound/`),
    `HELPDESK_INBOUND_SECRET` (the host's `inboundWebhookSecret`) and
-   `MAILGUN_WEBHOOK_SIGNING_KEY` (**Settings → Webhooks** in Mailgun).
+   `MAILGUN_WEBHOOK_SIGNING_KEY` (the **HTTP webhook signing key** under
+   **API Security** in Mailgun's settings).
 2. In Mailgun, add a receiving domain such as `in.example.com` with the MX
    records it shows, then under **Receiving → Routes** create a route whose
    filter matches `support(\+.*)?@in\.example\.com` and whose action is

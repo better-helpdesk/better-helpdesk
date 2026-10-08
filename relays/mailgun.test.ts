@@ -79,7 +79,7 @@ describe('Mailgun relay', () => {
       fromMailgun({ ...fields, signature: 'f'.repeat(64) }),
       env
     );
-    const replayed = await relay.fetch(
+    const tampered = await relay.fetch(
       fromMailgun({ ...fields, token: 'another-token' }),
       env
     );
@@ -91,7 +91,7 @@ describe('Mailgun relay', () => {
     });
 
     expect(forged.status).toBe(401);
-    expect(replayed.status).toBe(401);
+    expect(tampered.status).toBe(401);
     expect(none.status).toBe(401);
     expect(noKey.status).toBe(401);
     expect(sent).toHaveLength(0);
