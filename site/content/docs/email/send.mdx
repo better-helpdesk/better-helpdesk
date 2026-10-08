@@ -80,7 +80,7 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-On Resend, the same adapter is [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts) in the repository's examples.
+The same adapter is in the repository's examples for Resend, [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts), and for Postmark, [`email-postmark.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-postmark.ts).
 
 <Callout type="warn">
 Every email is queued as a job and sent when the jobs run. Until something runs them, no mail leaves at all. Set that up in [Run jobs and retention](/docs/operations/jobs).
