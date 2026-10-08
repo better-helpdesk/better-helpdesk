@@ -320,7 +320,10 @@ lists what Better Helpdesk will not do and what comes next.
 
 ## Contributing
 
-Issues and pull requests are welcome. Before you start, read
+Issues and pull requests are welcome.
+[`CONTRIBUTING.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/CONTRIBUTING.md)
+walks you through setup, the tests and what a pull request needs. For the
+full detail, read
 [`AGENTS.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/AGENTS.md)
 for how the repository works and what is off-limits, and
 [`CONTEXT.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/CONTEXT.md)
