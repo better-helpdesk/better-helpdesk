@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a change to what Better Helpdesk does.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you write it up, check [what Better Helpdesk will not do](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md#what-it-will-not-do). Requests for a standalone server, a hosted mode or its own login are out of scope.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you or your support team is trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: How Better Helpdesk could solve it. An option, a route, a UI change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you use now, or other ways to solve it.

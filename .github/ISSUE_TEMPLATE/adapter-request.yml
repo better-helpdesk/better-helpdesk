@@ -1,0 +1,30 @@
+name: Adapter request
+description: Ask for an adapter or example for a service Better Helpdesk does not cover yet.
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Adapter
+      options:
+        - Database
+        - Email
+        - Storage
+        - AI
+        - Help search
+        - Identity
+        - Inbound email relay
+    validations:
+      required: true
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      description: The product or library, for example Resend, S3, Clerk, Mailgun.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: How you would use it, and whether you could write it yourself.
