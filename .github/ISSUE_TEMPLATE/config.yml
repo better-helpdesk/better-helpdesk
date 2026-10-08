@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question
+    url: https://github.com/better-helpdesk/better-helpdesk/discussions
+    about: Ask how to set up or use Better Helpdesk in Discussions.
+  - name: Security vulnerability
+    url: https://github.com/better-helpdesk/better-helpdesk/security/advisories/new
+    about: Report it privately, never in a public issue.
