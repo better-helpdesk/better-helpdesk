@@ -73,7 +73,7 @@ email: { send(message: HelpdeskEmail): Promise<void> }
 
 `send` receives one message at a time and renders and delivers it. It runs inside a job, so a throw makes the job retry. The five message kinds are on [Email messages](/docs/email/messages).
 
-Example: [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts).
+Examples: [`email-resend.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-resend.ts) and [`email-postmark.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/email-postmark.ts).
 
 ## AI
 
