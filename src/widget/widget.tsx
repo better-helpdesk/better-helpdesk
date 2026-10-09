@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react';
 
-import type { Locale } from '../config';
+import type { Locale, Translated } from '../config';
 import { type Api, createApi, uploadToStorage, useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
 import {
@@ -15,6 +15,7 @@ import {
   nextWorkday,
   relativeTime,
   type Translate,
+  translated,
   translator,
 } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
@@ -98,8 +99,8 @@ type Session = {
     privacyUrl: string | null;
     bookingUrl: string | null;
     qualify: {
-      label: Record<Locale, string>;
-      options: { value: string; label: Record<Locale, string> }[];
+      label: Translated;
+      options: { value: string; label: Translated }[];
     } | null;
   } | null;
   conversations: Summary[];
@@ -1080,7 +1081,7 @@ function NewMessage({
           {qualify && (
             <fieldset className="field choices">
               <legend>
-                {qualify.label[locale]}{' '}
+                {translated(qualify.label, locale)}{' '}
                 <span className="hint">{t('form.optional')}</span>
               </legend>
               {qualify.options.map(o => (
@@ -1092,7 +1093,7 @@ function NewMessage({
                     checked={segment === o.value}
                     onChange={() => setSegment(o.value)}
                   />
-                  {o.label[locale]}
+                  {translated(o.label, locale)}
                 </label>
               ))}
             </fieldset>

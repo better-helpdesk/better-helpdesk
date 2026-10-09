@@ -41,7 +41,7 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-`title` and `replyPromise` are the widget's header and its promise about replies; `name` is what agents see instead of the inbox's key. A language you leave out counts as unset for that language: the widget shows its default title and promise, and the agent UI shows the key, capitalized. The qualifying question is stricter: its `label` and each option's `label` need every language, and so does an option's `badge` when you give one. The [inboxes reference](/docs/inbox/inboxes#inboxconfig) lists every field, and the [configuration reference](/docs/reference/configuration#names-shown-to-customers) covers `teamName` and `agentTitles`, which name your team and your agents per language.
+`title` and `replyPromise` are the widget's header and its promise about replies; `name` is what agents see instead of the inbox's key. A language you leave out counts as unset for that language: the widget shows its default title and promise, and the agent UI shows the key, capitalized. The qualifying question's `label`, each option's `label` and `badge`, and a custom field's `label` need English and show it for a language you leave out, so a language added to the package never breaks your build. The [inboxes reference](/docs/inbox/inboxes#inboxconfig) lists every field, and the [configuration reference](/docs/reference/configuration#names-shown-to-customers) covers `teamName` and `agentTitles`, which name your team and your agents per language.
 
 Agents can change one more text without a deploy: the confirmation the widget shows after a first message, under Settings in the agent UI.
 

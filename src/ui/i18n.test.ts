@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { dateLocale, nextWorkday, toLocale, translator } from './i18n';
+import {
+  dateLocale,
+  nextWorkday,
+  toLocale,
+  translated,
+  translator,
+} from './i18n';
 
 describe('nextWorkday', () => {
   it('skips the weekend', () => {
@@ -38,5 +44,13 @@ describe('translator', () => {
         month: 'long',
       }).format(date)
     ).toBe('lundi 5 octobre');
+  });
+});
+
+describe('translated', () => {
+  it('shows the English text for a language the host left out', () => {
+    expect(translated({ en: 'Seats', de: 'Plätze' }, 'de')).toBe('Plätze');
+    expect(translated({ en: 'Seats', de: 'Plätze' }, 'fr')).toBe('Seats');
+    expect(translated(undefined, 'fr')).toBeUndefined();
   });
 });

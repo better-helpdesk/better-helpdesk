@@ -7,6 +7,9 @@ import type { HelpdeskEvent } from './events';
 
 export type Locale = 'en' | 'de' | 'fr';
 
+/** Copy the host writes per language. English is required; a language left out shows the English text. */
+export type Translated = { en: string } & Partial<Record<Locale, string>>;
+
 export type HelpdeskUser = {
   id: string;
   email?: string | null;
@@ -102,12 +105,12 @@ export type InboxConfig = {
   replyPromise?: Partial<Record<Locale, string>>;
   /** One qualifying question asked before the first message is sent. */
   qualify?: {
-    label: Record<Locale, string>;
+    label: Translated;
     options: {
       value: string;
-      label: Record<Locale, string>;
+      label: Translated;
       /** Short form for badges; `label` shows as its tooltip. */
-      badge?: Record<Locale, string>;
+      badge?: Translated;
     }[];
   };
   /** Linked under the first-message form, per locale. */
@@ -215,7 +218,7 @@ export type InboundMessage = {
 
 export type CustomFieldDef = {
   key: string;
-  label: Record<Locale, string>;
+  label: Translated;
   type: 'text' | 'number' | 'date' | 'select';
   options?: string[];
 };
