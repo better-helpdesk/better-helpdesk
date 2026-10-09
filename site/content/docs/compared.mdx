@@ -1,0 +1,40 @@
+---
+title: Compared with
+description: Better Helpdesk next to Chatwoot, Libredesk, Intercom and Zendesk, feature by feature, with the dates and sources.
+---
+
+As of 5 October 2026. Better Helpdesk's column describes `main` on that
+date; the others come from their public pages, read on 2 October 2026 and
+collected in [`docs/research/2026-10`](https://github.com/better-helpdesk/better-helpdesk/tree/main/docs/research/2026-10). Pricing is per
+agent or seat per month, billed yearly, in US dollars. *By design* means a
+deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md).
+
+|                         | Better Helpdesk                                   | Chatwoot                                       | Libredesk                          | Intercom                                     | Zendesk                                       |
+| ----------------------- | ------------------------------------------------- | ---------------------------------------------- | ---------------------------------- | -------------------------------------------- | --------------------------------------------- |
+| Runs as                 | a library in your Next.js app                     | a Rails app you host, or Chatwoot Cloud  | a Go binary you host         | hosted                                 | hosted                                  |
+| Database                | yours: Postgres, MySQL, SQL Server or SQLite      | its own Postgres and Redis               | its own Postgres and Redis   | the vendor's                           | the vendor's                            |
+| Identity                | your session or a signed token                    | own logins; SAML on Enterprise           | own logins, OIDC             | own logins; SSO on Expert              | own logins                              |
+| License                 | MIT                                               | MIT core, proprietary Enterprise         | AGPL-3.0                     | proprietary                             | proprietary                              |
+| Pricing                 | free                                              | free to $99, Cloud and self-hosted       | free                         | $29 / $85 / $132                       | $19 / $55 / $115                        |
+| Install                 | npm, one route, one component, one migrate        | Docker, Helm or a VM script              | binary, Docker Compose       | a script tag or mobile SDK             | a script tag                            |
+| Upgrade                 | `pnpm up` plus migrate in your release            | new image, then a database task          | `--upgrade`, after a backup  | the vendor's                            | the vendor's                             |
+| Channels                | widget, email through a relay                     | web, email, social, SMS, voice           | web, email, WhatsApp         | chat, email, phone, SMS, social        | web, email, social, voice, SMS          |
+| Real-time delivery      | polling, 5 s in an open conversation              | WebSocket                                | WebSocket                    | yes, typing and seen                   | yes, typing and read                    |
+| Captured context        | URL, viewport, locale, errors, UTM, your own data | language, country, referrer              | last visited pages          | pages visited, as a trigger            | device and pages viewed                 |
+| Customer sees past conversations | yes, from your session                   | not documented                          | planned                      | yes                                    | yes                                     |
+| Tags                    | yes                                               | yes                                      | yes                         | yes                                    | yes                                     |
+| Snooze                  | yes                                               | yes                                     | yes                         | yes                                    | on-hold status                          |
+| Collision indicator     | yes                                               | yes                                     | no                          | yes                                   | yes                                     |
+| SLA                     | business hours and a reminder per inbox, by design | paid tier                               | yes                         | Expert                                | yes                                    |
+| Automation              | `onEvent` in your code                            | yes                                     | yes                         | Advanced and up                        | yes                                    |
+| Reporting               | SQL over your database                            | yes                                     | an overview page            | yes                                   | yes                                    |
+| CSAT                    | good or bad, from the widget or the reply email   | yes                                     | yes                         | yes                                   | yes                                    |
+| Help center             | search over your own docs, by design              | Startups and up                          | yes                         | yes                                    | yes                                     |
+| AI                      | suggestions and drafts for the agent, by design   | Captain, paid tier                      | your OpenAI-compatible key  | Fin, $0.99 per outcome                | Copilot, +$50                           |
+| Events out              | `onEvent` in your code                            | webhooks                                | webhooks                    | webhooks                              | webhooks                               |
+| API                     | in-process functions, by design                   | REST                                    | REST with API keys          | REST                                   | REST                                    |
+| Roles                   | `isAgent`, by design                              | custom roles, paid tier                 | custom roles                 | custom roles                          | custom roles on Enterprise             |
+| Languages               | English, German and French                        | many, community-translated               | 13                          | many                                   | many                                    |
+| Theming                 | CSS custom properties                             | widget settings                         | widget settings             | brand color,  logo, launcher          | widget presets and options             |
+
+Intercom hosts in the EU only on Advanced or Expert annual contracts.
