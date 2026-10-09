@@ -56,8 +56,8 @@ inboxes: {
     },
     qualify: {
       type: '{ label, options }',
-      typeDescription: '{ label: Record<Locale, string>; options: { value: string; label: Record<Locale, string>; badge?: Record<Locale, string> }[] }',
-      description: <>One qualifying question asked before the first message. The chosen <code>value</code> is added to the contact's tags and stored as <code>segment</code> in the conversation's host context. A value not among the options is refused with 400. <code>badge</code> is a short form for badges in the agent UI, with <code>label</code> as its tooltip.</>,
+      typeDescription: '{ label: Translated; options: { value: string; label: Translated; badge?: Translated }[] }',
+      description: <>One qualifying question asked before the first message. The chosen <code>value</code> is added to the contact's tags and stored as <code>segment</code> in the conversation's host context. A value not among the options is refused with 400. <code>badge</code> is a short form for badges in the agent UI, with <code>label</code> as its tooltip. Each label needs English; a language you leave out shows the English text (<a href="/docs/reference/configuration#translated">Translated</a>).</>,
     },
     privacyUrl: {
       type: 'Partial<Record<Locale, string>>',
