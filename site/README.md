@@ -70,8 +70,10 @@ Everyone shares that inbox, so the demo limits what a link-post spike can
 do to it. Anonymous visitors get 5 messages per address per quarter hour and
 the customer role 15 (`anonymousRateLimit` and `customerRateLimit` in
 `lib/demo.ts` count per clock hour, and the reset wipes the window every
-quarter hour); the customer role is one contact per address, so nobody sees
-what another visitor wrote as Nadia; whoever plays the agent can block a
+quarter hour); the customer role is one contact per address (an IPv6 host's
+/64, as the package counts it) and belongs to no company, so nobody sees what
+another visitor wrote as Nadia, not even by sharing it; whoever plays the
+agent can block a
 contact, which refuses that contact and its email address, so for the
 customer role the client address, while a visitor can still write from that
 address under another email within the 5-message budget; and the quarter-hour

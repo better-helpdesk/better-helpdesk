@@ -16,4 +16,10 @@ describe('visitorKey', () => {
     expect(key('1.1.1.1, 203.0.113.7')).toBe(key('2.2.2.2, 203.0.113.7'));
     expect(key('1.1.1.1, 203.0.113.7')).not.toBe(key('1.1.1.1'));
   });
+
+  it('counts an IPv6 host by its /64, as the anonymous limit does', () => {
+    expect(key('2001:db8:1:2::1')).toBe(key('2001:DB8:1:2::2'));
+    expect(key('2001:db8:1:2::1')).not.toBe(key('2001:db8:1:3::1'));
+    expect(key('::ffff:203.0.113.7')).toBe(key('203.0.113.7'));
+  });
 });

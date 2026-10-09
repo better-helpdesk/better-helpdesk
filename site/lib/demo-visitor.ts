@@ -12,5 +12,28 @@ export function visitorKey(headers: Headers) {
     headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     headers.get('x-real-ip') ||
     'local';
-  return createHash('sha256').update(address).digest('hex').slice(0, 12);
+  return createHash('sha256')
+    .update(bucket(address))
+    .digest('hex')
+    .slice(0, 12);
+}
+
+// The same bucket the package's anonymous limit uses: an IPv6 host owns its
+// whole /64, so a visitor cannot mint a Nadia per address out of one.
+function bucket(ip: string) {
+  const address = ip.replace(/%.*$/, '').toLowerCase();
+  if (!address.includes(':')) return address;
+  const mapped = address.match(/:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped?.[1]) return mapped[1];
+  const [head = '', tail] = address.split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups =
+    tail === undefined
+      ? left
+      : [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+  return `${groups
+    .slice(0, 4)
+    .map(g => g.replace(/^0+(?=.)/, ''))
+    .join(':')}::/64`;
 }

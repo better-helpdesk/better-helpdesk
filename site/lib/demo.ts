@@ -58,7 +58,8 @@ export async function newestRows() {
   return rows;
 }
 
-// Nadia is one contact per address, so visitors never see each other's messages as her.
+// Nadia is one contact per address and belongs to no company, so visitors never
+// see each other's messages as her, not even by sharing them with "her company".
 const customer = (key: string): Identity => ({
   user: {
     id: `demo-customer-${key}`,
@@ -66,7 +67,7 @@ const customer = (key: string): Identity => ({
     emailVerified: true,
     name: 'Nadia Olufemi',
   },
-  orgs: [{ id: 'demo-org', name: 'Brightline Logistics' }],
+  orgs: [],
   isAgent: false,
 });
 
