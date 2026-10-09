@@ -6,8 +6,8 @@
       "Bash(pnpm lint)",
       "Bash(pnpm run lint)",
       "Bash(pnpm test)",
-      "Bash(pnpm run test)"
-    ],
-    "ask": ["Bash(git tag:*)"]
+      "Bash(pnpm run test)",
+      "Bash(git tag:*)"
+    ]
   }
 }
