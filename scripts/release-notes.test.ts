@@ -34,8 +34,9 @@ function releaseNotesScript(): string {
 
 // A shell function shadows the real binary, so the script under test needs no
 // gh installed and no PATH of its own. There is no release yet, every pull
-// request lookup is answered from GH_PULLS, and the notes gh was handed are
-// kept at GH_NOTES_OUT.
+// request lookup is answered from GH_PULLS, an author's earlier merged pull
+// requests are counted from GH_PRIOR ("alice=0 bob=2"), and the notes gh was
+// handed are kept at GH_NOTES_OUT.
 const ghStub = [
   'gh() {',
   '  if [ "$1" = release ] && [ "$2" = view ]; then return 1; fi',
@@ -44,6 +45,15 @@ const ghStub = [
   '      if [ "$1" = --notes-file ]; then cp "$2" "$GH_NOTES_OUT"; fi',
   '      shift',
   '    done',
+  '    return 0',
+  '  fi',
+  '  if [ "$1" = api ] && [ "$2" = search/issues ]; then',
+  '    if [ -n "$GH_SEARCH_FAILS" ]; then return 1; fi',
+  '    local q author',
+  '    while [ "$#" -gt 0 ]; do case $1 in q=*) q=$1 ;; esac; shift; done',
+  '    if [ -n "$GH_SEARCH_LOG" ]; then printf "%s\\n" "$q" >> "$GH_SEARCH_LOG"; fi',
+  '    author=$(printf %s "$q" | sed -n "s/.*author:\\([^ ]*\\).*/\\1/p")',
+  '    printf %s "$GH_PRIOR" | tr " " "\\n" | grep "^$author=" | cut -d= -f2',
   '    return 0',
   '  fi',
   '  if [ "$1" = api ]; then',
@@ -63,6 +73,11 @@ const root = mkdtempSync(join(tmpdir(), 'release-notes-'));
 
 afterAll(() => rmSync(root, { force: true, recursive: true }));
 
+// The previous release's commit is dated in a non-UTC zone, so a bound taken
+// from the committer's wall clock instead of UTC shows up on a UTC runner too.
+const PREVIOUS_RELEASE_DATE = '2026-01-01T12:00:00+02:00';
+let commitDate: string | undefined;
+
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
     cwd,
@@ -73,6 +88,9 @@ function git(cwd: string, ...args: string[]): string {
       GIT_AUTHOR_EMAIL: 'test@example.com',
       GIT_COMMITTER_NAME: 'Test',
       GIT_COMMITTER_EMAIL: 'test@example.com',
+      ...(commitDate
+        ? { GIT_AUTHOR_DATE: commitDate, GIT_COMMITTER_DATE: commitDate }
+        : {}),
     },
   });
 }
@@ -85,7 +103,9 @@ function history(shape: Shape): string {
   const commit = (subject: string) =>
     git(repo, 'commit', '-q', '--allow-empty', '-m', subject);
   git(repo, 'init', '-q', '-b', 'main');
+  commitDate = PREVIOUS_RELEASE_DATE;
   commit('feat(widget): ship the first thing');
+  commitDate = undefined;
   git(repo, 'tag', 'v0.1.2');
   git(repo, 'checkout', '-q', '-b', 'fix-the-admin');
   commit('fix(admin): a fix');
@@ -131,17 +151,26 @@ function pulls(repo: string): string {
     .flatMap(line => {
       const [sha = '', subject = ''] = line.split('\t');
       if (/admin|#4/.test(subject)) {
-        return [`${sha}\t4\tfix(admin): a fix`];
+        return [`${sha}\t4\tfix(admin): a fix\talice`];
       }
       if (/0\.1\.3|#5/.test(subject)) {
-        return [`${sha}\t5\tchore(release): 0.1.3`];
+        return [`${sha}\t5\tchore(release): 0.1.3\tbob`];
       }
       return [];
     });
   return `${rows.join('\n')}\n`;
 }
 
-function bulletsFor(shape: Shape, apiFails = false): string[] {
+type Stub = {
+  apiFails?: boolean;
+  searchFails?: boolean;
+  prior?: string;
+  /** Where the stub appends every search query it is asked. */
+  searchLog?: string;
+};
+
+/** Every line of the notes handed to gh. */
+function notesFor(shape: Shape, stub: Stub = {}): string[] {
   const repo = history(shape);
   const runnerTemp = mkdtempSync(join(root, 'runner-'));
   const pullsFile = join(runnerTemp, 'pulls.tsv');
@@ -153,7 +182,10 @@ function bulletsFor(shape: Shape, apiFails = false): string[] {
     encoding: 'utf8',
     env: {
       ...process.env,
-      GH_API_FAILS: apiFails ? '1' : '',
+      GH_API_FAILS: stub.apiFails ? '1' : '',
+      GH_SEARCH_FAILS: stub.searchFails ? '1' : '',
+      GH_PRIOR: stub.prior ?? 'alice=1 bob=1',
+      GH_SEARCH_LOG: stub.searchLog ?? '',
       GH_NOTES_OUT: notesOut,
       GH_PULLS: pullsFile,
       GH_TOKEN: 'stub',
@@ -162,22 +194,52 @@ function bulletsFor(shape: Shape, apiFails = false): string[] {
       RUNNER_TEMP: runnerTemp,
     },
   });
-  return readFileSync(notesOut, 'utf8')
-    .split('\n')
-    .filter(line => line.startsWith('- '));
+  return readFileSync(notesOut, 'utf8').split('\n');
+}
+
+function bulletsFor(shape: Shape, stub: Stub = {}): string[] {
+  return notesFor(shape, stub).filter(line => line.startsWith('- '));
 }
 
 describe('the generated release notes', () => {
   for (const shape of ['a merge commit', 'a squash', 'a rebase'] as const) {
     it(`do not announce a release landed by ${shape}`, () => {
-      expect(bulletsFor(shape)).toEqual(['- fix(admin): a fix (#4).']);
+      expect(bulletsFor(shape)).toEqual([
+        '- fix(admin): a fix (#4) by @alice.',
+      ]);
     });
   }
 
   it('do not fall back to the raw merge commit when gh fails', () => {
-    expect(bulletsFor('a merge commit', true)).toEqual([
+    expect(bulletsFor('a merge commit', { apiFails: true })).toEqual([
       '- fix(admin): a fix.',
       '- test(admin): cover it.',
     ]);
+  });
+
+  it('welcome an author with no pull request merged before the previous release', () => {
+    const notes = notesFor('a squash', { prior: 'alice=0 bob=4' });
+    expect(notes).toContain('**New contributors**');
+    expect(notes).toContain('- @alice made their first contribution in #4.');
+  });
+
+  it('count earlier pull requests up to the previous release, in UTC', () => {
+    const searchLog = join(mkdtempSync(join(root, 'log-')), 'queries.txt');
+    notesFor('a squash', { prior: 'alice=0', searchLog });
+    expect(readFileSync(searchLog, 'utf8')).toContain(
+      'author:alice merged:<2026-01-01T10:00:00Z'
+    );
+  });
+
+  it('do not welcome a returning author, or anyone when the lookup fails', () => {
+    expect(notesFor('a squash', { prior: 'alice=3' })).not.toContain(
+      '**New contributors**'
+    );
+    const failed = notesFor('a squash', {
+      prior: 'alice=0',
+      searchFails: true,
+    });
+    expect(failed).not.toContain('**New contributors**');
+    expect(failed).toContain('- fix(admin): a fix (#4) by @alice.');
   });
 });

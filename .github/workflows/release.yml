@@ -73,6 +73,9 @@ jobs:
             exit 0
           fi
           previous=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          # When the previous release was tagged, in UTC: a pull request merged
+          # before it makes its author a returning contributor.
+          since=$([ -n "$previous" ] && TZ=UTC git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd "$previous" || true)
           commits=$RUNNER_TEMP/commits.tsv
           notes=$RUNNER_TEMP/release-notes.md
           # A command of its own, so a git failure fails the job. Read from a
@@ -90,10 +93,11 @@ jobs:
           }
           seen=
           changed=
+          firsts=
           while IFS=$'\t' read -r sha subject; do
             if is_the_release "$subject"; then continue; fi
             pull=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha/pulls" \
-              --jq 'first(.[]) | "\(.number)\t\(.title)"' </dev/null 2>/dev/null || true)
+              --jq 'first(.[]) | "\(.number)\t\(.title)\t\(.user.login // "")"' </dev/null 2>/dev/null || true)
             if [ -z "$pull" ]; then
               # A merge commit is no change of its own, and with the lookup
               # gone there is no pull request title to name it by. What it
@@ -105,15 +109,35 @@ jobs:
               continue
             fi
             number=${pull%%$'\t'*}
-            title=${pull#*$'\t'}
+            rest=${pull#*$'\t'}
+            title=${rest%%$'\t'*}
+            author=${rest#*$'\t'}
             # Merged as a merge commit the bump keeps a subject of its own, and
             # squashed it gains a "(#5)", so neither is caught above. Both
             # resolve to the release pull request, which is titled for the bump.
             if is_the_release "$title"; then continue; fi
             case " $seen " in *" $number "*) continue ;; esac
             seen="$seen $number"
-            changed=$changed"- $title (#$number)."$'\n'
+            changed=$changed"- $title (#$number)${author:+ by @$author}."$'\n'
+            case " $firsts " in *" $author:"*) ;; *) [ -n "$author" ] && firsts="$firsts $author:$number" ;; esac
           done < "$commits"
+          # First-time authors: nobody with a pull request merged before the
+          # previous release. A lookup that fails leaves the author out rather
+          # than announcing a first contribution that is not one.
+          new=
+          for entry in $firsts; do
+            author=${entry%%:*}
+            if [ -n "$since" ]; then
+              prior=$(gh api search/issues -X GET \
+                -f q="repo:$GITHUB_REPOSITORY is:pr is:merged author:$author merged:<$since" \
+                --jq 'select(.incomplete_results | not) | .total_count' </dev/null 2>/dev/null || true)
+            else
+              prior=0
+            fi
+            if [ "$prior" = 0 ]; then
+              new=$new"- @$author made their first contribution in #${entry#*:}."$'\n'
+            fi
+          done
           {
             echo '**What changed**'
             echo
@@ -122,6 +146,12 @@ jobs:
               printf '%s' "$changed"
             else
               echo '- Maintenance release.'
+            fi
+            if [ -n "$new" ]; then
+              echo
+              echo '**New contributors**'
+              echo
+              printf '%s' "$new"
             fi
             echo
             echo '**Notes**'
