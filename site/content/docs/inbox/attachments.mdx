@@ -60,6 +60,8 @@ export const storage: StorageAdapter = {
 };
 ```
 
+The adapter above is [`storage-s3.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/storage-s3.ts) in the repository's examples. For a host on Vercel, [`storage-vercel-blob.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/storage-vercel-blob.ts) does the same with a private Blob store. Vercel Blob takes uploads only as a `PUT`, and the widget sends a multipart `POST`, so that example also exports `handleUpload`, a route handler you mount in your app and name in `HELPDESK_UPLOAD_URL`; it relays the file to a presigned URL that Blob checks for path, type, size and expiry. Downloads come straight from Blob under the key's own name.
+
 Pass it to the config, with a size limit if 10 MiB is not the one you want. Both are described under [Adapters and host hooks](/docs/reference/configuration#adapters-and-host-hooks).
 
 ```ts title="lib/helpdesk.ts"
