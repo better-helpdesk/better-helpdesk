@@ -67,13 +67,16 @@ It runs the same published version as the rest of the site, so bumping
 `better-helpdesk` after a release updates the demo too.
 
 Everyone shares that inbox, so the demo limits what a link-post spike can
-do to it. Anonymous visitors get 5 messages per address per hour and the
-customer role 15 (`anonymousRateLimit` and `customerRateLimit` in
-`lib/demo.ts`); the customer role is one contact per address, so nobody sees
+do to it. Anonymous visitors get 5 messages per address per quarter hour and
+the customer role 15 (`anonymousRateLimit` and `customerRateLimit` in
+`lib/demo.ts` count per clock hour, and the reset wipes the window every
+quarter hour); the customer role is one contact per address, so nobody sees
 what another visitor wrote as Nadia; whoever plays the agent can block a
-sender, and the next message from that address is refused; and the
-quarter-hour reset wipes all of it, blocks and rate-limit windows included.
-The agent role still sees every conversation, which is the point of the demo.
+contact, which refuses that contact and its email address, so for the
+customer role the client address, while a visitor can still write from that
+address under another email within the 5-message budget; and the quarter-hour
+reset wipes all of it, blocks and rate-limit windows included. The agent role
+still sees every conversation, which is the point of the demo.
 
 Load test, 9 October 2026, against a local production build (`next build`,
 `next start`, Postgres 18 in Docker, Apple silicon laptop), with the live
