@@ -251,7 +251,7 @@ export function ContactList() {
                               {c.tags
                                 .map(
                                   tag =>
-                                    me.segments?.[tag]?.badge[locale] ?? tag
+                                    translated(me.segments?.[tag]?.badge, locale) ?? tag
                                 )
                                 .join(', ')}
                             </div>
