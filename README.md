@@ -10,8 +10,17 @@
 </p>
 
 <p align="center">
+  <a href="https://better-helpdesk.com/demo/"><img alt="A customer asks a question in the widget, an agent answers from the inbox, and the reply appears in the widget" src="https://raw.githubusercontent.com/better-helpdesk/better-helpdesk/main/.github/assets/loop.gif" width="880"></a>
+</p>
+
+<p align="center">
+  <a href="https://better-helpdesk.com/demo/"><b>Try the live demo, no install</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/better-helpdesk/better-helpdesk/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/better-helpdesk/better-helpdesk/ci.yml?branch=main&label=CI"></a>
   <a href="https://www.npmjs.com/package/better-helpdesk"><img alt="npm version" src="https://img.shields.io/npm/v/better-helpdesk"></a>
+  <a href="https://www.npmjs.com/package/better-helpdesk"><img alt="npm downloads" src="https://img.shields.io/npm/dm/better-helpdesk"></a>
   <a href="https://github.com/better-helpdesk/better-helpdesk/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/better-helpdesk/better-helpdesk"></a>
   <a href="https://nodejs.org/"><img alt="Node.js version" src="https://img.shields.io/node/v/better-helpdesk"></a>
 </p>
@@ -21,7 +30,7 @@
   <a href="#features">Features</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="https://better-helpdesk.com/docs">Docs</a> ·
-  <a href="https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo">Demo</a> ·
+  <a href="https://better-helpdesk.com/demo/">Demo</a> ·
   <a href="https://github.com/better-helpdesk/better-helpdesk/releases">Releases</a>
 </p>
 
@@ -35,6 +44,9 @@ system to deploy, no users to sync and no per-seat bill.
 ```sh
 npm install better-helpdesk pg
 ```
+
+Better Helpdesk is not affiliated with Better Auth. It works with it, as with
+Auth.js, Clerk and Supabase Auth.
 
 ## Why Better Helpdesk
 
@@ -81,41 +93,11 @@ database, its deploy and its design tokens.
 
 ## Compared with
 
-As of 5 October 2026. Better Helpdesk's column describes `main` on that
-date; the others come from their public pages, read on 2 October 2026 and
-collected in [`docs/research/2026-10`](https://github.com/better-helpdesk/better-helpdesk/tree/main/docs/research/2026-10). Pricing is per
-agent or seat per month, billed yearly, in US dollars. *By design* means a
-deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md).
-
-|                         | Better Helpdesk                                   | Chatwoot                                       | Libredesk                          | Intercom                                     | Zendesk                                       |
-| ----------------------- | ------------------------------------------------- | ---------------------------------------------- | ---------------------------------- | -------------------------------------------- | --------------------------------------------- |
-| Runs as                 | a library in your Next.js app                     | a Rails app you host, or Chatwoot Cloud  | a Go binary you host         | hosted                                 | hosted                                  |
-| Database                | yours: Postgres, MySQL, SQL Server or SQLite      | its own Postgres and Redis               | its own Postgres and Redis   | the vendor's                           | the vendor's                            |
-| Identity                | your session or a signed token                    | own logins; SAML on Enterprise           | own logins, OIDC             | own logins; SSO on Expert              | own logins                              |
-| License                 | MIT                                               | MIT core, proprietary Enterprise         | AGPL-3.0                     | proprietary                             | proprietary                              |
-| Pricing                 | free                                              | free to $99, Cloud and self-hosted       | free                         | $29 / $85 / $132                       | $19 / $55 / $115                        |
-| Install                 | npm, one route, one component, one migrate        | Docker, Helm or a VM script              | binary, Docker Compose       | a script tag or mobile SDK             | a script tag                            |
-| Upgrade                 | `pnpm up` plus migrate in your release            | new image, then a database task          | `--upgrade`, after a backup  | the vendor's                            | the vendor's                             |
-| Channels                | widget, email through a relay                     | web, email, social, SMS, voice           | web, email, WhatsApp         | chat, email, phone, SMS, social        | web, email, social, voice, SMS          |
-| Real-time delivery      | polling, 5 s in an open conversation              | WebSocket                                | WebSocket                    | yes, typing and seen                   | yes, typing and read                    |
-| Captured context        | URL, viewport, locale, errors, UTM, your own data | language, country, referrer              | last visited pages          | pages visited, as a trigger            | device and pages viewed                 |
-| Customer sees past conversations | yes, from your session                   | not documented                          | planned                      | yes                                    | yes                                     |
-| Tags                    | yes                                               | yes                                      | yes                         | yes                                    | yes                                     |
-| Snooze                  | yes                                               | yes                                     | yes                         | yes                                    | on-hold status                          |
-| Collision indicator     | yes                                               | yes                                     | no                          | yes                                   | yes                                     |
-| SLA                     | business hours and a reminder per inbox, by design | paid tier                               | yes                         | Expert                                | yes                                    |
-| Automation              | `onEvent` in your code                            | yes                                     | yes                         | Advanced and up                        | yes                                    |
-| Reporting               | SQL over your database                            | yes                                     | an overview page            | yes                                   | yes                                    |
-| CSAT                    | good or bad, from the widget or the reply email   | yes                                     | yes                         | yes                                   | yes                                    |
-| Help center             | search over your own docs, by design              | Startups and up                          | yes                         | yes                                    | yes                                     |
-| AI                      | suggestions and drafts for the agent, by design   | Captain, paid tier                      | your OpenAI-compatible key  | Fin, $0.99 per outcome                | Copilot, +$50                           |
-| Events out              | `onEvent` in your code                            | webhooks                                | webhooks                    | webhooks                              | webhooks                               |
-| API                     | in-process functions, by design                   | REST                                    | REST with API keys          | REST                                   | REST                                    |
-| Roles                   | `isAgent`, by design                              | custom roles, paid tier                 | custom roles                 | custom roles                          | custom roles on Enterprise             |
-| Languages               | English, German and French                        | many, community-translated               | 13                          | many                                   | many                                    |
-| Theming                 | CSS custom properties                             | widget settings                         | widget settings             | brand color,  logo, launcher          | widget presets and options             |
-
-Intercom hosts in the EU only on Advanced or Expert annual contracts.
+The table under [Why Better Helpdesk](#why-better-helpdesk) is the short version.
+[Compared with Chatwoot, Libredesk, Intercom and Zendesk](https://better-helpdesk.com/docs/compared)
+has the full one, feature by feature: channels, real-time delivery, SLA,
+automation, reporting, AI, API, roles, languages and theming, with the dates
+and sources.
 
 ## How it works
 
@@ -144,6 +126,35 @@ AI; AI only ever produces a suggestion or a draft that a person reviews.
 - Next.js 15 or newer for the examples below. The handler is a plain
   function from `Request` to `Response`, so any server with that shape can
   mount it.
+
+## The whole integration
+
+Three files in your Next.js app, and the helpdesk is in it:
+
+```ts
+// app/api/helpdesk/[...slug]/route.ts: every helpdesk route, one handler
+import { helpdesk } from '@/lib/helpdesk';
+
+const handle = (request: Request) => helpdesk.handler(request);
+export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle as DELETE, handle as OPTIONS };
+```
+
+```tsx
+// app/helpdesk/[[...slug]]/page.tsx: the inbox, for your support team
+import { HelpdeskAdmin } from 'better-helpdesk/admin';
+
+export default () => <HelpdeskAdmin api="/api/helpdesk" basePath="/helpdesk" locale="en" />;
+```
+
+```tsx
+// app/layout.tsx: the widget, for your customers
+import { HelpdeskWidget } from 'better-helpdesk/widget';
+
+<HelpdeskWidget inbox="support" locale="en" />
+```
+
+`lib/helpdesk.ts` builds the helpdesk from your database and your session;
+step 4 below has it in full.
 
 ## Quickstart
 
