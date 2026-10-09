@@ -5,7 +5,7 @@ import type { DatabaseAdapter } from './db/adapter';
 import { createStore, type HelpdeskStore } from './db/store';
 import type { HelpdeskEvent } from './events';
 
-export type Locale = 'en' | 'de';
+export type Locale = 'en' | 'de' | 'fr';
 
 export type HelpdeskUser = {
   id: string;

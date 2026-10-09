@@ -11,6 +11,7 @@ import type { Locale } from '../config';
 import { type Api, createApi, uploadToStorage, useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
 import {
+  dateLocale,
   nextWorkday,
   relativeTime,
   type Translate,
@@ -250,7 +251,7 @@ function awayPromise(
   who: string | undefined
 ) {
   const day = (d: Date) =>
-    new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
+    new Intl.DateTimeFormat(dateLocale(locale), {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
@@ -267,7 +268,7 @@ function openingPromise(
   opens: Date,
   who: string | undefined
 ) {
-  const tag = locale === 'de' ? 'de-CH' : 'en-GB';
+  const tag = dateLocale(locale);
   const soon = opens.getTime() - Date.now() < 6 * 86_400_000;
   const values = {
     day: new Intl.DateTimeFormat(tag, {

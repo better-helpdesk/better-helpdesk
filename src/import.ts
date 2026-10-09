@@ -217,10 +217,12 @@ export async function importCannedReplies(
   );
   for (const [index, row] of rows.entries()) {
     const locale =
-      row.locale === 'en' || row.locale === 'de' ? row.locale : null;
+      row.locale === 'en' || row.locale === 'de' || row.locale === 'fr'
+        ? row.locale
+        : null;
     if (row.locale && !locale) {
       report.notes.push(
-        `row ${index + 2}: locale "${row.locale}" is not en or de, saved for any language`
+        `row ${index + 2}: locale "${row.locale}" is not en, de or fr, saved for any language`
       );
     }
     const key = `${row.title}\n${locale ?? ''}`;

@@ -1207,7 +1207,7 @@ export function createHandler(support: Helpdesk) {
   const cannedReply = z.object({
     title: z.string().trim().min(1).max(200),
     body: z.string().trim().min(1).max(20_000),
-    locale: z.enum(['en', 'de']).nullable().optional(),
+    locale: z.enum(['en', 'de', 'fr']).nullable().optional(),
   });
 
   agentRoute('POST', 'canned', async ({ body }) => {

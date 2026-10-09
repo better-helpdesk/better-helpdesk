@@ -11,7 +11,7 @@ const h = createHarness({
     contact: [
       {
         key: 'tier',
-        label: { en: 'Tier', de: 'Stufe' },
+        label: { en: 'Tier', de: 'Stufe', fr: 'Niveau' },
         type: 'select',
         options: ['gold', 'silver'],
       },
@@ -942,7 +942,7 @@ describe('CRM', () => {
         contact: [
           {
             key: 'tier',
-            label: { en: 'Tier', de: 'Stufe' },
+            label: { en: 'Tier', de: 'Stufe', fr: 'Niveau' },
             type: 'select',
             options: ['silver'],
           },

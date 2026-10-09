@@ -64,10 +64,11 @@ code already does. Concretely:
   `src/widget/element.tsx`, with a shadow root and a React wrapper. Theming
   happens only through `--helpdesk-*` CSS custom properties; the styles are
   the CSS strings in `src/widget/styles.ts` and `src/admin/styles.ts`.
-- **English and German.** Every user-facing string is a key in
-  `src/ui/i18n.ts` with both languages. The `de` table is typed against the
-  `en` keys, so a missing or extra translation fails `tsc`. German is Swiss
-  Standard German (`ss`, never `ß`) and addresses the reader as "Sie".
+- **English, German and French.** Every user-facing string is a key in
+  `src/ui/i18n.ts` with all three languages. The `de` and `fr` tables are
+  typed against the `en` keys, so a missing or extra translation fails `tsc`.
+  German is Swiss Standard German (`ss`, never `ß`) and addresses the reader
+  as "Sie"; French addresses the reader as "vous".
 
 ## Off-limits
 

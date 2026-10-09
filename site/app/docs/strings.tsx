@@ -1,6 +1,9 @@
 import strings from './ui-strings.json';
 
-const { en, de } = strings as Record<'en' | 'de', Record<string, string>>;
+const { en, de, fr } = strings as Record<
+  'en' | 'de' | 'fr',
+  Record<string, string>
+>;
 
 export function StringTable() {
   return (
@@ -10,6 +13,7 @@ export function StringTable() {
           <th>Key</th>
           <th>English</th>
           <th>German</th>
+          <th>French</th>
         </tr>
       </thead>
       <tbody>
@@ -22,6 +26,7 @@ export function StringTable() {
               </td>
               <td>{en[key]}</td>
               <td>{de[key]}</td>
+              <td>{fr[key]}</td>
             </tr>
           ))}
       </tbody>

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import type { Locale } from '../config';
+import { dateLocale } from '../ui/i18n';
 import { useAdmin } from './context';
 import { useKeysOn, useShortcuts } from './ui';
 
@@ -28,7 +29,7 @@ export function snoozePresets(now: Date): [Preset, Date][] {
 }
 
 export function formatSnooze(date: string | Date, locale: Locale) {
-  return new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
+  return new Intl.DateTimeFormat(dateLocale(locale), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',

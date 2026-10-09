@@ -20,9 +20,9 @@ Every kind has these fields:
     kind: { type: 'string', required: true, description: 'Which of the five messages this is.' },
     to: { type: 'string', required: true, description: 'One recipient address.' },
     locale: {
-      type: "'en' | 'de'",
+      type: "'en' | 'de' | 'fr'",
       required: true,
-      description: <>For customer mail, the contact's locale; anything starting with <code>de</code> is German. Agent mail is always <code>en</code>.</>,
+      description: <>For customer mail, the contact's locale; anything starting with <code>de</code> is German and with <code>fr</code> French. Agent mail is always <code>en</code>.</>,
     },
     reference: { type: 'string', required: true, description: <>The conversation's reference, such as <code>ACME-1042</code>.</> },
   }}
