@@ -495,11 +495,14 @@ export function humanizeKey(key: string) {
 
 export function money(value: string | null, currency: string, locale: string) {
   if (value === null) return '';
-  return new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-CH', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(Number(value));
+  return new Intl.NumberFormat(
+    locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-CH',
+    {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }
+  ).format(Number(value));
 }
 
 type CustomValue = string | number | null;

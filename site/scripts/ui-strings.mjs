@@ -23,6 +23,7 @@ export function uiStrings() {
     {
       en: table(/^const en = (\{[\s\S]*?^\})/m),
       de: table(/^const de: Record<MessageKey, string> = (\{[\s\S]*?^\})/m),
+      fr: table(/^const fr: Record<MessageKey, string> = (\{[\s\S]*?^\})/m),
     },
     null,
     2

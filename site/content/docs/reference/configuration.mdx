@@ -256,7 +256,7 @@ What `identify` returns. `Identity`, `HelpdeskUser` and `HelpdeskOrg` are export
       description: "The host proved the address. The user's messages count as verified, and when their contact is created the address is attached to it as a verified email identity.",
     },
     name: { type: 'string | null' },
-    locale: { type: 'string | null', description: <>Anything starting with <code>de</code> is German; everything else is English.</> },
+    locale: { type: 'string | null', description: <>Anything starting with <code>de</code> is German and with <code>fr</code> French; everything else is English.</> },
     image: { type: 'string | null', description: 'Avatar URL, shown to customers when this user answers as an agent.' },
   }}
 />
@@ -328,6 +328,6 @@ These are not configurable and not exported.
 
 | Name | Values |
 | --- | --- |
-| Locales | `en`, `de` |
+| Locales | `en`, `de`, `fr` |
 | Statuses | `open`, `pending`, `resolved` |
 | Priorities | `low`, `normal`, `high`, `urgent` |

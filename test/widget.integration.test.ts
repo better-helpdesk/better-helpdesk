@@ -752,11 +752,11 @@ describe('first-message qualification', () => {
           public: true,
           defaultPriority: 'high',
           qualify: {
-            label: { en: 'You are', de: 'Sie sind' },
+            label: { en: 'You are', de: 'Sie sind', fr: 'Vous êtes' },
             options: [
               {
                 value: 'consultancy',
-                label: { en: 'Consultancy', de: 'Beratung' },
+                label: { en: 'Consultancy', de: 'Beratung', fr: 'Conseil' },
               },
             ],
           },

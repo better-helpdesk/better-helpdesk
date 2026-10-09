@@ -74,7 +74,7 @@ database, its deploy and its design tokens.
 - **Your identity, your data.** No passwords and no sessions are stored.
   Your `identify(request)`, or a signed identity token from another origin,
   decides who someone is. Retention and rate limits are yours to set.
-- **English and German**, with every agent UI string overridable. Theming through
+- **English, German and French**, with every agent UI string overridable. Theming through
   `--helpdesk-*` CSS custom properties.
 - **TypeScript, ESM, four runtime dependencies**: `kysely`, `zod`,
   `mailparser` and `mailauth`. Peer dependencies are React 19 and the driver of the host's database (`pg`, `mysql2`, or `tedious` and `tarn`; SQLite needs none).
@@ -112,7 +112,7 @@ deliberate scope decision; see [`ROADMAP.md`](https://github.com/better-helpdesk
 | Events out              | `onEvent` in your code                            | webhooks                                | webhooks                    | webhooks                              | webhooks                               |
 | API                     | in-process functions, by design                   | REST                                    | REST with API keys          | REST                                   | REST                                    |
 | Roles                   | `isAgent`, by design                              | custom roles, paid tier                 | custom roles                 | custom roles                          | custom roles on Enterprise             |
-| Languages               | English and German                                | many, community-translated               | 13                          | many                                   | many                                    |
+| Languages               | English, German and French                        | many, community-translated               | 13                          | many                                   | many                                    |
 | Theming                 | CSS custom properties                             | widget settings                         | widget settings             | brand color,  logo, launcher          | widget presets and options             |
 
 Intercom hosts in the EU only on Advanced or Expert annual contracts.
