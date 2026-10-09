@@ -275,7 +275,7 @@ What `identify` returns. `Identity`, `HelpdeskUser` and `HelpdeskOrg` are export
 <TypeTable
   type={{
     key: { type: 'string', required: true, description: <>Key in the record's <code>custom</code> object.</> },
-    label: { type: 'Record<Locale, string>', required: true, description: 'Label in both languages.' },
+    label: { type: 'Translated', required: true, description: <>English, plus any other language; see <a href="#translated">Translated</a>.</> },
     type: {
       type: "'text' | 'number' | 'date' | 'select'",
       required: true,
@@ -321,6 +321,10 @@ The arguments and result of `links`. All three are exported as types.
     url: { type: 'string', required: true },
   }}
 />
+
+## Translated
+
+Copy you write per language: `{ en: string } & Partial<Record<Locale, string>>`. English is required, and a language you leave out shows the English text, so adding a language to the package never breaks your build. The qualifying question's labels and [CustomFieldDef](#customfielddef) use it.
 
 ## Fixed values
 

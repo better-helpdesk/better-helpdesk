@@ -1552,4 +1552,39 @@ describe('opened by the host', () => {
       screen.getByRole('textbox', { name: 'What happened?' }).textContent
     ).toBe('my own words');
   });
+
+  it('asks the qualifying question in English when the host left the language out', async () => {
+    mockApi({
+      'widget/session': {
+        ...session,
+        inbox: {
+          title: null,
+          replyPromise: null,
+          privacyUrl: null,
+          bookingUrl: null,
+          qualify: {
+            label: { en: 'How many seats?' },
+            options: [{ value: 'few', label: { en: 'Under ten' } }],
+          },
+        },
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="de"
+        types={['question', 'bug']}
+        errors={() => []}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Support öffnen' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Fehler melden/ })
+    );
+
+    expect(await screen.findByText('How many seats?')).toBeTruthy();
+    expect(screen.getByLabelText('Under ten')).toBeTruthy();
+  });
 });

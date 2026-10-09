@@ -3,7 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
-import { relativeTime } from '../ui/i18n';
+import { relativeTime, translated } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
 import { isMac, RichEditor, type RichEditorHandle } from '../ui/rich-editor';
 import { useAdmin } from './context';
@@ -1046,8 +1046,8 @@ export function ConversationView({ id }: { id: string }) {
                   key={tag}
                   className="sa-pill"
                   style={{ justifySelf: 'start' }}
-                  title={me.segments[tag]?.label[locale]}>
-                  {me.segments[tag]?.badge[locale]}
+                  title={translated(me.segments[tag]?.label, locale)}>
+                  {translated(me.segments[tag]?.badge, locale)}
                 </span>
               ))}
             <HostLinks links={data.links} locale={locale} />

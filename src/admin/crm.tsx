@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { CustomFieldDef, HostLink } from '../config';
 import { useResource } from '../ui/api';
-import { relativeTime } from '../ui/i18n';
+import { relativeTime, translated } from '../ui/i18n';
 import { useAdmin } from './context';
 import { FREE_MAIL } from './conversation';
 import { DealDialog } from './deals';
@@ -251,7 +251,10 @@ export function ContactList() {
                               {c.tags
                                 .map(
                                   tag =>
-                                    me.segments?.[tag]?.badge[locale] ?? tag
+                                    translated(
+                                      me.segments?.[tag]?.badge,
+                                      locale
+                                    ) ?? tag
                                 )
                                 .join(', ')}
                             </div>
@@ -377,8 +380,8 @@ export function ContactView({ id }: { id: string }) {
               <span
                 key={tag}
                 className="sa-pill"
-                title={me.segments[tag]?.label[locale]}>
-                {me.segments[tag]?.badge[locale]}
+                title={translated(me.segments[tag]?.label, locale)}>
+                {translated(me.segments[tag]?.badge, locale)}
               </span>
             ))}
             {otherTags.map(tag => (

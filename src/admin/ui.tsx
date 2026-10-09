@@ -8,7 +8,7 @@ import {
 } from 'react';
 
 import type { CustomFieldDef, HostLink, Locale } from '../config';
-import type { Translate } from '../ui/i18n';
+import { type Translate, translated } from '../ui/i18n';
 
 export const paths = {
   sparkle:
@@ -522,7 +522,7 @@ export function CustomFields({
     const value = values[field.key];
     return field.type === 'select' ? (
       <label key={field.key} className="sa-field">
-        {field.label[locale]}
+        {translated(field.label, locale)}
         <select
           className="sa-select"
           style={{ width: '100%' }}
@@ -543,7 +543,7 @@ export function CustomFields({
       </label>
     ) : (
       <label key={field.key} className="sa-field">
-        {field.label[locale]}
+        {translated(field.label, locale)}
         <input
           className="sa-input"
           type={

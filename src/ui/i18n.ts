@@ -1,4 +1,4 @@
-import type { Locale } from '../config';
+import type { Locale, Translated } from '../config';
 
 const en = {
   'widget.title': 'Help & support',
@@ -1502,4 +1502,12 @@ export function formatMinutes(minutes: number, locale: Locale) {
     unit,
     unitDisplay: 'short',
   }).format(value);
+}
+
+/** The host's copy in `locale`, or its English when that language was left out. */
+export function translated(
+  text: Translated | null | undefined,
+  locale: Locale
+): string | undefined {
+  return text?.[locale] ?? text?.en;
 }

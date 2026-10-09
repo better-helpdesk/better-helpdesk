@@ -83,7 +83,7 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-Each field needs a `key`, a label in both languages and a `type`: `text`, `number`, `date`, or `select` with its `options`. The values are stored in the record's `custom` column, and a value of the wrong type, or for a key you have not defined, is refused unless the record already holds it. So when you remove a field, or an option of a `select`, the values records hold stay in place, and agents can still save those records. [CustomFieldDef](/docs/reference/configuration#customfielddef) describes each type's values.
+Each field needs a `key`, a label (English, plus any other language you want to show) and a `type`: `text`, `number`, `date`, or `select` with its `options`. The values are stored in the record's `custom` column, and a value of the wrong type, or for a key you have not defined, is refused unless the record already holds it. So when you remove a field, or an option of a `select`, the values records hold stay in place, and agents can still save those records. [CustomFieldDef](/docs/reference/configuration#customfielddef) describes each type's values.
 
 The agent UI shows and edits the fields of contacts and companies on their pages, and those of a deal when an agent opens it on the Deals board.
 
