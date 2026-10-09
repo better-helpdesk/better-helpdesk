@@ -75,7 +75,7 @@ jobs:
           previous=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
           # When the previous release was tagged, in UTC: a pull request merged
           # before it makes its author a returning contributor.
-          since=$([ -n "$previous" ] && TZ=UTC git log -1 --date=format:%Y-%m-%dT%H:%M:%SZ --format=%cd "$previous" || true)
+          since=$([ -n "$previous" ] && TZ=UTC git log -1 --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd "$previous" || true)
           commits=$RUNNER_TEMP/commits.tsv
           notes=$RUNNER_TEMP/release-notes.md
           # A command of its own, so a git failure fails the job. Read from a
@@ -130,7 +130,7 @@ jobs:
             if [ -n "$since" ]; then
               prior=$(gh api search/issues -X GET \
                 -f q="repo:$GITHUB_REPOSITORY is:pr is:merged author:$author merged:<$since" \
-                --jq .total_count </dev/null 2>/dev/null || true)
+                --jq 'select(.incomplete_results | not) | .total_count' </dev/null 2>/dev/null || true)
             else
               prior=0
             fi

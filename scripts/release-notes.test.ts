@@ -51,6 +51,7 @@ const ghStub = [
   '    if [ -n "$GH_SEARCH_FAILS" ]; then return 1; fi',
   '    local q author',
   '    while [ "$#" -gt 0 ]; do case $1 in q=*) q=$1 ;; esac; shift; done',
+  '    if [ -n "$GH_SEARCH_LOG" ]; then printf "%s\\n" "$q" >> "$GH_SEARCH_LOG"; fi',
   '    author=$(printf %s "$q" | sed -n "s/.*author:\\([^ ]*\\).*/\\1/p")',
   '    printf %s "$GH_PRIOR" | tr " " "\\n" | grep "^$author=" | cut -d= -f2',
   '    return 0',
@@ -72,6 +73,11 @@ const root = mkdtempSync(join(tmpdir(), 'release-notes-'));
 
 afterAll(() => rmSync(root, { force: true, recursive: true }));
 
+// The previous release's commit is dated in a non-UTC zone, so a bound taken
+// from the committer's wall clock instead of UTC shows up on a UTC runner too.
+const PREVIOUS_RELEASE_DATE = '2026-01-01T12:00:00+02:00';
+let commitDate: string | undefined;
+
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
     cwd,
@@ -82,6 +88,9 @@ function git(cwd: string, ...args: string[]): string {
       GIT_AUTHOR_EMAIL: 'test@example.com',
       GIT_COMMITTER_NAME: 'Test',
       GIT_COMMITTER_EMAIL: 'test@example.com',
+      ...(commitDate
+        ? { GIT_AUTHOR_DATE: commitDate, GIT_COMMITTER_DATE: commitDate }
+        : {}),
     },
   });
 }
@@ -94,7 +103,9 @@ function history(shape: Shape): string {
   const commit = (subject: string) =>
     git(repo, 'commit', '-q', '--allow-empty', '-m', subject);
   git(repo, 'init', '-q', '-b', 'main');
+  commitDate = PREVIOUS_RELEASE_DATE;
   commit('feat(widget): ship the first thing');
+  commitDate = undefined;
   git(repo, 'tag', 'v0.1.2');
   git(repo, 'checkout', '-q', '-b', 'fix-the-admin');
   commit('fix(admin): a fix');
@@ -150,7 +161,13 @@ function pulls(repo: string): string {
   return `${rows.join('\n')}\n`;
 }
 
-type Stub = { apiFails?: boolean; searchFails?: boolean; prior?: string };
+type Stub = {
+  apiFails?: boolean;
+  searchFails?: boolean;
+  prior?: string;
+  /** Where the stub appends every search query it is asked. */
+  searchLog?: string;
+};
 
 /** Every line of the notes handed to gh. */
 function notesFor(shape: Shape, stub: Stub = {}): string[] {
@@ -168,6 +185,7 @@ function notesFor(shape: Shape, stub: Stub = {}): string[] {
       GH_API_FAILS: stub.apiFails ? '1' : '',
       GH_SEARCH_FAILS: stub.searchFails ? '1' : '',
       GH_PRIOR: stub.prior ?? 'alice=1 bob=1',
+      GH_SEARCH_LOG: stub.searchLog ?? '',
       GH_NOTES_OUT: notesOut,
       GH_PULLS: pullsFile,
       GH_TOKEN: 'stub',
@@ -203,6 +221,14 @@ describe('the generated release notes', () => {
     const notes = notesFor('a squash', { prior: 'alice=0 bob=4' });
     expect(notes).toContain('**New contributors**');
     expect(notes).toContain('- @alice made their first contribution in #4.');
+  });
+
+  it('count earlier pull requests up to the previous release, in UTC', () => {
+    const searchLog = join(mkdtempSync(join(root, 'log-')), 'queries.txt');
+    notesFor('a squash', { prior: 'alice=0', searchLog });
+    expect(readFileSync(searchLog, 'utf8')).toContain(
+      'author:alice merged:<2026-01-01T10:00:00Z'
+    );
   });
 
   it('do not welcome a returning author, or anyone when the lookup fails', () => {
