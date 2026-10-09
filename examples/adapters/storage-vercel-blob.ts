@@ -1,10 +1,13 @@
 // A private Vercel Blob store. The widget POSTs each upload as a multipart
 // form and Blob takes a PUT, so `handleUpload` relays the file from a route
 // in your app to a presigned PUT URL, which Blob checks for path, type, size
-// and expiry. Mount it and point HELPDESK_UPLOAD_URL at it.
+// and expiry. Mount it and point HELPDESK_UPLOAD_URL at it. A Vercel
+// Function takes a request body of at most 4.5 MB, so set
+// `maxAttachmentBytes` to 4 MiB or less; the form adds a little on top.
 import {
   BlobNotFoundError,
   del,
+  getDownloadUrl,
   head,
   issueSignedToken,
   presignUrl,
@@ -16,9 +19,8 @@ const access = 'private';
 const fiveMinutes = 5 * 60 * 1000;
 // Presigned PUT URLs go to Blob's control API, which the SDK lets an env
 // variable override; the relay forwards only there, so it is no open proxy.
-const blobApi = new URL(
-  process.env.VERCEL_BLOB_API_URL ?? 'https://vercel.com/api/blob'
-).origin;
+const blobApi =
+  process.env.VERCEL_BLOB_API_URL ?? 'https://vercel.com/api/blob';
 
 export const storage: StorageAdapter = {
   async presignUpload(pathname, { contentType, maxBytes }) {
@@ -36,6 +38,7 @@ export const storage: StorageAdapter = {
       access,
       allowedContentTypes: [contentType],
       maximumSizeInBytes: maxBytes,
+      addRandomSuffix: false,
       allowOverwrite: true,
       validUntil,
     });
@@ -57,7 +60,7 @@ export const storage: StorageAdapter = {
       access,
       validUntil,
     });
-    return presignedUrl;
+    return getDownloadUrl(presignedUrl);
   },
   async put(pathname, body, contentType) {
     await put(pathname, Buffer.from(body), {
@@ -91,8 +94,7 @@ export async function handleUpload(request: Request) {
   if (
     typeof url !== 'string' ||
     !(file instanceof Blob) ||
-    !URL.canParse(url) ||
-    new URL(url).origin !== blobApi
+    !url.startsWith(`${blobApi}/`)
   ) {
     return new Response(null, { status: 400 });
   }
