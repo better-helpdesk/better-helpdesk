@@ -17,8 +17,9 @@ pnpm install --filter better-helpdesk-sveltekit
 pnpm --filter better-helpdesk-sveltekit dev
 ```
 
-Open `http://localhost:5173` and send a message from the launcher. The first
-request creates `helpdesk.db` and migrates it; look at what the widget wrote:
+Open `http://localhost:5173` and send a message from the launcher. The server
+creates `helpdesk.db` and migrates it when it starts; look at what the widget
+wrote:
 
 ```sh
 sqlite3 examples/sveltekit/helpdesk.db \
@@ -28,21 +29,23 @@ sqlite3 examples/sveltekit/helpdesk.db \
 The production build is a Node server from `@sveltejs/adapter-node`:
 
 ```sh
-pnpm --filter better-helpdesk-sveltekit build
+ORIGIN=http://localhost:3000 pnpm --filter better-helpdesk-sveltekit build
 ORIGIN=http://localhost:3000 pnpm --filter better-helpdesk-sveltekit start
 ```
 
-`ORIGIN` is the URL the app is reached at. The handler refuses mutations from
-any other origin, so without it every widget message is a 403. `PORT` changes
-the port and `HELPDESK_SQLITE` the database file.
+`ORIGIN` is the URL the app is reached at, for the build and the start alike:
+adapter-node bakes it into the build as the app's own origin, and the handler
+refuses mutations from any other origin, so without it every widget message is
+a 403. `PORT` changes the port and `HELPDESK_SQLITE` the database file.
 
 ## How it is wired
 
 - **Builds the helpdesk** in `src/lib/server/helpdesk.ts`. SvelteKit keeps
   everything under `src/lib/server` out of client code, so the database and
-  the configuration never reach the browser. `migrate(db)` runs when the
-  module loads; on a server, run `better-helpdesk-migrate` as a deploy step
-  instead.
+  the configuration never reach the browser. `src/hooks.server.ts` migrates
+  the database once per server start; on a server, run
+  `better-helpdesk-migrate` as a deploy step instead. `origin.ts` is the one
+  place both SvelteKit and the helpdesk read the app's origin from.
 - **Mounts the handler** in `src/routes/api/helpdesk/[...path]/+server.ts`.
   Its `fallback` export receives every method under the base path and hands
   SvelteKit's `request` to `helpdesk.handler`. `basePath` in the configuration
@@ -65,4 +68,6 @@ the port and `HELPDESK_SQLITE` the database file.
   same `/api/helpdesk`. Without it, the conversations are in the database but
   nobody can answer them.
 - **Email, storage, AI and jobs**, which are optional adapters and routes;
-  see the [documentation](https://better-helpdesk.com/docs).
+  see the [documentation](https://better-helpdesk.com/docs). A scheduler
+  that calls `/api/helpdesk/jobs/` must send a JSON content type, or
+  SvelteKit's own cross-site check answers 403 before the handler runs.

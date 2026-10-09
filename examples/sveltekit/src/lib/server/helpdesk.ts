@@ -1,18 +1,19 @@
 import { DatabaseSync } from 'node:sqlite';
 
-import { buildHelpdesk, migrate, sqliteAdapter } from 'better-helpdesk';
+import { buildHelpdesk, sqliteAdapter } from 'better-helpdesk';
 
-const db = sqliteAdapter({
+import { origin } from '../../../origin';
+
+export const db = sqliteAdapter({
   database: new DatabaseSync(process.env.HELPDESK_SQLITE ?? 'helpdesk.db'),
 });
-await migrate(db);
 
 export const helpdesk = buildHelpdesk({
   db,
   basePath: '/api/helpdesk',
   referencePrefix: 'KIT',
   // The same-origin check on mutations compares against this origin.
-  adminUrl: `${process.env.ORIGIN ?? 'http://localhost:5173'}/helpdesk/`,
+  adminUrl: `${origin}/helpdesk/`,
   inboxes: {
     support: { name: { en: 'Support' }, public: true },
   },
