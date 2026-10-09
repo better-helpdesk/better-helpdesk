@@ -38,7 +38,7 @@ export {
   signIdentityToken,
   verifyIdentityToken,
 } from './identity-token';
-export { HelpdeskError } from './service';
+export { HelpdeskError, ipBucket } from './service';
 
 /** Builds the support instance a host mounts: `handler` serves every route under `basePath`. */
 export function buildHelpdesk(config: HelpdeskConfig) {
