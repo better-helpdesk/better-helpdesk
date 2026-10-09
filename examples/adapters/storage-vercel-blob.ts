@@ -19,8 +19,13 @@ const access = 'private';
 const fiveMinutes = 5 * 60 * 1000;
 // Presigned PUT URLs go to Blob's control API, which the SDK lets an env
 // variable override; the relay forwards only there, so it is no open proxy.
-const blobApi =
-  process.env.VERCEL_BLOB_API_URL ?? 'https://vercel.com/api/blob';
+const blobApi = new URL(
+  `${
+    process.env.VERCEL_BLOB_API_URL ??
+    process.env.NEXT_PUBLIC_VERCEL_BLOB_API_URL ??
+    'https://vercel.com/api/blob'
+  }/`
+).href;
 
 export const storage: StorageAdapter = {
   async presignUpload(pathname, { contentType, maxBytes }) {
@@ -91,14 +96,13 @@ export async function handleUpload(request: Request) {
   const form = await request.formData().catch(() => null);
   const url = form?.get('url');
   const file = form?.get('file');
-  if (
-    typeof url !== 'string' ||
-    !(file instanceof Blob) ||
-    !url.startsWith(`${blobApi}/`)
-  ) {
+  // Compared after parsing, so dot segments cannot steer it off the API path.
+  const target =
+    typeof url === 'string' && URL.canParse(url) ? new URL(url) : null;
+  if (!target || !(file instanceof Blob) || !target.href.startsWith(blobApi)) {
     return new Response(null, { status: 400 });
   }
-  const response = await fetch(url, {
+  const response = await fetch(target, {
     method: 'PUT',
     headers: { 'content-type': file.type },
     body: file,
