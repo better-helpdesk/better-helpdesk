@@ -14,7 +14,7 @@ const ROLES = [
   {
     id: 'customer',
     label: 'Nadia, customer',
-    note: 'Signed in at Brightline Logistics. Her company’s conversations follow her.',
+    note: 'Signed in at Brightline Logistics. Her company’s conversations follow her; what you write as her stays yours.',
   },
   {
     id: 'agent',

@@ -66,6 +66,28 @@ Without `DEMO_DATABASE_URL`, `/demo` says it is not set up.
 It runs the same published version as the rest of the site, so bumping
 `better-helpdesk` after a release updates the demo too.
 
+Everyone shares that inbox, so the demo limits what a link-post spike can
+do to it. Anonymous visitors get 5 messages per address per hour and the
+customer role 15 (`anonymousRateLimit` and `customerRateLimit` in
+`lib/demo.ts`); the customer role is one contact per address, so nobody sees
+what another visitor wrote as Nadia; whoever plays the agent can block a
+sender, and the next message from that address is refused; and the
+quarter-hour reset wipes all of it, blocks and rate-limit windows included.
+The agent role still sees every conversation, which is the point of the demo.
+
+Load test, 9 October 2026, against a local production build (`next build`,
+`next start`, Postgres 18 in Docker, Apple silicon laptop), with the live
+instance left alone:
+
+| Run | Result |
+| --- | --- |
+| 200 visitors, 7 messages each, 50 in flight (`x-forwarded-for` per visitor) | 1,400 POSTs in 4.3 s, 325 req/s, p50 99 ms, p99 818 ms; 201 until each address's budget, 429 after, no 5xx |
+| One address, 30 messages, 10 in flight | 5 × 201, then 429 for the rest |
+| `GET /demo/`, 20 connections, 15 s (autocannon) | 536 req/s, p50 35 ms, p99 56 ms, no errors |
+
+Under a burst from one address the limiter counts the requests still in
+flight, so it refuses earlier than the budget, never later.
+
 ## Divio Cloud
 
 `site/Dockerfile` builds this directory only, with the repository root as

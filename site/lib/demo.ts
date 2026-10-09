@@ -2,6 +2,7 @@ import { buildHelpdesk, type Identity, postgresAdapter } from 'better-helpdesk';
 import pg from 'pg';
 
 import { sameDatabase } from './database-url';
+import { visitorKey } from './demo-visitor';
 import { siteUrl } from './site';
 
 /**
@@ -57,28 +58,28 @@ export async function newestRows() {
   return rows;
 }
 
-const IDENTITIES = {
-  customer: {
-    user: {
-      id: 'demo-customer',
-      email: 'nadia@brightline.test',
-      emailVerified: true,
-      name: 'Nadia Olufemi',
-    },
-    orgs: [{ id: 'demo-org', name: 'Brightline Logistics' }],
-    isAgent: false,
+// Nadia is one contact per address, so visitors never see each other's messages as her.
+const customer = (key: string): Identity => ({
+  user: {
+    id: `demo-customer-${key}`,
+    email: `nadia+${key}@brightline.test`,
+    emailVerified: true,
+    name: 'Nadia Olufemi',
   },
-  agent: {
-    user: {
-      id: 'demo-agent',
-      email: 'rowan@harbor.test',
-      emailVerified: true,
-      name: 'Rowan Vester',
-    },
-    orgs: [],
-    isAgent: true,
+  orgs: [{ id: 'demo-org', name: 'Brightline Logistics' }],
+  isAgent: false,
+});
+
+const AGENT: Identity = {
+  user: {
+    id: 'demo-agent',
+    email: 'rowan@harbor.test',
+    emailVerified: true,
+    name: 'Rowan Vester',
   },
-} satisfies Record<Exclude<DemoRole, 'visitor'>, Identity>;
+  orgs: [],
+  isAgent: true,
+};
 
 // No email adapter: visitors type any address, and nothing may ever be sent to it.
 export const demo = buildHelpdesk({
@@ -87,6 +88,10 @@ export const demo = buildHelpdesk({
   basePath: DEMO_API,
   adminUrl: `${siteUrl()}/demo/inbox/`,
   teamName: { en: 'the Harbor crew' },
+  // Per address and per quarter hour (the reset wipes the windows): enough to
+  // try the demo, too little for a link-post spike to fill the inbox.
+  anonymousRateLimit: 5,
+  customerRateLimit: 15,
   inboxes: {
     support: {
       name: { en: 'Support' },
@@ -134,7 +139,8 @@ export const demo = buildHelpdesk({
       request.headers.get('cookie') ?? ''
     );
     const role = roleFromCookie(cookie?.[1]);
-    return role === 'visitor' ? null : IDENTITIES[role];
+    if (role === 'visitor') return null;
+    return role === 'agent' ? AGENT : customer(visitorKey(request.headers));
   },
 });
 
