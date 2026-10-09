@@ -76,7 +76,13 @@ export function normalizeEmail(email: string) {
 
 function toLocale(value: string | null | undefined): Locale {
   const tag = value?.toLowerCase() ?? '';
-  return tag.startsWith('de') ? 'de' : tag.startsWith('fr') ? 'fr' : 'en';
+  return tag.startsWith('de')
+    ? 'de'
+    : tag.startsWith('fr')
+      ? 'fr'
+      : tag.startsWith('it')
+        ? 'it'
+        : 'en';
 }
 
 /** How a model is told to write in each locale. */
@@ -84,6 +90,7 @@ const LANGUAGES: Record<Locale, string> = {
   en: 'English',
   de: 'Swiss Standard German (use "ss", never "ß", address the customer as "Sie")',
   fr: 'French (address the customer as "vous")',
+  it: 'Italian (address the customer as "Lei")',
 };
 
 /** The rate-limit bucket: an IPv6 host owns its whole /64, so it counts as one. */
@@ -1361,7 +1368,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     const task = {
       shorten:
         'Make it shorter: drop repetition and filler, keep its language and every fact, link and reference.',
-      formal: `Make it more formal and polite, in its own language; German is ${LANGUAGES.de}, French is ${LANGUAGES.fr}. Keep every fact, link and reference.`,
+      formal: `Make it more formal and polite, in its own language; German is ${LANGUAGES.de}, French is ${LANGUAGES.fr}, Italian is ${LANGUAGES.it}. Keep every fact, link and reference.`,
       translate: `Translate it into ${target}. Keep every fact, link and reference.`,
     }[mode];
     const result = await ai.generate({

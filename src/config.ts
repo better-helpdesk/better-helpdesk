@@ -5,7 +5,7 @@ import type { DatabaseAdapter } from './db/adapter';
 import { createStore, type HelpdeskStore } from './db/store';
 import type { HelpdeskEvent } from './events';
 
-export type Locale = 'en' | 'de' | 'fr';
+export type Locale = 'en' | 'de' | 'fr' | 'it';
 
 /** Copy the host writes per language. English is required; a language left out shows the English text. */
 export type Translated = { en: string } & Partial<Record<Locale, string>>;
