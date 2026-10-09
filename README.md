@@ -125,7 +125,8 @@ AI; AI only ever produces a suggestion or a draft that a person reviews.
   any other.
 - Next.js 15 or newer for the examples below. The handler is a plain
   function from `Request` to `Response`, so any server with that shape can
-  mount it.
+  mount it: [`examples/hono`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/hono) and
+  [`examples/sveltekit`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/sveltekit) show two.
 
 ## The whole integration
 
