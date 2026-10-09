@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { ImageResponse } from 'next/og';
 
 export const dynamic = 'force-static';
@@ -9,17 +12,13 @@ const HEAD = ['YOUR HELPDESK,', 'INSIDE', 'YOUR APP.'];
 const INSTALL = '$ npm install better-helpdesk';
 const META = 'Open source · MIT · Your database';
 
-/** The site's faces from Google Fonts as TTF, which next/og reads and woff2 it does not; next/font fetches them at build too. */
-async function font(family: string, weight: number, text: string) {
-  const css = await fetch(
-    `https://fonts.googleapis.com/css2?family=${family.replace(/ /g, '+')}:wght@${weight}&text=${encodeURIComponent(text)}`
-  ).then(r => r.text());
-  const url = css.match(
-    /src: url\((.+?)\) format\('(?:opentype|truetype)'\)/
-  )?.[1];
-  if (!url) throw new Error(`No TTF for ${family} ${weight}`);
-  return fetch(url).then(r => r.arrayBuffer());
-}
+/**
+ * The card's faces, subset to the text it draws, as TTF (next/og reads TTF, not woff2).
+ * They ship in the repository so the build needs no network. They are Google Fonts'
+ * subsets for exactly this text: change the text, fetch them again.
+ */
+const font = (file: string) =>
+  readFile(join(process.cwd(), 'app/og.png/fonts', file));
 
 /** The social card for the site and the repository, in the hero's type: Doto headline, Martian Mono install line, Rethink Sans meta. */
 export async function GET() {
@@ -86,22 +85,22 @@ export async function GET() {
       fonts: [
         {
           name: 'Doto',
-          data: await font('Doto', 900, HEAD.join('')),
+          data: await font('doto-900.ttf'),
           weight: 900,
         },
         {
           name: 'Rethink Sans',
-          data: await font('Rethink Sans', 700, 'Better Helpdesk'),
+          data: await font('rethink-sans-700.ttf'),
           weight: 700,
         },
         {
           name: 'Rethink Sans',
-          data: await font('Rethink Sans', 400, META),
+          data: await font('rethink-sans-400.ttf'),
           weight: 400,
         },
         {
           name: 'Martian Mono',
-          data: await font('Martian Mono', 400, INSTALL),
+          data: await font('martian-mono-400.ttf'),
           weight: 400,
         },
       ],
