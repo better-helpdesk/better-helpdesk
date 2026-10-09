@@ -123,6 +123,8 @@ export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle a
 
 Export all six methods. The agent UI saves its settings with `PUT`, deletes with `DELETE` and edits with `PATCH`, and a method you leave out answers 405 before the helpdesk sees the request. To mount it somewhere else, set [`basePath`](/docs/reference/configuration#routing-and-identity) to match.
 
+The handler is a plain function from `Request` to `Response`, so it mounts in any framework that speaks web `Request`. [`examples/hono`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/hono) mounts it in a Hono app and [`examples/sveltekit`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/sveltekit) in SvelteKit; each README says how the React agent UI fits next to it.
+
 ## Render the agent UI
 
 Create `app/helpdesk/[[...slug]]/page.tsx`:
