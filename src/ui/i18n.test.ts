@@ -17,11 +17,12 @@ describe('nextWorkday', () => {
 });
 
 describe('toLocale', () => {
-  it('picks German and French from any variant and English otherwise', () => {
+  it('picks German, French and Italian from any variant and English otherwise', () => {
     expect(toLocale('de-CH')).toBe('de');
     expect(toLocale('fr')).toBe('fr');
     expect(toLocale('FR-ch')).toBe('fr');
-    expect(toLocale('it-CH')).toBe('en');
+    expect(toLocale('it-CH')).toBe('it');
+    expect(toLocale('es')).toBe('en');
     expect(toLocale(null)).toBe('en');
   });
 });
@@ -33,6 +34,23 @@ describe('translator', () => {
     expect(t('admin.queuePosition', { index: '2', count: '5' })).toBe(
       '2 sur 5'
     );
+  });
+
+  it('speaks Italian with the placeholders filled in', () => {
+    const t = translator('it');
+    expect(t('widget.title')).toBe('Aiuto e supporto');
+    expect(t('admin.queuePosition', { index: '2', count: '5' })).toBe('2 di 5');
+  });
+
+  it('formats dates in the Swiss variant for Italian', () => {
+    const date = new Date('2026-10-05T09:00:00Z');
+    expect(
+      new Intl.DateTimeFormat(dateLocale('it'), {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      }).format(date)
+    ).toBe('lunedì 5 ottobre');
   });
 
   it('formats dates in the Swiss variant for French', () => {

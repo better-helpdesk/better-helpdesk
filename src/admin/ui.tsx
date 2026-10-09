@@ -496,7 +496,13 @@ export function humanizeKey(key: string) {
 export function money(value: string | null, currency: string, locale: string) {
   if (value === null) return '';
   return new Intl.NumberFormat(
-    locale === 'de' ? 'de-CH' : locale === 'fr' ? 'fr-CH' : 'en-CH',
+    locale === 'de'
+      ? 'de-CH'
+      : locale === 'fr'
+        ? 'fr-CH'
+        : locale === 'it'
+          ? 'it-CH'
+          : 'en-CH',
     {
       style: 'currency',
       currency,

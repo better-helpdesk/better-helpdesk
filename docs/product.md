@@ -52,7 +52,7 @@ package.
   conversation.
 - Adapters for storage, AI (schema-typed prompts), help search and scheduled
   jobs. Data retention and anonymous rate limits are configurable.
-- English and German. Theming through CSS custom properties. Peer
+- English, German, French and Italian. Theming through CSS custom properties. Peer
   dependencies are React 19 and your database's driver, on Node 22.19 or newer. A migrations CLI
   runs in your release step.
 

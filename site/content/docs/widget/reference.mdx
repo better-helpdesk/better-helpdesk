@@ -31,7 +31,7 @@ All four exports come from `better-helpdesk/widget`, which starts with `'use cli
     locale: {
       type: 'string',
       default: 'the browser language',
-      description: <>Anything starting with <code>de</code> is German and with <code>fr</code> French; everything else is English.</>,
+      description: <>Anything starting with <code>de</code> is German, with <code>fr</code> French and with <code>it</code> Italian; everything else is English.</>,
     },
     types: {
       type: 'string[]',
@@ -83,7 +83,7 @@ import { HelpdeskWidget } from 'better-helpdesk/widget';
 | --- | --- | --- |
 | `api` | `api` | URL |
 | `inbox` | `inbox` | Inbox key |
-| `locale` | `locale` | `en`, `de`, `fr`, or a browser language tag |
+| `locale` | `locale` | `en`, `de`, `fr`, `it`, or a browser language tag |
 | `types` | `types` | Comma-separated list |
 | `org` | `orgId` | Organization id |
 | `identity-token` | `identityToken` | JWT |

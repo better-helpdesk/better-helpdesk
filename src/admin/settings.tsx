@@ -10,6 +10,7 @@ const LOCALES: { key: Locale; label: string }[] = [
   { key: 'en', label: 'English' },
   { key: 'de', label: 'Deutsch' },
   { key: 'fr', label: 'Français' },
+  { key: 'it', label: 'Italiano' },
 ];
 
 type TeamMember = { id: string; name: string | null; email: string | null };

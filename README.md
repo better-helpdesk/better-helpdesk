@@ -86,7 +86,7 @@ database, its deploy and its design tokens.
 - **Your identity, your data.** No passwords and no sessions are stored.
   Your `identify(request)`, or a signed identity token from another origin,
   decides who someone is. Retention and rate limits are yours to set.
-- **English, German and French**, with every agent UI string overridable. Theming through
+- **English, German, French and Italian**, with every agent UI string overridable. Theming through
   `--helpdesk-*` CSS custom properties.
 - **TypeScript, ESM, four runtime dependencies**: `kysely`, `zod`,
   `mailparser` and `mailauth`. Peer dependencies are React 19 and the driver of the host's database (`pg`, `mysql2`, or `tedious` and `tarn`; SQLite needs none).
