@@ -38,6 +38,12 @@ export {
   signIdentityToken,
   verifyIdentityToken,
 } from './identity-token';
+export {
+  memoryRealtime,
+  postgresRealtime,
+  type RealtimeAdapter,
+  type RealtimeChange,
+} from './realtime';
 export { HelpdeskError, ipBucket } from './service';
 
 /** Builds the support instance a host mounts: `handler` serves every route under `basePath`. */

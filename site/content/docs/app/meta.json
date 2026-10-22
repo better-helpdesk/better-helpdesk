@@ -1,5 +1,12 @@
 {
   "title": "Your app and CRM",
   "icon": "app",
-  "pages": ["own-code", "react-to-events", "crm", "---Reference---", "events"]
+  "pages": [
+    "own-code",
+    "react-to-events",
+    "realtime",
+    "crm",
+    "---Reference---",
+    "events"
+  ]
 }

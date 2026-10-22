@@ -30,6 +30,8 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | `kyselyAdapter({ dialect, family })` | function | A built-in adapter over any Kysely dialect of a family Better Helpdesk knows. `postgresAdapter` is this with Kysely's `PostgresDialect`. |
 | `migrate(adapter)` | function | Applies the migrations through a built-in adapter, as [`better-helpdesk-migrate`](/docs/operations/cli#better-helpdesk-migrate) does; returns the names of the ones it applied. |
 | `createAdapter(input)` | function | Turns an `AdapterInput`, the contract a custom adapter implements, into a `DatabaseAdapter`: it sets ids and defaults and converts values to and from what the input supports. |
+| `memoryRealtime()` | function | A `RealtimeAdapter` for the [`realtime`](/docs/reference/configuration#conversations) option that reaches the event streams of one process. |
+| `postgresRealtime({ pool, retryMs? })` | function | A `RealtimeAdapter` over Postgres `LISTEN` and `NOTIFY` on the host's `pg.Pool`, so a stream on one process hears a change made on another. It holds one pooled connection while anyone is subscribed. |
 | `createStore(adapter)` | function | The `HelpdeskStore` over an adapter, for code that runs without `buildHelpdesk`. |
 | `helpdeskModel` | object | Every table and field, with its kind, whether it may be null, its default and its references. |
 | `signIdentityToken(payload, secret, options?)` | function | Signs an identity token. |
@@ -43,6 +45,7 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | `HelpdeskStore` | type | The query layer, `buildHelpdesk(...).store`. |
 | `DatabaseAdapter`, `AdapterInput`, `Capabilities`, `Where`, `OrderBy`, `FindQuery`, `Notification` | type | The adapter contract. |
 | `HelpdeskEvent` | type | See [Events](/docs/app/events). |
+| `RealtimeAdapter`, `RealtimeChange` | type | What the `realtime` option takes, and the change it carries. |
 | `IdentityClaims` | type | The claims of an identity token. |
 
 Every type in the configuration module is exported as well: `HelpdeskConfig`, `InboxConfig`, `BusinessHours`, `Identity`, `HelpdeskUser`, `HelpdeskOrg`, `HostLink`, `LinkContact`, `LinkCompany`, `HelpdeskEmail`, `StorageAdapter`, `AiAdapter`, `HelpResult`, `InboundMessage`, `CustomFieldDef`, `Locale`, `Translated` and `ResolvedConfig`. The default lists, such as the statuses and the default types, are not exported.
@@ -171,7 +174,7 @@ The token is an HS256 JWT, so any JWT library that signs the same claims produce
 
 ## better-helpdesk/adapters
 
-What a host needs to pick or write a database adapter, without the rest of the server: `postgresAdapter`, `mysqlAdapter`, `mssqlAdapter`, `sqliteAdapter`, `kyselyAdapter`, `createAdapter`, `migrate` and `helpdeskModel`, with the contract's types. The same names are exported from `better-helpdesk`. None of them imports a database driver: the host passes its own connection.
+What a host needs to pick or write a database adapter, without the rest of the server: `postgresAdapter`, `mysqlAdapter`, `mssqlAdapter`, `sqliteAdapter`, `kyselyAdapter`, `createAdapter`, `migrate` and `helpdeskModel`, with the contract's types, and the realtime adapters `memoryRealtime` and `postgresRealtime`. The same names are exported from `better-helpdesk`. None of them imports a database driver: the host passes its own connection.
 
 ## better-helpdesk/testing
 

@@ -20,9 +20,13 @@ import type { Translate } from '../ui/i18n';
 
 /** Fired on `window` after every change an agent makes, so a host can refresh its own counts. */
 export const HELPDESK_CHANGED = 'helpdesk:changed';
+/** A change someone else made, from `agent/events`; `detail` is the `StreamChange`. */
+export const HELPDESK_REMOTE = 'helpdesk:remote';
 
 export type Me = {
   agent: { id: string; name: string | null; awayUntil: string | null };
+  /** The server pushes changes over `agent/events`; polling slows to a fallback. */
+  realtime?: boolean;
   referencePrefix: string;
   types: string[];
   statuses: string[];

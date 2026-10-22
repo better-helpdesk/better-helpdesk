@@ -97,7 +97,7 @@ export function Inbox() {
         counts?: Record<'all' | 'mine' | 'unassigned', number>;
       }>(`agent/conversations?${params}`),
     params,
-    10_000
+    me.realtime ? 60_000 : 10_000
   );
   const topTags = useResource(
     () => api<{ tags: string[] }>('agent/tags'),

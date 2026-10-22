@@ -45,6 +45,9 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done. |
 | `GET` | `widget/conversations/{id}/attachments/{attachmentId}` | Can see | Redirects to a presigned download URL. |
 | `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
+| `GET` | `widget/events` | Customer | An event stream of changes to the conversations the caller can see, internal notes left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
+
+A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, and `typing`, true while an agent writes a reply. `widget/session` says with `realtime` whether `widget/events` is there.
 
 ### Opening a conversation
 
@@ -56,6 +59,7 @@ The body of `POST widget/conversations`, which `helpdesk.createConversation(requ
     type: { type: 'string', required: true, description: <>One of <code>types</code>. 400 otherwise.</> },
     body: { type: 'string', required: true, description: '1 to 20,000 characters.' },
     subject: { type: 'string', description: <>Up to 200 characters. Unset, taken from the first line of <code>body</code>.</> },
+    kind: { type: "'chat' | 'ticket'", description: <>How the customer started it. Unset, a conversation with a <code>subject</code> is a ticket and one without is a chat. Email always arrives as a ticket.</> },
     context: { type: 'object', description: <>What the widget captured. See <a href="#context">context</a>.</> },
     segment: { type: 'string', description: <>A <code>value</code> of the inbox's <code>qualify</code> options. 400 otherwise.</> },
     orgId: { type: 'string', description: <>One of the caller's <code>orgs</code>; files the conversation under that company. 403 otherwise.</> },
@@ -106,6 +110,8 @@ Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent
 | `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
 | `PATCH` | `agent/conversations/{id}` | Changes its status, priority, type, inbox, title, assignee, company, tags or snooze. |
 | `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. |
+| `POST` | `agent/conversations/{id}/typing` | Shows the customer that the agent is writing a reply, for a few seconds; the agent UI repeats it while the agent types. |
+| `GET` | `agent/events` | An event stream of every change, internal notes included. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 | `POST` | `agent/conversations/{id}/participants` | Adds a contact to it. |
 | `POST` | `agent/conversations/{id}/merge` | Merges it into another. |
 | `POST` | `agent/conversations/{id}/draft` | An AI draft reply, or a rewrite of the agent's text. |

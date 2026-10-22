@@ -5,6 +5,8 @@ description: Put the support launcher on your pages, in React or with a script t
 
 The widget is a launcher and a panel in the corner of the page. Customers open conversations from it and follow the replies. It talks to the `widget/*` routes of the handler you mounted in the [quickstart](/docs/quickstart).
 
+When the inbox offers more than one type, the panel has three tabs. **Home** greets the customer and offers a search of your documentation (when you configured [`help`](/docs/reference/configuration#adapters-and-host-hooks)), **Send us a message** for a quick question, **Submit a ticket** for a bug report or a feature request, picked in the form itself, and their latest conversations and searches. **Messages** lists every conversation, chats and tickets together. **Help** is the documentation search, with a way to write to a person when nothing matches. An inbox with a single type, such as a sales inbox that only takes leads, opens straight on its form.
+
 ## In a React app
 
 Render `HelpdeskWidget` once, in the layout that wraps the pages where customers need it:

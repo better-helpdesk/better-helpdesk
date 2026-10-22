@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import type { HelpdeskConfig, ResolvedConfig } from './config';
 import type { Conversation, Message } from './db/store';
+import { publishChange } from './realtime';
 
 export type HelpdeskEvent =
   | {
@@ -28,6 +29,12 @@ export async function emit(config: HelpdeskConfig, event: HelpdeskEvent) {
   } catch (error) {
     console.error(`[helpdesk] onEvent ${event.kind} failed`, error);
   }
+  await publishChange(config.realtime, {
+    conversationId: event.conversation.id,
+    kind: event.kind === 'message.created' ? 'message' : 'conversation',
+    ...(event.kind === 'message.created' &&
+      event.internal && { internal: true }),
+  });
 }
 
 const TRACKED = [

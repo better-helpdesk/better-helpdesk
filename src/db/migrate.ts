@@ -83,16 +83,53 @@ const postgres: Record<string, Migration> = {
   },
 };
 
+// Existing conversations were all started through a form or an email, so they are tickets.
+const KIND_AND_TYPING = '0002_conversation_kind_and_typing';
+
 export const migrations: Record<Family, Record<string, Migration>> = {
-  postgres,
+  postgres: {
+    ...postgres,
+    [KIND_AND_TYPING]: {
+      async up(db: Db) {
+        await sql`ALTER TABLE helpdesk.conversation
+          ADD COLUMN kind text NOT NULL DEFAULT 'ticket',
+          ADD COLUMN agent_typing_until timestamp with time zone`.execute(db);
+      },
+    },
+  },
   mysql: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'mysql') },
+    [KIND_AND_TYPING]: {
+      async up(db: Db) {
+        await sql`ALTER TABLE helpdesk_conversation
+          ADD COLUMN kind varchar(255) NOT NULL DEFAULT 'ticket',
+          ADD COLUMN agent_typing_until datetime(3) NULL`.execute(db);
+      },
+    },
   },
   sqlite: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'sqlite') },
+    [KIND_AND_TYPING]: {
+      async up(db: Db) {
+        await sql`ALTER TABLE helpdesk_conversation ADD COLUMN kind text NOT NULL DEFAULT 'ticket'`.execute(
+          db
+        );
+        await sql`ALTER TABLE helpdesk_conversation ADD COLUMN agent_typing_until text`.execute(
+          db
+        );
+      },
+    },
   },
   mssql: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'mssql') },
+    [KIND_AND_TYPING]: {
+      async up(db: Db) {
+        await sql`ALTER TABLE helpdesk.conversation ADD
+          kind nvarchar(255) collate Latin1_General_100_BIN2 NOT NULL
+            CONSTRAINT conversation_kind_default DEFAULT 'ticket',
+          agent_typing_until datetime2(3) NULL`.execute(db);
+      },
+    },
   },
 };
 

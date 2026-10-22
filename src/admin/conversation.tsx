@@ -6,7 +6,7 @@ import { CodeBlock } from '../ui/code-block';
 import { relativeTime, translated } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
 import { isMac, RichEditor, type RichEditorHandle } from '../ui/rich-editor';
-import { useAdmin } from './context';
+import { HELPDESK_REMOTE, useAdmin } from './context';
 import { MergeDialog } from './merge';
 import { ContactPicker } from './pickers';
 import { formatSnooze, SnoozeControl } from './snooze';
@@ -185,8 +185,30 @@ export function ConversationView({ id }: { id: string }) {
   const detail = useResource(
     () => api<Detail>(`agent/conversations/${id}`),
     id,
-    5000
+    me.realtime ? 30_000 : 5000
   );
+  const refreshDetail = detail.refresh;
+  useEffect(() => {
+    const onRemote = (event: Event) => {
+      const change = (
+        event as CustomEvent<{ conversationId: string; kind: string }>
+      ).detail;
+      // Typing is the customer's to see, not a change to this thread.
+      if (change.conversationId === id && change.kind !== 'typing') {
+        void refreshDetail();
+      }
+    };
+    window.addEventListener(HELPDESK_REMOTE, onRemote);
+    return () => window.removeEventListener(HELPDESK_REMOTE, onRemote);
+  }, [id, refreshDetail]);
+  // Each keystroke would be a request; one every few seconds keeps the customer's line lit.
+  const lastTyping = useRef(0);
+  const typing = () => {
+    const now = Date.now();
+    if (now - lastTyping.current < 3000) return;
+    lastTyping.current = now;
+    void api(`agent/conversations/${id}/typing`, { body: {} }).catch(() => {});
+  };
   const agents = useResource(
     () =>
       api<{
@@ -857,6 +879,7 @@ export function ConversationView({ id }: { id: string }) {
               onChange={next => {
                 setBody(() => next);
                 setSlashIndex(0);
+                if (!internal && next.trim()) typing();
               }}
               onKeyDown={e => {
                 if (picks.length > 0) {

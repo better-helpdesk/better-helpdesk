@@ -913,7 +913,8 @@ describe('HelpdeskAdmin', () => {
       'fetch',
       vi.fn(async (input: string, init?: RequestInit) => {
         const url = String(input);
-        if (init?.method === 'POST') posts.push(JSON.parse(String(init.body)));
+        if (init?.method === 'POST' && !url.includes('/typing'))
+          posts.push(JSON.parse(String(init.body)));
         return respond(url);
       })
     );
@@ -2828,5 +2829,37 @@ describe('loading a conversation', () => {
       return found;
     });
     expect(skeleton.querySelector('aside')?.hidden).toBe(true);
+  });
+});
+
+describe('typing', () => {
+  it('tells the customer an agent is writing a reply, at most every few seconds, and never for a note', async () => {
+    routes['agent/conversations/c1/typing/'] = { ok: true };
+    onTestFinished(() => {
+      delete routes['agent/conversations/c1/typing/'];
+    });
+    const pings: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/typing')) pings.push(init?.method ?? 'GET');
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const type = (box: HTMLElement, text: string) => {
+      box.innerHTML = text;
+      fireEvent.input(box);
+    };
+
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    type(reply, 'Hello');
+    type(reply, 'Hello there');
+    fireEvent.click(screen.getByRole('button', { name: 'Internal note' }));
+    type(screen.getByRole('textbox', { name: 'Internal note' }), 'Ask billing');
+
+    await waitFor(() => expect(pings).toEqual(['POST']));
   });
 });

@@ -1,4 +1,10 @@
-import { buildHelpdesk, type Identity, postgresAdapter } from 'better-helpdesk';
+import {
+  buildHelpdesk,
+  type HelpResult,
+  type Identity,
+  postgresAdapter,
+  postgresRealtime,
+} from 'better-helpdesk';
 import pg from 'pg';
 
 import { type DemoRole, ROLE_COOKIE, roleFromCookie } from './role';
@@ -53,8 +59,39 @@ const IDENTITIES = {
   },
 } satisfies Record<Exclude<DemoRole, 'visitor'>, Identity>;
 
+// A few invented articles, so the widget's documentation search has something to find.
+const ARTICLES: HelpResult[] = [
+  {
+    title: 'Track a shipment',
+    url: 'https://docs.harbor.test/shipments/track',
+    excerpt:
+      'Shipments › Every update from pickup to delivery, and who gets told.',
+  },
+  {
+    title: 'Export shipments to CSV',
+    url: 'https://docs.harbor.test/shipments/export',
+    excerpt: 'Shipments › Pick the columns and the date range, then download.',
+  },
+  {
+    title: 'Invite your team',
+    url: 'https://docs.harbor.test/account/team',
+    excerpt:
+      'Account › Add colleagues and choose what each of them can change.',
+  },
+];
+
 export const helpdesk = buildHelpdesk({
   db: postgresAdapter({ pool }),
+  // Every instance hears the others' changes, so replies show without a reload.
+  realtime: postgresRealtime({ pool }),
+  help: {
+    search: async query => {
+      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+      return ARTICLES.filter(a =>
+        words.some(w => `${a.title} ${a.excerpt}`.toLowerCase().includes(w))
+      );
+    },
+  },
   referencePrefix: 'HRB',
   teamName: { en: 'the Harbor crew' },
   // The same-origin check reads this, so a hard-coded production URL would

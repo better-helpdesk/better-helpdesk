@@ -55,6 +55,7 @@ describe.skipIf(testFamily !== 'postgres')(
       expect(await migrate(adapter)).toEqual([
         '0000_baseline',
         '0001_tags_and_counter',
+        '0002_conversation_kind_and_typing',
       ]);
       const { rows } = await pool.query(
         'SELECT count(*)::int AS n FROM helpdesk.__migrations'

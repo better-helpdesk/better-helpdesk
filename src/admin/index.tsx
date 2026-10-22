@@ -3,13 +3,20 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import type { Feature, Locale } from '../config';
-import { type Api, ApiError, createApi, useResource } from '../ui/api';
+import {
+  type Api,
+  ApiError,
+  createApi,
+  useEvents,
+  useResource,
+} from '../ui/api';
 import { type Translate, translator } from '../ui/i18n';
 import { isMac, SHORTCUT } from '../ui/rich-editor';
 import { CannedReplies } from './canned';
 import {
   AdminProvider,
   HELPDESK_CHANGED,
+  HELPDESK_REMOTE,
   hrefForRoute,
   type Me,
   type QueueEntry,
@@ -69,15 +76,20 @@ export function HelpdeskAdmin({
 }) {
   const api = useMemo<Api>(() => {
     const call = createApi(apiBase);
-    return async (path, init) => {
+    const wrapped: Api = async (path, init) => {
       const result = await call(path, init);
+      // A typing ping changes nothing anyone here shows.
       if (
-        (init?.method ?? (init?.body === undefined ? 'GET' : 'POST')) !== 'GET'
+        (init?.method ?? (init?.body === undefined ? 'GET' : 'POST')) !==
+          'GET' &&
+        !/\/typing\/?$/.test(path)
       ) {
         window.dispatchEvent(new Event(HELPDESK_CHANGED));
       }
       return result as never;
     };
+    wrapped.events = call.events;
+    return wrapped;
   }, [apiBase]);
   const t = useMemo(() => translator(locale, messages), [locale, messages]);
   const root = basePath.replace(/\/$/, '');
@@ -87,6 +99,10 @@ export function HelpdeskAdmin({
     onNavigate,
   });
   const me = useResource(() => api<Me>('agent/me'), 'me');
+  useEvents(api, 'agent/events', Boolean(me.data?.realtime), change => {
+    window.dispatchEvent(new CustomEvent(HELPDESK_REMOTE, { detail: change }));
+    window.dispatchEvent(new Event(HELPDESK_CHANGED));
+  });
   const [sheet, setSheet] = useState(false);
   useShortcuts(me.data ? { '?': () => setSheet(true) } : {});
 

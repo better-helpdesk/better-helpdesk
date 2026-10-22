@@ -15,6 +15,7 @@ import { formatReference } from './domain';
 import { emitUpdated } from './events';
 import { toInbound } from './inbound/parse';
 import { fromDomainSigned } from './inbound/verify';
+import { eventStream, type RealtimeChange } from './realtime';
 import { plainText } from './rich';
 import {
   ATTACHMENT_TYPES,
@@ -129,6 +130,7 @@ export function createHandler(support: Helpdesk) {
     reference: support.reference(c),
     subject: c.subject,
     type: c.type,
+    kind: c.kind,
     // In the customer's terms: who holds the ball.
     status:
       c.status === 'resolved'
@@ -146,6 +148,7 @@ export function createHandler(support: Helpdesk) {
       c.waitingSince === null,
     rating: c.rating,
     merged: c.mergedIntoId !== null,
+    typing: Boolean(c.agentTypingUntil && c.agentTypingUntil > clock()),
     // The newest message an agent has opened the thread on; the widget shows "Seen" from it.
     agentSeenAt: c.agentSeenAt,
     createdAt: c.createdAt,
@@ -208,12 +211,36 @@ export function createHandler(support: Helpdesk) {
       types: config.types,
       help: Boolean(config.help),
       uploads: Boolean(config.storage),
+      realtime: Boolean(config.realtime),
       conversations: conversations.map(c => ({
         ...customerView(customer, c),
         preview: previewOf(last.get(c.id)?.body, 140),
         lastFromSupport: last.get(c.id)?.authorType === 'agent',
       })),
     });
+  });
+
+  // Every change in the helpdesk passes each customer's stream, so what they
+  // may see is remembered for a minute rather than read for every one.
+  define('GET', 'widget/events', async ({ request }) => {
+    if (!config.realtime) throw new HelpdeskError(404, 'Not found');
+    const customer = await support.resolveCustomer(request, { create: false });
+    if (!customer.contact && customer.companies.length === 0) {
+      throw new HelpdeskError(401, 'Unauthenticated');
+    }
+    const seen = new Map<string, { ok: boolean; at: number }>();
+    const visible = async (change: RealtimeChange) => {
+      if (change.internal) return false;
+      const known = seen.get(change.conversationId);
+      if (known && Date.now() - known.at < 60_000) return known.ok;
+      const conversation = await store.getConversation(change.conversationId);
+      const ok = Boolean(
+        conversation && (await support.canCustomerSee(customer, conversation))
+      );
+      seen.set(change.conversationId, { ok, at: Date.now() });
+      return ok;
+    };
+    return eventStream(config.realtime, { signal: request.signal, visible });
   });
 
   define('POST', 'widget/conversations', async ({ request, body }) => {
@@ -610,6 +637,7 @@ export function createHandler(support: Helpdesk) {
   agentRoute('GET', 'me', async ({ agent }) =>
     json({
       agent,
+      realtime: Boolean(config.realtime),
       referencePrefix: config.referencePrefix,
       types: config.types,
       statuses: STATUSES,
@@ -1095,6 +1123,19 @@ export function createHandler(support: Helpdesk) {
       return json({ id: message.id }, 201);
     }
   );
+
+  agentRoute('POST', 'conversations/:id/typing', async ({ params }) => {
+    await support.agentTyping(await requireConversation(params.id));
+    return json({ ok: true });
+  });
+
+  agentRoute('GET', 'events', async ({ request }) => {
+    if (!config.realtime) throw new HelpdeskError(404, 'Not found');
+    return eventStream(config.realtime, {
+      signal: request.signal,
+      visible: () => true,
+    });
+  });
 
   agentRoute(
     'POST',

@@ -102,6 +102,10 @@ export const helpdesk = buildHelpdesk({
       type: '(event: HelpdeskEvent) => Promise<void>',
       description: <>Told about new conversations, new messages and conversation changes once they are stored. Awaited inside the request; what it throws is logged and never returned. See <a href="/docs/app/events">Events</a>.</>,
     },
+    realtime: {
+      type: 'RealtimeAdapter',
+      description: <>Pushes changes to open widgets and agent UIs over <code>widget/events</code> and <code>agent/events</code>, so a reply or a typing agent shows without waiting for the next poll. <code>memoryRealtime()</code> serves one process, <code>postgresRealtime({'{ pool }'})</code> every process on the database. Unset, both routes answer 404 and the clients poll alone. See <a href="/docs/app/realtime">Real-time updates</a>.</>,
+    },
     jobsSecret: {
       type: 'string',
       description: <>Bearer secret for <code>POST {'{basePath}'}/jobs</code>. Unset, that route answers 401.</>,
