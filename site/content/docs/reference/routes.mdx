@@ -88,7 +88,7 @@ An unidentified caller on an inbox that is not `public` gets 401. A blocked cont
 
 ## Agent
 
-Every route here requires an agent.
+Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent/overview` routes answer 404 when [`features`](/docs/reference/configuration#crm) switched their section off.
 
 | Method | Path | What it does |
 | --- | --- | --- |
@@ -96,12 +96,12 @@ Every route here requires an agent.
 | `PATCH` | `agent/me` | Sets the agent's away time. |
 | `GET` | `agent/settings` | The settings agents change. |
 | `PUT` | `agent/settings` | Changes them. |
-| `GET` | `agent/overview` | Volume, response and resolution times, ratings and tags. |
+| `GET` | `agent/overview` | The Statistics page: volume, response and resolution times, ratings and tags. |
 | `GET` | `agent/unread` | The count of waiting conversations. |
 | `GET` | `agent/tags` | The most used conversation tags. |
 | `GET` | `agent/agents` | The team. |
 | `DELETE` | `agent/agents/{id}` | Removes an agent from the team. |
-| `GET` | `agent/conversations` | The inbox list, filtered by the query string. |
+| `GET` | `agent/conversations` | The inbox list, filtered by the query string, with the counts of all, the agent's own and unassigned conversations under the same filters. |
 | `POST` | `agent/conversations/bulk` | Changes several conversations at once. |
 | `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
 | `PATCH` | `agent/conversations/{id}` | Changes its status, priority, type, inbox, title, assignee, company, tags or snooze. |

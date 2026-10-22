@@ -16,6 +16,7 @@ import {
   HostLinks,
   humanizeKey,
   LoadError,
+  Menu,
   Property,
   paths,
   RatingChip,
@@ -195,14 +196,9 @@ export function ConversationView({ id }: { id: string }) {
   );
   const canned = useResource(
     () =>
-      api<{
-        replies: {
-          id: string;
-          title: string;
-          body: string;
-          locale: string | null;
-        }[];
-      }>('agent/canned'),
+      me.features.canned
+        ? api<{ replies: CannedReply[] }>('agent/canned')
+        : Promise.resolve({ replies: [] as CannedReply[] }),
     'canned'
   );
   const unsentKey = `helpdesk.draft.${me.agent.id}.${id}`;
@@ -288,7 +284,14 @@ export function ConversationView({ id }: { id: string }) {
 
   const data = detail.data;
   if (detail.error) return <LoadError t={t} onRetry={detail.refresh} />;
-  if (!data) return <Skeleton kind="thread" label={t('admin.loading')} />;
+  if (!data)
+    return (
+      <Skeleton
+        kind="thread"
+        aside={aside !== false}
+        label={t('admin.loading')}
+      />
+    );
   const c = data.conversation;
 
   const send = async (resolve: boolean) => {
@@ -844,7 +847,11 @@ export function ConversationView({ id }: { id: string }) {
               t={t}
               label={internal ? t('admin.note') : t('admin.reply')}
               placeholder={
-                internal ? t('admin.noteHint') : t('admin.slashHint')
+                internal
+                  ? t('admin.noteHint')
+                  : me.features.canned
+                    ? t('admin.slashHint')
+                    : undefined
               }
               value={body}
               onChange={next => {
@@ -930,26 +937,72 @@ export function ConversationView({ id }: { id: string }) {
               </p>
             )}
             <div className="sa-composer-foot">
-              <button
-                type="submit"
-                className="sa-btn sa-primary"
-                title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
-                disabled={busy !== null || !body.trim()}>
-                {busy === 'send' ? t('admin.sending') : t('admin.send')}
-              </button>
-              {!internal && c.status !== 'resolved' && (
+              <div className="sa-send">
                 <button
-                  type="button"
-                  className="sa-btn"
-                  title={isMac() ? '⌘ ⇧ ↵' : 'Ctrl ⇧ ↵'}
-                  aria-keyshortcuts={
-                    isMac() ? 'Meta+Shift+Enter' : 'Control+Shift+Enter'
-                  }
-                  disabled={busy !== null || !body.trim()}
-                  onClick={() => void send(true)}>
-                  {t('admin.sendResolve')}
+                  type="submit"
+                  className="sa-btn sa-primary"
+                  title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
+                  disabled={busy !== null || !body.trim()}>
+                  {busy === 'send' ? t('admin.sending') : t('admin.send')}
                 </button>
-              )}
+                {/* Live while Send is not: resolving needs no reply. */}
+                {c.status !== 'resolved' && (
+                  <Menu
+                    label={t('admin.sendOptions')}
+                    className="sa-btn sa-primary sa-send-more"
+                    button={<Svg d={paths.chevron} />}
+                    above>
+                    {close => (
+                      <>
+                        {!internal && (
+                          <button
+                            type="button"
+                            className="sa-btn sa-ghost"
+                            aria-keyshortcuts={
+                              isMac()
+                                ? 'Meta+Shift+Enter'
+                                : 'Control+Shift+Enter'
+                            }
+                            disabled={busy !== null || !body.trim()}
+                            onClick={() => {
+                              close();
+                              void send(true);
+                            }}>
+                            {t('admin.sendResolve')}
+                            <span
+                              className="sa-kbd sa-menu-key"
+                              aria-hidden="true">
+                              <kbd>{isMac() ? '⌘ ⇧ ↵' : 'Ctrl ⇧ ↵'}</kbd>
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="sa-btn sa-ghost"
+                          aria-keyshortcuts={keysOn ? 'E' : undefined}
+                          disabled={busy !== null}
+                          onClick={() => {
+                            close();
+                            act({ status: 'resolved' }, () =>
+                              t('admin.resolvedToast', {
+                                reference: c.reference,
+                              })
+                            );
+                          }}>
+                          {t('admin.resolveOnly')}
+                          {keysOn && (
+                            <span
+                              className="sa-kbd sa-menu-key"
+                              aria-hidden="true">
+                              <kbd>e</kbd>
+                            </span>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </Menu>
+                )}
+              </div>
               <span className="sa-kbd">
                 <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
               </span>
@@ -1007,10 +1060,12 @@ export function ConversationView({ id }: { id: string }) {
                     {t(`admin.rewrite.${mode}`)}
                   </button>
                 ))}
-              <CannedMenu
-                replies={replies}
-                onPick={text => insert(fill(text))}
-              />
+              {me.features.canned && (
+                <CannedMenu
+                  replies={replies}
+                  onPick={text => insert(fill(text))}
+                />
+              )}
             </div>
           </form>
         </div>
@@ -1085,6 +1140,7 @@ export function ConversationView({ id }: { id: string }) {
                   <button
                     type="button"
                     className="sa-btn"
+                    title={t('admin.createCompanyFrom', { domain })}
                     onClick={async () => {
                       if (!data.contact) return;
                       const created = await api<{ company: { id: string } }>(
@@ -1110,7 +1166,7 @@ export function ConversationView({ id }: { id: string }) {
                 ))}
               </dl>
             )}
-            {c.type === 'lead' && data.contact && (
+            {c.type === 'lead' && data.contact && me.features.deals && (
               <button
                 type="button"
                 className="sa-btn"

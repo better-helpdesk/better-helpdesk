@@ -282,6 +282,12 @@ export type HelpdeskConfig = {
   customFields?: Partial<
     Record<'contact' | 'company' | 'deal', CustomFieldDef[]>
   >;
+  /**
+   * Parts of the agent UI a team does without, each on unless set to
+   * `false`: the agent UI hides the section and what leads to it, and the
+   * section's `agent/*` routes answer 404.
+   */
+  features?: Partial<Record<Feature, boolean>>;
   /** Delete resolved conversations this many days after resolution. */
   retentionDays?: number;
   maxAttachmentBytes?: number;
@@ -303,12 +309,16 @@ export const DEFAULT_DEAL_STAGES = [
   'lost',
 ];
 
+export const FEATURES = ['deals', 'canned', 'overview'] as const;
+export type Feature = (typeof FEATURES)[number];
+
 export type ResolvedConfig = HelpdeskConfig & {
   store: HelpdeskStore;
   basePath: string;
   types: string[];
   leadStages: string[];
   dealStages: string[];
+  features: Record<Feature, boolean>;
   maxAttachmentBytes: number;
   anonymousRateLimit: number;
   customerRateLimit: number;
@@ -340,6 +350,9 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
     types: config.types ?? DEFAULT_TYPES,
     leadStages: config.leadStages ?? DEFAULT_LEAD_STAGES,
     dealStages: config.dealStages ?? DEFAULT_DEAL_STAGES,
+    features: Object.fromEntries(
+      FEATURES.map(f => [f, config.features?.[f] !== false])
+    ) as Record<Feature, boolean>,
     maxAttachmentBytes: config.maxAttachmentBytes ?? 10 * 1024 * 1024,
     anonymousRateLimit: config.anonymousRateLimit ?? 20,
     customerRateLimit: config.customerRateLimit ?? 60,

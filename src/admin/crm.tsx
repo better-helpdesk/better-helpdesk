@@ -15,6 +15,7 @@ import {
   Empty,
   HostLinks,
   LoadError,
+  Menu,
   money,
   paths,
   Skeleton,
@@ -414,42 +415,46 @@ export function ContactView({ id }: { id: string }) {
           onClick={() => setEditing(true)}>
           {t('admin.edit')}
         </button>
-        <details className="sa-menu">
-          <summary className="sa-btn sa-ghost" aria-label={t('widget.more')}>
-            ⋯
-          </summary>
-          <div className="sa-menu-pop">
-            <button
-              type="button"
-              className="sa-btn sa-ghost"
-              onClick={() => setMerging(true)}>
-              {t('admin.merge')}
-            </button>
-            <button
-              type="button"
-              className="sa-btn sa-ghost"
-              title={c.blocked ? undefined : t('admin.blockHint')}
-              onClick={async () => {
-                await api(`agent/contacts/${id}`, {
-                  method: 'PATCH',
-                  body: { blocked: !c.blocked },
-                });
-                await detail.refresh();
-              }}>
-              {t(c.blocked ? 'admin.unblock' : 'admin.block')}
-            </button>
-            <button
-              type="button"
-              className="sa-btn sa-ghost sa-danger"
-              onClick={async () => {
-                if (!(await confirm.ask())) return;
-                await api(`agent/contacts/${id}`, { method: 'DELETE' });
-                navigate({ view: 'contacts' });
-              }}>
-              {t('admin.delete')}
-            </button>
-          </div>
-        </details>
+        <Menu label={t('widget.more')} button="⋯">
+          {close => (
+            <>
+              <button
+                type="button"
+                className="sa-btn sa-ghost"
+                onClick={() => {
+                  close();
+                  setMerging(true);
+                }}>
+                {t('admin.merge')}
+              </button>
+              <button
+                type="button"
+                className="sa-btn sa-ghost"
+                title={c.blocked ? undefined : t('admin.blockHint')}
+                onClick={async () => {
+                  close();
+                  await api(`agent/contacts/${id}`, {
+                    method: 'PATCH',
+                    body: { blocked: !c.blocked },
+                  });
+                  await detail.refresh();
+                }}>
+                {t(c.blocked ? 'admin.unblock' : 'admin.block')}
+              </button>
+              <button
+                type="button"
+                className="sa-btn sa-ghost sa-danger"
+                onClick={async () => {
+                  close();
+                  if (!(await confirm.ask())) return;
+                  await api(`agent/contacts/${id}`, { method: 'DELETE' });
+                  navigate({ view: 'contacts' });
+                }}>
+                {t('admin.delete')}
+              </button>
+            </>
+          )}
+        </Menu>
       </div>
       <div className="sa-split">
         <div className="sa">
@@ -522,31 +527,33 @@ export function ContactView({ id }: { id: string }) {
               }}
             />
           </div>
-          <div className="sa-card">
-            <h3>{t('admin.deals')}</h3>
-            {data.deals.map(d => (
-              <a
-                key={d.id}
-                href={href({ view: 'deals' })}
-                onClick={e => {
-                  e.preventDefault();
-                  navigate({ view: 'deals' });
-                }}>
-                {d.title} · {t(`stage.${d.stage}`)}{' '}
-                <span className="num sa-muted">
-                  {money(d.value, d.currency, locale)}
-                </span>
-              </a>
-            ))}
-            <button
-              type="button"
-              className="sa-btn"
-              style={{ justifySelf: 'start' }}
-              onClick={() => setNewDeal(true)}>
-              <Svg d={paths.plus} />
-              {t('admin.newDeal')}
-            </button>
-          </div>
+          {me.features.deals && (
+            <div className="sa-card">
+              <h3>{t('admin.deals')}</h3>
+              {data.deals.map(d => (
+                <a
+                  key={d.id}
+                  href={href({ view: 'deals' })}
+                  onClick={e => {
+                    e.preventDefault();
+                    navigate({ view: 'deals' });
+                  }}>
+                  {d.title} · {t(`stage.${d.stage}`)}{' '}
+                  <span className="num sa-muted">
+                    {money(d.value, d.currency, locale)}
+                  </span>
+                </a>
+              ))}
+              <button
+                type="button"
+                className="sa-btn"
+                style={{ justifySelf: 'start' }}
+                onClick={() => setNewDeal(true)}>
+                <Svg d={paths.plus} />
+                {t('admin.newDeal')}
+              </button>
+            </div>
+          )}
           <div className="sa-card">
             <h3>{t('admin.identities')}</h3>
             {data.identities.map(i => (
@@ -823,11 +830,13 @@ export function CompanyView({ id }: { id: string }) {
               </a>
             ))}
           </div>
-          <DealsCard
-            deals={data.deals}
-            create={{ companyId: id }}
-            onChanged={detail.refresh}
-          />
+          {me.features.deals && (
+            <DealsCard
+              deals={data.deals}
+              create={{ companyId: id }}
+              onChanged={detail.refresh}
+            />
+          )}
         </aside>
       </div>
     </div>

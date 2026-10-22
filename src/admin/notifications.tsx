@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 import { useResource } from '../ui/api';
 import { HELPDESK_CHANGED, useAdmin } from './context';
-import { paths, Svg, setTitleCountOn, useTitleCountOn } from './ui';
+import { Menu, paths, Svg, setTitleCountOn, useTitleCountOn } from './ui';
 
 type Notification = {
   kind: 'assigned' | 'mentioned' | 'reply';
@@ -45,62 +45,64 @@ export function NotificationBell() {
     };
   }, [unread, titleOn]);
 
-  const menu = useRef<HTMLDetailsElement>(null);
   const list = feed.data?.notifications ?? [];
   return (
-    <details
-      className="sa-menu sa-bell"
-      ref={menu}
-      onToggle={e => {
-        if (!e.currentTarget.open || unread === 0) return;
+    <Menu
+      label={
+        unread > 0
+          ? t('admin.notificationsUnread', { count: String(unread) })
+          : t('admin.notifications')
+      }
+      className="sa-btn sa-ghost sa-bell"
+      popClass="sa-bell-pop"
+      onOpen={() => {
+        if (unread === 0) return;
         void api('agent/notifications/seen', { body: {} }).then(feed.refresh);
-      }}>
-      <summary
-        className="sa-btn sa-ghost"
-        aria-label={
-          unread > 0
-            ? t('admin.notificationsUnread', { count: String(unread) })
-            : t('admin.notifications')
-        }>
-        <Svg d={paths.bell} />
-        {unread > 0 && (
-          <span className="sa-bell-count num" aria-hidden="true">
-            {unread}
-          </span>
-        )}
-      </summary>
-      <div className="sa-menu-pop sa-bell-pop">
-        {list.length === 0 ? (
-          <p className="sa-muted">{t('admin.notificationsNone')}</p>
-        ) : (
-          list.map(n => (
-            <button
-              key={`${n.kind}-${n.conversationId}-${n.at}`}
-              type="button"
-              className="sa-btn sa-ghost sa-bell-item"
-              onClick={() => {
-                if (menu.current) menu.current.open = false;
-                navigate({ conversation: n.conversationId });
-              }}>
-              <span>
-                {t(`admin.notify.${n.kind}`, {
-                  who: n.who ?? t('admin.someone'),
-                  reference: n.reference,
-                })}
-              </span>
-              {n.subject && <span className="sa-muted">{n.subject}</span>}
-            </button>
-          ))
-        )}
-        <label className="sa-toggle">
-          <input
-            type="checkbox"
-            checked={titleOn}
-            onChange={e => setTitleCountOn(e.target.checked)}
-          />
-          {t('admin.titleCount')}
-        </label>
-      </div>
-    </details>
+      }}
+      button={
+        <>
+          <Svg d={paths.bell} />
+          {unread > 0 && (
+            <span className="sa-bell-count num" aria-hidden="true">
+              {unread}
+            </span>
+          )}
+        </>
+      }>
+      {close => (
+        <>
+          {list.length === 0 ? (
+            <p className="sa-muted">{t('admin.notificationsNone')}</p>
+          ) : (
+            list.map(n => (
+              <button
+                key={`${n.kind}-${n.conversationId}-${n.at}`}
+                type="button"
+                className="sa-btn sa-ghost sa-bell-item"
+                onClick={() => {
+                  close();
+                  navigate({ conversation: n.conversationId });
+                }}>
+                <span>
+                  {t(`admin.notify.${n.kind}`, {
+                    who: n.who ?? t('admin.someone'),
+                    reference: n.reference,
+                  })}
+                </span>
+                {n.subject && <span className="sa-muted">{n.subject}</span>}
+              </button>
+            ))
+          )}
+          <label className="sa-toggle">
+            <input
+              type="checkbox"
+              checked={titleOn}
+              onChange={e => setTitleCountOn(e.target.checked)}
+            />
+            {t('admin.titleCount')}
+          </label>
+        </>
+      )}
+    </Menu>
   );
 }

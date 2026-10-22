@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import type { Locale } from '../config';
+import type { Feature, Locale } from '../config';
 import { type Api, ApiError, createApi, useResource } from '../ui/api';
 import { type Translate, translator } from '../ui/i18n';
 import { isMac, SHORTCUT } from '../ui/rich-editor';
@@ -44,7 +44,6 @@ export const HELPDESK_SECTIONS = [
   'overview',
   'settings',
 ] as const;
-const VIEWS = HELPDESK_SECTIONS;
 
 /** The agent UI. Mount it in any React page; it routes through the query string. */
 export function HelpdeskAdmin({
@@ -105,13 +104,17 @@ export function HelpdeskAdmin({
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new page clears the last page's failure.
   useEffect(() => setUnhandled(false), [route]);
 
-  const view = route.conversation
+  const enabled = (section: string) =>
+    me.data?.features[section as Feature] !== false;
+  const wanted = route.conversation
     ? 'conversation'
     : route.contact
       ? 'contact'
       : route.company
         ? 'company'
         : (route.view ?? 'inbox');
+  // A link into a section the config switched off lands on the inbox.
+  const view = enabled(wanted) ? wanted : 'inbox';
   const section =
     view === 'conversation'
       ? 'inbox'
@@ -175,7 +178,7 @@ export function HelpdeskAdmin({
                   className="sa-nav"
                   ref={navRef}
                   aria-label={t('admin.sections')}>
-                  {VIEWS.map(v => (
+                  {HELPDESK_SECTIONS.filter(enabled).map(v => (
                     <button
                       key={v}
                       type="button"
@@ -245,7 +248,11 @@ export function HelpdeskAdmin({
             open={sheet}
             title={t('admin.shortcuts')}
             onClose={() => setSheet(false)}>
-            <ShortcutSheet t={t} onClose={() => setSheet(false)} />
+            <ShortcutSheet
+              t={t}
+              canned={me.data.features.canned}
+              onClose={() => setSheet(false)}
+            />
           </Dialog>
         </AdminProvider>
       )}
@@ -253,7 +260,15 @@ export function HelpdeskAdmin({
   );
 }
 
-function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
+function ShortcutSheet({
+  t,
+  canned,
+  onClose,
+}: {
+  t: Translate;
+  canned: boolean;
+  onClose: () => void;
+}) {
   const mod = isMac() ? '⌘' : 'Ctrl';
   const keysOn = useKeysOn();
   const hintId = useId();
@@ -282,7 +297,9 @@ function ShortcutSheet({ t, onClose }: { t: Translate; onClose: () => void }) {
           [mod, key.toUpperCase()],
           t(`rich.${format}`),
         ]),
-        [['/'], t('admin.keyCanned')],
+        ...(canned
+          ? [[['/'], t('admin.keyCanned')] as [string[], string]]
+          : []),
       ],
     ],
     [t('admin.everywhere'), [[['?'], t('admin.keyHelp')]]],

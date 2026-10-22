@@ -11,6 +11,7 @@ import {
 import type {
   BusinessHours,
   CustomFieldDef,
+  Feature,
   Locale,
   Translated,
 } from '../config';
@@ -38,6 +39,8 @@ export type Me = {
     Record<'contact' | 'company' | 'deal', CustomFieldDef[]>
   >;
   ai: boolean;
+  /** The sections the config left on; the UI shows nothing that leads to one that is off. */
+  features: Record<Feature, boolean>;
 };
 
 export type AdminContext = {

@@ -272,6 +272,10 @@ export const adminCss = `
 .sa-split > aside .sa-kv { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .sa-split > aside .sa-kv dt { font-size: 12px; }
 .sa-split > aside .sa-kv dd + dt { margin-top: 10px; }
+/* The column is narrow and its labels carry domains and names: a button cuts its label with an ellipsis inside its card. */
+.sa-split > aside .sa-btn { display: block; max-width: 100%; line-height: 34px; overflow: hidden; text-overflow: ellipsis; text-align: start; }
+.sa-split > aside .sa-btn svg { vertical-align: -3px; margin-inline-end: 6px; }
+.sa-split > aside :is(a, .sa-who) { min-width: 0; overflow-wrap: anywhere; }
 .sa-details > summary { cursor: pointer; color: var(--a-muted); font-size: 13px; list-style: none; display: flex; align-items: center; gap: 6px; }
 .sa-details > summary::-webkit-details-marker { display: none; }
 .sa-details > summary::before { content: ''; width: 6px; height: 6px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform 150ms; }
@@ -304,7 +308,8 @@ export const adminCss = `
 .sa .rt-toolbar svg { width: 16px; height: 16px; }
 .sa-msg { display: grid; grid-template-columns: 28px 1fr; gap: 12px; }
 .sa-msg-body { border-radius: var(--a-radius); padding: 14px 18px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--a-border); background: var(--a-bg); }
-.sa-msg[data-author="agent"] .sa-msg-body { position: relative; background: var(--a-subtle); }
+/* Ours carries the accent's tint, as the active row does; the subtle tone is many hosts' page colour and would vanish into it. */
+.sa-msg[data-author="agent"] .sa-msg-body { position: relative; background: color-mix(in srgb, var(--a-accent) 6%, var(--a-bg)); border-color: color-mix(in srgb, var(--a-accent) 15%, var(--a-border)); }
 .sa-msg[data-author="agent"] { grid-template-columns: 1fr 28px; }
 .sa-msg[data-author="agent"] > :first-child { order: 2; }
 .sa-msg > div { display: grid; justify-items: start; min-width: 0; }
@@ -354,6 +359,10 @@ export const adminCss = `
 .sa-slash button[aria-selected="true"] { background: var(--a-subtle); }
 .sa-composer > .sa-seg { justify-self: start; }
 .sa-composer-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Send and its menu read as one control; the menu's half keeps the full accent while Send is pale, so it reads as live. */
+.sa-send { display: inline-flex; }
+.sa-send > .sa-btn:first-child:not(:only-child) { border-start-end-radius: 0; border-end-end-radius: 0; border-inline-end: 0; }
+.sa .sa-send-more { padding: 0 8px; border-start-start-radius: 0; border-end-start-radius: 0; border-inline-start: 1px solid color-mix(in srgb, var(--a-accent-fg) 30%, var(--a-accent)); }
 .sa-composer-foot .sa-grow { flex: 1; min-width: 0; overflow: hidden; }
 /* Where the hint would squeeze the buttons, it gives up its place; the send buttons carry the shortcuts as titles. */
 @container (max-width: 520px) { .sa-composer-foot .sa-kbd { visibility: hidden; } }
@@ -375,12 +384,12 @@ export const adminCss = `
 .sa-summary { grid-template-columns: auto 1fr auto auto; align-items: start; gap: 14px; }
 .sa-summary h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .sa-summary .sa-avatar { width: 44px; height: 44px; font-size: 15px; }
-.sa-menu { position: relative; }
-.sa-menu > summary { list-style: none; }
-.sa-menu > summary::-webkit-details-marker { display: none; }
-.sa-menu-pop { position: absolute; right: 0; top: 40px; z-index: 5; display: grid; min-width: 260px; padding: 6px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); box-shadow: var(--a-shadow-pop); }
+/* A popover in the top layer: a scrolling list pane cannot clip it. Menu sets top and left when it opens. */
+.sa-menu-pop { position: fixed; inset: auto; margin: 0; min-width: 260px; padding: 6px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); color: var(--a-fg); box-shadow: var(--a-shadow-pop); }
+.sa-menu-pop:popover-open { display: grid; }
 .sa-menu-pop .sa-btn { justify-content: flex-start; }
-.sa-bell > summary { position: relative; }
+.sa-menu-key { margin-inline-start: auto; padding-inline-start: 16px; }
+.sa .sa-bell { position: relative; }
 .sa-bell-count { position: absolute; top: 2px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--a-accent); color: var(--a-accent-fg); font-size: 11px; line-height: 16px; text-align: center; }
 .sa-bell-pop { width: min(340px, calc(100vw - 32px)); max-height: 420px; overflow-y: auto; gap: 2px; }
 .sa .sa-bell-item { height: auto; padding: 8px; display: grid; gap: 2px; text-align: left; white-space: normal; }
@@ -401,6 +410,12 @@ export const adminCss = `
 .sa-stats { margin: 0; }
 .sa-page-head .sa-grow { flex: 1; }
 .sa-stats dd { margin: 0; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sa .sa-link { padding: 0; border: 0; background: none; color: var(--a-accent); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.sa :is(.sa-stats, .sa-report) a, .sa .sa-link { text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; }
+.sa :is(.sa-stats, .sa-report) a:hover, .sa .sa-link:hover { text-decoration-color: currentColor; }
+.sa-stats a { color: var(--a-accent); }
+.sa .sa-toolbar > a:has(> .sa-pill) { text-decoration: none; }
+.sa .sa-toolbar > a:hover > .sa-pill { border-color: var(--a-muted); }
 .sa-report { min-width: 560px; }
 .sa-card .sa-table-wrap:has(.sa-report) { overflow-x: auto; }
 .sa-report tbody tr { cursor: default; }
@@ -437,8 +452,23 @@ export const adminCss = `
 .sa-row-actions .sa-btn:hover { background: var(--a-bg); border-color: var(--a-border); }
 .sa-canned-table td:last-child { width: 1%; white-space: nowrap; }
 .sa-canned-table .sa-clamp { max-width: 60ch; }
-.sa-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 12px; padding: 8px 12px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-subtle); }
+/* The inbox bar is one line: the tabs, the search where there is room, and the button that opens the tray. */
+.sa-bar { flex-wrap: nowrap; }
+.sa-bar > .sa-seg, .sa-bar > .sa-btn { flex: none; }
+.sa-bar > .sa-grow { min-width: 120px; }
+/* In the narrow pane the tabs take the start and the icon buttons the end. */
+.sa-bar[data-narrow] > .sa-seg { margin-inline-end: auto; }
+.sa-bar[data-narrow] .sa-seg button { padding: 0 8px; }
+.sa-bar[data-narrow] > .sa-btn { min-width: 36px; padding: 0; justify-content: center; }
+/* With a count the button widens to hold it beside the icon; the scrolling pane would clip a badge on its corner. */
+.sa-bar[data-narrow] > .sa-btn:has(> .sa-count) { padding: 0 6px 0 9px; gap: 5px; }
+.sa-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-subtle); }
 .sa-filters[hidden] { display: none; }
+.sa-filters-wide { grid-column: 1 / -1; }
+.sa-filters > .sa-toolbar { flex-wrap: nowrap; }
+.sa-filters > .sa-toolbar > .sa-grow { min-width: 0; }
+.sa-filters-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 8px; border-top: 1px solid var(--a-border); }
+.sa-filters-foot .sa-hint { margin-inline-start: auto; }
 .sa-filters .sa-field { gap: 2px; margin: 0; color: var(--a-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 /* The controls inherit the label's type through ".sa select". */
 .sa-filters :is(.sa-select, .sa-input) { font-size: 14px; font-weight: 400; text-transform: none; letter-spacing: normal; color: var(--a-fg); }
@@ -455,7 +485,7 @@ export const adminCss = `
 .sa .sa-chip-warn[aria-pressed="true"]::before { background: currentColor; }
 .sa .sa-chip[aria-pressed="true"] { background: var(--a-accent); border-color: var(--a-accent); color: var(--a-accent-fg); }
 .sa-drop-hint { margin: 0; padding: 14px 8px; border: 1px dashed var(--a-border); border-radius: var(--a-radius); text-align: center; font-size: 12px; color: var(--a-muted); }
-@container (max-width: 1400px) { .sa-hint { display: none; } }
+@container (max-width: 720px) { .sa-hint { display: none; } }
 .sa-kbd kbd { font: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid var(--a-border); border-bottom-width: 2px; border-radius: min(5px, var(--a-r-inner)); background: var(--a-bg); }
 
 .sa-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -2165,7 +2165,7 @@ describe('inbox counts and unread', () => {
     (await h.call('GET', `agent/conversations${query}`, { user: 'agent' }))
       .data;
 
-  it('counts open conversations for all, mine and unassigned whatever the filter', async () => {
+  it('counts all, mine and unassigned under the status filter, whichever tab is open', async () => {
     const me = (await h.call('GET', 'agent/me', { user: 'agent' })).data.agent
       .id;
     const grace = (await h.call('GET', 'agent/me', { user: 'grace' })).data
@@ -2183,11 +2183,51 @@ describe('inbox counts and unread', () => {
     await patch(theirs.id, { assigneeId: grace });
     await patch(resolved.id, { status: 'resolved', assigneeId: me });
 
-    const expected = { all: 4, mine: 1, unassigned: 2 };
-    expect((await list()).counts).toEqual(expected);
-    const filtered = await list('?assignee=me&status=resolved');
-    expect(filtered.conversations).toHaveLength(1);
-    expect(filtered.counts).toEqual(expected);
+    // The tabs split whatever the other filters leave, so their counts follow the status.
+    expect((await list('?status=open')).counts).toEqual({
+      all: 4,
+      mine: 1,
+      unassigned: 2,
+    });
+    const resolvedOnes = await list('?assignee=me&status=resolved');
+    expect(resolvedOnes.conversations).toHaveLength(1);
+    expect(resolvedOnes.counts).toEqual({ all: 1, mine: 1, unassigned: 0 });
+    expect((await list()).counts).toEqual({ all: 5, mine: 2, unassigned: 2 });
+    await patch(theirs.id, { priority: 'urgent' });
+    expect((await list('?status=open&priority=high')).counts).toEqual({
+      all: 1,
+      mine: 0,
+      unassigned: 0,
+    });
+  });
+
+  it('narrows the list to a period by the date its status names: resolved, rated or any of them', async () => {
+    const agent = { user: 'agent' };
+    const [old, recent] = [await open('ada'), await open('ada')];
+    for (const c of [old, recent])
+      await h.call('PATCH', `agent/conversations/${c.id}`, {
+        ...agent,
+        body: { status: 'resolved' },
+      });
+    await h.update(
+      'conversation',
+      { id: old.id },
+      {
+        createdAt: ago(60 * DAY),
+        resolvedAt: ago(40 * DAY),
+      }
+    );
+    const ids = async (query: string) =>
+      (await list(query)).conversations.map((c: { id: string }) => c.id);
+
+    expect(await ids('?status=resolved&days=30')).toEqual([recent.id]);
+    expect((await ids('?status=resolved&days=90')).sort()).toEqual(
+      [old.id, recent.id].sort()
+    );
+    expect(await ids('?status=any&days=7')).toEqual([recent.id]);
+    expect(
+      (await h.call('GET', 'agent/conversations?days=5', agent)).status
+    ).toBe(400);
   });
 
   it('marks a waiting conversation unread until an agent opens it, and again on the next customer reply', async () => {
