@@ -240,7 +240,7 @@ export function createHandler(support: Helpdesk) {
       seen.set(change.conversationId, { ok, at: Date.now() });
       return ok;
     };
-    return eventStream(config.realtime, { signal: request.signal, visible });
+    return eventStream(config.realtime, { request, visible });
   });
 
   define('POST', 'widget/conversations', async ({ request, body }) => {
@@ -1132,7 +1132,7 @@ export function createHandler(support: Helpdesk) {
   agentRoute('GET', 'events', async ({ request }) => {
     if (!config.realtime) throw new HelpdeskError(404, 'Not found');
     return eventStream(config.realtime, {
-      signal: request.signal,
+      request,
       visible: () => true,
     });
   });

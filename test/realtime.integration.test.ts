@@ -1,3 +1,6 @@
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
+
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { memoryRealtime, postgresRealtime, type RealtimeChange } from '../src';
@@ -32,12 +35,13 @@ async function open(
 /** Reads `path`'s event stream until `count` changes arrived or it went quiet. */
 async function follow(path: string, user: string) {
   const controller = new AbortController();
-  const response = await h.support.handler(
-    new Request(`${ADMIN_ORIGIN}/api/helpdesk/${path}`, {
-      headers: { 'x-test-user': user },
-      signal: controller.signal,
-    })
-  );
+  const request = new Request(`${ADMIN_ORIGIN}/api/helpdesk/${path}`, {
+    headers: { 'x-test-user': user },
+    signal: controller.signal,
+  });
+  // Weakly: a test that held the Request would hide a stream that lets go of it.
+  const held = new WeakRef(request);
+  const response = await h.support.handler(request);
   const changes: RealtimeChange[] = [];
   const reader = response.body
     ?.pipeThrough(new TextDecoderStream())
@@ -57,17 +61,31 @@ async function follow(path: string, user: string) {
   return {
     response,
     changes,
+    held,
     async settle() {
       await new Promise(resolve => setTimeout(resolve, 20));
     },
     async stop() {
       controller.abort();
-      // Cancelling the reader ends the stream on its own; Node 22 can lose an
-      // abort on a Request nothing else holds.
-      await reader?.cancel().catch(() => undefined);
       await reading;
     },
   };
+}
+
+/** Runs the garbage collector until a finalizer has run, so collected objects' cleanups are done too. */
+async function collectGarbage() {
+  setFlagsFromString('--expose-gc');
+  const gc = runInNewContext('gc') as () => void;
+  let finalized = false;
+  const registry = new FinalizationRegistry(() => {
+    finalized = true;
+  });
+  registry.register({}, null);
+  for (let i = 0; i < 50 && !finalized; i++) {
+    gc();
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  await new Promise(resolve => setTimeout(resolve, 10));
 }
 
 describe('the kind of a conversation', () => {
@@ -238,6 +256,28 @@ describe('event streams', () => {
       { conversationId: id, kind: 'message' },
     ]);
   });
+
+  it.each([
+    ['widget/events', 'ada'],
+    ['agent/events', 'sam'],
+  ])(
+    'holds the request behind %s, so the client leaving still ends it',
+    async (path, user) => {
+      h.addUser('ada');
+      h.addUser('sam', { isAgent: true });
+      await open('ada', {});
+      const stream = await follow(path, user);
+      // A Request passes the client's abort on only while it is alive.
+      await collectGarbage();
+      expect(stream.held.deref()).toBeDefined();
+
+      const ended = await Promise.race([
+        stream.stop().then(() => 'ended'),
+        new Promise(resolve => setTimeout(() => resolve('still open'), 1000)),
+      ]);
+      expect(ended).toBe('ended');
+    }
+  );
 
   it('refuses a customer the agent stream and a stranger the widget stream', async () => {
     h.addUser('ada');
