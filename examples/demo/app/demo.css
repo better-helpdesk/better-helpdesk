@@ -585,7 +585,7 @@ h1 em {
 
 .admin-inner {
   min-height: calc(100dvh - 196px);
-  padding: 8px 16px 16px;
+  padding: 16px;
   border-radius: var(--radius-inner);
   background: var(--surface);
   box-shadow: var(--shadow);
