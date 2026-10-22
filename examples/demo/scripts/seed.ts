@@ -21,6 +21,12 @@ type Thread = {
   /** Later messages, in order. */
   replies?: { by: 'agent' | 'note' | 'contact'; body: string }[];
   resolved?: boolean;
+  /** The customer's rating of a resolved conversation. */
+  rating?: 'good' | 'bad';
+  ratingComment?: string;
+  assignee?: 'rowan' | 'kit';
+  /** Waiting on the customer after the team's last reply. */
+  pending?: boolean;
   tags?: string[];
 };
 
@@ -191,6 +197,111 @@ const THREADS: Thread[] = [
     body: 'What are the rate limits on the shipments API? We plan to sync every five minutes.',
     context: browser('/developers'),
   },
+  {
+    from: { name: 'Clara Moreau', email: 'clara@quaidelest.test' },
+    inbox: 'support',
+    type: 'question',
+    subject: 'Change the language of customer emails',
+    body: 'Our customers are in France. Can the shipment emails go out in French?',
+    context: browser('/settings/notifications', { locale: 'fr' }),
+    replies: [
+      {
+        by: 'agent',
+        body: 'Yes: Settings → Notifications → Language. Each customer can also have their own.',
+      },
+      { by: 'contact', body: 'Perfect, that worked.' },
+    ],
+    resolved: true,
+    rating: 'good',
+    ratingComment: 'Quick and clear.',
+    assignee: 'rowan',
+    tags: ['emails'],
+  },
+  {
+    from: { name: 'Pieter de Vries', email: 'pieter@grachtcargo.test' },
+    inbox: 'support',
+    type: 'bug',
+    subject: 'CSV import skips the last row',
+    body: 'When I import shipments from a CSV, the last row never shows up.',
+    context: browser('/shipments/import'),
+    replies: [
+      {
+        by: 'agent',
+        body: 'Thanks for the file. The importer needs a line break after the last row; we will fix that, and adding one works today.',
+      },
+    ],
+    resolved: true,
+    rating: 'bad',
+    ratingComment: 'A workaround is not a fix.',
+    assignee: 'kit',
+    tags: ['import'],
+  },
+  {
+    from: { name: 'Yusuf Demir', email: 'yusuf@bosporuslines.test' },
+    inbox: 'support',
+    type: 'question',
+    subject: 'Who can see our rates?',
+    body: 'Can our customers see the rates we pay carriers, or only their own price?',
+    context: browser('/settings/roles'),
+    replies: [
+      {
+        by: 'agent',
+        body: 'Only their own price. Carrier rates stay with your team unless you give a role the Rates permission.',
+      },
+    ],
+    resolved: true,
+    rating: 'good',
+    assignee: 'kit',
+  },
+  {
+    from: { name: 'Marta Kowalska', email: 'marta@wislafreight.test' },
+    inbox: 'support',
+    type: 'bug',
+    subject: 'Duplicate notifications for one delivery',
+    body: 'Each delivery sends two "delivered" emails to our customer.',
+    context: browser('/shipments/HB-91022'),
+    replies: [
+      {
+        by: 'agent',
+        body: 'Found it: two webhooks pointed at the same event. I removed the older one, so it should be one email from now on.',
+      },
+    ],
+    resolved: true,
+    rating: 'bad',
+    ratingComment: 'Took three days.',
+    assignee: 'rowan',
+    tags: ['emails'],
+  },
+  {
+    from: {
+      name: 'Felix Baumann',
+      email: 'felix@brightline.test',
+      org: 'brightline',
+    },
+    inbox: 'support',
+    type: 'question',
+    subject: 'Driver app login on a shared tablet',
+    body: 'Several drivers share one tablet. Do they each need their own login?',
+    context: browser('/drivers/devices'),
+    replies: [
+      {
+        by: 'agent',
+        body: 'They can share one device: turn on "Shared device" and each driver signs in with a PIN. Which tablet model do you use?',
+      },
+    ],
+    pending: true,
+    assignee: 'rowan',
+    tags: ['driver-app'],
+  },
+  {
+    from: { name: 'Noor Haddad', email: 'noor@cedarroute.test' },
+    inbox: 'support',
+    type: 'question',
+    subject: 'Archive old shipments',
+    body: 'Can we hide shipments older than a year from the board?',
+    context: browser('/shipments?view=board'),
+    assignee: 'kit',
+  },
 ];
 
 const [seq] = (
@@ -207,6 +318,14 @@ if (seq?.is_called) {
     name: 'Rowan Vester',
     email: 'rowan@harbor.test',
   });
+  // A teammate, so assignments and the statistics by assignee have two people.
+  const kit = await store.touchAgent({
+    externalUserId: 'demo-agent-kit',
+    name: 'Kit Achterberg',
+    email: 'kit@harbor.test',
+  });
+  const agents = { rowan, kit };
+  const contacts = new Map<string, string>();
   const brightline = await store.upsertCompany(
     'demo-org',
     'Brightline Logistics'
@@ -226,6 +345,7 @@ if (seq?.is_called) {
       },
       { channel: 'email', externalId: thread.from.email, verified: false }
     );
+    contacts.set(thread.from.email, contact.id);
     const { conversation } = await store.createConversation(
       {
         inbox: thread.inbox,
@@ -264,15 +384,61 @@ if (seq?.is_called) {
             }
       );
     }
+    const assigneeId = agents[thread.assignee ?? 'rowan'].id;
     if (thread.resolved) {
       await store.updateConversation(conversation.id, {
         status: 'resolved',
         resolvedAt: new Date(),
         waitingSince: null,
-        assigneeId: rowan.id,
+        assigneeId,
       });
+      if (thread.rating)
+        await store.rateConversation(conversation.id, {
+          rating: thread.rating,
+          ratingComment: thread.ratingComment ?? null,
+          ratedAt: new Date(),
+        });
+    } else if (thread.pending) {
+      await store.updateConversation(conversation.id, {
+        status: 'pending',
+        waitingSince: null,
+        assigneeId,
+      });
+    } else if (thread.assignee) {
+      await store.updateConversation(conversation.id, { assigneeId });
     }
   }
+
+  const deal = (
+    title: string,
+    stage: string,
+    value: string,
+    extra: { companyId?: string; contactEmail?: string; ownerId: string }
+  ) =>
+    store.createDeal({
+      title,
+      stage,
+      value,
+      currency: 'CHF',
+      companyId: extra.companyId ?? null,
+      contactId: extra.contactEmail
+        ? (contacts.get(extra.contactEmail) ?? null)
+        : null,
+      ownerId: extra.ownerId,
+    });
+  await deal('Brightline: second warehouse', 'proposal', '18000', {
+    companyId: brightline.id,
+    contactEmail: 'ingrid@brightline.test',
+    ownerId: rowan.id,
+  });
+  await deal('Via Lattea: 8,000 shipments a month', 'qualified', '96000', {
+    contactEmail: 'mateo@vialattea.test',
+    ownerId: kit.id,
+  });
+  await deal('Petit Port: starter plan', 'new', '2400', {
+    contactEmail: 'sophie@petitport.test',
+    ownerId: rowan.id,
+  });
   console.log(`Seeded ${THREADS.length} conversations.`);
 }
 await pool.end();

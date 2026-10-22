@@ -64,7 +64,7 @@ export const helpdesk = buildHelpdesk({
 
 Without it, the stages are `new`, `qualified`, `proposal`, `won` and `lost`. A new deal starts in the first stage. The Deals board shows one column per stage, in your order, with the total value of each; an agent drags a deal to move it, and a deal 14 days in one stage is flagged. A deal in a stage you remove from the list keeps it, in a column of its own at the end of the board, until an agent drags it into one of your stages. No stage has a meaning of its own to the helpdesk, `won` and `lost` included. Custom deal stages take their names from `messages` under `stage.` as well.
 
-Agents create deals on the board, on a contact's or a company's page, and from a conversation of type `lead`, which fills in its contact and company. The agent who creates a deal owns it.
+Agents create deals on the board, on a contact's or a company's page, and from a conversation of type `lead`, which fills in its contact and company. The agent who creates a deal owns it. A team that keeps its pipeline elsewhere sets `features: { deals: false }`: the board, the deals on contacts and companies and the button on a lead go, and the `agent/deals` routes answer 404.
 
 ## Add your own fields
 

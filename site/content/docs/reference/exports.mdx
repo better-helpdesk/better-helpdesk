@@ -128,7 +128,7 @@ Every type in the configuration module is exported as well: `HelpdeskConfig`, `I
     },
     listInbox: {
       type: '(filter: InboxFilter) => Promise<{ conversation: Conversation; contact: Contact }[]>',
-      description: <>The agent inbox, longest waiting first, at most <code>limit</code> (200 by default). The filter takes <code>inbox</code>, <code>status</code> (also <code>snoozed</code> and <code>rated-bad</code>), <code>assigneeId</code> (<code>null</code> for unassigned), <code>contactId</code>, <code>companyId</code>, <code>tag</code>, <code>query</code>, <code>priority: 'high'</code>, <code>sort</code> and <code>limit</code>. Blocked contacts' conversations are left out unless <code>contactId</code> is given.</>,
+      description: <>The agent inbox, longest waiting first, at most <code>limit</code> (200 by default). The filter takes <code>inbox</code>, <code>status</code> (also <code>snoozed</code>, <code>rated-good</code> and <code>rated-bad</code>), <code>assigneeId</code> (<code>null</code> for unassigned), <code>contactId</code>, <code>companyId</code>, <code>tag</code>, <code>query</code>, <code>priority: 'high'</code>, <code>since</code> (a <code>Date</code>: resolved, rated, or for any other status opened, resolved or rated since then), <code>sort</code> and <code>limit</code>. Blocked contacts' conversations are left out unless <code>contactId</code> is given.</>,
     },
     updateConversation: {
       type: '(id: string, patch: Partial<Conversation>) => Promise<Conversation | null>',

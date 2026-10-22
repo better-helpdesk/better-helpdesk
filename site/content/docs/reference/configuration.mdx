@@ -192,6 +192,11 @@ export const helpdesk = buildHelpdesk({
       type: "Partial<Record<'contact' | 'company' | 'deal', CustomFieldDef[]>>",
       description: <>Extra fields per record, stored in its <code>custom</code> column. See <a href="#customfielddef">CustomFieldDef</a>.</>,
     },
+    features: {
+      type: "Partial<Record<'deals' | 'canned' | 'overview', boolean>>",
+      default: 'every one on',
+      description: <>Parts of the agent UI a team does without, each off when set to <code>false</code>: the Deals board, canned replies, or the Statistics page. The agent UI hides the section and what leads to it (the deals on a contact or company, the canned-reply menu and <code>/</code> in the composer), and the section's <code>agent/*</code> routes answer 404. A host that renders its own tabs leaves the section out itself.</>,
+    },
   }}
 />
 

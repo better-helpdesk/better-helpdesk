@@ -1,6 +1,10 @@
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type RefObject,
+  type ToggleEvent,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -23,6 +27,7 @@ export const paths = {
   external:
     'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
+  chevron: 'M6 9l6 6 6-6',
 };
 
 export function Svg({ d }: { d: string }) {
@@ -52,6 +57,7 @@ export function Skeleton({
   label,
   columns,
   summary = false,
+  aside = true,
 }: {
   kind: 'table' | 'thread' | 'cards';
   label: string;
@@ -59,6 +65,8 @@ export function Skeleton({
   columns?: number;
   /** The contact page's summary card under the page head. */
   summary?: boolean;
+  /** The details column; off when the page will open without it, so the page does not move when it loads. */
+  aside?: boolean;
 }) {
   const rows = [0, 1, 2, 3, 4, 5];
   const status = (
@@ -170,7 +178,7 @@ export function Skeleton({
             {bone('100%', 160)}
           </section>
         )}
-        <aside className="sa">
+        <aside className="sa" hidden={!aside}>
           {[96, 140, 72].map(height => (
             <div key={height} className="sa-card">
               <h3>{bone(96)}</h3>
@@ -684,4 +692,127 @@ export function HostLinks({
       ))}
     </div>
   );
+}
+
+/**
+ * A menu in the top layer, so no scroll pane clips it. It is placed when it
+ * opens: under its button, or above it, with their end edges aligned where
+ * that fits in the viewport.
+ */
+export function Menu({
+  label,
+  button,
+  className = 'sa-btn sa-ghost',
+  popClass,
+  above = false,
+  onOpen,
+  children,
+}: {
+  /** The button's accessible name. */
+  label: string;
+  /** What the button shows. */
+  button: ReactNode;
+  className?: string;
+  popClass?: string;
+  above?: boolean;
+  onOpen?: () => void;
+  children: (close: () => void) => ReactNode;
+}) {
+  const id = useId();
+  const anchor = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const close = () => pop.current?.hidePopover?.();
+  const place = () => {
+    const at = anchor.current?.getBoundingClientRect();
+    const menu = pop.current;
+    if (!at || !menu) return;
+    const margin = 8;
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+    const left =
+      at.right - width >= margin
+        ? at.right - width
+        : Math.min(at.left, window.innerWidth - width - margin);
+    const top = above ? at.top - 4 - height : at.bottom + 4;
+    menu.style.left = `${Math.max(margin, left)}px`;
+    menu.style.top = `${Math.max(
+      margin,
+      Math.min(top, window.innerHeight - height - margin)
+    )}px`;
+  };
+  // Fixed in the viewport, the menu would stay behind when its button scrolls away or the window resizes.
+  useEffect(() => {
+    if (!open) return;
+    const hide = (e: Event) => {
+      if (!pop.current?.contains(e.target as Node))
+        pop.current?.hidePopover?.();
+    };
+    document.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    return () => {
+      document.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+    };
+  }, [open]);
+  // Escape is the menu's: a pane around it would otherwise take it and move focus elsewhere.
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key !== 'Escape' || !open) return;
+    e.preventDefault();
+    close();
+    anchor.current?.focus();
+  };
+
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className={className}
+        aria-label={label}
+        aria-expanded={open}
+        popoverTarget={id}
+        onKeyDown={onKeyDown}>
+        {button}
+      </button>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: Escape bubbles up from the menu's own controls. */}
+      <div
+        id={id}
+        ref={pop}
+        popover="auto"
+        className={`sa-menu-pop${popClass ? ` ${popClass}` : ''}`}
+        onKeyDown={onKeyDown}
+        // Toggle arrives a task after the menu shows; until it is placed it stays invisible, so it never paints in the corner.
+        onBeforeToggle={(e: ToggleEvent<HTMLDivElement>) => {
+          if (e.newState === 'open')
+            e.currentTarget.style.visibility = 'hidden';
+        }}
+        onToggle={(e: ToggleEvent<HTMLDivElement>) => {
+          const opened = e.newState === 'open';
+          setOpen(opened);
+          if (!opened) return;
+          place();
+          e.currentTarget.style.visibility = '';
+          onOpen?.();
+        }}>
+        {children(close)}
+      </div>
+    </>
+  );
+}
+
+/** Whether the element is narrower than `below`; false until it has a layout. */
+export function useNarrow(ref: RefObject<HTMLElement | null>, below: number) {
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () =>
+      setNarrow(el.clientWidth > 0 && el.clientWidth < below);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, below]);
+  return narrow;
 }

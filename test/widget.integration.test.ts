@@ -1025,6 +1025,12 @@ describe('rating from the email', () => {
       'has been rated already'
     );
     expect(await rating(conversation.id)).toMatchObject({ rating: 'good' });
+    const good = await h.call('GET', 'agent/conversations?status=rated-good', {
+      user: 'agent',
+    });
+    expect(good.data.conversations.map((c: { id: string }) => c.id)).toEqual([
+      conversation.id,
+    ]);
 
     const forged = new URL(links.good);
     forged.searchParams.set('r', 'bad');

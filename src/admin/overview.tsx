@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { useResource } from '../ui/api';
 import { formatMinutes } from '../ui/i18n';
-import { useAdmin } from './context';
+import { type Route, useAdmin } from './context';
 import { Empty, Select, Skeleton } from './ui';
 
 type Numbers = {
@@ -25,7 +25,7 @@ const PERIODS = ['7', '30', '90'];
 
 /** Volume and median reply and resolution times over the last 7, 30 or 90 days. */
 export function OverviewPage() {
-  const { api, t, locale, inboxName } = useAdmin();
+  const { api, t, locale, me, inboxName, href, navigate } = useAdmin();
   const [days, setDays] = useState('30');
   const data = useResource(
     () => api<Overview>(`agent/overview?days=${days}`),
@@ -33,10 +33,25 @@ export function OverviewPage() {
   );
   const hours = (value: number | null) =>
     value === null ? '—' : formatMinutes(Math.round(value * 60), locale);
+  // A figure opens the inbox on the conversations it counts, over the same period.
+  const link = (filter: Route, label: ReactNode, key?: string) => {
+    const to = { ...filter, days };
+    return (
+      <a
+        key={key}
+        href={href(to)}
+        onClick={e => {
+          e.preventDefault();
+          navigate(to);
+        }}>
+        {label}
+      </a>
+    );
+  };
   const table = (
     title: string,
     column: string,
-    rows: (Numbers & { key: string; label: string })[]
+    rows: (Numbers & { key: string; label: ReactNode })[]
   ) => (
     <div className="sa-card">
       <h3>{title}</h3>
@@ -94,21 +109,41 @@ export function OverviewPage() {
             <dl className="sa-grid sa-stats">
               {(
                 [
-                  ['admin.newCount', String(data.data.total.new)],
-                  ['admin.resolvedCount', String(data.data.total.resolved)],
-                  ['admin.firstResponse', hours(data.data.total.firstResponse)],
-                  ['admin.resolutionTime', hours(data.data.total.resolution)],
+                  ['admin.newCount', String(data.data.total.new), null],
+                  [
+                    'admin.resolvedCount',
+                    String(data.data.total.resolved),
+                    { status: 'resolved' },
+                  ],
+                  [
+                    'admin.firstResponse',
+                    hours(data.data.total.firstResponse),
+                    null,
+                  ],
+                  [
+                    'admin.resolutionTime',
+                    hours(data.data.total.resolution),
+                    null,
+                  ],
                   ...(data.data.ratings
                     ? ([
-                        ['admin.rated.good', String(data.data.ratings.good)],
-                        ['admin.rated.bad', String(data.data.ratings.bad)],
+                        [
+                          'admin.rated.good',
+                          String(data.data.ratings.good),
+                          { status: 'rated-good' },
+                        ],
+                        [
+                          'admin.rated.bad',
+                          String(data.data.ratings.bad),
+                          { status: 'rated-bad' },
+                        ],
                       ] as const)
                     : []),
                 ] as const
-              ).map(([key, value]) => (
+              ).map(([key, value, to]) => (
                 <div key={key} className="sa-card">
                   <dt className="sa-muted">{t(key)}</dt>
-                  <dd>{value}</dd>
+                  <dd>{to ? link(to, value) : value}</dd>
                 </div>
               ))}
             </dl>
@@ -118,7 +153,10 @@ export function OverviewPage() {
               data.data.inboxes.map(r => ({
                 ...r,
                 key: r.inbox,
-                label: inboxName(r.inbox),
+                label: link(
+                  { inbox: r.inbox, status: 'any' },
+                  inboxName(r.inbox)
+                ),
               }))
             )}
             {table(
@@ -127,18 +165,33 @@ export function OverviewPage() {
               data.data.agents.map(r => ({
                 ...r,
                 key: r.agentId ?? '',
-                label: r.agentId ? (r.name ?? '—') : t('admin.unassigned'),
+                label: link(
+                  {
+                    assignee:
+                      r.agentId === null
+                        ? 'none'
+                        : r.agentId === me.agent.id
+                          ? 'me'
+                          : r.agentId,
+                    status: 'any',
+                  },
+                  r.agentId ? (r.name ?? '—') : t('admin.unassigned')
+                ),
               }))
             )}
             {data.data.tags.length > 0 && (
               <div className="sa-card">
                 <h3>{t('admin.topTags')}</h3>
                 <div className="sa-toolbar">
-                  {data.data.tags.map(({ tag, count }) => (
-                    <span key={tag} className="sa-pill">
-                      {tag} · {count}
-                    </span>
-                  ))}
+                  {data.data.tags.map(({ tag, count }) =>
+                    link(
+                      { tag, status: 'any' },
+                      <span className="sa-pill">
+                        {tag} · {count}
+                      </span>,
+                      tag
+                    )
+                  )}
                 </div>
               </div>
             )}

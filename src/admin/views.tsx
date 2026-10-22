@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import { useResource } from '../ui/api';
 import { HELPDESK_CHANGED, useAdmin } from './context';
@@ -22,16 +22,18 @@ const sameFilters = (query: string, current: Record<string, string>) => {
   return [...keys].every(k => saved[k] === now[k]);
 };
 
-/** Saved filter sets, the agent's own and the team's, above the inbox list. */
+/** Saved filter sets, the agent's own and the team's: their chips, and the actions that save, rename and delete them, each placed by the caller. */
 export function SavedViews({
   filters,
   canSave,
+  children,
 }: {
   /** The inbox's current filters; an empty value is no filter. */
   filters: Record<string, string>;
   canSave: boolean;
+  children: (chips: ReactNode, actions: ReactNode) => ReactNode;
 }) {
-  const { api, t, navigate } = useAdmin();
+  const { api, t, navigate, route } = useAdmin();
   const views = useResource(
     () => api<{ views: SavedView[] }>('agent/views'),
     'views',
@@ -45,9 +47,7 @@ export function SavedViews({
   const [editing, setEditing] = useState<'save' | 'rename' | null>(null);
   const list = views.data?.views ?? [];
   const active = list.find(v => sameFilters(v.query, filters));
-  if (list.length === 0 && !canSave) return null;
-
-  return (
+  const chips = list.length > 0 && (
     <fieldset className="sa-views" aria-label={t('admin.views')}>
       {list.map(v => (
         <button
@@ -57,23 +57,31 @@ export function SavedViews({
           aria-pressed={v === active}
           title={v.shared ? t('admin.sharedView') : undefined}
           onClick={() =>
-            navigate(Object.fromEntries(new URLSearchParams(v.query)))
+            navigate({
+              ...Object.fromEntries(new URLSearchParams(v.query)),
+              ...(route.conversation && { conversation: route.conversation }),
+            })
           }>
           {v.name}
           {v.count !== null && <span className="sa-count num"> {v.count}</span>}
         </button>
       ))}
+    </fieldset>
+  );
+
+  const actions = (
+    <>
       {active ? (
         <>
           <button
             type="button"
-            className="sa-btn sa-ghost"
+            className="sa-link"
             onClick={() => setEditing('rename')}>
             {t('admin.renameView')}
           </button>
           <button
             type="button"
-            className="sa-btn sa-ghost"
+            className="sa-link"
             onClick={async () => {
               await api(`agent/views/${active.id}`, { method: 'DELETE' });
               await views.refresh();
@@ -85,7 +93,7 @@ export function SavedViews({
         canSave && (
           <button
             type="button"
-            className="sa-btn sa-ghost"
+            className="sa-link"
             onClick={() => setEditing('save')}>
             {t('admin.saveView')}
           </button>
@@ -151,6 +159,8 @@ export function SavedViews({
           </div>
         </form>
       </Dialog>
-    </fieldset>
+    </>
   );
+
+  return children(chips, actions);
 }

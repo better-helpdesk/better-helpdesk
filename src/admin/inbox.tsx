@@ -4,7 +4,7 @@ import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
 import { duration, nextWorkday } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
-import { HELPDESK_CHANGED, useAdmin } from './context';
+import { HELPDESK_CHANGED, type Route, useAdmin } from './context';
 import { NotificationBell } from './notifications';
 import { formatSnooze, localInput } from './snooze';
 import {
@@ -19,6 +19,7 @@ import {
   Svg,
   setQueueOn,
   useKeysOn,
+  useNarrow,
   useQueueOn,
   useShortcuts,
   useToast,
@@ -71,6 +72,10 @@ export function Inbox() {
   const tagInputId = useId();
   const moreId = useId();
   const [moreOpen, setMoreOpen] = useState(false);
+  // Beside an open thread the list is a narrow pane: the bar keeps the tabs and
+  // the icon buttons, and the tray under it takes the search and the rest.
+  const root = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(root, 720);
   const filters = {
     inbox: route.inbox ?? '',
     status: route.status ?? 'open',
@@ -79,11 +84,11 @@ export function Inbox() {
     tag: route.tag ?? '',
     sort: route.sort ?? '',
     priority: route.priority ?? '',
+    days: route.days ?? '',
   };
-  // Priority narrows the fetched list here, so its count stays visible when off.
-  const { priority, ...serverFilters } = filters;
+  const { priority } = filters;
   const params = new URLSearchParams(
-    Object.entries(serverFilters).filter(([, v]) => v !== '' && v !== 'any')
+    Object.entries(filters).filter(([, v]) => v !== '' && v !== 'any')
   ).toString();
   const list = useResource(
     () =>
@@ -98,8 +103,12 @@ export function Inbox() {
     () => api<{ tags: string[] }>('agent/tags'),
     'tags'
   );
+  // A filter changes the list beside an open conversation, not the conversation.
+  const thread: Route = route.conversation
+    ? { conversation: route.conversation }
+    : {};
   const set = (key: string, value: string) =>
-    navigate({ ...filters, [key]: value });
+    navigate({ ...filters, [key]: value, ...thread });
   useEffect(() => setTag(route.tag ?? ''), [route.tag]);
   useEffect(() => {
     const refresh = () => void list.refresh();
@@ -122,7 +131,7 @@ export function Inbox() {
   const urgent = all.filter(
     c => c.priority === 'high' || c.priority === 'urgent'
   );
-  const rows = priority === 'high' ? urgent : all;
+  const rows = all;
   useEffect(() => {
     const next = rows.map(r => ({
       id: r.id,
@@ -133,69 +142,94 @@ export function Inbox() {
     // Polling hands over new rows every time; only a changed order is news.
     setQueue(current => (key(current) === key(next) ? current : next));
   });
-  // Status, inbox, tag and sort sit behind one button, which opens when one of them is set.
-  const moreActive = [
+  // Status, inbox, tag, sort and priority sit in the tray, which opens when one of them is set.
+  const trayActive = [
     filters.status !== 'open',
     filters.inbox,
     filters.tag,
     filters.sort,
+    filters.days,
   ].filter(Boolean).length;
-  const anyMore = moreActive > 0;
+  const anyMore = trayActive > 0;
   useEffect(() => {
     if (anyMore) setMoreOpen(true);
   }, [anyMore]);
+  // The search and its chip count once they are in the tray too, out of sight.
+  const moreActive =
+    trayActive + (narrow ? [filters.q, priority].filter(Boolean).length : 0);
   const visibleSelected = selected.filter(id => rows.some(r => r.id === id));
   const filtered =
     Boolean(
-      filters.assignee || filters.inbox || filters.q || filters.tag || priority
+      filters.assignee ||
+        filters.inbox ||
+        filters.q ||
+        filters.tag ||
+        priority ||
+        filters.days
     ) || filters.status !== 'open';
+  const clear = () => {
+    setQuery('');
+    setTag('');
+    navigate(thread);
+  };
+  // High and urgent narrows the list as the search does, so it sits beside it in the bar or the tray.
+  const search = (
+    <>
+      <form
+        className="sa-grow"
+        onSubmit={e => {
+          e.preventDefault();
+          set('q', query);
+        }}>
+        <input
+          type="search"
+          className="sa-input"
+          aria-label={t('admin.search')}
+          placeholder={t('admin.search')}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+      </form>
+      {(urgent.length > 0 || priority === 'high') && (
+        <button
+          type="button"
+          className="sa-btn sa-chip sa-chip-warn"
+          aria-pressed={priority === 'high'}
+          onClick={() => set('priority', priority === 'high' ? '' : 'high')}>
+          {t('admin.highCount', { count: String(urgent.length) })}
+        </button>
+      )}
+    </>
+  );
 
   return (
-    <div className="sa">
-      <div className="sa-toolbar">
+    <div className="sa" ref={root}>
+      <div className="sa-toolbar sa-bar" data-narrow={narrow || undefined}>
         <fieldset className="sa-seg" aria-label={t('admin.assignee')}>
           {(
             [
-              ['', 'admin.all', 'all'],
-              ['me', 'admin.mine', 'mine'],
-              ['none', 'admin.unassigned', 'unassigned'],
+              ['', 'admin.all', 'admin.all', 'all'],
+              ['me', 'admin.mine', 'admin.mineShort', 'mine'],
+              [
+                'none',
+                'admin.unassigned',
+                'admin.unassignedShort',
+                'unassigned',
+              ],
             ] as const
-          ).map(([value, label, count]) => (
+          ).map(([value, label, short, count]) => (
             <button
               key={value}
               type="button"
               aria-pressed={filters.assignee === value}
+              title={narrow ? t(label) : undefined}
               onClick={() => set('assignee', value)}>
-              {t(label)}
+              {t(narrow ? short : label)}
               {counts && <span className="sa-count num"> {counts[count]}</span>}
             </button>
           ))}
         </fieldset>
-        <SavedViews filters={filters} canSave={filtered} />
-        {(urgent.length > 0 || priority === 'high') && (
-          <button
-            type="button"
-            className="sa-btn sa-chip sa-chip-warn"
-            aria-pressed={priority === 'high'}
-            onClick={() => set('priority', priority === 'high' ? '' : 'high')}>
-            {t('admin.highCount', { count: String(urgent.length) })}
-          </button>
-        )}
-        <form
-          className="sa-grow"
-          onSubmit={e => {
-            e.preventDefault();
-            set('q', query);
-          }}>
-          <input
-            type="search"
-            className="sa-input"
-            aria-label={t('admin.search')}
-            placeholder={t('admin.search')}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-          />
-        </form>
+        {!narrow && search}
         <button
           type="button"
           className="sa-btn"
@@ -203,100 +237,128 @@ export function Inbox() {
           aria-controls={moreId}
           onClick={() => setMoreOpen(!moreOpen)}>
           <Svg d={paths.filter} />
-          {t('admin.filters')}
+          <span className={narrow ? 'sa-sr-only' : undefined}>
+            {t('admin.filters')}
+          </span>
           {moreActive > 0 && <span className="sa-count num">{moreActive}</span>}
         </button>
         {!nav && <NotificationBell />}
-        {!nav && <AwayControl />}
-        <label className="sa-toggle">
-          <input
-            type="checkbox"
-            checked={queueOn}
-            onChange={e => setQueueOn(e.target.checked)}
-          />
-          {t('admin.workQueue')}
-        </label>
-        {!keysOn ? (
-          <button
-            type="button"
-            className="sa-btn sa-ghost"
-            onClick={openShortcuts}>
-            {t('admin.shortcuts')}
-          </button>
-        ) : (
-          rows.length > 1 && (
-            <span className="sa-kbd sa-hint">
-              <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
-              {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')} ·{' '}
-              <kbd>?</kbd> {t('admin.allShortcuts')}
-            </span>
-          )
+        {!nav && !narrow && <AwayControl />}
+      </div>
+      <SavedViews filters={filters} canSave={filtered}>
+        {(chips, actions) => (
+          <div id={moreId} className="sa-filters" hidden={!moreOpen}>
+            {narrow && (
+              <div className="sa-filters-wide sa-toolbar">{search}</div>
+            )}
+            {chips && <div className="sa-filters-wide">{chips}</div>}
+            {filters.days && (
+              <div className="sa-filters-wide sa-toolbar">
+                <button
+                  type="button"
+                  className="sa-btn sa-chip"
+                  aria-pressed="true"
+                  onClick={() => set('days', '')}>
+                  {t('admin.lastDays', { count: filters.days })}
+                  <Svg d={paths.x} />
+                </button>
+              </div>
+            )}
+            <label className="sa-field">
+              {t('admin.status')}
+              <select
+                className="sa-select"
+                value={filters.status}
+                onChange={e => set('status', e.target.value)}>
+                <option value="any">{t('admin.all')}</option>
+                {me.statuses.map(s => (
+                  <option key={s} value={s}>
+                    {t(`agentStatus.${s}`)}
+                  </option>
+                ))}
+                <option value="snoozed">{t('admin.snoozed')}</option>
+                <option value="rated-good">{t('admin.rated.good')}</option>
+                <option value="rated-bad">{t('admin.rated.bad')}</option>
+              </select>
+            </label>
+            <label className="sa-field">
+              {t('admin.inboxLabel')}
+              <select
+                className="sa-select"
+                value={filters.inbox}
+                onChange={e => set('inbox', e.target.value)}>
+                <option value="">{t('admin.allInboxes')}</option>
+                {me.inboxes.map(i => (
+                  <option key={i} value={i}>
+                    {inboxName(i)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <form
+              className="sa-field"
+              onSubmit={e => {
+                e.preventDefault();
+                set('tag', tag.trim().toLowerCase());
+              }}>
+              <label htmlFor={tagInputId}>{t('admin.tag')}</label>
+              <input
+                id={tagInputId}
+                type="search"
+                className="sa-input"
+                placeholder={t('admin.tagFilter')}
+                list={tagListId}
+                value={tag}
+                onChange={e => setTag(e.target.value)}
+              />
+              <datalist id={tagListId}>
+                {(topTags.data?.tags ?? []).map(name => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </form>
+            <label className="sa-field">
+              {t('admin.sort')}
+              <select
+                className="sa-select"
+                value={filters.sort}
+                onChange={e => set('sort', e.target.value)}>
+                <option value="">{t('admin.sortWaiting')}</option>
+                <option value="priority">{t('admin.sortPriority')}</option>
+              </select>
+            </label>
+            <div className="sa-filters-wide sa-filters-foot">
+              <label className="sa-toggle">
+                <input
+                  type="checkbox"
+                  checked={queueOn}
+                  onChange={e => setQueueOn(e.target.checked)}
+                />
+                {t('admin.workQueue')}
+              </label>
+              {!nav && narrow && <AwayControl />}
+              <span className="sa-grow" />
+              {!keysOn ? (
+                <button
+                  type="button"
+                  className="sa-btn sa-ghost"
+                  onClick={openShortcuts}>
+                  {t('admin.shortcuts')}
+                </button>
+              ) : (
+                rows.length > 1 && (
+                  <span className="sa-kbd sa-hint">
+                    <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
+                    {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')} ·{' '}
+                    <kbd>?</kbd> {t('admin.allShortcuts')}
+                  </span>
+                )
+              )}
+              {actions}
+            </div>
+          </div>
         )}
-      </div>
-      <div id={moreId} className="sa-filters" hidden={!moreOpen}>
-        <label className="sa-field">
-          {t('admin.status')}
-          <select
-            className="sa-select"
-            value={filters.status}
-            onChange={e => set('status', e.target.value)}>
-            <option value="any">{t('admin.all')}</option>
-            {me.statuses.map(s => (
-              <option key={s} value={s}>
-                {t(`agentStatus.${s}`)}
-              </option>
-            ))}
-            <option value="snoozed">{t('admin.snoozed')}</option>
-            <option value="rated-bad">{t('admin.ratedBad')}</option>
-          </select>
-        </label>
-        <label className="sa-field">
-          {t('admin.inboxLabel')}
-          <select
-            className="sa-select"
-            value={filters.inbox}
-            onChange={e => set('inbox', e.target.value)}>
-            <option value="">{t('admin.allInboxes')}</option>
-            {me.inboxes.map(i => (
-              <option key={i} value={i}>
-                {inboxName(i)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <form
-          className="sa-field"
-          onSubmit={e => {
-            e.preventDefault();
-            set('tag', tag.trim().toLowerCase());
-          }}>
-          <label htmlFor={tagInputId}>{t('admin.tag')}</label>
-          <input
-            id={tagInputId}
-            type="search"
-            className="sa-input"
-            placeholder={t('admin.tagFilter')}
-            list={tagListId}
-            value={tag}
-            onChange={e => setTag(e.target.value)}
-          />
-          <datalist id={tagListId}>
-            {(topTags.data?.tags ?? []).map(name => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </form>
-        <label className="sa-field">
-          {t('admin.sort')}
-          <select
-            className="sa-select"
-            value={filters.sort}
-            onChange={e => set('sort', e.target.value)}>
-            <option value="">{t('admin.sortWaiting')}</option>
-            <option value="priority">{t('admin.sortPriority')}</option>
-          </select>
-        </label>
-      </div>
+      </SavedViews>
       <p className="sa-sr-only" role="status">
         {visibleSelected.length > 0
           ? t('admin.selected', { count: String(visibleSelected.length) })
@@ -312,14 +374,7 @@ export function Inbox() {
             text={t(filtered ? 'admin.emptyFiltered' : 'admin.emptyInbox')}
             action={
               filtered && (
-                <button
-                  type="button"
-                  className="sa-btn"
-                  onClick={() => {
-                    setQuery('');
-                    setTag('');
-                    navigate({});
-                  }}>
+                <button type="button" className="sa-btn" onClick={clear}>
                   {t('admin.clearFilters')}
                 </button>
               )

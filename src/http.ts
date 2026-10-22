@@ -2,7 +2,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { type Locale, PRIORITIES, STATUSES } from './config';
+import { type Feature, type Locale, PRIORITIES, STATUSES } from './config';
 import { clock } from './db/adapter';
 import type {
   Agent,
@@ -98,6 +98,7 @@ const VIEW_FILTERS = [
   'tag',
   'sort',
   'priority',
+  'days',
 ];
 // A message is at most 20,000 characters; this leaves room for its context.
 const MAX_JSON_BYTES = 256 * 1024;
@@ -535,6 +536,11 @@ export function createHandler(support: Helpdesk) {
     define(method, `agent/${path}`, async ctx =>
       run({ ...ctx, agent: await support.requireAgent(ctx.request) })
     );
+  /** A feature the config switched off has no routes, so the router answers 404 for them. */
+  const featureRoute = (feature: Feature): typeof agentRoute =>
+    config.features[feature] ? agentRoute : () => {};
+  const dealsRoute = featureRoute('deals');
+  const cannedRoute = featureRoute('canned');
 
   const tag = z.string().trim().min(1).max(50);
   const tags = z.array(tag).max(MAX_TAGS).optional();
@@ -582,7 +588,7 @@ export function createHandler(support: Helpdesk) {
     return json({ ok: true });
   });
 
-  agentRoute('GET', 'overview', async ({ url }) => {
+  featureRoute('overview')('GET', 'overview', async ({ url }) => {
     const days = z
       .enum(['7', '30', '90'])
       .catch('30')
@@ -632,6 +638,7 @@ export function createHandler(support: Helpdesk) {
         )
       ),
       ai: Boolean(config.ai),
+      features: config.features,
     })
   );
 
@@ -656,6 +663,10 @@ export function createHandler(support: Helpdesk) {
     const id = (key: string) => uuid.optional().parse(p.get(key) || undefined);
     const assignee = p.get('assignee');
     const status = p.get('status');
+    const days = z
+      .enum(['7', '30', '90'])
+      .optional()
+      .parse(p.get('days') || undefined);
     return {
       inbox: p.get('inbox') || undefined,
       status: status && status !== 'any' ? status : undefined,
@@ -670,6 +681,10 @@ export function createHandler(support: Helpdesk) {
       tag: p.get('tag')?.trim().toLowerCase() || undefined,
       query: p.get('q') || undefined,
       priority: p.get('priority') === 'high' ? ('high' as const) : undefined,
+      // The Statistics page's periods, so its figures open the list they count.
+      since: days
+        ? new Date(clock().getTime() - Number(days) * 86_400_000)
+        : undefined,
       sort:
         p.get('sort') === 'priority'
           ? ('priority' as const)
@@ -678,10 +693,15 @@ export function createHandler(support: Helpdesk) {
   }
 
   agentRoute('GET', 'conversations', async ({ url, agent }) => {
-    const [rows, counts] = await Promise.all([
-      store.listInbox(inboxFilter(url.searchParams, agent.id)),
-      store.countOpen(agent.id),
+    const filter = inboxFilter(url.searchParams, agent.id);
+    // The assignee tabs split what the other filters leave, priority and period included.
+    const [rows, all, mine, unassigned] = await Promise.all([
+      store.listInbox(filter),
+      store.countInbox({ ...filter, assigneeId: undefined }),
+      store.countInbox({ ...filter, assigneeId: agent.id }),
+      store.countInbox({ ...filter, assigneeId: null }),
     ]);
+    const counts = { all, mine, unassigned };
     const ids = rows.map(r => r.conversation.id);
     const [last, viewers] = await Promise.all([
       store.lastMessages(ids),
@@ -1200,7 +1220,7 @@ export function createHandler(support: Helpdesk) {
       download(await requireConversation(params.id), params.attachmentId)
   );
 
-  agentRoute('GET', 'canned', async () =>
+  cannedRoute('GET', 'canned', async () =>
     json({ replies: await store.listCannedReplies() })
   );
 
@@ -1210,12 +1230,12 @@ export function createHandler(support: Helpdesk) {
     locale: z.enum(['en', 'de', 'fr', 'it']).nullable().optional(),
   });
 
-  agentRoute('POST', 'canned', async ({ body }) => {
+  cannedRoute('POST', 'canned', async ({ body }) => {
     const data = cannedReply.parse(await body());
     return json({ reply: await store.createCannedReply(data) }, 201);
   });
 
-  agentRoute('PATCH', 'canned/:id', async ({ params, body }) => {
+  cannedRoute('PATCH', 'canned/:id', async ({ params, body }) => {
     if (!uuid.safeParse(params.id).success)
       throw new HelpdeskError(404, 'Not found');
     const data = cannedReply.parse(await body());
@@ -1225,7 +1245,7 @@ export function createHandler(support: Helpdesk) {
     return json({ ok: true });
   });
 
-  agentRoute('DELETE', 'canned/:id', async ({ params }) => {
+  cannedRoute('DELETE', 'canned/:id', async ({ params }) => {
     if (!uuid.safeParse(params.id).success)
       throw new HelpdeskError(404, 'Not found');
     await store.deleteCannedReply(params.id);
@@ -1318,7 +1338,7 @@ export function createHandler(support: Helpdesk) {
         contact.companyId ? store.getCompany(contact.companyId) : null,
         store.listInbox({ contactId: contact.id }),
         store.listActivities({ contactId: contact.id }),
-        store.listDeals({ contactId: contact.id }),
+        config.features.deals ? store.listDeals({ contactId: contact.id }) : [],
       ]);
     const first = conversations
       .map(r => r.conversation)
@@ -1399,7 +1419,7 @@ export function createHandler(support: Helpdesk) {
       store.listContacts({ companyId: company.id }),
       store.listInbox({ companyId: company.id }),
       store.listActivities({ companyId: company.id }),
-      store.listDeals({ companyId: company.id }),
+      config.features.deals ? store.listDeals({ companyId: company.id }) : [],
     ]);
     return json({
       company,
@@ -1432,7 +1452,7 @@ export function createHandler(support: Helpdesk) {
   const dealStage = (stored?: string) =>
     z.string().refine(s => config.dealStages.includes(s) || s === stored);
 
-  agentRoute('GET', 'deals', async () => {
+  dealsRoute('GET', 'deals', async () => {
     const rows = await store.listDeals({});
     return json({
       deals: rows.map(r => ({
@@ -1443,7 +1463,7 @@ export function createHandler(support: Helpdesk) {
     });
   });
 
-  agentRoute('POST', 'deals', async ({ body, agent }) => {
+  dealsRoute('POST', 'deals', async ({ body, agent }) => {
     const data = z
       .object({
         title: z.string().trim().min(1).max(200),
@@ -1469,7 +1489,7 @@ export function createHandler(support: Helpdesk) {
     return json({ deal }, 201);
   });
 
-  agentRoute('PATCH', 'deals/:id', async ({ params, body }) => {
+  dealsRoute('PATCH', 'deals/:id', async ({ params, body }) => {
     const deal = await requireRow(params.id, store.getDeal);
     const data = z
       .object({
@@ -1506,7 +1526,7 @@ export function createHandler(support: Helpdesk) {
     return json({ deal: updated });
   });
 
-  agentRoute('DELETE', 'deals/:id', async ({ params }) => {
+  dealsRoute('DELETE', 'deals/:id', async ({ params }) => {
     const deal = await requireRow(params.id, store.getDeal);
     await store.deleteDeal(deal.id);
     return json({ ok: true });

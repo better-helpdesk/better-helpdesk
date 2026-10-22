@@ -37,6 +37,7 @@ const me = {
   dealStages: ['new', 'won'],
   customFields: {},
   ai: false,
+  features: { deals: true, canned: true, overview: true },
 };
 
 const conversation = {
@@ -96,6 +97,7 @@ const routes: Record<string, unknown> = {
   'agent/deals/': { deals: [] },
   'agent/overview/?days=30': {
     openHours: false,
+    ratings: { good: 3, bad: 1 },
     total: { new: 4, resolved: 2, firstResponse: 2, resolution: 50 },
     inboxes: [
       { inbox: 'sales', new: 4, resolved: 2, firstResponse: 2, resolution: 50 },
@@ -122,6 +124,18 @@ const routes: Record<string, unknown> = {
 };
 
 const original = routes['agent/conversations/c1/'];
+
+// jsdom has no popover: a Menu is opened the way a browser does on its button, by hand.
+const openMenu = (button: HTMLElement) => {
+  const pop = document.getElementById(
+    button.getAttribute('popovertarget') as string
+  ) as HTMLElement;
+  pop.style.display = 'block';
+  fireEvent(pop, Object.assign(new Event('toggle'), { newState: 'open' }));
+  return pop;
+};
+const openTray = async () =>
+  fireEvent.click(await screen.findByRole('button', { name: 'Filters' }));
 
 // A URL with no entry in `routes` fails the test instead of getting an empty body.
 const unrouted: string[] = [];
@@ -251,6 +265,7 @@ describe('HelpdeskAdmin', () => {
     );
     window.history.replaceState(null, '', '/support/contacts/p1/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    openMenu(await screen.findByRole('button', { name: 'More options' }));
     fireEvent.click(
       await screen.findByRole('button', { name: 'Block sender' })
     );
@@ -594,6 +609,7 @@ describe('HelpdeskAdmin', () => {
       })
     );
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await openTray();
     const views = await screen.findByRole('group', { name: 'Views' });
     const view = await within(views).findByRole('button', {
       name: /Urgent anywhere/,
@@ -603,13 +619,12 @@ describe('HelpdeskAdmin', () => {
     fireEvent.click(view);
     expect(window.location.search).toBe('?status=any&priority=high');
     await waitFor(() => expect(view.ariaPressed).toBe('true'));
-    expect(
-      within(views).getByRole('button', { name: 'Delete view' })
-    ).toBeTruthy();
+    // The view's actions are links in the tray's footer, apart from the chips.
+    expect(screen.getByRole('button', { name: 'Delete view' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Unassigned' }));
     fireEvent.click(
-      await within(views).findByRole('button', { name: 'Save as view' })
+      await screen.findByRole('button', { name: 'Save as view' })
     );
     fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
       target: { value: 'Up for grabs' },
@@ -675,9 +690,7 @@ describe('HelpdeskAdmin', () => {
     const bell = await screen.findByLabelText('Notifications, 2 new');
     await waitFor(() => expect(document.title).toBe('(2) Support'));
 
-    fireEvent.click(bell);
-    (bell.parentElement as HTMLDetailsElement).open = true;
-    fireEvent(bell.parentElement as Element, new Event('toggle'));
+    openMenu(bell);
     await waitFor(() =>
       expect(posts.some(p => p.endsWith('agent/notifications/seen/'))).toBe(
         true
@@ -824,6 +837,7 @@ describe('HelpdeskAdmin', () => {
     composer.innerHTML = 'Fixed in the next release';
     fireEvent.input(composer);
 
+    openMenu(screen.getByRole('button', { name: 'Send options' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send and resolve' }));
 
     expect(
@@ -862,6 +876,7 @@ describe('HelpdeskAdmin', () => {
     });
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
 
+    await openTray();
     fireEvent.click(
       await screen.findByRole('checkbox', { name: 'Work the queue' })
     );
@@ -2366,6 +2381,7 @@ describe('conversation shortcuts', () => {
     cleanup();
     window.history.replaceState(null, '', '/support/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await openTray();
     fireEvent.click(
       await screen.findByRole('button', { name: 'Keyboard shortcuts' })
     );
@@ -2599,7 +2615,25 @@ describe('details sidebar', () => {
         'Resolved2',
         'Median first response2 hr',
         'Median resolution2 days',
+        'Rated good3',
+        'Rated bad1',
       ]
+    );
+    // Each figure that is a list opens the inbox on its filter; the medians are not lists.
+    const link = (name: string) =>
+      screen.getByRole('link', { name }).getAttribute('href');
+    expect(screen.queryByRole('link', { name: '4' })).toBeNull();
+    expect(link('2')).toBe('/support/conversations/?status=resolved&days=30');
+    expect(link('3')).toBe('/support/conversations/?status=rated-good&days=30');
+    expect(link('1')).toBe('/support/conversations/?status=rated-bad&days=30');
+    expect(link('Sales')).toBe(
+      '/support/conversations/?inbox=sales&status=any&days=30'
+    );
+    expect(link('Unassigned')).toBe(
+      '/support/conversations/?assignee=none&status=any&days=30'
+    );
+    expect(link('billing · 3')).toBe(
+      '/support/conversations/?tag=billing&status=any&days=30'
     );
     const [byInbox, byAgent] = screen.getAllByRole('table');
     expect(
@@ -2620,5 +2654,179 @@ describe('details sidebar', () => {
         'No conversations were opened or resolved in this period.'
       )
     ).toBeTruthy();
+  });
+});
+
+describe('features and the send menu', () => {
+  it('leaves out the Deals tab, the deals on a contact and the board when deals are off', async () => {
+    routes['agent/me/'] = { ...me, features: { ...me.features, deals: false } };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (!url.endsWith('agent/contacts/p1/')) return respond(url);
+        return new Response(
+          JSON.stringify({
+            contact: {
+              id: 'p1',
+              name: 'Ada',
+              email: 'ada@example.test',
+              companyId: null,
+              leadStage: null,
+              tags: [],
+              custom: {},
+              blocked: false,
+              createdAt: new Date().toISOString(),
+            },
+            identities: [],
+            company: null,
+            conversations: [],
+            timeline: [],
+            deals: [{ id: 'd1', title: 'Renewal', stage: 'new' }],
+          })
+        );
+      })
+    );
+    window.history.replaceState(null, '', '/support/contacts/p1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const nav = await screen.findByRole('navigation', { name: 'Sections' });
+    const tabs = within(nav)
+      .getAllByRole('button')
+      .map(b => b.textContent);
+    expect(tabs).not.toContain('Deals');
+    expect(tabs).toContain('Statistics');
+    expect(
+      await screen.findByRole('heading', { name: 'Identities' })
+    ).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Deals' })).toBeNull();
+
+    cleanup();
+    window.history.replaceState(null, '', '/support/deals/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect(await screen.findByRole('link', { name: /DG-1000/ })).toBeTruthy();
+  });
+
+  it('resolves without a reply from the menu beside Send, which stays live while Send is not', async () => {
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PATCH') {
+          patches.push(JSON.parse(String(init.body)));
+          return new Response('{}');
+        }
+        return respond(String(input));
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const options = await screen.findByRole('button', {
+      name: 'Send options',
+    });
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+    expect((options as HTMLButtonElement).disabled).toBe(false);
+
+    openMenu(options);
+    const sendResolve = screen.getByRole('button', {
+      name: 'Send and resolve',
+    });
+    expect((sendResolve as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Resolve without a reply' })
+    );
+
+    await waitFor(() => expect(patches).toEqual([{ status: 'resolved' }]));
+    expect(await screen.findByText('Resolved DG-1000')).toBeTruthy();
+  });
+
+  it('keeps the inbox bar to one line and opens the tray with the rating filters and the queue switch', async () => {
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('group', { name: 'Assignee' });
+    expect(
+      screen.queryByRole('checkbox', { name: 'Work the queue' })
+    ).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Status' })).toBeNull();
+
+    await openTray();
+    const status = screen.getByRole('combobox', { name: 'Status' });
+    expect(
+      within(status)
+        .getAllByRole('option')
+        .map(o => o.textContent)
+        .slice(-3)
+    ).toEqual(['Snoozed', 'Rated good', 'Rated bad']);
+    expect(
+      screen.getByRole('checkbox', { name: 'Work the queue' })
+    ).toBeTruthy();
+
+    fireEvent.change(status, { target: { value: 'rated-good' } });
+    expect(window.location.search).toBe('?status=rated-good');
+  });
+});
+
+describe('filters beside an open conversation', () => {
+  it('takes Escape in the Send menu and gives focus back to its button, not to the inbox list', async () => {
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const options = await screen.findByRole('button', {
+      name: 'Send options',
+    });
+    openMenu(options);
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Resolve without a reply' }),
+      { key: 'Escape' }
+    );
+    expect(document.activeElement).toBe(options);
+  });
+
+  it('keeps the conversation open when an assignee tab changes the list', async () => {
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    // jsdom has no container width, so the stylesheet hides the list beside a thread.
+    const group = await screen.findByRole('group', {
+      name: 'Assignee',
+      hidden: true,
+    });
+    await screen.findByRole('textbox', { name: 'Reply' });
+
+    fireEvent.click(
+      within(group).getByRole('button', {
+        name: /Assigned to me/,
+        hidden: true,
+      })
+    );
+
+    expect(window.location.pathname).toBe('/support/conversations/c1/');
+    expect(window.location.search).toBe('?status=open&assignee=me');
+    expect(screen.getByRole('textbox', { name: 'Reply' })).toBeTruthy();
+  });
+});
+
+describe('loading a conversation', () => {
+  it('draws the loading thread without a details column when the agent keeps it closed, so the panes do not move once it loads', async () => {
+    localStorage.setItem('helpdesk.aside', 'closed');
+    onTestFinished(() => localStorage.removeItem('helpdesk.aside'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        String(input).endsWith('agent/conversations/c1/')
+          ? new Promise<Response>(() => {})
+          : respond(String(input))
+      )
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    const { container } = render(
+      <HelpdeskAdmin basePath="/support" locale="en" />
+    );
+    const skeleton = await waitFor(() => {
+      const found = container.querySelector('.sa-thread-pane .sa-skeleton');
+      if (!found) throw new Error('no skeleton');
+      return found;
+    });
+    expect(skeleton.querySelector('aside')?.hidden).toBe(true);
   });
 });

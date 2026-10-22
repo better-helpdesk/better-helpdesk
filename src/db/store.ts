@@ -40,6 +40,8 @@ export type InboxFilter = {
   query?: string;
   /** `high` keeps high and urgent conversations only. */
   priority?: 'high';
+  /** Resolved, rated or, for any other status, opened, resolved or rated since then. */
+  since?: Date;
   /** Longest waiting first by default; `priority` puts urgent and high on top. */
   sort?: 'waiting' | 'priority';
   limit?: number;
@@ -342,8 +344,8 @@ export function createStore(adapter: DatabaseAdapter) {
       filter.inbox && eq('inbox', filter.inbox),
       filter.status === 'snoozed'
         ? and(eq('status', 'pending'), ne('snoozedUntil', null))
-        : filter.status === 'rated-bad'
-          ? eq('rating', 'bad')
+        : filter.status === 'rated-good' || filter.status === 'rated-bad'
+          ? eq('rating', filter.status.slice('rated-'.length))
           : filter.status && eq('status', filter.status),
       filter.assigneeId === null
         ? eq('assigneeId', null)
@@ -358,6 +360,16 @@ export function createStore(adapter: DatabaseAdapter) {
           eq('tag', filter.tag)
         ),
       filter.priority === 'high' && oneOf('priority', ['high', 'urgent']),
+      filter.since &&
+        (filter.status === 'resolved'
+          ? gte('resolvedAt', filter.since)
+          : filter.status?.startsWith('rated-')
+            ? gte('ratedAt', filter.since)
+            : or(
+                gte('createdAt', filter.since),
+                gte('resolvedAt', filter.since),
+                gte('ratedAt', filter.since)
+              )),
       // A blocked sender's conversations stay on their contact page only.
       !filter.contactId && notBlocked,
       q &&
@@ -1526,16 +1538,6 @@ export function createStore(adapter: DatabaseAdapter) {
         `notifications-seen:${agentId}`,
         clock().toISOString()
       );
-    },
-
-    async countOpen(agentId: string) {
-      const open = and(eq('status', 'open'), notBlocked);
-      const [all, mine, unassigned] = await Promise.all([
-        adapter.count('conversation', open),
-        adapter.count('conversation', and(open, eq('assigneeId', agentId))),
-        adapter.count('conversation', and(open, eq('assigneeId', null))),
-      ]);
-      return { all, mine, unassigned };
     },
 
     async countWaiting() {
