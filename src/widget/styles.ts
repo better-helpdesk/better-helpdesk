@@ -147,7 +147,7 @@ button { cursor: pointer; }
 .resolve button:hover:not(:disabled) { color: var(--s-fg); text-decoration: underline; }
 .resolve button:focus-visible { outline: 2px solid var(--s-focus); outline-offset: 2px; border-radius: min(4px, var(--s-r-inner)); }
 .resolve button:disabled { cursor: default; opacity: 0.6; }
-.rating { display: grid; gap: 8px; margin: 0 12px 12px; padding: 12px; border: 1px solid var(--s-border); border-radius: var(--s-r-control); }
+.rating { display: grid; gap: 8px; margin: 8px 12px 12px; padding: 12px; border: 1px solid var(--s-border); border-radius: var(--s-r-control); }
 .rating legend { padding: 0 4px; font-size: 13px; font-weight: 600; }
 .rating textarea { min-height: 56px; }
 .rating-buttons { display: flex; gap: 8px; }
