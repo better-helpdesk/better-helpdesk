@@ -50,6 +50,11 @@ package.
 - Email: outbound through your own sender, inbound through a webhook from
   any relay with DKIM verification, replies threaded back into the
   conversation.
+- Service levels: tiers, an SLA policy per tier and priority with response
+  and resolution targets, a clock that pauses while the customer has the
+  ball, warnings and breaches, attainment on the Statistics page. Roles
+  (agent, supervisor, viewer) and an audit log. Conversations the team
+  opens, host functions for notes and changes, export and import of history.
 - Adapters for storage, AI (schema-typed prompts), help search and scheduled
   jobs. Data retention and anonymous rate limits are configurable.
 - English, German, French and Italian. Theming through CSS custom properties. Peer

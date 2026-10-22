@@ -126,6 +126,8 @@ describe('onEvent', () => {
         type: 'bug',
         resolvedAt: null,
         waitingSince: expect.any(Date),
+        // Resolving pauses the SLA clock.
+        slaPausedAt: null,
       },
       agentId: agent?.id,
     });

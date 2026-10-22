@@ -2,8 +2,9 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { type Feature, type Locale, PRIORITIES, STATUSES } from './config';
+import { type Feature, type Locale, STATUSES } from './config';
 import { clock } from './db/adapter';
+import type { Channel } from './db/model';
 import type {
   Agent,
   Company,
@@ -100,7 +101,19 @@ const VIEW_FILTERS = [
   'sort',
   'priority',
   'days',
+  'tier',
+  'channel',
 ];
+export const CHANNELS: Channel[] = ['widget', 'email', 'agent', 'api'];
+/** Agent writes a viewer may still make: their own away time, read marks and saved views. */
+const VIEWER_WRITES = new Set([
+  'me',
+  'notifications/seen',
+  'views',
+  'views/:id',
+]);
+/** Once the host hands out roles, these are a supervisor's alone. */
+const SUPERVISOR_ONLY = new Set(['PUT settings', 'DELETE agents/:id']);
 // A message is at most 20,000 characters; this leaves room for its context.
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_INBOUND_BYTES = 25 * 1024 * 1024;
@@ -147,7 +160,10 @@ export function createHandler(support: Helpdesk) {
       (!c.customerSeenAt || c.customerSeenAt < c.lastMessageAt) &&
       c.waitingSince === null,
     rating: c.rating,
+    ratingScore: c.ratingScore,
     merged: c.mergedIntoId !== null,
+    // When the team aims to answer by, while nobody has.
+    respondBy: c.firstRespondedAt ? null : c.respondBy,
     typing: Boolean(c.agentTypingUntil && c.agentTypingUntil > clock()),
     // The newest message an agent has opened the thread on; the widget shows "Seen" from it.
     agentSeenAt: c.agentSeenAt,
@@ -175,6 +191,22 @@ export function createHandler(support: Helpdesk) {
     const awayUntil = await support.teamAwayUntil();
     const confirmation =
       await store.getSetting<ConfirmationSetting>('confirmation');
+    // The widget names the organization it files under; else the first one.
+    const org = url.searchParams.get('org');
+    const orgId =
+      customer.identity?.orgs.find(o => o.id === org)?.id ??
+      customer.identity?.orgs[0]?.id ??
+      null;
+    const tier =
+      inbox?.priorities && customer.identity
+        ? await support.resolveTier({
+            user: customer.identity.user,
+            orgId,
+            email: customer.contact?.email ?? null,
+            inbox: key,
+            context: {},
+          })
+        : null;
     return json({
       // Agents using the widget in the host app see what waits in their inbox.
       agent: customer.identity?.isAgent
@@ -197,9 +229,12 @@ export function createHandler(support: Helpdesk) {
                 support.toLocale(url.searchParams.get('locale'))
               ] ?? null,
             qualify: inbox.qualify ?? null,
+            priorities: support.offeredPriorities(key, customer.identity, tier),
             bookingUrl: inbox.bookingUrl ?? null,
           }
         : null,
+      priorityLabels: config.priorityLabels ?? {},
+      ratingScale: config.ratingScale,
       team,
       teamName:
         config.teamName?.[support.toLocale(url.searchParams.get('locale'))] ??
@@ -246,7 +281,8 @@ export function createHandler(support: Helpdesk) {
   define('POST', 'widget/conversations', async ({ request, body }) => {
     const { conversation, visitorToken } = await support.createConversation(
       request,
-      await body()
+      await body(),
+      'widget'
     );
     return json(
       {
@@ -397,13 +433,17 @@ export function createHandler(support: Helpdesk) {
       }
       const data = z
         .object({
-          rating: z.enum(['good', 'bad']),
+          rating: z.enum(['good', 'bad']).optional(),
+          score: z.number().int().min(1).max(5).optional(),
           comment: z.string().trim().max(2000).optional(),
         })
+        .refine(d =>
+          config.ratingScale === 5 ? d.score !== undefined : d.rating
+        )
         .parse(await body());
       const updated = await support.rateAsCustomer(
         conversation,
-        data.rating,
+        data.score ? (String(data.score) as '1') : (data.rating as 'good'),
         data.comment
       );
       if (!updated) {
@@ -547,8 +587,24 @@ export function createHandler(support: Helpdesk) {
     return json({ results: (await config.help.search(q, locale)).slice(0, 5) });
   });
 
+  define('GET', 'health', async () => {
+    try {
+      await support.ping();
+      return json({ ok: true });
+    } catch (error) {
+      console.error('[helpdesk] health', error);
+      return json({ ok: false }, 503);
+    }
+  });
+
   // Agent -------------------------------------------------------------------
 
+  /**
+   * Every agent route passes through here: a viewer may only read, a
+   * supervisor-only route is refused once the team has a supervisor, and a
+   * change that went through is written to the audit log with the fields it
+   * sent, never their values.
+   */
   const agentRoute = (
     method: string,
     path: string,
@@ -560,9 +616,43 @@ export function createHandler(support: Helpdesk) {
       agent: Agent;
     }) => Promise<Response>
   ) =>
-    define(method, `agent/${path}`, async ctx =>
-      run({ ...ctx, agent: await support.requireAgent(ctx.request) })
-    );
+    define(method, `agent/${path}`, async ctx => {
+      const agent = await support.requireAgent(ctx.request);
+      const action = `${method} ${path}`;
+      if (method !== 'GET') {
+        if (agent.role === 'viewer' && !VIEWER_WRITES.has(path)) {
+          throw new HelpdeskError(403, 'Read-only');
+        }
+        if (
+          SUPERVISOR_ONLY.has(action) &&
+          agent.role !== 'supervisor' &&
+          (await store.hasSupervisors())
+        ) {
+          throw new HelpdeskError(403, 'Supervisors only');
+        }
+      }
+      let sent: unknown;
+      const body = async () => {
+        sent ??= await ctx.body();
+        return sent;
+      };
+      const response = await run({ ...ctx, body, agent });
+      if (method !== 'GET' && response.status < 400) {
+        const fields =
+          sent && typeof sent === 'object' ? Object.keys(sent) : [];
+        try {
+          await store.recordAudit({
+            agentId: agent.id,
+            action,
+            target: ctx.params.attachmentId || ctx.params.id || null,
+            data: fields.length ? { fields } : {},
+          });
+        } catch (error) {
+          console.error('[helpdesk] recording the audit log failed', error);
+        }
+      }
+      return response;
+    });
   /** A feature the config switched off has no routes, so the router answers 404 for them. */
   const featureRoute = (feature: Feature): typeof agentRoute =>
     config.features[feature] ? agentRoute : () => {};
@@ -571,13 +661,7 @@ export function createHandler(support: Helpdesk) {
 
   const tag = z.string().trim().min(1).max(50);
   const tags = z.array(tag).max(MAX_TAGS).optional();
-
-  const requireConversation = async (id: string) => {
-    if (!uuid.safeParse(id).success) throw new HelpdeskError(404, 'Not found');
-    const conversation = await store.getConversation(id);
-    if (!conversation) throw new HelpdeskError(404, 'Not found');
-    return conversation;
-  };
+  const { requireConversation } = support;
 
   // A contact's first captured context is only ever read for its source.
   const contactRow = ({
@@ -634,6 +718,20 @@ export function createHandler(support: Helpdesk) {
     return json({ ok: true });
   });
 
+  agentRoute('GET', 'audit', async ({ url, agent }) => {
+    if (agent.role !== 'supervisor' && (await store.hasSupervisors())) {
+      throw new HelpdeskError(403, 'Supervisors only');
+    }
+    const p = url.searchParams;
+    const id = (key: string) => uuid.optional().parse(p.get(key) || undefined);
+    return json({
+      entries: await store.listAudit({
+        agentId: id('agentId'),
+        target: p.get('target') || undefined,
+      }),
+    });
+  });
+
   agentRoute('GET', 'me', async ({ agent }) =>
     json({
       agent,
@@ -641,7 +739,13 @@ export function createHandler(support: Helpdesk) {
       referencePrefix: config.referencePrefix,
       types: config.types,
       statuses: STATUSES,
-      priorities: PRIORITIES,
+      priorities: config.priorities,
+      defaultPriority: config.defaultPriority,
+      priorityLabels: config.priorityLabels ?? {},
+      tiers: config.tiers,
+      channels: CHANNELS,
+      sla: Boolean(config.sla),
+      ratingScale: config.ratingScale,
       inboxes: Object.keys(config.inboxes),
       inboxHours: Object.fromEntries(
         Object.entries(config.inboxes).flatMap(([key, inbox]) =>
@@ -707,6 +811,8 @@ export function createHandler(support: Helpdesk) {
       contactId: id('contactId'),
       companyId: id('companyId'),
       tag: p.get('tag')?.trim().toLowerCase() || undefined,
+      tier: p.get('tier') || undefined,
+      channel: p.get('channel') || undefined,
       query: p.get('q') || undefined,
       priority: p.get('priority') === 'high' ? ('high' as const) : undefined,
       // The Statistics page's periods, so its figures open the list they count.
@@ -716,9 +822,19 @@ export function createHandler(support: Helpdesk) {
       sort:
         p.get('sort') === 'priority'
           ? ('priority' as const)
-          : ('waiting' as const),
+          : p.get('sort') === 'sla'
+            ? ('sla' as const)
+            : ('waiting' as const),
     };
   }
+
+  agentRoute('POST', 'conversations', async ({ body, agent }) => {
+    const { conversation } = await support.openConversation(
+      await body(),
+      agent
+    );
+    return json({ conversation: agentView(conversation) }, 201);
+  });
 
   agentRoute('GET', 'conversations', async ({ url, agent }) => {
     const filter = inboxFilter(url.searchParams, agent.id);
@@ -952,112 +1068,17 @@ export function createHandler(support: Helpdesk) {
     });
   });
 
-  const conversationBody = z.object({
-    status: z.enum(STATUSES).optional(),
-    priority: z.enum(PRIORITIES).optional(),
-    type: z
-      .string()
-      .refine(t => config.types.includes(t))
-      .optional(),
-    inbox: z
-      .string()
-      .refine(i => Object.hasOwn(config.inboxes, i))
-      .optional(),
-    subject: z.string().trim().max(200).nullable().optional(),
-    assigneeId: uuid.nullable().optional(),
-    companyId: uuid.nullable().optional(),
-    tags: z
-      .array(tag.toLowerCase())
-      .max(MAX_TAGS)
-      .transform(list => [...new Set(list)])
-      .optional(),
-    snoozedUntil: z.iso
-      .datetime({ offset: true })
-      .transform(v => new Date(v))
-      .refine(d => d.getTime() > Date.now(), 'Must be in the future')
-      .nullable()
-      .optional(),
-  });
-  type ConversationBody = z.infer<typeof conversationBody>;
-
-  const checkConversationBody = async (data: ConversationBody) => {
-    if (data.snoozedUntil) {
-      if (data.status && data.status !== 'pending') {
-        throw new HelpdeskError(400, 'A snoozed conversation is pending');
-      }
-      data.status = 'pending';
-    }
-    if (data.assigneeId && !(await store.getActiveAgent(data.assigneeId))) {
-      throw new HelpdeskError(400, 'Unknown agent');
-    }
-    if (data.companyId && !(await store.getCompany(data.companyId))) {
-      throw new HelpdeskError(400, 'Unknown company');
-    }
-    return data;
-  };
-
-  /**
-   * The row update an agent's change makes to `conversation` as it stands, with
-   * whether it resolves it. `last` is its newest public message, needed when
-   * a resolved conversation is reopened.
-   */
-  function conversationPatch(
-    conversation: Conversation,
-    data: ConversationBody,
-    last: Message | undefined
-  ) {
-    const { subject, ...rest } = data;
-    const patch: Partial<Conversation> = {
-      ...rest,
-      ...(subject !== undefined ? { title: subject } : {}),
-    };
-    // A snooze left on an open thread would hold back its reminders.
-    if (data.status && data.status !== 'pending') patch.snoozedUntil = null;
-    // Sharing was granted to one organization; it does not follow a move.
-    if (
-      data.companyId !== undefined &&
-      data.companyId !== conversation.companyId
-    ) {
-      patch.sharedWithCompany = false;
-    }
-    const resolving =
-      data.status === 'resolved' && conversation.status !== 'resolved';
-    if (resolving) {
-      patch.resolvedAt = clock();
-      patch.waitingSince = null;
-    } else if (data.status && data.status !== 'resolved') {
-      patch.resolvedAt = null;
-      // Reopened while the customer had the last word: they are waiting again.
-      if (
-        conversation.status === 'resolved' &&
-        last?.authorType === 'contact'
-      ) {
-        patch.waitingSince = last.createdAt;
-      }
-    }
-    return { patch, resolving };
-  }
-
   agentRoute('PATCH', 'conversations/:id', async ({ params, body, agent }) => {
     const conversation = await requireConversation(params.id);
-    const data = await checkConversationBody(
-      conversationBody.parse(await body())
+    const current = await support.changeConversation(
+      conversation,
+      await body(),
+      agent.id
     );
-    const last =
-      conversation.status === 'resolved'
-        ? (await store.lastMessages([conversation.id])).get(conversation.id)
-        : undefined;
-    const { patch, resolving } = conversationPatch(conversation, data, last);
-    // A concurrent resolve that lands first keeps its resolvedAt and its timeline row.
-    const updated = await store.updateConversation(conversation.id, patch, {
-      unlessResolved: resolving,
-    });
-    await emitUpdated(config, conversation, updated, patch, agent.id);
-    const current = updated ?? (await store.getConversation(conversation.id));
     return json({ conversation: current && agentView(current) });
   });
 
-  const bulkBody = conversationBody
+  const bulkBody = support.changeInput
     .omit({ subject: true, companyId: true, tags: true })
     .extend({
       ids: z
@@ -1066,11 +1087,16 @@ export function createHandler(support: Helpdesk) {
         .max(100)
         .transform(list => [...new Set(list)]),
       addTag: tag.toLowerCase().optional(),
+      /** One answer to every selected conversation, as its own reply. */
+      reply: z.string().trim().min(1).max(20_000).optional(),
+      note: z.string().trim().min(1).max(20_000).optional(),
     });
 
   agentRoute('POST', 'conversations/bulk', async ({ body, agent }) => {
-    const { ids, addTag, ...fields } = bulkBody.parse(await body());
-    const data = await checkConversationBody(fields);
+    const { ids, addTag, reply, note, ...fields } = bulkBody.parse(
+      await body()
+    );
+    const data = await support.checkChange(fields);
     // Read before the transaction: inside it a second pool connection could
     // wait on connections held by batches that wait on it.
     const lastMessages =
@@ -1087,7 +1113,7 @@ export function createHandler(support: Helpdesk) {
         if (tags && tags.length > MAX_TAGS) {
           throw new HelpdeskError(400, 'Too many tags', [conversation.id]);
         }
-        return conversationPatch(
+        return support.changePatch(
           conversation,
           tags ? { ...data, tags } : data,
           lastMessages.get(conversation.id)
@@ -1097,6 +1123,18 @@ export function createHandler(support: Helpdesk) {
     if (missing.length > 0) throw new HelpdeskError(404, 'Not found', missing);
     for (const { before, updated, patch } of changes) {
       await emitUpdated(config, before, updated, patch, agent.id);
+    }
+    // After the change, so a reply that resolves lands on the resolved thread.
+    for (const { updated } of changes) {
+      if (!updated || updated.mergedIntoId) continue;
+      if (note) await support.addAgentMessage(agent.id, updated, note, true);
+      if (reply) {
+        const current = note
+          ? await store.getConversation(updated.id)
+          : updated;
+        if (current)
+          await support.addAgentMessage(agent.id, current, reply, false);
+      }
     }
     return json({ ok: true });
   });
@@ -1641,17 +1679,20 @@ export function createHandler(support: Helpdesk) {
     if (conversation.status !== 'resolved' || conversation.mergedIntoId) {
       return page(locale, 409, t('rate.closed', { reference }));
     }
+    // A score from 1 to 5 reads its own lines; good and bad keep theirs.
+    const key = /^\d$/.test(link.rating) ? 'score' : link.rating;
+    const values = { reference, score: link.rating };
     if (!submit) {
       return page(
         locale,
         200,
-        t(`rate.confirm.${link.rating}`, { reference }),
-        t(`rate.button.${link.rating}`)
+        t(`rate.confirm.${key}`, values),
+        t(`rate.button.${key}`, values)
       );
     }
     const updated = await support.rateAsCustomer(conversation, link.rating);
     return updated
-      ? page(locale, 200, t(`rate.thanks.${link.rating}`, { reference }))
+      ? page(locale, 200, t(`rate.thanks.${key}`, values))
       : page(locale, 409, t('rate.closed', { reference }));
   }
 
@@ -1763,13 +1804,15 @@ export function createHandler(support: Helpdesk) {
         id: values.id ?? '',
         attachmentId: values.attachmentId ?? '',
       };
+      // Read once: the route and the audit log both look at it.
+      let parsed: Promise<unknown> | undefined;
       try {
         checkMutation(request, path);
         const response = await route.run({
           request,
           params,
           url,
-          body: () => readJson(request),
+          body: () => (parsed ??= readJson(request)),
         });
         for (const [key, value] of Object.entries(cors)) {
           response.headers.set(key, value);

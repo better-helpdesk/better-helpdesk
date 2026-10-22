@@ -406,6 +406,9 @@ export const adminCss = `
 .sa-dialog-foot > :first-child:not(:only-child) { margin-inline-end: auto; }
 .sa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .sa-error { color: var(--a-danger); }
+.sa-readonly { margin: 0 0 12px; padding: 12px; border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-subtle); color: var(--a-muted); font-size: 13px; line-height: 1.4; }
+.sa-sla { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; margin: 0; }
+.sa-sla .sa-eyebrow { margin-inline-end: 4px; }
 .sa-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--a-danger) 30%, var(--a-border)); border-radius: var(--a-radius); background: color-mix(in srgb, var(--a-danger) 6%, var(--a-bg)); color: var(--a-danger); }
 .sa-stats { margin: 0; }
 .sa-page-head .sa-grow { flex: 1; }

@@ -109,11 +109,13 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
     {
       orgs = [],
       isAgent = false,
+      role,
       email = `${key}@example.test`,
       emailVerified = true,
     }: {
       orgs?: Identity['orgs'];
       isAgent?: boolean;
+      role?: Identity['role'];
       email?: string;
       emailVerified?: boolean;
     } = {}
@@ -128,6 +130,7 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
       },
       orgs,
       isAgent,
+      ...(role && { role }),
     });
   }
 

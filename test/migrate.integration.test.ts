@@ -56,6 +56,7 @@ describe.skipIf(testFamily !== 'postgres')(
         '0000_baseline',
         '0001_tags_and_counter',
         '0002_conversation_kind_and_typing',
+        '0003_tiers_sla_roles_audit',
       ]);
       const { rows } = await pool.query(
         'SELECT count(*)::int AS n FROM helpdesk.__migrations'

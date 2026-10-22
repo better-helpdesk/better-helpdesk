@@ -55,6 +55,9 @@ async function seed(
         resolveAfter === null
           ? null
           : new Date(createdAt.getTime() + resolveAfter),
+      firstRespondedAt: replyAfter
+        ? new Date(createdAt.getTime() + replyAfter)
+        : null,
       status: resolveAfter ? 'resolved' : 'open',
       assigneeId: agent?.id ?? null,
     }
@@ -90,28 +93,35 @@ describe('overview', () => {
     });
     expect(res.status).toBe(200);
     const numbers = { new: 4, resolved: 2, firstResponse: 2, resolution: 5 };
-    expect(res.data.total).toEqual(numbers);
-    expect(res.data.inboxes).toEqual([{ inbox: 'support', ...numbers }]);
+    expect(res.data.total).toMatchObject({
+      ...numbers,
+      firstResponseP90: 2.8,
+      resolutionP90: 5.8,
+      reopened: 0,
+      response: { met: 0, breached: 0 },
+    });
+    expect(res.data.inboxes).toMatchObject([{ inbox: 'support', ...numbers }]);
     expect(res.data.agents).toEqual(
       expect.arrayContaining([
-        {
+        expect.objectContaining({
           agentId: expect.any(String),
           name: 'agent',
           new: 2,
           resolved: 2,
           firstResponse: 2,
           resolution: 5,
-        },
-        {
+        }),
+        expect.objectContaining({
           agentId: null,
           name: null,
           new: 2,
           resolved: 0,
           firstResponse: 2,
           resolution: null,
-        },
+        }),
       ])
     );
+    expect(res.data.channels).toMatchObject([{ channel: 'widget', new: 4 }]);
     expect(res.data.openHours).toBe(false);
     expect(res.data.ratings).toBeNull();
 
@@ -137,7 +147,7 @@ describe('overview', () => {
       user: 'agent',
     });
     expect(res.data.openHours).toBe(true);
-    expect(res.data.total).toEqual({
+    expect(res.data.total).toMatchObject({
       new: 1,
       resolved: 1,
       firstResponse: 1,
@@ -178,7 +188,7 @@ describe('overview', () => {
       user: 'agent',
     });
     expect(res.data.total).toMatchObject({ new: 2, resolved: 2 });
-    expect(res.data.ratings).toEqual({ good: 1, bad: 1 });
+    expect(res.data.ratings).toEqual({ good: 1, bad: 1, average: null });
   });
 
   it('is for agents only', async () => {

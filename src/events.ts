@@ -11,6 +11,13 @@ export type HelpdeskEvent =
       message: Message;
     }
   | {
+      /** A share of a service-level target has passed, or the target was missed. */
+      kind: 'sla.warning' | 'sla.breach';
+      conversation: Conversation;
+      target: 'response' | 'resolution';
+      due: Date;
+    }
+  | {
       kind: 'message.created';
       conversation: Conversation;
       message: Message;
@@ -40,6 +47,7 @@ export async function emit(config: HelpdeskConfig, event: HelpdeskEvent) {
 const TRACKED = [
   'status',
   'priority',
+  'tier',
   'assigneeId',
   'type',
   'inbox',

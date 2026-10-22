@@ -7,6 +7,7 @@ import { useAdmin } from './context';
 import { FREE_MAIL } from './conversation';
 import { DealDialog } from './deals';
 import { type ConversationRow, ConversationTable } from './inbox';
+import { NewConversationDialog } from './new-conversation';
 import { CompanyPicker, ContactPicker } from './pickers';
 import {
   Avatar,
@@ -77,7 +78,7 @@ function Toolbar({
   onNew: () => void;
   extra?: React.ReactNode;
 }) {
-  const { t, route, navigate } = useAdmin();
+  const { t, route, navigate, readOnly } = useAdmin();
   const [query, setQuery] = useState(route.q ?? '');
   return (
     <div className="sa-toolbar">
@@ -97,10 +98,12 @@ function Toolbar({
         />
       </form>
       {extra}
-      <button type="button" className="sa-btn sa-primary" onClick={onNew}>
-        <Svg d={paths.plus} />
-        {newLabel}
-      </button>
+      {!readOnly && (
+        <button type="button" className="sa-btn sa-primary" onClick={onNew}>
+          <Svg d={paths.plus} />
+          {newLabel}
+        </button>
+      )}
     </div>
   );
 }
@@ -308,11 +311,12 @@ export function ContactList() {
 }
 
 export function ContactView({ id }: { id: string }) {
-  const { api, t, me, navigate, href, locale } = useAdmin();
+  const { api, t, me, navigate, href, locale, readOnly } = useAdmin();
   const confirm = useConfirm(t);
   const [editing, setEditing] = useState(false);
   const [merging, setMerging] = useState(false);
   const [newDeal, setNewDeal] = useState(false);
+  const [starting, setStarting] = useState(false);
   const detail = useResource(
     () =>
       api<{
@@ -409,52 +413,74 @@ export function ContactView({ id }: { id: string }) {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          className="sa-btn"
-          onClick={() => setEditing(true)}>
-          {t('admin.edit')}
-        </button>
-        <Menu label={t('widget.more')} button="⋯">
-          {close => (
-            <>
-              <button
-                type="button"
-                className="sa-btn sa-ghost"
-                onClick={() => {
-                  close();
-                  setMerging(true);
-                }}>
-                {t('admin.merge')}
-              </button>
-              <button
-                type="button"
-                className="sa-btn sa-ghost"
-                title={c.blocked ? undefined : t('admin.blockHint')}
-                onClick={async () => {
-                  close();
-                  await api(`agent/contacts/${id}`, {
-                    method: 'PATCH',
-                    body: { blocked: !c.blocked },
-                  });
-                  await detail.refresh();
-                }}>
-                {t(c.blocked ? 'admin.unblock' : 'admin.block')}
-              </button>
-              <button
-                type="button"
-                className="sa-btn sa-ghost sa-danger"
-                onClick={async () => {
-                  close();
-                  if (!(await confirm.ask())) return;
-                  await api(`agent/contacts/${id}`, { method: 'DELETE' });
-                  navigate({ view: 'contacts' });
-                }}>
-                {t('admin.delete')}
-              </button>
-            </>
-          )}
-        </Menu>
+        {!readOnly && (
+          <button
+            type="button"
+            className="sa-btn"
+            onClick={() => setStarting(true)}>
+            <Svg d={paths.plus} />
+            {t('admin.newConversation')}
+          </button>
+        )}
+        <NewConversationDialog
+          open={starting}
+          contact={{ id: c.id, name: c.name, email: c.email }}
+          onClose={() => setStarting(false)}
+          onCreated={cid => {
+            setStarting(false);
+            navigate({ conversation: cid });
+          }}
+        />
+        {!readOnly && (
+          <button
+            type="button"
+            className="sa-btn"
+            onClick={() => setEditing(true)}>
+            {t('admin.edit')}
+          </button>
+        )}
+        {!readOnly && (
+          <Menu label={t('widget.more')} button="⋯">
+            {close => (
+              <>
+                <button
+                  type="button"
+                  className="sa-btn sa-ghost"
+                  onClick={() => {
+                    close();
+                    setMerging(true);
+                  }}>
+                  {t('admin.merge')}
+                </button>
+                <button
+                  type="button"
+                  className="sa-btn sa-ghost"
+                  title={c.blocked ? undefined : t('admin.blockHint')}
+                  onClick={async () => {
+                    close();
+                    await api(`agent/contacts/${id}`, {
+                      method: 'PATCH',
+                      body: { blocked: !c.blocked },
+                    });
+                    await detail.refresh();
+                  }}>
+                  {t(c.blocked ? 'admin.unblock' : 'admin.block')}
+                </button>
+                <button
+                  type="button"
+                  className="sa-btn sa-ghost sa-danger"
+                  onClick={async () => {
+                    close();
+                    if (!(await confirm.ask())) return;
+                    await api(`agent/contacts/${id}`, { method: 'DELETE' });
+                    navigate({ view: 'contacts' });
+                  }}>
+                  {t('admin.delete')}
+                </button>
+              </>
+            )}
+          </Menu>
+        )}
       </div>
       <div className="sa-split">
         <div className="sa">
@@ -492,40 +518,47 @@ export function ContactView({ id }: { id: string }) {
             ) : (
               <span className="sa-muted">{t('admin.company.none')}</span>
             )}
-            {!data.company && domain && !FREE_MAIL.test(domain) && (
-              <button
-                type="button"
-                className="sa-btn"
-                onClick={async () => {
-                  const created = await api<{ company: { id: string } }>(
-                    'agent/companies',
-                    { body: { name: domain, domain } }
-                  );
-                  await api(`agent/contacts/${id}`, {
-                    method: 'PATCH',
-                    body: { companyId: created.company.id },
-                  });
-                  await detail.refresh();
-                }}>
-                <Svg d={paths.plus} />
-                {t('admin.createCompanyFrom', { domain })}
-              </button>
-            )}
-            {!data.company && (
+            {!readOnly &&
+              !data.company &&
+              domain &&
+              !FREE_MAIL.test(domain) && (
+                <button
+                  type="button"
+                  className="sa-btn"
+                  onClick={async () => {
+                    const created = await api<{ company: { id: string } }>(
+                      'agent/companies',
+                      { body: { name: domain, domain } }
+                    );
+                    await api(`agent/contacts/${id}`, {
+                      method: 'PATCH',
+                      body: { companyId: created.company.id },
+                    });
+                    await detail.refresh();
+                  }}>
+                  <Svg d={paths.plus} />
+                  {t('admin.createCompanyFrom', { domain })}
+                </button>
+              )}
+            {!readOnly && !data.company && (
               <span className="sa-fine">{t('admin.orLinkExisting')}</span>
             )}
-            <CompanyPicker
-              label={
-                data.company ? t('admin.changeCompany') : t('admin.linkCompany')
-              }
-              onPick={async company => {
-                await api(`agent/contacts/${id}`, {
-                  method: 'PATCH',
-                  body: { companyId: company.id },
-                });
-                await detail.refresh();
-              }}
-            />
+            {!readOnly && (
+              <CompanyPicker
+                label={
+                  data.company
+                    ? t('admin.changeCompany')
+                    : t('admin.linkCompany')
+                }
+                onPick={async company => {
+                  await api(`agent/contacts/${id}`, {
+                    method: 'PATCH',
+                    body: { companyId: company.id },
+                  });
+                  await detail.refresh();
+                }}
+              />
+            )}
           </div>
           {me.features.deals && (
             <div className="sa-card">
@@ -544,14 +577,16 @@ export function ContactView({ id }: { id: string }) {
                   </span>
                 </a>
               ))}
-              <button
-                type="button"
-                className="sa-btn"
-                style={{ justifySelf: 'start' }}
-                onClick={() => setNewDeal(true)}>
-                <Svg d={paths.plus} />
-                {t('admin.newDeal')}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="sa-btn"
+                  style={{ justifySelf: 'start' }}
+                  onClick={() => setNewDeal(true)}>
+                  <Svg d={paths.plus} />
+                  {t('admin.newDeal')}
+                </button>
+              )}
             </div>
           )}
           <div className="sa-card">
@@ -730,7 +765,7 @@ export function CompanyList() {
 }
 
 export function CompanyView({ id }: { id: string }) {
-  const { api, t, me, navigate, href, locale } = useAdmin();
+  const { api, t, me, navigate, href, locale, readOnly } = useAdmin();
   const detail = useResource(
     () =>
       api<{
@@ -770,20 +805,43 @@ export function CompanyView({ id }: { id: string }) {
       </div>
       <div className="sa-split">
         <div className="sa">
-          <EntityForm
-            key={c.id}
-            entity="company"
-            path={`agent/companies/${id}`}
-            initial={{
-              name: c.name,
-              domain: c.domain ?? '',
-              leadStage: c.leadStage,
-              tags: c.tags,
-              custom: c.custom,
-            }}
-            fields={me.customFields.company ?? []}
-            onSaved={detail.refresh}
-          />
+          {readOnly ? (
+            <div className="sa-card">
+              <dl className="sa-kv">
+                <dt>{t('admin.name')}</dt>
+                <dd>{c.name}</dd>
+                <dt>{t('admin.domain')}</dt>
+                <dd>{c.domain ?? '—'}</dd>
+                <dt>{t('admin.leadStage')}</dt>
+                <dd>
+                  {c.leadStage ? t(`stage.${c.leadStage}`) : t('admin.none')}
+                </dd>
+                <dt>{t('admin.tags')}</dt>
+                <dd>{c.tags.join(', ') || '—'}</dd>
+                {(me.customFields.company ?? []).map(field => (
+                  <div key={field.key} style={{ display: 'contents' }}>
+                    <dt>{translated(field.label, locale)}</dt>
+                    <dd>{String(c.custom[field.key] ?? '—')}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : (
+            <EntityForm
+              key={c.id}
+              entity="company"
+              path={`agent/companies/${id}`}
+              initial={{
+                name: c.name,
+                domain: c.domain ?? '',
+                leadStage: c.leadStage,
+                tags: c.tags,
+                custom: c.custom,
+              }}
+              fields={me.customFields.company ?? []}
+              onSaved={detail.refresh}
+            />
+          )}
           <Timeline
             entries={data.timeline.filter(e => e.kind !== 'conversation')}
             target={{ companyId: id }}
@@ -983,49 +1041,51 @@ function Timeline({
   target: { contactId?: string; companyId?: string };
   onLogged: () => void;
 }) {
-  const { api, t, locale } = useAdmin();
+  const { api, t, locale, readOnly } = useAdmin();
   const [kind, setKind] = useState<'note' | 'call' | 'meeting'>('note');
   const [body, setBody] = useState('');
 
   return (
     <div className="sa-card">
       <h3>{t('admin.timeline')}</h3>
-      <form
-        className="sa"
-        style={{ gap: 8 }}
-        onSubmit={async e => {
-          e.preventDefault();
-          if (!body.trim()) return;
-          await api('agent/activities', { body: { kind, body, ...target } });
-          setBody('');
-          onLogged();
-        }}>
-        <fieldset className="sa-seg" style={{ justifySelf: 'start' }}>
-          {(['note', 'call', 'meeting'] as const).map(k => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={kind === k}
-              onClick={() => setKind(k)}>
-              {t(`activity.${k}`)}
-            </button>
-          ))}
-        </fieldset>
-        <textarea
-          className="sa-textarea sa-note-input"
-          aria-label={t(`activity.${kind}`)}
-          placeholder={t(`admin.add.${kind}`)}
-          value={body}
-          onChange={e => setBody(e.target.value)}
-        />
-        {body.trim() && (
-          <div>
-            <button type="submit" className="sa-btn sa-primary">
-              {t('admin.logActivity')}
-            </button>
-          </div>
-        )}
-      </form>
+      {!readOnly && (
+        <form
+          className="sa"
+          style={{ gap: 8 }}
+          onSubmit={async e => {
+            e.preventDefault();
+            if (!body.trim()) return;
+            await api('agent/activities', { body: { kind, body, ...target } });
+            setBody('');
+            onLogged();
+          }}>
+          <fieldset className="sa-seg" style={{ justifySelf: 'start' }}>
+            {(['note', 'call', 'meeting'] as const).map(k => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={kind === k}
+                onClick={() => setKind(k)}>
+                {t(`activity.${k}`)}
+              </button>
+            ))}
+          </fieldset>
+          <textarea
+            className="sa-textarea sa-note-input"
+            aria-label={t(`activity.${kind}`)}
+            placeholder={t(`admin.add.${kind}`)}
+            value={body}
+            onChange={e => setBody(e.target.value)}
+          />
+          {body.trim() && (
+            <div>
+              <button type="submit" className="sa-btn sa-primary">
+                {t('admin.logActivity')}
+              </button>
+            </div>
+          )}
+        </form>
+      )}
       {entries.length === 0 && (
         <p className="sa-fine">{t('admin.timelineEmpty')}</p>
       )}
@@ -1053,7 +1113,7 @@ function DealsCard({
   create: { contactId?: string; companyId?: string | null };
   onChanged: () => void;
 }) {
-  const { api, t, navigate, href, locale } = useAdmin();
+  const { api, t, navigate, href, locale, readOnly } = useAdmin();
   const [title, setTitle] = useState('');
   return (
     <div className="sa-card">
@@ -1072,32 +1132,34 @@ function DealsCard({
           </span>
         </a>
       ))}
-      <form
-        className="sa-toolbar"
-        onSubmit={async e => {
-          e.preventDefault();
-          if (!title.trim()) return;
-          await api('agent/deals', {
-            body: {
-              title,
-              contactId: create.contactId,
-              companyId: create.companyId ?? undefined,
-            },
-          });
-          setTitle('');
-          onChanged();
-        }}>
-        <input
-          className="sa-input sa-grow"
-          aria-label={t('admin.dealTitle')}
-          placeholder={t('admin.newDeal')}
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-        />
-        <button type="submit" className="sa-btn" disabled={!title.trim()}>
-          <Svg d={paths.plus} />
-        </button>
-      </form>
+      {!readOnly && (
+        <form
+          className="sa-toolbar"
+          onSubmit={async e => {
+            e.preventDefault();
+            if (!title.trim()) return;
+            await api('agent/deals', {
+              body: {
+                title,
+                contactId: create.contactId,
+                companyId: create.companyId ?? undefined,
+              },
+            });
+            setTitle('');
+            onChanged();
+          }}>
+          <input
+            className="sa-input sa-grow"
+            aria-label={t('admin.dealTitle')}
+            placeholder={t('admin.newDeal')}
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+          />
+          <button type="submit" className="sa-btn" disabled={!title.trim()}>
+            <Svg d={paths.plus} />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

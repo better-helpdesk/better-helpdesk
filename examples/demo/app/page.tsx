@@ -76,7 +76,12 @@ export default async function Page() {
         </section>
       </main>
       <Foot />
-      <HelpdeskWidget inbox="support" locale="en" appVersion="harbor@4.12.0" />
+      <HelpdeskWidget
+        inbox="support"
+        locale="en"
+        appVersion="harbor@4.12.0"
+        context={{ workspace: 'eu-west', project: 'harbor-web' }}
+      />
     </>
   );
 }

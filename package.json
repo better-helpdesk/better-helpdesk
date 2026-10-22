@@ -40,6 +40,7 @@
     "./testing": "./src/testing.ts"
   },
   "bin": {
+    "better-helpdesk-export": "bin/export.mjs",
     "better-helpdesk-import": "bin/import.mjs",
     "better-helpdesk-migrate": "bin/migrate.mjs"
   },

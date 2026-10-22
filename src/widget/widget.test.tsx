@@ -1739,6 +1739,98 @@ describe('home, messages and help', () => {
     );
   });
 
+  it('lets the customer pick a priority the inbox offers, named as the host names it', async () => {
+    const calls = mockApi({
+      'widget/session': {
+        ...session,
+        priorityLabels: { urgent: { en: 'P1' }, high: { en: 'P2' } },
+        inbox: {
+          title: null,
+          replyPromise: null,
+          privacyUrl: null,
+          bookingUrl: null,
+          qualify: null,
+          priorities: [
+            { value: 'high', description: { en: 'A key function is down' } },
+            { value: 'urgent', description: { en: 'Everything is down' } },
+          ],
+        },
+      },
+      ...posted,
+    });
+    await opened();
+    fireEvent.click(await ticketType(/Report a bug/));
+    const p1 = screen.getByRole('radio', { name: /P1/ });
+    expect(screen.getByText('Everything is down')).toBeTruthy();
+    fireEvent.click(p1);
+    const message = screen.getByRole('textbox', { name: 'What happened?' });
+    message.textContent = 'Nothing loads';
+    fireEvent.input(message);
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({ type: 'bug', priority: 'urgent' })
+    );
+  });
+
+  it('asks for a score from 1 to 5 on the five-point scale', async () => {
+    const summary = { ...ownThread, status: 'resolved' };
+    const ratings: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('widget/session')) {
+          return new Response(
+            JSON.stringify({
+              ...session,
+              ratingScale: 5,
+              conversations: [summary],
+            })
+          );
+        }
+        if (url.endsWith('widget/conversations/c1/rating/')) {
+          ratings.push(JSON.parse(String(init?.body)));
+          return new Response(JSON.stringify({ ok: true }));
+        }
+        if (url.endsWith('widget/conversations/c1/')) {
+          return new Response(
+            JSON.stringify({
+              conversation: {
+                ...summary,
+                rating: ratings.length ? 'good' : null,
+              },
+              messages: [],
+              attachments: [],
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }));
+      })
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
+    fireEvent.click(await screen.findByText('Export broken'));
+
+    expect(await screen.findByText('How did we do?')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Good' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '4 of 5' }));
+    await screen.findByText('Thanks for your feedback.');
+    expect(ratings).toEqual([{ score: 4, comment: '' }]);
+  });
+
   it('submits a ticket of the type picked', async () => {
     const calls = mockApi({ 'widget/session': session, ...posted });
     await opened();

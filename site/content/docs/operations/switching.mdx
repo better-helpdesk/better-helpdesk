@@ -3,7 +3,7 @@ title: Switch from another helpdesk
 description: Move a support team from Intercom, Zendesk, a shared Gmail inbox or Chatwoot, with contacts and canned replies imported and two tools side by side for a while.
 ---
 
-This guide assumes the [quickstart](/docs/quickstart) is done and inbound email works as in [Receive email](/docs/email/receive). Better Helpdesk does not import conversation history. What moves over is contacts, companies and canned replies; the history stays readable in the old tool for as long as you keep it.
+This guide assumes the [quickstart](/docs/quickstart) is done and inbound email works as in [Receive email](/docs/email/receive). Contacts, companies and canned replies move over from CSV files. Conversation history moves over as [JSON Lines](/docs/operations/cli#conversations), one conversation per line, once you have mapped the old tool's export to that shape; until then the history stays readable in the old tool.
 
 ## Run the two tools side by side
 
@@ -33,6 +33,18 @@ When an agent inserts a canned reply, `{firstName}` and `{reference}` in it are 
 Running the import again is safe, also after agents have started working. A contact whose email is already known only gains what it lacks: empty fields are filled and tags are added, and nothing an agent changed is undone. A canned reply whose title and locale exist is left alone. So fix the export and run the whole file again.
 
 An imported contact is not linked to anyone's login. When the same person later writes in or signs in, they may arrive as a second contact; open the older one and use **Merge another contact into this one**.
+
+## Import conversation history
+
+The old tool's threads can come along as conversations of their own. Write a script that turns its export into one JSON object per line in the [export format](/docs/operations/cli#better-helpdesk-export), then import the file:
+
+```sh
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-import conversations history.jsonl --source Freshdesk
+```
+
+Each line needs the inbox and type it should land in, when it was opened, the customer by email, and its messages with their authors and times. People are matched by email, so a customer who later writes in lands on the same contact. Agents are matched by email to your team; a message from someone who is not on it stays an agent message without a name. The old reference and the `--source` are kept with the conversation, so an agent can still quote the old number. Attachments are not imported: keep the old tool's files where they are, or copy them into your storage and link them from a note. Run the import once; running it again opens every conversation a second time.
+
+`better-helpdesk-export` writes the same format, so the next tool can take over from this one the same way.
 
 ## Move each tool over
 

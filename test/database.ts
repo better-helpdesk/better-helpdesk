@@ -138,6 +138,7 @@ const tables: ModelName[] = [
   'contact_tag',
   'company_tag',
   'attachment',
+  'audit_log',
   'conversation_event',
   'participant',
   'message',

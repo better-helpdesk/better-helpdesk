@@ -48,13 +48,15 @@ const FAQ: { question: string; answer: React.ReactNode; text: string }[] = [
     answer: (
       <>
         Contacts, companies and canned replies come over from a CSV export with{' '}
-        <code>better-helpdesk-import</code>. Conversation history stays readable
-        in the old tool. The{' '}
+        <code>better-helpdesk-import</code>, and conversation history as JSON
+        Lines once you have mapped the old tool's export to it. The{' '}
         <a href="/docs/operations/switching/">switching guide</a> covers
-        Intercom, Zendesk, Gmail and Chatwoot.
+        Intercom, Zendesk, Gmail and Chatwoot, and{' '}
+        <code>better-helpdesk-export</code> writes the same format, so the next
+        tool can take over too.
       </>
     ),
-    text: 'Contacts, companies and canned replies come over from a CSV export with better-helpdesk-import. Conversation history stays readable in the old tool. The switching guide covers Intercom, Zendesk, Gmail and Chatwoot.',
+    text: "Contacts, companies and canned replies come over from a CSV export with better-helpdesk-import, and conversation history as JSON Lines once you have mapped the old tool's export to it. The switching guide covers Intercom, Zendesk, Gmail and Chatwoot, and better-helpdesk-export writes the same format, so the next tool can take over too.",
   },
   {
     question: 'Does it work outside Next.js?',
@@ -196,10 +198,11 @@ export default function Home() {
 
         <section className="sec box" id="box" aria-labelledby="b-h">
           <div className="sh split rv">
-            <h2 id="b-h">Everything a small support team needs.</h2>
+            <h2 id="b-h">Everything a support team needs.</h2>
             <p className="sub">
-              Sized for any team answering customers. Every colleague can be an
-              agent at no extra cost.
+              Sized for any team answering customers, enterprise contracts
+              included. Every colleague can be an agent, a supervisor or a
+              read-only seat at no extra cost.
             </p>
           </div>
           <div className="bento">
@@ -207,8 +210,9 @@ export default function Home() {
               <h3>Shared inboxes</h3>
               <p>
                 Support and sales side by side, priorities, tags, canned
-                replies, snooze, keyboard navigation and a reminder email before
-                anyone waits too long.
+                replies, snooze, keyboard navigation, and service levels per
+                customer tier with a warning before a deadline and a breach on
+                record after it.
               </p>
               <MiniInbox />
             </article>

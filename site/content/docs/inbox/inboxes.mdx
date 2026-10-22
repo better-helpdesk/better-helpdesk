@@ -42,9 +42,14 @@ inboxes: {
       description: <>When the team answers. Reminders and the agent UI's waiting colors count only these hours, and while the inbox is closed the widget and the receipt say when it opens. Unset, every hour counts and the team is back on the next weekday. See <a href="#businesshours">BusinessHours</a>.</>,
     },
     defaultPriority: {
-      type: "'low' | 'normal' | 'high' | 'urgent'",
-      default: "'normal'",
-      description: 'Priority new conversations start with. Conversations opened by inbound email start at normal.',
+      type: 'string',
+      default: "'normal', or the lowest of priorities",
+      description: <>Priority new conversations start with, one of <code>priorities</code>. Conversations opened by inbound email start at the helpdesk's default whatever the inbox says.</>,
+    },
+    priorities: {
+      type: '{ options, tiers? }',
+      typeDescription: '{ options: Partial<Record<Priority, Translated>>; tiers?: string[] }',
+      description: <>The priorities a signed-in customer may pick on a ticket form. <code>options</code> maps each one to the text that says what it means, shown under its <code>priorityLabels</code> name. <code>tiers</code> names the tiers whose customers get the choice, as <code>resolveTier</code> assigns them; unset, every signed-in customer does. A visitor never picks one. A priority sent that is not offered to that customer is refused with 400; without a choice, <code>defaultPriority</code> applies.</>,
     },
     title: {
       type: 'Partial<Record<Locale, string>>',

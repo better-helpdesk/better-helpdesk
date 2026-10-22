@@ -53,7 +53,7 @@ const THREADS: Thread[] = [
     },
     inbox: 'support',
     type: 'bug',
-    priority: 'high',
+    priority: 'p2',
     subject: 'ETA column is blank on the shipments board',
     body: 'Since this morning the ETA column on the shipments board is empty for every container. Refreshing does not help.',
     context: browser('/shipments?view=board', {
@@ -105,7 +105,7 @@ const THREADS: Thread[] = [
     from: { name: 'Lena Aebischer', email: 'lena@alpenfracht.test' },
     inbox: 'support',
     type: 'bug',
-    priority: 'urgent',
+    priority: 'p1',
     subject: 'Tracking link in the customer email returns 404',
     body: 'Our customers get a 404 when they click the tracking link in the shipment confirmation email.',
     context: browser('/shipments/HB-90114', {
@@ -118,7 +118,7 @@ const THREADS: Thread[] = [
     from: { name: 'Priya Natarajan', email: 'priya@copperleaf.test' },
     inbox: 'support',
     type: 'feature',
-    priority: 'low',
+    priority: 'p3',
     subject: 'Dark mode for the driver app',
     body: 'Our drivers work night shifts. A dark mode in the driver app would be easier on their eyes.',
     context: browser('/drivers'),
@@ -350,8 +350,7 @@ if (seq?.is_called) {
       {
         inbox: thread.inbox,
         type: thread.type,
-        priority:
-          thread.priority ?? (thread.inbox === 'sales' ? 'high' : 'normal'),
+        priority: thread.priority ?? (thread.inbox === 'sales' ? 'p2' : 'p3'),
         subject: thread.subject,
         contactId: contact.id,
         companyId,

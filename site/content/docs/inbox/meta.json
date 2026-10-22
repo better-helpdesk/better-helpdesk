@@ -3,6 +3,7 @@
   "icon": "inbox",
   "pages": [
     "setup",
+    "sla",
     "team",
     "blocking",
     "attachments",

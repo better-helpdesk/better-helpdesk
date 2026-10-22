@@ -32,7 +32,7 @@ type Deal = {
 };
 
 export function DealsBoard() {
-  const { api, t, me, locale } = useAdmin();
+  const { api, t, me, locale, readOnly } = useAdmin();
   const deals = useResource(
     () => api<{ deals: Deal[] }>('agent/deals'),
     'deals'
@@ -74,13 +74,15 @@ export function DealsBoard() {
       <div className="sa-toolbar">
         {error && <p className="sa-error">{t('admin.error')}</p>}
         <span className="sa-grow" />
-        <button
-          type="button"
-          className="sa-btn sa-primary"
-          onClick={() => setEditing('new')}>
-          <Svg d={paths.plus} />
-          {t('admin.newDeal')}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="sa-btn sa-primary"
+            onClick={() => setEditing('new')}>
+            <Svg d={paths.plus} />
+            {t('admin.newDeal')}
+          </button>
+        )}
       </div>
       {none && <Empty text={t('admin.emptyDeals')} />}
       <div
@@ -101,7 +103,7 @@ export function DealsBoard() {
               data-over={over === stage}
               aria-label={t(`stage.${stage}`)}
               onDragOver={e => {
-                if (!configured) return;
+                if (!configured || readOnly) return;
                 e.preventDefault();
                 setOver(stage);
               }}
@@ -129,7 +131,7 @@ export function DealsBoard() {
                   key={d.id}
                   type="button"
                   className="sa-deal"
-                  draggable
+                  draggable={!readOnly}
                   onDragStart={e => e.dataTransfer.setData('text/plain', d.id)}
                   onClick={() => setEditing(d)}>
                   <strong>{d.title}</strong>
@@ -185,7 +187,7 @@ export function DealDialog({
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { api, t, me, locale } = useAdmin();
+  const { api, t, me, locale, readOnly } = useAdmin();
   const existing = deal && deal !== 'new' ? deal : null;
   const confirm = useConfirm(t);
   const [custom, setCustom] = useState(existing?.custom ?? {});
@@ -229,70 +231,72 @@ export function DealDialog({
           await onSaved();
         }}>
         <h2>{existing ? t('admin.editDeal') : t('admin.newDeal')}</h2>
-        <label className="sa-field">
-          {t('admin.dealTitle')}
-          <input
-            className="sa-input"
-            name="title"
-            required
-            defaultValue={existing?.title}
-          />
-        </label>
-        <div className="sa-grid">
+        <fieldset disabled={readOnly} style={{ display: 'contents' }}>
           <label className="sa-field">
-            {t('admin.stage')}
-            <select
-              className="sa-select"
-              style={{ width: '100%' }}
-              name="stage"
-              defaultValue={existing?.stage ?? me.dealStages[0]}>
-              {[
-                ...me.dealStages,
-                ...(existing && !me.dealStages.includes(existing.stage)
-                  ? [existing.stage]
-                  : []),
-              ].map(s => (
-                <option key={s} value={s}>
-                  {t(`stage.${s}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="sa-field">
-            {t('admin.value')} (CHF)
-            <input
-              className="sa-input num"
-              name="value"
-              type="number"
-              min={0}
-              defaultValue={existing?.value ?? ''}
-            />
-          </label>
-          <label className="sa-field">
-            {t('admin.closeDate')}
+            {t('admin.dealTitle')}
             <input
               className="sa-input"
-              name="expectedCloseAt"
-              type="date"
-              defaultValue={existing?.expectedCloseAt?.slice(0, 10) ?? ''}
+              name="title"
+              required
+              defaultValue={existing?.title}
             />
           </label>
-          {existing && (
-            <CustomFields
-              fields={me.customFields.deal ?? []}
-              values={custom}
-              locale={locale}
-              onChange={(key, value) =>
-                setCustom(v => ({ ...v, [key]: value }))
-              }
-            />
-          )}
-        </div>
+          <div className="sa-grid">
+            <label className="sa-field">
+              {t('admin.stage')}
+              <select
+                className="sa-select"
+                style={{ width: '100%' }}
+                name="stage"
+                defaultValue={existing?.stage ?? me.dealStages[0]}>
+                {[
+                  ...me.dealStages,
+                  ...(existing && !me.dealStages.includes(existing.stage)
+                    ? [existing.stage]
+                    : []),
+                ].map(s => (
+                  <option key={s} value={s}>
+                    {t(`stage.${s}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="sa-field">
+              {t('admin.value')} (CHF)
+              <input
+                className="sa-input num"
+                name="value"
+                type="number"
+                min={0}
+                defaultValue={existing?.value ?? ''}
+              />
+            </label>
+            <label className="sa-field">
+              {t('admin.closeDate')}
+              <input
+                className="sa-input"
+                name="expectedCloseAt"
+                type="date"
+                defaultValue={existing?.expectedCloseAt?.slice(0, 10) ?? ''}
+              />
+            </label>
+            {existing && (
+              <CustomFields
+                fields={me.customFields.deal ?? []}
+                values={custom}
+                locale={locale}
+                onChange={(key, value) =>
+                  setCustom(v => ({ ...v, [key]: value }))
+                }
+              />
+            )}
+          </div>
+        </fieldset>
         <div className="sa-dialog-foot">
           <button type="button" className="sa-btn" onClick={onClose}>
-            {t('admin.cancel')}
+            {t(readOnly ? 'admin.close' : 'admin.cancel')}
           </button>
-          {existing && (
+          {existing && !readOnly && (
             <button
               type="button"
               className="sa-btn sa-danger"
@@ -304,9 +308,11 @@ export function DealDialog({
               {t('admin.delete')}
             </button>
           )}
-          <button type="submit" className="sa-btn sa-primary">
-            {t('admin.save')}
-          </button>
+          {!readOnly && (
+            <button type="submit" className="sa-btn sa-primary">
+              {t('admin.save')}
+            </button>
+          )}
         </div>
       </form>
       {confirm.node}

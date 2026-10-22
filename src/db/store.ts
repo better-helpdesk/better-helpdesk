@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto';
 
-import { PRIORITIES } from '../config';
+import { DEFAULT_PRIORITIES } from '../config';
+import { type SlaClockFor, slaPatch, slaStart } from '../sla';
 import { clock, type DatabaseAdapter, type Where } from './adapter';
 import {
+  type AgentRole,
   type ConversationContext,
   helpdeskModel,
   type IdentityChannel,
   type Insert,
   type ModelName,
   type Row,
+  type SlaNotice,
 } from './model';
 
 export type Contact = Row<'contact'> & { tags: string[] };
@@ -21,6 +24,7 @@ export type Deal = Row<'deal'>;
 export type Activity = Row<'activity'>;
 export type Job = Row<'job'>;
 export type ConversationEvent = Row<'conversation_event'>;
+export type AuditEntry = Row<'audit_log'>;
 export type IdentityInput = {
   channel: IdentityChannel;
   externalId: string;
@@ -37,14 +41,25 @@ export type InboxFilter = {
   contactId?: string;
   companyId?: string;
   tag?: string;
+  tier?: string;
+  channel?: string;
   query?: string;
-  /** `high` keeps high and urgent conversations only. */
+  /** `high` keeps the two highest priorities only. */
   priority?: 'high';
   /** Resolved, rated or, for any other status, opened, resolved or rated since then. */
   since?: Date;
-  /** Longest waiting first by default; `priority` puts urgent and high on top. */
-  sort?: 'waiting' | 'priority';
+  /** Longest waiting first by default; `priority` puts urgent and high on top, `sla` the nearest deadline. */
+  sort?: 'waiting' | 'priority' | 'sla';
   limit?: number;
+};
+
+export type StoreOptions = {
+  /** The SLA targets a conversation falls under; none when unset. */
+  slaClock?: SlaClockFor;
+  /** The host's priorities, lowest first; the defaults when unset. */
+  priorities?: string[];
+  /** What a conversation starts at when its caller names none. */
+  defaultPriority?: string;
 };
 
 const MAX_ATTEMPTS = 5;
@@ -179,7 +194,14 @@ function latest<T extends Date | null>(a: T, b: Date | null): T {
 export type HelpdeskStore = ReturnType<typeof createStore>;
 
 /** Every query Better Helpdesk makes, written once over the adapter contract. */
-export function createStore(adapter: DatabaseAdapter) {
+export function createStore(
+  adapter: DatabaseAdapter,
+  {
+    slaClock = () => null,
+    priorities = DEFAULT_PRIORITIES,
+    defaultPriority = 'normal',
+  }: StoreOptions = {}
+) {
   const caps = adapter.capabilities;
 
   async function withTags<R extends { id: string }>(
@@ -359,7 +381,9 @@ export function createStore(adapter: DatabaseAdapter) {
           'conversationId',
           eq('tag', filter.tag)
         ),
-      filter.priority === 'high' && oneOf('priority', ['high', 'urgent']),
+      filter.tier && eq('tier', filter.tier),
+      filter.channel && eq('channel', filter.channel),
+      filter.priority === 'high' && oneOf('priority', priorities.slice(-2)),
       filter.since &&
         (filter.status === 'resolved'
           ? gte('resolvedAt', filter.since)
@@ -844,11 +868,13 @@ export function createStore(adapter: DatabaseAdapter) {
       name?: string | null;
       email?: string | null;
       avatarUrl?: string | null;
+      role?: AgentRole;
     }): Promise<Agent> {
       const profile = {
         name: user.name ?? null,
         email: user.email ?? null,
         avatarUrl: user.avatarUrl ?? null,
+        role: user.role ?? 'agent',
       };
       await upsert(
         'agent',
@@ -868,6 +894,15 @@ export function createStore(adapter: DatabaseAdapter) {
         where: eq('deactivatedAt', null),
         orderBy: [{ field: 'name', nulls: 'last' }],
       });
+    },
+
+    async hasSupervisors() {
+      return (
+        (await adapter.count(
+          'agent',
+          and(eq('deactivatedAt', null), eq('role', 'supervisor'))
+        )) > 0
+      );
     },
 
     /** Agents still mailed: not removed, and in the agent UI within `idleDays`. */
@@ -942,33 +977,70 @@ export function createStore(adapter: DatabaseAdapter) {
       return adapter.findOne<Agent>('agent', { where: eq('id', id) });
     },
 
+    /** The active agent with this host user id. */
+    async findAgentByUserId(externalUserId: string) {
+      return adapter.findOne<Agent>('agent', {
+        where: and(
+          eq('externalUserId', externalUserId),
+          eq('deactivatedAt', null)
+        ),
+      });
+    },
+
+    /** One cheap query, so a health check can tell the database is there. */
+    async ping() {
+      await adapter.count('counter');
+    },
+
     async getActiveAgent(id: string) {
       return adapter.findOne<Agent>('agent', {
         where: and(eq('id', id), eq('deactivatedAt', null)),
       });
     },
 
+    /**
+     * A conversation with its first message. From a customer it opens with
+     * them waiting; from an agent it opens pending, with the customer's turn.
+     * Deadlines come from the SLA policy unless `sla` is off, as for an import.
+     */
     async createConversation(
       values: Omit<Tagged<'conversation'>, 'number'>,
       firstMessage: {
         body: string;
-        contactId: string;
-        verified: boolean;
+        contactId?: string;
+        agentId?: string;
+        verified?: boolean;
         emailMessageId?: string;
-      }
+      },
+      { sla = true }: { sla?: boolean } = {}
     ): Promise<{ conversation: Conversation; message: Message }> {
       return adapter.transaction(async tx => {
-        const { tags = [], ...rest } = values;
+        const { tags = [], ...given } = values;
+        const rest = { priority: defaultPriority, ...given };
+        const byAgent = Boolean(firstMessage.agentId);
         // The conversation, its first message and its wait start together.
         const now = clock();
+        const status = rest.status ?? (byAgent ? 'pending' : 'open');
         const conversation = await tx.create<Row<'conversation'>>(
           'conversation',
           {
-            ...rest,
-            number: await nextReference(tx),
             createdAt: now,
             lastMessageAt: now,
-            waitingSince: now,
+            waitingSince: byAgent ? null : now,
+            ...(byAgent && { firstRespondedAt: now }),
+            ...rest,
+            status,
+            number: await nextReference(tx),
+            ...(sla &&
+              slaStart(
+                slaClock({
+                  inbox: rest.inbox,
+                  tier: rest.tier ?? null,
+                  priority: rest.priority,
+                }),
+                now,
+                { status, awaitingResponse: !byAgent }
+              )),
           }
         );
         if (tags.length > 0) {
@@ -976,10 +1048,11 @@ export function createStore(adapter: DatabaseAdapter) {
         }
         const message = await tx.create<Message>('message', {
           conversationId: conversation.id,
-          authorType: 'contact',
-          contactId: firstMessage.contactId,
+          authorType: byAgent ? 'agent' : 'contact',
+          contactId: byAgent ? null : (firstMessage.contactId ?? null),
+          agentId: firstMessage.agentId ?? null,
           body: firstMessage.body,
-          verified: firstMessage.verified,
+          verified: byAgent ? null : (firstMessage.verified ?? null),
           emailMessageId: firstMessage.emailMessageId ?? null,
           createdAt: conversation.createdAt,
         });
@@ -988,6 +1061,11 @@ export function createStore(adapter: DatabaseAdapter) {
           message,
         };
       });
+    },
+
+    /** A message as it is, for an import; nothing on the conversation moves. */
+    async createMessage(values: Insert<'message'>) {
+      return adapter.create<Message>('message', values);
     },
 
     async getConversation(id: string) {
@@ -1050,12 +1128,14 @@ export function createStore(adapter: DatabaseAdapter) {
             });
           }
         }
+        const now = clock();
         await tx.updateMany('conversation', eq('id', sourceId), {
           mergedIntoId: targetId,
           status: 'resolved',
-          resolvedAt: source.resolvedAt ?? clock(),
+          resolvedAt: source.resolvedAt ?? now,
           waitingSince: null,
           snoozedUntil: null,
+          ...slaPatch(slaClock(source), source, { status: 'resolved' }, now),
         });
         // An unanswered customer message moves with the source, so the target
         // takes over its wait, reopening if it was resolved.
@@ -1069,9 +1149,19 @@ export function createStore(adapter: DatabaseAdapter) {
         await tx.updateMany('conversation', eq('id', targetId), {
           lastMessageAt: latest(target.lastMessageAt, source.lastMessageAt),
           waitingSince: waiting,
-          ...(reopen ? { status: source.status, resolvedAt: null } : {}),
+          ...(reopen
+            ? {
+                status: source.status,
+                resolvedAt: null,
+                ...slaPatch(
+                  slaClock(target),
+                  target,
+                  { status: source.status },
+                  now
+                ),
+              }
+            : {}),
         });
-        const now = clock();
         await tx.create('conversation_event', {
           conversationId: sourceId,
           agentId,
@@ -1192,9 +1282,18 @@ export function createStore(adapter: DatabaseAdapter) {
       const where = inboxWhere(filter);
       const limit = filter.limit ?? 200;
       let rows: Row<'conversation'>[] = [];
-      if (filter.sort === 'priority') {
-        // One query per priority, most urgent first, until the page is full.
-        const ranked = [...PRIORITIES].reverse();
+      if (filter.sort === 'sla') {
+        rows = await adapter.findMany<Row<'conversation'>>('conversation', {
+          where,
+          orderBy: [
+            { field: 'slaDueAt', direction: 'asc', nulls: 'last' },
+            ...inboxOrder,
+          ],
+          limit,
+        });
+      } else if (filter.sort === 'priority') {
+        // One query per priority, highest first, until the page is full.
+        const ranked = [...priorities].reverse();
         const buckets: Where[] = [
           ...ranked.map(p => eq('priority', p)),
           { field: 'priority', op: 'notIn', value: ranked },
@@ -1329,58 +1428,160 @@ export function createStore(adapter: DatabaseAdapter) {
         .map(([tag]) => tag);
     },
 
-    /** Conversations opened, resolved or rated in the last `sinceDays`, with their first public agent reply; merged-away ones are left out. */
+    /** Conversations opened, resolved or rated in the last `sinceDays`; merged-away ones are left out. */
     async overview(sinceDays: number) {
       const since = ago(sinceDays * DAY);
-      const inWindow = and(
-        eq('mergedIntoId', null),
-        or(
-          gte('createdAt', since),
-          gte('resolvedAt', since),
-          gte('ratedAt', since)
-        )
-      );
       const conversations = await withTags(
         'conversation',
         await adapter.findMany<Row<'conversation'>>('conversation', {
-          where: inWindow,
+          where: and(
+            eq('mergedIntoId', null),
+            or(
+              gte('createdAt', since),
+              gte('resolvedAt', since),
+              gte('ratedAt', since)
+            )
+          ),
         })
       );
-      const firstReply = new Map<string, Date>();
-      for (const m of await adapter.findMany<{
-        conversationId: string;
-        createdAt: Date;
-      }>('message', {
-        where: and(
-          inSelect('conversationId', 'conversation', 'id', inWindow),
-          eq('authorType', 'agent'),
-          eq('internal', false)
-        ),
-        select: ['conversationId', 'createdAt'],
-      })) {
-        const known = firstReply.get(m.conversationId);
-        if (!known || m.createdAt < known) {
-          firstReply.set(m.conversationId, m.createdAt);
-        }
-      }
       const agents = await namesOf(
         'agent',
         conversations.map(c => c.assigneeId)
       );
+      const contacts = await namesOf(
+        'contact',
+        conversations.map(c => c.contactId)
+      );
       return conversations.map(c => {
         const agent = c.assigneeId ? agents.get(c.assigneeId) : undefined;
+        const contact = contacts.get(c.contactId);
         return {
+          id: c.id,
+          number: c.number,
           inbox: c.inbox,
+          tier: c.tier,
+          priority: c.priority,
+          channel: c.channel,
+          status: c.status,
           assigneeId: c.assigneeId,
           agentName: agent ? (agent.name ?? agent.email) : null,
+          contactName: contact ? (contact.name ?? contact.email) : null,
           tags: c.tags,
           rating: c.rating,
+          ratingScore: c.ratingScore,
           ratedAt: c.ratedAt,
           createdAt: c.createdAt,
-          firstReplyAt: firstReply.get(c.id) ?? null,
+          firstRespondedAt: c.firstRespondedAt,
+          respondBy: c.respondBy,
+          resolveBy: c.resolveBy,
+          slaPausedSeconds: c.slaPausedSeconds,
           resolvedAt: c.resolvedAt,
+          reopened: false,
         };
       });
+    },
+
+    /** Ids of the given conversations that a customer reopened at least once. */
+    async reopenedAmong(conversationIds: string[]) {
+      const reopened = new Set<string>();
+      for (const part of chunks(conversationIds)) {
+        for (const e of await adapter.findMany<{ conversationId: string }>(
+          'conversation_event',
+          {
+            where: and(eq('kind', 'reopened'), oneOf('conversationId', part)),
+            select: ['conversationId'],
+          }
+        )) {
+          reopened.add(e.conversationId);
+        }
+      }
+      return reopened;
+    },
+
+    /** Open conversations with a deadline still to meet, for the SLA notices. */
+    async slaCandidates() {
+      return withTags(
+        'conversation',
+        await adapter.findMany<Row<'conversation'>>('conversation', {
+          where: and(
+            eq('status', 'open'),
+            eq('mergedIntoId', null),
+            ne('slaDueAt', null),
+            notBlocked
+          ),
+        })
+      );
+    },
+
+    /** Records a notice as sent, once: false when another run got there first. */
+    async claimSlaNotice(
+      id: string,
+      target: 'respond' | 'resolve',
+      from: SlaNotice | null,
+      to: SlaNotice
+    ) {
+      const field = `${target}Notice`;
+      return (
+        (await adapter.updateMany(
+          'conversation',
+          and(eq('id', id), eq(field, from), eq('status', 'open')),
+          { [field]: to }
+        )) === 1
+      );
+    },
+
+    async recordAudit(values: Insert<'audit_log'>) {
+      await adapter.create('audit_log', values);
+    },
+
+    async listAudit({
+      limit = 100,
+      agentId,
+      target,
+    }: {
+      limit?: number;
+      agentId?: string;
+      target?: string;
+    } = {}) {
+      const rows = await adapter.findMany<AuditEntry>('audit_log', {
+        where: and(
+          agentId && eq('agentId', agentId),
+          target && eq('target', target)
+        ),
+        orderBy: [{ field: 'createdAt', direction: 'desc' }],
+        limit,
+      });
+      const agents = await namesOf(
+        'agent',
+        rows.map(r => r.agentId)
+      );
+      return rows.map(r => {
+        const agent = r.agentId ? agents.get(r.agentId) : undefined;
+        return { ...r, agentName: agent ? (agent.name ?? agent.email) : null };
+      });
+    },
+
+    /** Conversations in id order after `after`, a page at a time, for the export. */
+    async pageConversations({
+      after,
+      since,
+      limit = 100,
+    }: {
+      after?: string;
+      since?: Date;
+      limit?: number;
+    } = {}) {
+      return withTags(
+        'conversation',
+        await adapter.findMany<Row<'conversation'>>('conversation', {
+          where: and(
+            after && gt('id', after),
+            since && gte('createdAt', since)
+          ),
+          orderBy: [{ field: 'id' }],
+          limit,
+        })
+      );
     },
 
     // Copies `last_message_at`, not the current time: a customer message committing
@@ -1637,7 +1838,7 @@ export function createStore(adapter: DatabaseAdapter) {
 
     /**
      * A customer message reopens a resolved thread and starts the waiting
-     * clock; a public agent reply stops it.
+     * clock; a public agent reply stops it. The SLA clock follows the status.
      */
     async appendMessage(values: Insert<'message'>): Promise<Message> {
       return adapter.transaction(async tx => {
@@ -1661,6 +1862,21 @@ export function createStore(adapter: DatabaseAdapter) {
           patch.waitingSince = null;
           patch.remindedAt = null;
           if (conversation?.status !== 'resolved') patch.status = 'pending';
+          if (!conversation?.firstRespondedAt) patch.firstRespondedAt = now;
+        }
+        if (conversation && (patch.status || patch.firstRespondedAt)) {
+          Object.assign(
+            patch,
+            slaPatch(
+              slaClock(conversation),
+              conversation,
+              {
+                status: patch.status ?? conversation.status,
+                firstRespondedAt: patch.firstRespondedAt ?? undefined,
+              },
+              now
+            )
+          );
         }
         if (Object.keys(patch).length > 0) {
           await tx.updateMany(
@@ -1970,7 +2186,15 @@ export function createStore(adapter: DatabaseAdapter) {
             eq('status', row.status),
             at('snoozedUntil', row.snoozedUntil)
           ),
-          { snoozedUntil: null, ...(pending ? { status: 'open' } : {}) }
+          {
+            snoozedUntil: null,
+            ...(pending
+              ? {
+                  status: 'open',
+                  ...slaPatch(slaClock(row), row, { status: 'open' }, clock()),
+                }
+              : {}),
+          }
         );
         if (won !== 1 || !pending) continue;
         const updated = await get('conversation', row.id);

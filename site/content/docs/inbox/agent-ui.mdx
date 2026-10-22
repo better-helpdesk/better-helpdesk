@@ -66,20 +66,20 @@ Each screen is a path under `basePath`; inbox filters are in the query string.
 
 | Section | Path | Shows |
 | --- | --- | --- |
-| `inbox` | `{basePath}/conversations/` | The conversation list, saved views, bulk actions. |
+| `inbox` | `{basePath}/conversations/` | The conversation list, saved views, bulk actions, and **New conversation**, which opens one in the agent's name to a contact or an address. |
 | | `{basePath}/conversations/{id}/` | One conversation beside the list. |
 | `contacts` | `{basePath}/contacts/` and `{basePath}/contacts/{id}/` | Contacts, and one contact with its timeline. |
 | `companies` | `{basePath}/companies/` and `{basePath}/companies/{id}/` | Companies, and one company with its timeline. |
 | `deals` | `{basePath}/deals/` | The deals board. |
 | `canned` | `{basePath}/canned/` | Canned replies. |
 | `overview` | `{basePath}/overview/` | Statistics: volume, response and resolution times, ratings and tags, each figure a link into the inbox filtered to its conversations. |
-| `settings` | `{basePath}/settings/` | The widget's confirmation text, and the team, where an agent can remove another. |
+| `settings` | `{basePath}/settings/` | The widget's confirmation text, the team with each member's role, where an agent can remove another, and the audit log of every change made here. |
 
 A section that [`features`](/docs/reference/configuration#crm) switched off has no tab, and a link into it lands on the inbox.
 
-The inbox list reads `inbox`, `status`, `assignee`, `q`, `tag`, `sort`, `priority` and `days` from the query string. `status` is one of the statuses, `any`, `snoozed`, `rated-good` or `rated-bad`; `assignee` is `me`, `none` or an agent id. `days` is `7`, `30` or `90`, the Statistics periods: it keeps conversations resolved in that time for `status=resolved`, rated in it for `rated-good` and `rated-bad`, and opened, resolved or rated in it otherwise, so each figure on Statistics opens the conversations it counts. The All, Assigned to me and Unassigned counts are of the list the other filters give. Changing a filter keeps the open conversation open.
+The inbox list reads `inbox`, `status`, `assignee`, `q`, `tag`, `tier`, `channel`, `sort`, `priority` and `days` from the query string. `status` is one of the statuses, `any`, `snoozed`, `rated-good` or `rated-bad`; `assignee` is `me`, `none` or an agent id; `sort` is empty for longest waiting, `priority`, or `sla` for the nearest deadline, which the tray offers once the config has [service levels](/docs/inbox/sla). A row shows its tier and how long until its deadline, or how far past it. `days` is `7`, `30` or `90`, the Statistics periods: it keeps conversations resolved in that time for `status=resolved`, rated in it for `rated-good` and `rated-bad`, and opened, resolved or rated in it otherwise, so each figure on Statistics opens the conversations it counts. The All, Assigned to me and Unassigned counts are of the list the other filters give. Changing a filter keeps the open conversation open.
 
-The bar above the list is one line: the assignee tabs, the search with the High and urgent switch beside it, and a Filters button. The button opens a tray with the saved views, the status, inbox, tag and sort filters and the period, and a footer with the work-the-queue switch on the left and the links to save, rename or delete a view on the right. Beside an open conversation the search and High and urgent move into the tray too. Agent emails link to `{adminUrl}/conversations/{id}/`, which opens the agent UI when `adminUrl` is the URL that `basePath` is mounted at.
+The bar above the list is one line: the assignee tabs, the search with the High and urgent switch beside it, which keeps the two highest of your `priorities`, a Filters button and New conversation. The button opens a tray with the saved views, the status, inbox, tag, tier, channel and sort filters and the period, and a footer with the work-the-queue switch on the left and the links to save, rename or delete a view on the right. The bulk bar under a selection also offers **Reply to all** and **Note on all**, one text written to each selected conversation, with the same formatting toolbar as a reply. A `viewer` sees a line at the top saying they can change nothing: no checkboxes and no bulk bar, no New conversation button, and in a conversation the properties as text instead of controls and no composer. Beside an open conversation the search and High and urgent move into the tray too. Agent emails link to `{adminUrl}/conversations/{id}/`, which opens the agent UI when `adminUrl` is the URL that `basePath` is mounted at.
 
 ## Keyboard shortcuts
 

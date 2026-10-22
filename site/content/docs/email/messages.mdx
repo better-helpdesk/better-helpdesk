@@ -3,7 +3,7 @@ title: Email messages
 description: Every HelpdeskEmail kind the email adapter receives, its fields, and when it is sent.
 ---
 
-The `email.send(message)` adapter receives a `HelpdeskEmail`, a union of five kinds told apart by `kind`. The package decides when to send and to whom; the adapter decides how the message looks and how it is delivered. Every message is sent from a job, so it goes out when [`runJobs`](/docs/reference/routes#jobs) runs, and a throw from `send` retries the job. Related guide: [Send email](/docs/email/send).
+The `email.send(message)` adapter receives a `HelpdeskEmail`, a union of six kinds told apart by `kind`. The package decides when to send and to whom; the adapter decides how the message looks and how it is delivered. Every message is sent from a job, so it goes out when [`runJobs`](/docs/reference/routes#jobs) runs, and a throw from `send` retries the job. Related guide: [Send email](/docs/email/send).
 
 | `kind` | To | Sent when |
 | --- | --- | --- |
@@ -12,12 +12,13 @@ The `email.send(message)` adapter receives a `HelpdeskEmail`, a union of five ki
 | `agent-new` | Agents | A conversation opens, or a customer writes on a resolved one |
 | `agent-reminder` | Agents | A customer has waited longer than the inbox's `reminderAfterHours` |
 | `agent-mention` | The agents picked | An agent picks teammates with `@` in an internal note |
+| `agent-sla` | The assignee or the team, and every supervisor | A share of a response or resolution target has passed, or the target was missed |
 
 Every kind has these fields:
 
 <TypeTable
   type={{
-    kind: { type: 'string', required: true, description: 'Which of the five messages this is.' },
+    kind: { type: 'string', required: true, description: 'Which of the six messages this is.' },
     to: { type: 'string', required: true, description: 'One recipient address.' },
     locale: {
       type: "'en' | 'de' | 'fr' | 'it'",
@@ -41,8 +42,8 @@ Every kind has these fields:
     replyTo: { type: 'string', description: <><code>replyToAddress(reference)</code>, when configured.</> },
     inReplyTo: { type: 'string', description: 'The Message-ID of the latest inbound email in the conversation, for threading.' },
     ratingLinks: {
-      type: '{ good: string; bad: string }',
-      description: 'Present when the conversation is resolved, not yet rated and not merged.',
+      type: '{ good: string; bad: string; scores?: Record<1 | 2 | 3 | 4 | 5, string> }',
+      description: <>Present when the conversation is resolved, not yet rated and not merged. With <code>ratingScale: 5</code>, <code>scores</code> holds one link per score, and <code>good</code> and <code>bad</code> are the links for 5 and 1.</>,
     },
   }}
 />
@@ -68,6 +69,7 @@ Each rating link opens `{basePath}/rate/` on the origin of `adminUrl`, with a si
     },
     bookingUrl: { type: 'string', description: <>The inbox's <code>bookingLink(reference)</code>, or its <code>bookingUrl</code>.</> },
     replyTo: { type: 'string', description: <><code>replyToAddress(reference)</code>, when configured.</> },
+    respondBy: { type: 'string', description: 'ISO timestamp of when the team aims to answer by, when the conversation falls under a response target.' },
   }}
 />
 
@@ -110,6 +112,21 @@ An `agent-reminder` goes once per wait, from `runJobs`, and not for a conversati
 />
 
 Sent to each agent picked in the note who has an email address and has not been removed from the team, except the author.
+
+## agent-sla
+
+<TypeTable
+  type={{
+    subject: { type: 'string', required: true, description: <>As for <code>agent-new</code>.</> },
+    body: { type: 'string', required: true, description: "The customer's first message, at most 1,000 characters." },
+    url: { type: 'string', required: true, description: 'The conversation in the agent UI.' },
+    target: { type: "'response' | 'resolution'", required: true },
+    stage: { type: "'warning' | 'breach'", required: true, description: <><code>warning</code> once the configured share of the target has passed, <code>breach</code> once the deadline has.</> },
+    due: { type: 'string', required: true, description: 'The deadline, as an ISO timestamp.' },
+  }}
+/>
+
+Sent to the assignee, or to the whole team when there is none, and to every supervisor, under the same conditions as `agent-new`. At most one warning and one breach go out per target per conversation; a new tier or priority that moves the deadline into the future starts both over.
 
 ## Recorded sends
 

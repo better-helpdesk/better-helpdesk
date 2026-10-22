@@ -40,7 +40,7 @@ All four exports come from `better-helpdesk/widget`, which starts with `'use cli
     },
     orgId: {
       type: 'string',
-      description: <>Files new conversations under this organization of the signed-in user. Must be one of the <code>orgs</code> their identity lists.</>,
+      description: <>Files new conversations under this organization of the signed-in user. Must be one of the <code>orgs</code> their identity lists. Also what <code>resolveTier</code> is asked about when the inbox offers priorities by tier.</>,
     },
     identityToken: {
       type: 'string',
@@ -165,7 +165,7 @@ Key presses in the widget's text fields stop at the element, so they do not reac
 
 ## What the widget captures
 
-A message sent with **Send us a message** is a `chat` and carries the page URL and locale. A ticket for a `bug`, `feature` or `question` is a `ticket`, and its context holds the page URL and title, user agent, viewport, locale, `appVersion`, the last 10 errors and unhandled rejections on the page (300 characters each), and the host context as `host`. The form lists each item, and the customer can leave any of them out. For any other type, it holds the page URL, the locale, the first page of the visit, the external referrer and the UTM parameters of that first page. The fields and their limits are on [HTTP routes](/docs/reference/routes#context).
+A message sent with **Send us a message** is a `chat` and carries the page URL and locale. A ticket for a `bug`, `feature` or `question` is a `ticket`, and its context holds the page URL and title, user agent, viewport, locale, `appVersion`, the last 10 errors and unhandled rejections on the page (300 characters each), and the host context as `host`. The form lists each item, and the customer can leave any of them out. On an inbox with [`priorities`](/docs/inbox/inboxes#inboxconfig), a ticket form also asks a signed-in customer of a tier the inbox offers them to to pick one, named by `priorityLabels` and explained by the inbox's text; a visitor is never asked. Once sent, the thread says by when the team aims to reply when the conversation falls under a [response target](/docs/inbox/sla), and after resolution asks for a rating: good or bad, or 1 to 5 with `ratingScale: 5`. For any other type, it holds the page URL, the locale, the first page of the visit, the external referrer and the UTM parameters of that first page. The fields and their limits are on [HTTP routes](/docs/reference/routes#context).
 
 ## Browser storage
 

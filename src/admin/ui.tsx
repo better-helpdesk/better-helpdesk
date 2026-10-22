@@ -12,7 +12,12 @@ import {
 } from 'react';
 
 import type { CustomFieldDef, HostLink, Locale } from '../config';
-import { type Translate, translated } from '../ui/i18n';
+import {
+  dateLocale,
+  formatMinutes,
+  type Translate,
+  translated,
+} from '../ui/i18n';
 
 export const paths = {
   sparkle:
@@ -649,10 +654,13 @@ export function Select({
 export function RatingChip({
   t,
   rating,
+  score,
   comment,
 }: {
   t: Translate;
   rating: 'good' | 'bad';
+  /** On a five-point scale, the score itself. */
+  score?: number | null;
   comment?: string | null;
 }) {
   return (
@@ -660,7 +668,31 @@ export function RatingChip({
       className="sa-pill sa-rating"
       data-rating={rating}
       title={comment ?? undefined}>
-      {t(`admin.rated.${rating}`)}
+      {score
+        ? t('admin.outOfFive', { score: String(score) })
+        : t(`admin.rated.${rating}`)}
+    </span>
+  );
+}
+
+/** How long until a service-level deadline, or how far past it. */
+export function DueChip({
+  t,
+  locale,
+  dueAt,
+}: {
+  t: Translate;
+  locale: Locale;
+  dueAt: string;
+}) {
+  const ms = Date.parse(dueAt) - Date.now();
+  const time = formatMinutes(Math.round(Math.abs(ms) / 60_000), locale);
+  return (
+    <span
+      className="sa-pill sa-due"
+      data-tone={ms < 0 ? 'late' : ms < 2 * 3_600_000 ? 'soon' : undefined}
+      title={new Date(dueAt).toLocaleString(dateLocale(locale))}>
+      {t(ms < 0 ? 'admin.overdue' : 'admin.dueIn', { time })}
     </span>
   );
 }

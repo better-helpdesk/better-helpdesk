@@ -40,6 +40,44 @@ The conversation lands on the customer's contact, creating it if they never wrot
 
 Give `billing` an entry in `inboxes` without `receipt`, or the customer is mailed a receipt for a message they did not send. The `inbox` and `type` must exist in your config, the input takes [the same fields as the widget's request](/docs/reference/routes#opening-a-conversation), and the call counts against the customer's hourly limit, `customerRateLimit`.
 
+## Open a conversation from the team
+
+When support starts the conversation, after a phone call or to reach a customer before they write in, open it in an agent's name. The agent's message is stored as the first one and emailed to the customer, who answers in the widget or by mail:
+
+```ts
+const { conversation } = await helpdesk.openConversation({
+  agentUserId: user.id, // a host user who is an agent
+  inbox: 'support',
+  type: 'question',
+  email: 'ops@example.test',
+  subject: 'Incident INC-42',
+  body: 'We are looking into the outage you reported by phone.',
+  priority: 'urgent',
+});
+```
+
+It takes [the same fields as the agent route](/docs/reference/routes#opening-a-conversation-as-an-agent): a `contactId` or an `email`, with a `name` for a contact that has to be made. The conversation opens pending with the customer's turn, assigned to that agent unless `assigneeId` says otherwise, and `onEvent` hears `conversation.created` with the agent's message. An `agentUserId` that is not an active agent throws a `HelpdeskError` with status 400.
+
+## Write what your systems learn
+
+When something happens elsewhere that the thread should record, such as an incident acknowledged on your pager, a deploy that fixes the reported bug or an issue closed in your tracker, add a note. An internal note is for the team; a public one goes to the customer like a reply:
+
+```ts
+await helpdesk.addNote(conversationId, 'PagerDuty: acknowledged by Sam at 14:02.');
+await helpdesk.addNote(conversationId, 'The fix is live.', {
+  agentUserId: user.id,
+  internal: false,
+});
+```
+
+Without `agentUserId` the note is from the system. Both raise `message.created` and show in open agent UIs at once. For a conversation your own system should move on, change it as an agent would:
+
+```ts
+await helpdesk.changeConversation(conversationId, { status: 'resolved', tags: ['incident'] });
+```
+
+It takes [the body of the PATCH route](/docs/reference/routes#agent), writes the timeline, and raises `conversation.updated` with the agent named in `agentUserId` or with none. Writes through `helpdesk.store` do none of that.
+
 ## Put an event on a customer's timeline
 
 To show a "plan upgraded" event on the contact's page in the agent UI:

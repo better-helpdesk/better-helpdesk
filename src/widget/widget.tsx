@@ -82,8 +82,11 @@ type Summary = {
   lastMessageAt: string;
   preview: string | null;
   rating?: 'good' | 'bad' | null;
+  ratingScore?: number | null;
   merged?: boolean;
   agentSeenAt?: string | null;
+  /** When the team aims to answer by, while nobody has. */
+  respondBy?: string | null;
   /** An agent is writing a reply right now. */
   typing?: boolean;
 };
@@ -105,6 +108,9 @@ type Session = {
   nextOpening?: string | null;
   agent?: { waiting: number; url: string } | null;
   confirmation?: string | null;
+  /** What the host calls each priority, such as P1. */
+  priorityLabels?: Partial<Record<string, Translated>>;
+  ratingScale?: 2 | 5;
   inbox: {
     title: Partial<Record<Locale, string>> | null;
     replyPromise: Partial<Record<Locale, string>> | null;
@@ -114,6 +120,8 @@ type Session = {
       label: Translated;
       options: { value: string; label: Translated }[];
     } | null;
+    /** Priorities the customer picks between on a ticket, each with what it means. */
+    priorities?: { value: string; description: Translated }[] | null;
   } | null;
   conversations: Summary[];
 };
@@ -372,12 +380,15 @@ export function Widget(props: WidgetProps) {
   // or, for an agent, a customer who wrote in.
   const [awaitingTeam, setAwaitingTeam] = useState(false);
   const [isAgent, setIsAgent] = useState(false);
+  const orgId = props.orgId;
   const session = useResource(
     () =>
       api<Session>(
-        `widget/session?inbox=${encodeURIComponent(inbox)}&locale=${locale}`
+        `widget/session?inbox=${encodeURIComponent(inbox)}&locale=${locale}${
+          orgId ? `&org=${encodeURIComponent(orgId)}` : ''
+        }`
       ),
-    `session:${inbox}:${locale}:${subject}`,
+    `session:${inbox}:${locale}:${subject}:${orgId ?? ''}`,
     open || isAgent ? 60_000 : awaitingTeam ? 300_000 : undefined
   );
   useEffect(() => {
@@ -887,6 +898,7 @@ export function Widget(props: WidgetProps) {
               changes={changes}
               realtime={Boolean(data?.realtime)}
               who={who ?? null}
+              ratingScale={data?.ratingScale ?? 2}
             />
           )}
           {showNav && (
@@ -1050,6 +1062,9 @@ function NewMessage({
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
   const [segment, setSegment] = useState('');
+  const priorities =
+    kind === 'ticket' ? (session.inbox?.priorities ?? null) : null;
+  const [priority, setPriority] = useState('');
   const [org, setOrg] = useState(
     orgId && session.orgs.some(o => o.id === orgId)
       ? orgId
@@ -1171,6 +1186,7 @@ function NewMessage({
             orgId: org || undefined,
             sharedWithCompany: share,
             segment: segment || undefined,
+            priority: priority || undefined,
             ...(session.identified
               ? {}
               : { name: name || undefined, email, website }),
@@ -1299,6 +1315,32 @@ function NewMessage({
                   </label>
                 ))}
               </div>
+            </fieldset>
+          )}
+          {priorities && priorities.length > 0 && (
+            <fieldset className="field choices">
+              <legend>{t('form.priority')}</legend>
+              {priorities.map(p => (
+                <label key={p.value} className="choice">
+                  <input
+                    type="radio"
+                    name="support-priority"
+                    value={p.value}
+                    checked={priority === p.value}
+                    onChange={() => setPriority(p.value)}
+                  />
+                  <span>
+                    <strong>
+                      {translated(session.priorityLabels?.[p.value], locale) ??
+                        t(`priority.${p.value}`)}
+                    </strong>
+                    <span className="fine">
+                      {' '}
+                      {translated(p.description, locale)}
+                    </span>
+                  </span>
+                </label>
+              ))}
             </fieldset>
           )}
           {kind === 'chat' && <p className="fine">{t('form.chatHint')}</p>}
@@ -1645,6 +1687,7 @@ function Thread({
   changes,
   realtime,
   who,
+  ratingScale,
 }: {
   api: Api;
   apiBase: string;
@@ -1664,6 +1707,7 @@ function Thread({
   realtime: boolean;
   /** Who answers, for the typing line. */
   who: string | null;
+  ratingScale: 2 | 5;
 }) {
   const thread = useResource(
     () => api<ThreadData>(`widget/conversations/${id}`),
@@ -1846,6 +1890,17 @@ function Thread({
                             reference: data.conversation.reference,
                           })}
                   </span>
+                  {data.conversation.respondBy && (
+                    <span>
+                      {t('thread.respondBy', {
+                        date: new Intl.DateTimeFormat(dateLocale(locale), {
+                          weekday: 'long',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }).format(new Date(data.conversation.respondBy)),
+                      })}
+                    </span>
+                  )}
                   {bookingUrl && (
                     <span className="book">
                       {t('thread.bookLead')}{' '}
@@ -1946,6 +2001,7 @@ function Thread({
           !data.conversation.merged && (
             <RatingPrompt
               t={t}
+              scale={ratingScale}
               onRate={async body => {
                 await api(`widget/conversations/${id}/rating`, { body });
                 await thread.refresh();
@@ -1972,19 +2028,26 @@ function LoadFailed({ t, onRetry }: { t: Translate; onRetry: () => void }) {
 
 function RatingPrompt({
   t,
+  scale,
   onRate,
 }: {
   t: Translate;
-  onRate: (body: { rating: 'good' | 'bad'; comment: string }) => Promise<void>;
+  /** Good or bad, or a score from 1 to 5. */
+  scale: 2 | 5;
+  onRate: (body: {
+    rating?: 'good' | 'bad';
+    score?: number;
+    comment: string;
+  }) => Promise<void>;
 }) {
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
-  const rate = async (rating: 'good' | 'bad') => {
+  const rate = async (value: { rating?: 'good' | 'bad'; score?: number }) => {
     setSending(true);
     setFailed(false);
     try {
-      await onRate({ rating, comment });
+      await onRate({ ...value, comment });
     } catch {
       setFailed(true);
       setSending(false);
@@ -2000,14 +2063,31 @@ function RatingPrompt({
         value={comment}
         onChange={e => setComment(e.target.value)}
       />
-      <div className="rating-buttons">
-        <button type="button" onClick={() => void rate('good')}>
-          {t('rating.good')}
-        </button>
-        <button type="button" onClick={() => void rate('bad')}>
-          {t('rating.bad')}
-        </button>
-      </div>
+      {scale === 5 ? (
+        <>
+          <div className="rating-buttons">
+            {[1, 2, 3, 4, 5].map(score => (
+              <button
+                key={score}
+                type="button"
+                aria-label={t('rating.score', { score: String(score) })}
+                onClick={() => void rate({ score })}>
+                {score}
+              </button>
+            ))}
+          </div>
+          <span className="fine">{t('rating.scale')}</span>
+        </>
+      ) : (
+        <div className="rating-buttons">
+          <button type="button" onClick={() => void rate({ rating: 'good' })}>
+            {t('rating.good')}
+          </button>
+          <button type="button" onClick={() => void rate({ rating: 'bad' })}>
+            {t('rating.bad')}
+          </button>
+        </div>
+      )}
       {failed && (
         <p className="error" role="alert">
           {t('rating.failed')}

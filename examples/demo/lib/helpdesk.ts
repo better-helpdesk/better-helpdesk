@@ -1,4 +1,5 @@
 import {
+  type BusinessHours,
   buildHelpdesk,
   type HelpResult,
   type Identity,
@@ -47,6 +48,16 @@ const IDENTITIES = {
     orgs: [{ id: 'demo-org', name: 'Brightline Logistics' }],
     isAgent: false,
   },
+  platinum: {
+    user: {
+      id: 'demo-platinum',
+      email: 'jonas@nordkai.test',
+      emailVerified: true,
+      name: 'Jonas Weber',
+    },
+    orgs: [{ id: 'demo-org-nordkai', name: 'Nordkai Shipping' }],
+    isAgent: false,
+  },
   agent: {
     user: {
       id: 'demo-agent',
@@ -57,7 +68,41 @@ const IDENTITIES = {
     orgs: [],
     isAgent: true,
   },
+  supervisor: {
+    user: {
+      id: 'demo-supervisor',
+      email: 'mina@harbor.test',
+      emailVerified: true,
+      name: 'Mina Okonjo',
+    },
+    orgs: [],
+    isAgent: true,
+    role: 'supervisor',
+  },
+  viewer: {
+    user: {
+      id: 'demo-viewer',
+      email: 'theo@harbor.test',
+      emailVerified: true,
+      name: 'Theo Lindqvist',
+    },
+    orgs: [],
+    isAgent: true,
+    role: 'viewer',
+  },
 } satisfies Record<Exclude<DemoRole, 'visitor'>, Identity>;
+
+/** The support tier of each customer organization, as Harbor's billing would know it; Brightline is on standard support and has none. */
+const TIERS: Record<string, string> = {
+  'demo-org-nordkai': 'premium',
+};
+
+const office: BusinessHours = {
+  timeZone: 'Europe/Zurich',
+  weekly: Object.fromEntries(
+    ['mon', 'tue', 'wed', 'thu', 'fri'].map(d => [d, [['08:00', '18:00']]])
+  ),
+};
 
 // A few invented articles, so the widget's documentation search has something to find.
 const ARTICLES: HelpResult[] = [
@@ -94,6 +139,40 @@ export const helpdesk = buildHelpdesk({
   },
   referencePrefix: 'HRB',
   teamName: { en: 'the Harbor crew' },
+  // Harbor's own priority ladder, lowest first; the agent UI and the widget show them as named below.
+  priorities: ['p3', 'p2', 'p1'],
+  // Short targets, so a warning and a breach can be watched within a demo.
+  tiers: ['priority', 'premium'],
+  resolveTier: async ({ orgId, email }) =>
+    (orgId && TIERS[orgId]) ??
+    (email?.endsWith('@nordkai.test') ? 'premium' : null),
+  sla: {
+    tiers: {
+      priority: {
+        targets: {
+          p1: { respond: 0.25, resolve: 1, hours: 'always' },
+          p2: { respond: 0.5, resolve: 2, hours: 'always' },
+          p3: { respond: 4, resolve: 24, hours: office },
+        },
+      },
+      premium: {
+        targets: {
+          p1: { respond: 0.1, resolve: 0.5, hours: 'always' },
+          p2: { respond: 0.25, resolve: 1, hours: 'always' },
+          p3: { respond: 2, resolve: 8, hours: office },
+        },
+      },
+    },
+    // Standard support: a best-effort reply within a working day, nothing on resolution.
+    default: { targets: { p3: { respond: 8, hours: office } } },
+    warnAt: 0.5,
+  },
+  priorityLabels: {
+    p1: { en: 'P1', de: 'P1' },
+    p2: { en: 'P2', de: 'P2' },
+    p3: { en: 'P3', de: 'P3' },
+  },
+  ratingScale: 5,
   // The same-origin check reads this, so a hard-coded production URL would
   // refuse every mutation from localhost.
   adminUrl: `${process.env.DEMO_URL ?? 'http://localhost:3000'}/helpdesk/`,
@@ -105,11 +184,26 @@ export const helpdesk = buildHelpdesk({
       replyPromise: { en: 'We answer within a few hours on weekdays.' },
       receipt: true,
       privacyUrl: { en: '/privacy/' },
+      // Premium customers raise P1 to P3 themselves; the definitions are the support policy's.
+      priorities: {
+        options: {
+          p1: {
+            en: 'Complete loss of functionality, damaging public content, or a security vulnerability.',
+          },
+          p2: {
+            en: 'A key function is unavailable or an urgent action is impossible.',
+          },
+          p3: {
+            en: 'Partial functionality, a display or behaviour error, or performance.',
+          },
+        },
+        tiers: ['premium'],
+      },
     },
     sales: {
       name: { en: 'Sales' },
       public: true,
-      defaultPriority: 'high',
+      defaultPriority: 'p2',
       title: { en: 'Talk to sales' },
       privacyUrl: { en: '/privacy/' },
       qualify: {
@@ -157,12 +251,24 @@ export const helpdesk = buildHelpdesk({
       console.log(`[helpdesk email] ${message.kind} → ${message.to}`, message);
     },
   },
-  // The README's Slack recipe, with the terminal standing in for Slack.
+  // The README's Slack recipe, with the terminal standing in for Slack and
+  // for the pager an SLA breach on a P1 would open.
   onEvent: async event => {
-    if (event.kind !== 'conversation.created') return;
     const { conversation } = event;
-    console.log(
-      `[helpdesk event] New ${conversation.type} ${helpdesk.reference(conversation)}: ${conversation.subject}`
-    );
+    if (event.kind === 'conversation.created') {
+      console.log(
+        `[helpdesk event] New ${conversation.type} ${helpdesk.reference(conversation)}: ${conversation.subject}`
+      );
+    } else if (event.kind === 'sla.warning' || event.kind === 'sla.breach') {
+      console.log(
+        `[helpdesk ${event.kind}] ${helpdesk.reference(conversation)} ${event.target} target${
+          event.kind === 'sla.breach' ? ' missed, was' : ''
+        } due ${event.due.toISOString()}${
+          event.kind === 'sla.breach' && conversation.priority === 'urgent'
+            ? ' → PagerDuty incident would open here'
+            : ''
+        }`
+      );
+    }
   },
 });
