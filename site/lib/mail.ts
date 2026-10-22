@@ -32,7 +32,11 @@ function render(message: HelpdeskEmail): {
     case 'customer-receipt':
       return {
         subject: `We got your message (${message.reference})`,
-        text: `Thanks for writing. We read every message and reply to this address.\n\nReference: ${message.reference}`,
+        text: `Thanks for writing. We read every message and reply to this address.${
+          message.respondBy
+            ? `\n\nWe aim to reply by ${new Date(message.respondBy).toUTCString()}.`
+            : ''
+        }\n\nReference: ${message.reference}`,
         replyTo: message.replyTo,
       };
     case 'agent-new':
@@ -41,6 +45,13 @@ function render(message: HelpdeskEmail): {
       return {
         subject: message.subject,
         text: `${message.body}\n\n${message.url}`,
+      };
+    case 'agent-sla':
+      return {
+        subject: `${message.stage === 'breach' ? 'Missed' : 'Due soon'}: ${message.target} target for ${message.reference}`,
+        text: `The ${message.target} target for ${message.reference} ${
+          message.stage === 'breach' ? 'was due' : 'is due'
+        } ${new Date(message.due).toUTCString()}.\n\n${message.body}\n\n${message.url}`,
       };
   }
 }
