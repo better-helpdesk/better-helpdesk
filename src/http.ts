@@ -2,7 +2,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { type Feature, type Locale, PRIORITIES, STATUSES } from './config';
+import { type Feature, type Locale, STATUSES } from './config';
 import { clock } from './db/adapter';
 import type { Channel } from './db/model';
 import type {
@@ -739,7 +739,8 @@ export function createHandler(support: Helpdesk) {
       referencePrefix: config.referencePrefix,
       types: config.types,
       statuses: STATUSES,
-      priorities: PRIORITIES,
+      priorities: config.priorities,
+      defaultPriority: config.defaultPriority,
       priorityLabels: config.priorityLabels ?? {},
       tiers: config.tiers,
       channels: CHANNELS,

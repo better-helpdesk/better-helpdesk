@@ -56,7 +56,9 @@ says **conversation**. Each has:
   promise. "Inbox" also names the agent UI screen that lists conversations.
 - A **type** (`question`, `bug`, `feature`, `lead` by default; hosts add
   their own), a **status** and a **priority** (`low`, `normal`, `high`,
-  `urgent`). The statuses read from the customer's side: `open` is "with
+  `urgent` by default; `config.priorities` replaces the list, lowest first,
+  and the two highest are the ones shown in colour and behind the inbox's
+  "High & urgent" switch). The statuses read from the customer's side: `open` is "with
   our team", `pending` is "awaiting your reply", `resolved` is done.
 - A **subject**, what the customer called it and the only name they ever
   see, and a **title**, the team's name from triage or a rename, which

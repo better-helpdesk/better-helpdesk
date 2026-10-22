@@ -139,6 +139,8 @@ export const helpdesk = buildHelpdesk({
   },
   referencePrefix: 'HRB',
   teamName: { en: 'the Harbor crew' },
+  // Harbor's own priority ladder, lowest first; the agent UI and the widget show them as named below.
+  priorities: ['p3', 'p2', 'p1'],
   // Short targets, so a warning and a breach can be watched within a demo.
   tiers: ['priority', 'premium'],
   resolveTier: async ({ orgId, email }) =>
@@ -148,27 +150,27 @@ export const helpdesk = buildHelpdesk({
     tiers: {
       priority: {
         targets: {
-          urgent: { respond: 0.25, resolve: 1, hours: 'always' },
-          high: { respond: 0.5, resolve: 2, hours: 'always' },
-          normal: { respond: 4, resolve: 24, hours: office },
+          p1: { respond: 0.25, resolve: 1, hours: 'always' },
+          p2: { respond: 0.5, resolve: 2, hours: 'always' },
+          p3: { respond: 4, resolve: 24, hours: office },
         },
       },
       premium: {
         targets: {
-          urgent: { respond: 0.1, resolve: 0.5, hours: 'always' },
-          high: { respond: 0.25, resolve: 1, hours: 'always' },
-          normal: { respond: 2, resolve: 8, hours: office },
+          p1: { respond: 0.1, resolve: 0.5, hours: 'always' },
+          p2: { respond: 0.25, resolve: 1, hours: 'always' },
+          p3: { respond: 2, resolve: 8, hours: office },
         },
       },
     },
     // Standard support: a best-effort reply within a working day, nothing on resolution.
-    default: { targets: { normal: { respond: 8, hours: office } } },
+    default: { targets: { p3: { respond: 8, hours: office } } },
     warnAt: 0.5,
   },
   priorityLabels: {
-    urgent: { en: 'P1', de: 'P1' },
-    high: { en: 'P2', de: 'P2' },
-    normal: { en: 'P3', de: 'P3' },
+    p1: { en: 'P1', de: 'P1' },
+    p2: { en: 'P2', de: 'P2' },
+    p3: { en: 'P3', de: 'P3' },
   },
   ratingScale: 5,
   // The same-origin check reads this, so a hard-coded production URL would
@@ -185,13 +187,13 @@ export const helpdesk = buildHelpdesk({
       // Premium customers raise P1 to P3 themselves; the definitions are the support policy's.
       priorities: {
         options: {
-          urgent: {
+          p1: {
             en: 'Complete loss of functionality, damaging public content, or a security vulnerability.',
           },
-          high: {
+          p2: {
             en: 'A key function is unavailable or an urgent action is impossible.',
           },
-          normal: {
+          p3: {
             en: 'Partial functionality, a display or behaviour error, or performance.',
           },
         },
@@ -201,7 +203,7 @@ export const helpdesk = buildHelpdesk({
     sales: {
       name: { en: 'Sales' },
       public: true,
-      defaultPriority: 'high',
+      defaultPriority: 'p2',
       title: { en: 'Talk to sales' },
       privacyUrl: { en: '/privacy/' },
       qualify: {

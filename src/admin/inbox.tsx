@@ -139,9 +139,8 @@ export function Inbox() {
     if (list.data?.counts) setCounts(list.data.counts);
   }, [list.data]);
   const all = list.data?.conversations ?? [];
-  const urgent = all.filter(
-    c => c.priority === 'high' || c.priority === 'urgent'
-  );
+  const top = me.priorities.slice(-2);
+  const urgent = all.filter(c => top.includes(c.priority));
   const rows = all;
   useEffect(() => {
     const next = rows.map(r => ({
@@ -819,9 +818,9 @@ export function ConversationTable({
   const allSelected =
     rows.length > 0 && rows.every(r => selected?.includes(r.id));
   const someSelected = !allSelected && rows.some(r => selected?.includes(r.id));
-  const showPriority = rows.some(
-    r => r.priority === 'high' || r.priority === 'urgent'
-  );
+  // The two highest priorities are the ones worth a column and a colour.
+  const top = me.priorities.slice(-2);
+  const showPriority = rows.some(r => top.includes(r.priority));
 
   const row = rows[active];
   const move = (to: number) => setActiveId(rows[to]?.id ?? null);
@@ -1026,8 +1025,14 @@ export function ConversationTable({
                 )}
                 {showPriority && (
                   <td className="sa-col-pri">
-                    {(c.priority === 'high' || c.priority === 'urgent') && (
-                      <span className="sa-pill" data-tone={c.priority}>
+                    {top.includes(c.priority) && (
+                      <span
+                        className="sa-pill"
+                        data-tone={
+                          c.priority === me.priorities.at(-1)
+                            ? 'urgent'
+                            : 'high'
+                        }>
                         {priorityName(c.priority)}
                       </span>
                     )}

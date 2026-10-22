@@ -154,7 +154,7 @@ const line = z.object({
   kind: z.enum(['chat', 'ticket']).optional(),
   channel: z.enum(['widget', 'email', 'agent', 'api']).optional(),
   status: z.enum(['open', 'pending', 'resolved']).optional(),
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  priority: z.string().min(1).max(255).optional(),
   tier: z.string().max(100).nullable().optional(),
   subject: z.string().max(200).nullable().optional(),
   title: z.string().max(200).nullable().optional(),
@@ -204,7 +204,13 @@ export async function importConversations(
     inboxes,
     types,
     source,
-  }: { inboxes?: string[]; types?: string[]; source?: string } = {}
+    defaultPriority = 'normal',
+  }: {
+    inboxes?: string[];
+    types?: string[];
+    source?: string;
+    defaultPriority?: string;
+  } = {}
 ): Promise<ImportReport> {
   const report: ImportReport = {
     created: 0,
@@ -312,7 +318,7 @@ export async function importConversations(
         kind: c.kind ?? (c.subject ? 'ticket' : 'chat'),
         channel: c.channel ?? 'api',
         status,
-        priority: c.priority ?? 'normal',
+        priority: c.priority ?? defaultPriority,
         tier: c.tier ?? null,
         subject: c.subject ?? null,
         title: c.title ?? null,

@@ -29,6 +29,7 @@ const me = {
   types: ['question', 'bug'],
   statuses: ['open', 'pending', 'resolved'],
   priorities: ['low', 'normal', 'high', 'urgent'],
+  defaultPriority: 'normal',
   priorityLabels: {},
   tiers: [],
   channels: ['widget', 'email', 'agent', 'api'],

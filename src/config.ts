@@ -55,7 +55,8 @@ export type Identity = {
   role?: AgentRole;
 };
 
-export type Priority = (typeof PRIORITIES)[number];
+/** One of `priorities`: `low`, `normal`, `high` or `urgent` unless the host sets its own. */
+export type Priority = string;
 
 /** Hours to answer and to resolve, counted in `hours`, the policy's, the inbox's, or round the clock. */
 export type SlaTarget = {
@@ -138,8 +139,8 @@ export type InboxConfig = {
   reminderAfterHours?: number;
   /** Unset, reminders and the waiting colours count every hour, and the team is back on the next weekday. */
   hours?: BusinessHours;
-  /** Priority new conversations start with, e.g. `high` for sales. */
-  defaultPriority?: (typeof PRIORITIES)[number];
+  /** Priority new conversations start with, e.g. `high` for sales; one of `priorities`. */
+  defaultPriority?: Priority;
   /**
    * Priorities a customer may pick on a ticket form, each with the text that
    * says what it means, and the tiers whose customers may pick one: unset,
@@ -308,6 +309,13 @@ export type HelpdeskConfig = {
   /** Absolute URL of the agent UI, used in agent emails. */
   adminUrl: string;
   types?: string[];
+  /**
+   * The priorities, lowest first: `low`, `normal`, `high` and `urgent`
+   * unless set. The two highest are shown in colour and make the inbox's
+   * "High & urgent" switch. New conversations start at `normal` when the
+   * list has it, else at the lowest, unless the inbox says otherwise.
+   */
+  priorities?: string[];
   /** Support tiers agents may set; unset, the keys of `sla.tiers`. */
   tiers?: string[];
   /** The tier a new conversation gets, from what the host knows about the customer; a throw leaves it unset. */
@@ -386,7 +394,7 @@ export type HelpdeskConfig = {
 
 export const DEFAULT_TYPES = ['question', 'bug', 'feature', 'lead'];
 export const STATUSES = ['open', 'pending', 'resolved'] as const;
-export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export const DEFAULT_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 export const DEFAULT_LEAD_STAGES = ['lead', 'qualified', 'customer', 'churned'];
 export const DEFAULT_DEAL_STAGES = [
   'new',
@@ -403,6 +411,8 @@ export type ResolvedConfig = HelpdeskConfig & {
   store: HelpdeskStore;
   basePath: string;
   types: string[];
+  priorities: string[];
+  defaultPriority: string;
   tiers: string[];
   ratingScale: 2 | 5;
   slaClock: SlaClockFor;
@@ -439,12 +449,43 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
       throw new Error(`Invalid sla: ${z.prettifyError(parsed.error)}`);
     }
   }
+  const priorities = config.priorities ?? DEFAULT_PRIORITIES;
+  const list = priorityList.safeParse(priorities);
+  if (!list.success) {
+    throw new Error(`Invalid priorities: ${z.prettifyError(list.error)}`);
+  }
+  // Every priority named elsewhere in the config must be one of the list.
+  const known = (where: string, names: string[]) => {
+    const unknown = names.filter(name => !priorities.includes(name));
+    if (unknown.length > 0) {
+      throw new Error(
+        `${where} names priorities that are not in priorities: ${unknown.join(', ')}`
+      );
+    }
+  };
+  for (const [key, inbox] of Object.entries(config.inboxes)) {
+    known(`Inbox ${key}`, [
+      ...(inbox.defaultPriority ? [inbox.defaultPriority] : []),
+      ...Object.keys(inbox.priorities?.options ?? {}),
+    ]);
+  }
+  known('priorityLabels', Object.keys(config.priorityLabels ?? {}));
+  for (const [tier, policy] of [
+    ...Object.entries(config.sla?.tiers ?? {}),
+    ...(config.sla?.default ? [['default', config.sla.default] as const] : []),
+  ]) {
+    known(`sla policy ${tier}`, Object.keys(policy.targets));
+  }
   const tiers = config.tiers ?? Object.keys(config.sla?.tiers ?? {});
   const resolved: ResolvedConfig = {
     ...config,
     store: undefined as unknown as HelpdeskStore,
     basePath: (config.basePath ?? '/api/helpdesk').replace(/\/$/, ''),
     types: config.types ?? DEFAULT_TYPES,
+    priorities,
+    defaultPriority: priorities.includes('normal')
+      ? 'normal'
+      : (priorities[0] as string),
     tiers,
     ratingScale: config.ratingScale ?? 2,
     slaClock: () => null,
@@ -459,9 +500,18 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
   };
   // The store starts and pauses the clocks itself, so every status change keeps them right.
   resolved.slaClock = slaClockFor(resolved);
-  resolved.store = createStore(config.db, { slaClock: resolved.slaClock });
+  resolved.store = createStore(config.db, {
+    slaClock: resolved.slaClock,
+    priorities,
+    defaultPriority: resolved.defaultPriority,
+  });
   return resolved;
 }
+
+const priorityList = z
+  .array(z.string().trim().min(1).max(50))
+  .min(1)
+  .refine(list => new Set(list).size === list.length, 'No repeats');
 
 const hoursOrAlways = z.union([businessHours, z.literal('always')]).optional();
 const slaTarget = z
@@ -475,7 +525,7 @@ const slaTarget = z
   });
 const slaPolicy = z.object({
   hours: hoursOrAlways,
-  targets: z.partialRecord(z.enum(PRIORITIES), slaTarget),
+  targets: z.record(z.string(), slaTarget),
 });
 const slaConfig = z.object({
   tiers: z.record(z.string().min(1).max(100), slaPolicy).optional(),

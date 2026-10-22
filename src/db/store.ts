@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { PRIORITIES } from '../config';
+import { DEFAULT_PRIORITIES } from '../config';
 import { type SlaClockFor, slaPatch, slaStart } from '../sla';
 import { clock, type DatabaseAdapter, type Where } from './adapter';
 import {
@@ -44,7 +44,7 @@ export type InboxFilter = {
   tier?: string;
   channel?: string;
   query?: string;
-  /** `high` keeps high and urgent conversations only. */
+  /** `high` keeps the two highest priorities only. */
   priority?: 'high';
   /** Resolved, rated or, for any other status, opened, resolved or rated since then. */
   since?: Date;
@@ -56,6 +56,10 @@ export type InboxFilter = {
 export type StoreOptions = {
   /** The SLA targets a conversation falls under; none when unset. */
   slaClock?: SlaClockFor;
+  /** The host's priorities, lowest first; the defaults when unset. */
+  priorities?: string[];
+  /** What a conversation starts at when its caller names none. */
+  defaultPriority?: string;
 };
 
 const MAX_ATTEMPTS = 5;
@@ -192,7 +196,11 @@ export type HelpdeskStore = ReturnType<typeof createStore>;
 /** Every query Better Helpdesk makes, written once over the adapter contract. */
 export function createStore(
   adapter: DatabaseAdapter,
-  { slaClock = () => null }: StoreOptions = {}
+  {
+    slaClock = () => null,
+    priorities = DEFAULT_PRIORITIES,
+    defaultPriority = 'normal',
+  }: StoreOptions = {}
 ) {
   const caps = adapter.capabilities;
 
@@ -375,7 +383,7 @@ export function createStore(
         ),
       filter.tier && eq('tier', filter.tier),
       filter.channel && eq('channel', filter.channel),
-      filter.priority === 'high' && oneOf('priority', ['high', 'urgent']),
+      filter.priority === 'high' && oneOf('priority', priorities.slice(-2)),
       filter.since &&
         (filter.status === 'resolved'
           ? gte('resolvedAt', filter.since)
@@ -1007,7 +1015,8 @@ export function createStore(
       { sla = true }: { sla?: boolean } = {}
     ): Promise<{ conversation: Conversation; message: Message }> {
       return adapter.transaction(async tx => {
-        const { tags = [], ...rest } = values;
+        const { tags = [], ...given } = values;
+        const rest = { priority: defaultPriority, ...given };
         const byAgent = Boolean(firstMessage.agentId);
         // The conversation, its first message and its wait start together.
         const now = clock();
@@ -1027,7 +1036,7 @@ export function createStore(
                 slaClock({
                   inbox: rest.inbox,
                   tier: rest.tier ?? null,
-                  priority: rest.priority ?? 'normal',
+                  priority: rest.priority,
                 }),
                 now,
                 { status, awaitingResponse: !byAgent }
@@ -1283,8 +1292,8 @@ export function createStore(
           limit,
         });
       } else if (filter.sort === 'priority') {
-        // One query per priority, most urgent first, until the page is full.
-        const ranked = [...PRIORITIES].reverse();
+        // One query per priority, highest first, until the page is full.
+        const ranked = [...priorities].reverse();
         const buckets: Where[] = [
           ...ranked.map(p => eq('priority', p)),
           { field: 'priority', op: 'notIn', value: ranked },

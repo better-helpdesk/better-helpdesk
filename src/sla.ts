@@ -1,9 +1,4 @@
-import type {
-  BusinessHours,
-  Priority,
-  ResolvedConfig,
-  SlaPolicy,
-} from './config';
+import type { BusinessHours, ResolvedConfig, SlaPolicy } from './config';
 import type { Conversation } from './db/store';
 import { openDeadline, openHoursBetween } from './ui/hours';
 
@@ -52,7 +47,7 @@ export function slaClockFor(
     const policy: SlaPolicy | undefined =
       (conversation.tier ? sla.tiers?.[conversation.tier] : undefined) ??
       sla.default;
-    const target = policy?.targets[conversation.priority as Priority];
+    const target = policy?.targets[conversation.priority];
     if (!target) return null;
     const hours =
       target.hours ??

@@ -94,6 +94,11 @@ export const helpdesk = buildHelpdesk({
       default: "['question', 'bug', 'feature', 'lead']",
       description: 'Conversation types. A conversation opened by inbound email takes the first one.',
     },
+    priorities: {
+      type: 'string[]',
+      default: "['low', 'normal', 'high', 'urgent']",
+      description: <>The priorities, lowest first; what agents pick from, what the SLA policy and <code>priorityLabels</code> are keyed by, and what AI triage chooses between. The two highest are shown in colour and make the inbox's High and urgent switch. A new conversation starts at <code>normal</code> when the list has it, else at the lowest, unless its inbox sets <code>defaultPriority</code>. Every priority named elsewhere in the config must be in the list, or <code>buildHelpdesk</code> throws. Changing the list on an existing install leaves old conversations with their old words, shown as they are and sorted below the configured ones.</>,
+    },
     retentionDays: {
       type: 'number',
       description: <>Resolved conversations are deleted, with their attachments, this many days after <code>resolved_at</code>, by <code>runJobs</code>. Unset, nothing is deleted.</>,
@@ -132,7 +137,7 @@ export const helpdesk = buildHelpdesk({
     },
     priorityLabels: {
       type: 'Partial<Record<Priority, Translated>>',
-      description: <>What agents and customers see instead of <code>low</code>, <code>normal</code>, <code>high</code> and <code>urgent</code>, for example <code>{"{ urgent: { en: 'P1' }, high: { en: 'P2' }, normal: { en: 'P3' } }"}</code>. The stored values do not change.</>,
+      description: <>What agents and customers see instead of a priority's own word, for example <code>{"{ urgent: { en: 'P1' }, high: { en: 'P2' }, normal: { en: 'P3' } }"}</code>. The stored values do not change; to change those, set <code>priorities</code>.</>,
     },
     ratingScale: {
       type: '2 | 5',
@@ -259,6 +264,7 @@ Fixed limits that are not configurable are listed under [HTTP routes](/docs/refe
 - `identityTokenSecret` is set and shorter than 32 bytes.
 - An inbox's `hours` fails validation; the message names the inbox. The rules are on [Inboxes](/docs/inbox/inboxes#businesshours).
 - `sla` fails validation: a target without `respond` or `resolve`, a target that is not a positive number of hours, `warnAt` outside 0 to 1, or hours that break the rules above.
+- `priorities` is empty, repeats a word, or has one longer than 50 characters; or an inbox's `defaultPriority` or `priorities.options`, `priorityLabels` or an SLA target names a priority that is not in the list.
 
 ## Identity
 
@@ -442,6 +448,5 @@ These are not configurable and not exported.
 | --- | --- |
 | Locales | `en`, `de`, `fr`, `it` |
 | Statuses | `open`, `pending`, `resolved` |
-| Priorities | `low`, `normal`, `high`, `urgent`; `priorityLabels` changes what is shown, not what is stored |
 | Channels | `widget`, `email`, `agent`, `api` |
 | Roles | `agent`, `supervisor`, `viewer` |

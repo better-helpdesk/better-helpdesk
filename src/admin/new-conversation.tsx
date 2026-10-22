@@ -30,7 +30,7 @@ export function NewConversationDialog({
   const [name, setName] = useState('');
   const [inbox, setInbox] = useState(me.inboxes[0] ?? 'support');
   const [type, setType] = useState(me.types[0] ?? 'question');
-  const [priority, setPriority] = useState('normal');
+  const [priority, setPriority] = useState(me.defaultPriority);
   const [tier, setTier] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');

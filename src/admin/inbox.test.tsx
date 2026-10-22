@@ -27,8 +27,10 @@ const context = {
   locale: 'en',
   href: () => '#',
   inboxName: (key: string) => key,
+  priorityName: (priority: string) => priority,
   route: {},
   me: {
+    priorities: ['low', 'normal', 'high', 'urgent'],
     inboxHours: {
       support: {
         timeZone: 'Europe/Zurich',

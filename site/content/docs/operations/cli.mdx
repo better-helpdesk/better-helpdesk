@@ -75,7 +75,7 @@ A row without a title or a body, or over either limit, is skipped. A reply whose
 
 ### conversations
 
-One JSON object per line, in the format `better-helpdesk-export` writes; see [the export](#better-helpdesk-export). A line needs `inbox`, `type`, `createdAt`, a `contact` and at least one message. Each line opens a new conversation with a new reference; the old reference and `--source` are kept in the conversation's context as `imported`, so agents can still quote it. Contacts are found by email, or made; a company by domain, then name, or made; agents by email, and a message from an agent nobody here has is kept as an agent message without a name. Attachments and timeline events are not imported, and no deadline starts. A line that is not JSON, or fails validation, is skipped with a note naming the line.
+One JSON object per line, in the format `better-helpdesk-export` writes; see [the export](#better-helpdesk-export). A line needs `inbox`, `type`, `createdAt`, a `contact` and at least one message. A line without a `priority` gets `normal`, so give each line one of your own when your `priorities` differ. Each line opens a new conversation with a new reference; the old reference and `--source` are kept in the conversation's context as `imported`, so agents can still quote it. Contacts are found by email, or made; a company by domain, then name, or made; agents by email, and a message from an agent nobody here has is kept as an agent message without a name. Attachments and timeline events are not imported, and no deadline starts. A line that is not JSON, or fails validation, is skipped with a note naming the line.
 
 ### Output
 

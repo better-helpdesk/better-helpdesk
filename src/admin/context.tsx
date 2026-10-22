@@ -35,7 +35,9 @@ export type Me = {
   referencePrefix: string;
   types: string[];
   statuses: string[];
+  /** Lowest first; the two highest are shown in colour. */
   priorities: string[];
+  defaultPriority: string;
   /** What the host calls each priority, such as P1; the package's own words otherwise. */
   priorityLabels: Partial<Record<string, Translated>>;
   tiers: string[];

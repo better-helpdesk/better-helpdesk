@@ -28,7 +28,7 @@ try {
       email: target,
       subject: text.split(':')[0] ?? text,
       body: text,
-      priority: 'urgent',
+      priority: 'p1',
     });
     console.log(`Opened ${helpdesk.reference(conversation)} to ${target}`);
   } else {

@@ -35,7 +35,7 @@ A **reference**, such as `ACME-1042`: the `referencePrefix` and a number from a 
 
 An **inbox**, one of the keys of `inboxes`, such as `support` or `sales`. The inbox's configuration decides whether visitors may write to it, when agents are reminded, and what the widget says at the top. Its `allowedOrigins` are pooled with every other inbox's into one list of origins that may call the widget routes. "Inbox" is also the name of the agent UI's screen that lists conversations.
 
-A **type**, a **status** and a **priority**. Types are `question`, `bug`, `feature` and `lead` unless you configure your own. Priorities are `low`, `normal`, `high` and `urgent`; `priorityLabels` can show them as P3 to P1. Statuses are named from the customer's side: `open` means the conversation is with your team, `pending` means it awaits the customer's reply, and `resolved` means it is done.
+A **type**, a **status** and a **priority**. Types are `question`, `bug`, `feature` and `lead` unless you configure your own. Priorities are `low`, `normal`, `high` and `urgent` unless you configure your own list, lowest first; `priorityLabels` can show them as P3 to P1, and the two highest are the ones shown in colour. Statuses are named from the customer's side: `open` means the conversation is with your team, `pending` means it awaits the customer's reply, and `resolved` means it is done.
 
 A **tier**, such as `gold` or `platinum`: the word your app attaches to a conversation through `resolveTier`, or an agent sets, which picks its service-level policy. A **channel**: where the conversation came in, `widget`, `email`, `agent` for one the team opened, or `api` for one opened from host code.
 

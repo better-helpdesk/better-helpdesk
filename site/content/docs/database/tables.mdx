@@ -101,7 +101,7 @@ A row is written on an agent's first request, keyed by the host's user id. The p
 | `type` | `text` | no | | One of `types`. |
 | `kind` | `text` | no | `ticket` | `chat` for a message the customer wrote, `ticket` for a form with a subject or an email. |
 | `status` | `text` | no | `open` | `open`, `pending` or `resolved`. |
-| `priority` | `text` | no | `normal` | `low`, `normal`, `high` or `urgent`. |
+| `priority` | `text` | no | `normal` | One of `priorities`: `low`, `normal`, `high` or `urgent` unless the host set its own. |
 | `tier` | `text` | yes | | One of `tiers`, from `resolveTier` or an agent; picks the SLA policy. |
 | `channel` | `text` | no | `widget` | Where it came in: `widget`, `email`, `agent` or `api`. |
 | `subject` | `text` | yes | | What the customer called it; the only name they see. |

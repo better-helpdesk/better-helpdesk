@@ -65,7 +65,7 @@ A priority a policy leaves out has no deadline. The `default` policy is for conv
 
 ## Let customers pick the priority
 
-Enterprise customers often raise P1, P2 and P3 themselves, while everyone else gets a priority from the team. Name the priorities with `priorityLabels`, and on the inbox their tickets land in say which ones may be picked, what each means, and which tiers get the choice:
+Enterprise customers often raise P1, P2 and P3 themselves, while everyone else gets a priority from the team. Either name the package's four priorities with `priorityLabels`, or make P1 to P3 the priorities themselves with `priorities: ['p3', 'p2', 'p1']`, lowest first, and key the policy by those. Then on the inbox their tickets land in say which ones may be picked, what each means, and which tiers get the choice:
 
 ```ts title="lib/helpdesk.ts"
 priorityLabels: { urgent: { en: 'P1' }, high: { en: 'P2' }, normal: { en: 'P3' } },
