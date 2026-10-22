@@ -18,6 +18,24 @@ Element.prototype.scrollIntoView = () => {};
 
 type Call = { url: string; method: string; body: unknown };
 
+/** The ticket form through Home's "Submit a ticket", with the type picked in it. */
+async function ticketType(name: RegExp) {
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: /^(Submit a ticket|Ticket erfassen)$/,
+    })
+  );
+  await waitFor(() => expect(document.querySelector('form.form')).toBeTruthy());
+  // With one ticket type on offer, the form has nothing to choose.
+  const pill = screen.queryByRole('radio', {
+    name: /bug/i.test(name.source)
+      ? /^(Bug|Fehler)$/
+      : /^(Feature|Funktionswunsch)$/,
+  });
+  if (pill) fireEvent.click(pill);
+  return document.querySelector('form.form') as HTMLElement;
+}
+
 function mockApi(routes: Record<string, unknown>) {
   const calls: Call[] = [];
   vi.stubGlobal(
@@ -120,9 +138,7 @@ describe('Widget', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    );
+    fireEvent.click(await ticketType(/Report a bug/));
     fireEvent.change(screen.getByLabelText('Subject (optional)'), {
       target: { value: 'Export broken' },
     });
@@ -175,9 +191,7 @@ describe('Widget', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    );
+    fireEvent.click(await ticketType(/Report a bug/));
     expect(screen.queryByRole('toolbar', { name: 'Formatting' })).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Formatting' });
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
@@ -212,9 +226,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    );
+    fireEvent.click(await ticketType(/Report a bug/));
     const message = screen.getByRole('textbox', { name: 'What happened?' });
     const trace =
       'TypeError: <b>x</b> is undefined\n    at render (app.js:10:5)\n    at main (app.js:2:1)';
@@ -263,9 +275,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    );
+    fireEvent.click(await ticketType(/Report a bug/));
     const message = screen.getByRole('textbox', { name: 'What happened?' });
     const trace = 'Plan:\n    ◦ export\n    ◦ import';
     const html = '<p><b>Plan:</b></p><ul><li>export</li><li>import</li></ul>';
@@ -379,7 +389,7 @@ describe('Widget', () => {
         />
       );
       fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-      fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
       fireEvent.click(await screen.findByText('Export broken'));
       await screen.findByText('Firefox');
     };
@@ -480,7 +490,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
     fireEvent.click(await screen.findByText('Shared thread'));
     expect(
       (await screen.findByText('Audit report')).parentElement?.textContent
@@ -523,7 +533,9 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: /Support/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Nachrichten/ }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^Nachrichten/ })
+    );
     fireEvent.click(await screen.findByText('Export broken'));
     const copy = await screen.findByRole('button', { name: 'Code kopieren' });
     expect(copy.closest('.code')?.querySelector('pre')?.textContent).toBe(
@@ -559,9 +571,7 @@ describe('Widget', () => {
 
     up = true;
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    ).toBeTruthy();
+    expect(await ticketType(/Report a bug/)).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -577,9 +587,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    );
+    fireEvent.click(await ticketType(/Report a bug/));
     fireEvent.change(screen.getByLabelText('Subject (optional)'), {
       target: { value: 'Export broken' },
     });
@@ -658,9 +666,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    );
+    fireEvent.click(await ticketType(/Report a bug/));
     const message = screen.getByRole('textbox', { name: 'What happened?' });
     message.innerHTML = 'Export fails';
     fireEvent.input(message);
@@ -1032,7 +1038,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
     fireEvent.click(await screen.findByText('Export broken'));
     await screen.findByText('With our team');
 
@@ -1087,9 +1093,7 @@ describe('Widget', () => {
     expect(notice.textContent).toContain('This could not be loaded.');
     down = false;
     fireEvent.click(within(notice).getByRole('button', { name: 'Try again' }));
-    expect(
-      await screen.findByRole('button', { name: /Report a bug/ })
-    ).toBeTruthy();
+    expect(await ticketType(/Report a bug/)).toBeTruthy();
     expect(screen.queryByText('This could not be loaded.')).toBeNull();
   });
 
@@ -1133,7 +1137,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
     fireEvent.click(await screen.findByText('Export broken'));
 
     expect(await screen.findByText('How did we do?')).toBeTruthy();
@@ -1180,7 +1184,7 @@ describe('Widget', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
-    fireEvent.click(await screen.findByRole('tab', { name: /Messages/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
     fireEvent.click(await screen.findByText('Shared thread'));
     await screen.findByText('Looking into it.');
     expect(screen.queryByRole('button', { name: 'Mark as resolved' })).toBe(
@@ -1213,7 +1217,7 @@ describe('Widget', () => {
     ).toBe('https://app.test/support/conversations/');
   });
 
-  it('fits the panel to the home view but not to the message list', async () => {
+  it('keeps one height through home, a message and a ticket', async () => {
     mockApi({ 'widget/session': { ...session, conversations: [ownThread] } });
     render(
       <Widget
@@ -1226,8 +1230,12 @@ describe('Widget', () => {
     await act(async () => {});
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
     const panel = await screen.findByRole('dialog');
-    expect(panel.hasAttribute('data-fit')).toBe(true);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Messages' }));
+    await screen.findByRole('button', { name: 'Send us a message' });
+    expect(panel.hasAttribute('data-fit')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Send us a message' }));
+    expect(panel.hasAttribute('data-fit')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit a ticket' }));
     expect(panel.hasAttribute('data-fit')).toBe(false);
   });
 
@@ -1249,7 +1257,7 @@ describe('Widget', () => {
     await act(async () => {});
     fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
     const panel = await screen.findByRole('dialog');
-    await screen.findAllByRole('button', { name: /bug/i });
+    await screen.findByRole('button', { name: 'Submit a ticket' });
     const focusable = [
       ...panel.querySelectorAll<HTMLElement>('button, [href], input'),
     ].filter(el => !el.hasAttribute('disabled'));
@@ -1371,7 +1379,7 @@ describe('Widget', () => {
     expect(within(page).queryByText('Broken')).toBeNull();
   });
 
-  it('offers a new message when the person switched to has no conversations', async () => {
+  it('offers to write in when the person switched to has no conversations', async () => {
     const tokenFor = (sub: string) =>
       `h.${btoa(JSON.stringify({ sub, exp: 1 })).replace(/=+$/, '')}.s`;
     vi.stubGlobal(
@@ -1404,8 +1412,9 @@ describe('Widget', () => {
 
     rerender(widget(tokenFor('u2')));
     expect(
-      await within(page).findAllByRole('button', { name: /bug/i })
-    ).not.toHaveLength(0);
+      await within(page).findByRole('button', { name: 'New message' })
+    ).toBeTruthy();
+    expect(within(page).getByText('No conversations yet')).toBeTruthy();
     expect(within(page).queryByText('Export broken')).toBeNull();
   });
 });
@@ -1440,7 +1449,7 @@ describe('opened by the host', () => {
     mockApi({ 'widget/session': session });
     render(widget({ type: 'refund' }));
     expect(
-      await screen.findByRole('button', { name: /Report a bug/ })
+      await screen.findByRole('button', { name: 'Submit a ticket' })
     ).toBeTruthy();
     expect(
       screen.queryByRole('textbox', { name: 'What happened?' })
@@ -1580,11 +1589,283 @@ describe('opened by the host', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Support öffnen' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Fehler melden/ })
-    );
+    fireEvent.click(await ticketType(/Fehler melden/));
 
     expect(await screen.findByText('How many seats?')).toBeTruthy();
     expect(screen.getByLabelText('Under ten')).toBeTruthy();
+  });
+});
+
+describe('home, messages and help', () => {
+  afterEach(() => localStorage.clear());
+  const widget = () => (
+    <Widget api="/api/support" inbox="support" locale="en" errors={() => []} />
+  );
+  const opened = async () => {
+    render(widget());
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    return screen.findByRole('dialog');
+  };
+
+  it('greets by first name and offers both ways to write, the search only with docs behind it', async () => {
+    mockApi({ 'widget/session': { ...session, name: 'Ada Lovelace' } });
+    const panel = await opened();
+
+    expect(
+      await within(panel).findByText('Hi Ada, how can we help?')
+    ).toBeTruthy();
+    expect(
+      within(panel).getByRole('button', { name: 'Send us a message' })
+    ).toBeTruthy();
+    expect(
+      within(panel).getByRole('button', { name: 'Submit a ticket' })
+    ).toBeTruthy();
+    expect(within(panel).queryByRole('searchbox')).toBeNull();
+    expect(within(panel).queryByRole('button', { name: 'Help' })).toBeNull();
+    expect(
+      within(panel).getByText(
+        'Nothing yet. What you send us shows up here, with our replies.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('lists the latest conversations, newest first, with a way to all of them', async () => {
+    mockApi({
+      'widget/session': {
+        ...session,
+        conversations: [
+          ownThread,
+          {
+            ...ownThread,
+            id: 'c2',
+            subject: 'Billing question',
+            kind: 'chat',
+            unread: true,
+            lastMessageAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+      },
+    });
+    const panel = await opened();
+
+    const recent = await within(panel).findAllByRole('listitem');
+    expect(recent.map(item => item.textContent)).toEqual([
+      expect.stringMatching(/^Billing question.*unread$/),
+      expect.stringMatching(/^Export broken/),
+    ]);
+    fireEvent.click(within(panel).getByRole('button', { name: 'View all' }));
+    expect(
+      within(panel).getByRole('button', { name: /^Messages/ })
+    ).toHaveProperty('ariaCurrent', 'page');
+  });
+
+  it('sends a message as a chat, without a subject', async () => {
+    const calls = mockApi({ 'widget/session': session, ...posted });
+    const panel = await opened();
+    fireEvent.click(
+      await within(panel).findByRole('button', { name: 'Send us a message' })
+    );
+    expect(within(panel).queryByLabelText('Subject (optional)')).toBeNull();
+    const message = within(panel).getByRole('textbox', { name: 'Message' });
+    message.textContent = 'Can I move an app?';
+    fireEvent.input(message);
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Send message' })
+    );
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({
+        type: 'question',
+        kind: 'chat',
+        body: 'Can I move an app?',
+      })
+    );
+  });
+
+  it('submits a ticket of the type picked', async () => {
+    const calls = mockApi({ 'widget/session': session, ...posted });
+    await opened();
+    fireEvent.click(await ticketType(/Report a bug/));
+    fireEvent.change(screen.getByLabelText('Subject (optional)'), {
+      target: { value: 'Export broken' },
+    });
+    const message = screen.getByRole('textbox', { name: 'What happened?' });
+    message.textContent = 'It fails';
+    fireEvent.input(message);
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({ type: 'bug', kind: 'ticket', subject: 'Export broken' })
+    );
+  });
+
+  it('searches the docs from Home, remembers what was searched, and offers a person when nothing matches', async () => {
+    const results = [
+      {
+        title: 'Deploying',
+        url: 'https://docs.test/deploy',
+        excerpt: 'How a deploy runs',
+      },
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        const body = url.includes('widget/help')
+          ? { results: url.includes('q=deploy&') ? results : [] }
+          : { ...session, help: true };
+        return new Response(JSON.stringify(body), { status: 200 });
+      })
+    );
+    const panel = await opened();
+    fireEvent.change(
+      await within(panel).findByRole('searchbox', {
+        name: 'Search the documentation',
+      }),
+      { target: { value: 'deploy' } }
+    );
+
+    const link = await within(panel).findByRole('link', { name: /Deploying/ });
+    expect(link.getAttribute('href')).toBe('https://docs.test/deploy');
+    fireEvent.keyDown(within(panel).getByRole('searchbox'), { key: 'Enter' });
+    fireEvent.click(within(panel).getByRole('button', { name: /^Home/ }));
+    fireEvent.click(
+      await within(panel).findByRole('button', { name: 'deploy' })
+    );
+    expect(
+      await within(panel).findByRole('link', { name: /Deploying/ })
+    ).toBeTruthy();
+
+    fireEvent.change(within(panel).getByRole('searchbox'), {
+      target: { value: 'billing' },
+    });
+    fireEvent.click(
+      await within(panel).findByRole('button', { name: 'Message us' })
+    );
+    expect(
+      within(panel).getByRole('textbox', { name: 'Message' }).textContent
+    ).toBe('billing: ');
+  });
+
+  it('shows the team typing in the thread', async () => {
+    mockApi({
+      'widget/session': { ...session, conversations: [ownThread] },
+      'widget/conversations/c1/': {
+        ...posted['widget/conversations/c1/'],
+        conversation: {
+          ...posted['widget/conversations/c1/'].conversation,
+          typing: true,
+        },
+      },
+    });
+    const panel = await opened();
+    fireEvent.click(
+      await within(panel).findByRole('button', { name: /Export broken/ })
+    );
+
+    expect(await within(panel).findByText('Angelo is typing…')).toBeTruthy();
+  });
+
+  it('reloads an open thread when the stream says it changed', async () => {
+    const encoder = new TextEncoder();
+    let push: (text: string) => void = () => {};
+    let threadLoads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.includes('widget/events')) {
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                push = text => controller.enqueue(encoder.encode(text));
+              },
+            }),
+            { headers: { 'content-type': 'text/event-stream' } }
+          );
+        }
+        if (url.includes('widget/conversations/c1/seen')) {
+          return new Response('{}', { status: 200 });
+        }
+        if (url.includes('widget/conversations/c1')) {
+          threadLoads += 1;
+          return new Response(
+            JSON.stringify(posted['widget/conversations/c1/'])
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            ...session,
+            realtime: true,
+            conversations: [ownThread],
+          })
+        );
+      })
+    );
+    const panel = await opened();
+    fireEvent.click(
+      await within(panel).findByRole('button', { name: /Export broken/ })
+    );
+    await within(panel).findByText('Broken');
+    const before = threadLoads;
+
+    await act(async () => {
+      push(
+        `event: change\ndata: ${JSON.stringify({ conversationId: 'c1', kind: 'message' })}\n\n`
+      );
+    });
+
+    await waitFor(() => expect(threadLoads).toBe(before + 1));
+  });
+});
+
+describe('submitting a ticket', () => {
+  it('opens straight on the form, the category picked in it, and keeps what was written when it changes', async () => {
+    const calls = mockApi({ 'widget/session': session, ...posted });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Submit a ticket' })
+    );
+
+    expect(screen.getByRole('group', { name: 'Category' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Bug' })).toHaveProperty(
+      'checked',
+      true
+    );
+    fireEvent.change(screen.getByLabelText('Subject (optional)'), {
+      target: { value: 'Dark mode' },
+    });
+    fireEvent.click(screen.getByRole('radio', { name: 'Feature' }));
+    expect(
+      (screen.getByLabelText('Subject (optional)') as HTMLInputElement).value
+    ).toBe('Dark mode');
+    const message = screen.getByRole('textbox', { name: 'Message' });
+    message.textContent = 'Please add a dark theme';
+    fireEvent.input(message);
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({ type: 'feature', kind: 'ticket', subject: 'Dark mode' })
+    );
   });
 });

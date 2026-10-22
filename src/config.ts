@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { DatabaseAdapter } from './db/adapter';
 import { createStore, type HelpdeskStore } from './db/store';
 import type { HelpdeskEvent } from './events';
+import type { RealtimeAdapter } from './realtime';
 
 export type Locale = 'en' | 'de' | 'fr' | 'it';
 
@@ -273,6 +274,12 @@ export type HelpdeskConfig = {
    * throws is logged, never returned to the caller.
    */
   onEvent?(event: HelpdeskEvent): Promise<void>;
+  /**
+   * Pushes changes to open widgets and agent UIs over `widget/events` and
+   * `agent/events`, so a reply shows without waiting for the next poll.
+   * Unset, both routes answer 404 and the clients poll alone.
+   */
+  realtime?: RealtimeAdapter;
   /** Bearer secret for `POST {basePath}/jobs`. */
   jobsSecret?: string;
   /** The caller's address as your proxy reports it; the default takes the last X-Forwarded-For hop. */

@@ -1,0 +1,43 @@
+---
+title: Real-time updates
+description: Push replies, changes and a typing agent to open widgets and agent UIs as they happen, instead of waiting for the next poll.
+---
+
+Without configuration, the widget and the agent UI poll: an open thread every 5 seconds, the inbox every 10. With [`realtime`](/docs/reference/configuration#conversations) set, they also follow an event stream, `widget/events` for customers and `agent/events` for agents. A change shows as soon as it is stored, and the polling slows to a fallback for a dropped connection.
+
+## One process
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, memoryRealtime } from 'better-helpdesk';
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  realtime: memoryRealtime(),
+});
+```
+
+`memoryRealtime()` reaches the streams the same process serves. It fits a single server, and development.
+
+## Several processes on Postgres
+
+```ts title="lib/helpdesk.ts"
+import { buildHelpdesk, postgresAdapter, postgresRealtime } from 'better-helpdesk';
+
+export const helpdesk = buildHelpdesk({
+  db: postgresAdapter({ pool }),
+  realtime: postgresRealtime({ pool }),
+  // ...
+});
+```
+
+`postgresRealtime` publishes each change with `NOTIFY` and listens with `LISTEN` on one connection from your pool, held while anyone is subscribed. A reply written on one instance reaches a widget connected to another. On another database, implement `RealtimeAdapter`, `publish` and `subscribe`, over whatever your instances already share, such as Redis.
+
+## What travels
+
+A change names the conversation and what happened: `message`, `conversation` or `typing`. The client reloads what it shows of that conversation through the routes it already uses, so a stream never carries more than the caller may read. A customer's stream only carries the conversations they can see, and never an internal note.
+
+An agent typing a reply, not a note, tells the customer through `agent/conversations/{id}/typing`. The agent UI repeats it every few seconds while the agent types, and the widget shows "… is typing" until the reply lands or the agent stops.
+
+## Hosting
+
+A stream is a long-lived response. Each one ends itself after five minutes and the client reconnects, which keeps a serverless function inside its time limit and lets proxies recycle the connection. The response sets `x-accel-buffering: no` so nginx passes events through as they are written; another buffering proxy needs the same setting.

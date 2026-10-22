@@ -29,6 +29,7 @@ import type {
 import { formatReference, parseReference } from './domain';
 import { emit, emitUpdated } from './events';
 import { verifyIdentityToken } from './identity-token';
+import { publishChange } from './realtime';
 import { plainText } from './rich';
 import { nextOpening, openCutoff, openHoursBetween } from './ui/hours';
 import { nextWorkday } from './ui/i18n';
@@ -113,6 +114,8 @@ export function ipBucket(ip: string) {
 }
 
 const RATING_LINK_DAYS = 30;
+/** How long one sign of typing shows; the composer repeats it well inside this. */
+export const TYPING_MS = 6000;
 
 /** No email address is longer (RFC 5321), and the columns that keep one are not. */
 export const MAX_ADDRESS = 254;
@@ -329,6 +332,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     inbox: z.string(),
     type: z.string(),
     subject: z.string().trim().max(200).optional(),
+    kind: z.enum(['chat', 'ticket']).optional(),
     body: z.string().trim().min(1).max(20_000),
     context: z
       .object({
@@ -442,6 +446,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
       {
         inbox: data.inbox,
         type: data.type,
+        // A form names its subject; a message only has one derived from its words.
+        kind: data.kind ?? (data.subject ? 'ticket' : 'chat'),
         subject: data.subject || deriveSubject(data.body),
         priority: inbox.defaultPriority ?? 'normal',
         contactId: contact.id,
@@ -542,7 +548,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   }
 
   async function messageCreated(message: Message) {
-    if (!config.onEvent) return;
+    if (!config.onEvent && !config.realtime) return;
     const conversation = await store.getConversation(message.conversationId);
     if (!conversation) return;
     await emit(config, {
@@ -604,6 +610,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
       body,
       internal,
     });
+    if (!internal && conversation.agentTypingUntil) {
+      await store.updateConversation(conversation.id, {
+        agentTypingUntil: null,
+      });
+    }
     if (!internal) {
       await store.enqueueJob(
         'notify-customer',
@@ -631,6 +642,27 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
     await messageCreated(message);
     return message;
+  }
+
+  /**
+   * Shows the customer that an agent is writing. The composer repeats it
+   * while the agent types; a repeat inside half the window writes nothing.
+   */
+  async function agentTyping(conversation: Conversation) {
+    const now = clock().getTime();
+    if (
+      conversation.agentTypingUntil &&
+      conversation.agentTypingUntil.getTime() - now > TYPING_MS / 2
+    ) {
+      return;
+    }
+    await store.updateConversation(conversation.id, {
+      agentTypingUntil: new Date(now + TYPING_MS),
+    });
+    await publishChange(config.realtime, {
+      conversationId: conversation.id,
+      kind: 'typing',
+    });
   }
 
   function clientIp(request: Request) {
@@ -1606,6 +1638,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     createConversation,
     addCustomerMessage,
     addAgentMessage,
+    agentTyping,
     limitCustomer,
     handleInbound,
     attachmentKey,

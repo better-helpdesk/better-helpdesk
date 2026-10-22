@@ -47,6 +47,8 @@ Every analyst was given the same inventory and the same architecture limits and 
 
 Social and messaging channels, a help-centre CMS, an AI that answers customers, a visual rule builder, an SLA policy engine with calendars, roles beyond `isAgent`, multi-brand, campaigns and surveys, an own login, a hosted mode or hosted relay, API tokens, a mobile app, a second process. Live chat with typing indicators stays out: polling plus an honest reply promise is the pitch, and marketing asks that the word "live chat" never appears in copy. Nothing gets gated.
 
+*Reversed in part on 22 October 2026 by the maintainer, for a design partner's support panel:* the widget shows an agent typing a reply, and conversations carry a `kind` (`chat` or `ticket`). The reply promise stays, and so does the rule on the words "live chat".
+
 
 ## The epics
 
@@ -86,6 +88,7 @@ Social and messaging channels, a help-centre CMS, an AI that answers customers, 
 Each was proposed by at least one report. The reason is the engineering verdict; "later" means it returns when a design partner asks.
 
 - **A realtime adapter (SSE, Pusher, WebSockets).** One implementation (polling at 5 and 10 seconds) does not earn an interface. The seam, when a host brings a transport, is `useResource`'s `refresh` and a `publish()` next to `emit()`. Nothing else needs to know.
+  *Reversed on 22 October 2026 by the maintainer:* the `realtime` option takes a `RealtimeAdapter` with two implementations, in one process and over Postgres `NOTIFY`, published next to `emit()` as this entry foresaw. Clients reload through `refresh` on a change and keep polling as the fallback, so a host without it loses nothing.
 - **A ⌘K command palette.** Six sections and three filters do not need one; the UX review reached the same verdict. Shortcuts and a `?` sheet instead.
 - **Round-robin auto-assignment.** A README recipe on the events hook (`conversation.created` → `store.updateConversation` over `store.listAgents()` filtered by `awayUntil`); "assign to me" is the `a` key.
 - **Host-defined triage rules in config.** A rules DSL with no UI is the events hook with a worse interface. Recipe instead.

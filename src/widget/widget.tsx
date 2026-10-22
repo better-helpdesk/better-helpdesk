@@ -2,13 +2,20 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
 
 import type { Locale, Translated } from '../config';
-import { type Api, createApi, uploadToStorage, useResource } from '../ui/api';
+import {
+  type Api,
+  createApi,
+  uploadToStorage,
+  useEvents,
+  useResource,
+} from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
 import {
   dateLocale,
@@ -67,6 +74,7 @@ type Summary = {
   reference: string;
   subject: string | null;
   type: string;
+  kind?: 'chat' | 'ticket';
   status: string;
   own: boolean;
   unread: boolean;
@@ -76,6 +84,8 @@ type Summary = {
   rating?: 'good' | 'bad' | null;
   merged?: boolean;
   agentSeenAt?: string | null;
+  /** An agent is writing a reply right now. */
+  typing?: boolean;
 };
 
 type Session = {
@@ -86,6 +96,8 @@ type Session = {
   types: string[];
   help: boolean;
   uploads: boolean;
+  /** The server pushes changes over `widget/events`. */
+  realtime?: boolean;
   team: { name: string; initials: string; avatarUrl: string | null }[];
   teamName?: string | null;
   awayUntil?: string | null;
@@ -108,14 +120,18 @@ type Session = {
 
 type View =
   | { name: 'home' }
-  | { name: 'form'; type: string; prefill?: Prefill }
+  | { name: 'types' }
+  | { name: 'form'; type: string; prefill?: Prefill; choices?: string[] }
+  | { name: 'chat'; prefill?: Prefill }
   | { name: 'list' }
+  | { name: 'help'; query: string }
   | { name: 'thread'; id: string };
 
 // Keyed by API so two helpdesks on one origin keep separate visitors. The bare
 // key is what earlier versions wrote, read once so nobody loses a conversation.
 const VISITOR_KEY = 'helpdesk-visitor';
 const visitorKey = (api: string) => `${VISITOR_KEY}:${api.replace(/\/$/, '')}`;
+const SEARCHES_KEY = 'helpdesk-searches';
 const LANDING_KEY = 'helpdesk-landing';
 const REFERRER_KEY = 'helpdesk-referrer';
 
@@ -179,7 +195,44 @@ const Icon = {
   camera:
     'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   clip: 'M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5',
+  home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
+  messages:
+    'M17 8h2a2 2 0 0 1 2 2v10l-4-4h-6a2 2 0 0 1-2-2v-1M15 4H5a2 2 0 0 0-2 2v10l4-4h8a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+  help: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
+  ticket:
+    'M3 8V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a2 2 0 0 0 0 4v0a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4V8zM9 5v14',
+  external:
+    'M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
 };
+
+/** What this browser searched the docs for last, newest first; per API, like the visitor. */
+function recentSearches(api: string): string[] {
+  try {
+    const stored = JSON.parse(
+      storage('local')?.getItem(`${SEARCHES_KEY}:${api}`) ?? '[]'
+    );
+    return Array.isArray(stored)
+      ? stored.filter((q): q is string => typeof q === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSearch(api: string, query: string) {
+  const q = query.trim();
+  if (q.length < 2) return;
+  const next = [
+    q,
+    ...recentSearches(api).filter(s => s.toLowerCase() !== q.toLowerCase()),
+  ].slice(0, 5);
+  try {
+    storage('local')?.setItem(`${SEARCHES_KEY}:${api}`, JSON.stringify(next));
+  } catch {
+    // Not remembered; the search worked all the same.
+  }
+}
 
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(
@@ -333,9 +386,21 @@ export function Widget(props: WidgetProps) {
     );
     setIsAgent(Boolean(session.data?.agent));
   }, [session.data]);
-  // A support page opens on the customer's conversations once there are any.
+  // The open thread hears its own changes through this, the list through the session.
+  const changes = useMemo(() => new EventTarget(), []);
+  useEvents(
+    api,
+    'widget/events',
+    Boolean(session.data?.realtime) && (open || awaitingTeam || isAgent),
+    change => {
+      void session.refresh();
+      changes.dispatchEvent(new CustomEvent('change', { detail: change }));
+    }
+  );
+  // A support page opens on the customer's conversations once there are any,
+  // before Home's recent list can paint and take a click the switch would undo.
   const listed = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!inline || listed.current || !session.data) return;
     listed.current = true;
     if (session.data.conversations.length > 0) setView({ name: 'list' });
@@ -360,9 +425,23 @@ export function Widget(props: WidgetProps) {
   );
   const single = offered.length === 1 ? offered[0] : undefined;
   const home: View = single ? { name: 'form', type: single } : { name: 'home' };
-  // An empty list has no tabs and no back button, so it would be a dead end.
+  // A ticket reports a bug or asks for a feature; the form offers whichever the inbox takes.
+  const ticketTypes = offered.filter(
+    type => type === 'bug' || type === 'feature'
+  );
+  const ticket: View = ticketTypes[0]
+    ? { name: 'form', type: ticketTypes[0], choices: ticketTypes }
+    : offered.length === 1 && offered[0]
+      ? { name: 'form', type: offered[0] }
+      : { name: 'types' };
+  // A message goes in as a question when the inbox takes questions.
+  const chatType = offered.includes('question') ? 'question' : offered[0];
+  // With one form there is no navigation, so an empty list would be a dead end.
   const emptyList =
-    view.name === 'list' && data !== null && data.conversations.length === 0;
+    Boolean(single) &&
+    view.name === 'list' &&
+    data !== null &&
+    data.conversations.length === 0;
   useEffect(() => {
     if (emptyList)
       setView(single ? { name: 'form', type: single } : { name: 'home' });
@@ -410,9 +489,12 @@ export function Widget(props: WidgetProps) {
   useEffect(() => {
     if (!focusForm.current || view.name !== 'form') return;
     focusForm.current = false;
-    panel.current
-      ?.querySelector<HTMLElement>('.rt-input, textarea, input')
-      ?.focus();
+    // The message is what a form is for, wherever the subject sits.
+    const fields = panel.current;
+    (
+      fields?.querySelector<HTMLElement>('.rt-input') ??
+      fields?.querySelector<HTMLElement>('textarea, input')
+    )?.focus();
   }, [view]);
 
   const close = useCallback(() => {
@@ -434,12 +516,20 @@ export function Widget(props: WidgetProps) {
   }, [open, inline, onEvent]);
 
   const title =
-    view.name === 'form' && !single
-      ? t(`type.${view.type}`)
-      : view.name === 'thread'
-        ? (data?.conversations.find(c => c.id === view.id)?.reference ?? '')
-        : (data?.inbox?.title?.[locale] ??
-          (single === 'lead' ? t('type.lead') : t('widget.title')));
+    view.name === 'form' && view.choices
+      ? t('widget.submitTicket')
+      : view.name === 'form' && !single
+        ? t(`type.${view.type}`)
+        : view.name === 'thread'
+          ? (data?.conversations.find(c => c.id === view.id)?.reference ?? '')
+          : view.name === 'chat'
+            ? t('widget.sendMessage')
+            : view.name === 'types'
+              ? t('widget.submitTicket')
+              : view.name === 'help'
+                ? t('widget.docs')
+                : (data?.inbox?.title?.[locale] ??
+                  (single === 'lead' ? t('type.lead') : t('widget.title')));
   const soleResponder = data?.team.length === 1 ? data.team[0] : undefined;
   const who = soleResponder?.name ?? data?.teamName ?? undefined;
   const promise = data?.nextOpening
@@ -467,7 +557,27 @@ export function Widget(props: WidgetProps) {
   }, [open, mobile, inline]);
   const agentWaiting = data?.agent?.waiting ?? 0;
   const hasConversations = (data?.conversations.length ?? 0) > 0;
-  const showBack = view.name === 'thread' || (view.name === 'form' && !single);
+  const showBack =
+    view.name === 'thread' ||
+    view.name === 'chat' ||
+    view.name === 'types' ||
+    (view.name === 'form' && !single);
+  const back: View =
+    view.name === 'thread'
+      ? { name: 'list' }
+      : view.name === 'form' && !view.choices && offered.length > 1
+        ? { name: 'types' }
+        : home;
+  const tab =
+    view.name === 'list' || view.name === 'thread'
+      ? 'messages'
+      : view.name === 'help'
+        ? 'help'
+        : 'home';
+  const showNav =
+    !single &&
+    data !== null &&
+    (view.name === 'home' || view.name === 'list' || view.name === 'help');
   const formType =
     view.name === 'form'
       ? view.type
@@ -483,7 +593,12 @@ export function Widget(props: WidgetProps) {
         <div
           ref={panel}
           className="panel"
-          data-fit={view.name === 'home' || view.name === 'form' || undefined}
+          // Only a single-form inbox fits its content; the tabbed panel keeps
+          // one height, so it does not jump as the customer moves through it.
+          data-fit={
+            (single && (view.name === 'home' || view.name === 'form')) ||
+            undefined
+          }
           data-inline={inline || undefined}
           role={inline ? 'region' : 'dialog'}
           aria-modal={(!inline && mobile) || undefined}
@@ -499,9 +614,7 @@ export function Widget(props: WidgetProps) {
                   type="button"
                   className="icon-btn"
                   aria-label={t('widget.back')}
-                  onClick={() =>
-                    setView(view.name === 'thread' ? { name: 'list' } : home)
-                  }>
+                  onClick={() => setView(back)}>
                   <Svg d={Icon.back} />
                 </button>
               )}
@@ -568,23 +681,34 @@ export function Widget(props: WidgetProps) {
                 </span>
               </a>
             )}
-          {(view.name === 'home' || view.name === 'list' || single) &&
-            view.name !== 'thread' &&
-            hasConversations && (
-              <Tabs
-                t={t}
-                current={view.name === 'list' ? 'list' : 'new'}
-                unread={unread > 0}
-                onChange={next =>
-                  setView(next === 'list' ? { name: 'list' } : home)
-                }
-              />
-            )}
+          {single && view.name !== 'thread' && hasConversations && (
+            <Tabs
+              t={t}
+              current={view.name === 'list' ? 'list' : 'new'}
+              unread={unread > 0}
+              onChange={next =>
+                setView(next === 'list' ? { name: 'list' } : home)
+              }
+            />
+          )}
           {!data && session.error && (
             <LoadFailed t={t} onRetry={refreshSession} />
           )}
           {data && view.name === 'home' && !single && (
-            <div className="body" role="tabpanel">
+            <Home
+              t={t}
+              locale={locale}
+              session={data}
+              searches={recentSearches(props.api)}
+              onSearch={query => setView({ name: 'help', query })}
+              onChat={() => setView({ name: 'chat' })}
+              onTicket={() => setView(ticket)}
+              onOpen={id => setView({ name: 'thread', id })}
+              onAll={() => setView({ name: 'list' })}
+            />
+          )}
+          {data && view.name === 'types' && (
+            <div className="body">
               <div className="types">
                 {offered.map(type => (
                   <button
@@ -599,11 +723,52 @@ export function Widget(props: WidgetProps) {
               </div>
             </div>
           )}
+          {data && view.name === 'help' && (
+            <HelpSearch
+              api={api}
+              t={t}
+              locale={locale}
+              query={view.query}
+              onQuery={query => setView({ name: 'help', query })}
+              onRemember={query => rememberSearch(props.api, query)}
+              onAsk={query =>
+                setView({
+                  name: 'chat',
+                  prefill: query.trim()
+                    ? { message: `${query.trim()}: ` }
+                    : undefined,
+                })
+              }
+            />
+          )}
+          {data && view.name === 'chat' && chatType && (
+            <NewMessage
+              key="chat"
+              {...props}
+              type={chatType}
+              kind="chat"
+              prefill={view.prefill}
+              api={api}
+              t={t}
+              session={data}
+              onToken={value => {
+                token.current = value;
+                storage('local')?.setItem(visitorKey(props.api), value);
+              }}
+              onCreated={(id, detail) => {
+                onEvent?.({ name: 'helpdesk:message-sent', detail });
+                refreshSession();
+                setView({ name: 'thread', id });
+              }}
+            />
+          )}
           {data && formType && (
             <NewMessage
-              key={formType}
+              key={view.name === 'form' && view.choices ? 'ticket' : formType}
               {...props}
               type={formType}
+              kind="ticket"
+              typeChoices={view.name === 'form' ? view.choices : undefined}
               prefill={view.name === 'form' ? view.prefill : undefined}
               api={api}
               t={t}
@@ -619,8 +784,15 @@ export function Widget(props: WidgetProps) {
               }}
             />
           )}
-          {view.name === 'list' && (
-            <div className="body" role="tabpanel">
+          {view.name === 'list' && data?.conversations.length === 0 && (
+            <div className="body empty">
+              <Svg d={Icon.messages} />
+              <strong>{t('widget.noConversations')}</strong>
+              <span className="fine">{t('widget.noConversationsHint')}</span>
+            </div>
+          )}
+          {view.name === 'list' && (data?.conversations.length ?? 0) > 0 && (
+            <div className="body" role={single ? 'tabpanel' : undefined}>
               <div className="list">
                 {[...(data?.conversations ?? [])]
                   .sort(
@@ -641,14 +813,25 @@ export function Widget(props: WidgetProps) {
                         .join(' ')}
                       onClick={() => setView({ name: 'thread', id: c.id })}>
                       <span className="item-top">
+                        {!single && (
+                          <span className="kind" aria-hidden="true">
+                            <Svg
+                              d={c.kind === 'chat' ? Icon.chat : Icon.ticket}
+                            />
+                          </span>
+                        )}
                         <strong>{c.subject ?? t(`type.${c.type}`)}</strong>
                         <span className="fine">
                           {timeAgo(c.lastMessageAt, locale, t)}
                         </span>
                       </span>
-                      {c.preview && (
-                        <span className="preview">{c.preview}</span>
-                      )}
+                      {c.preview &&
+                        // A chat's subject is its first words, so the preview would say them twice.
+                        !(
+                          c.kind === 'chat' &&
+                          c.subject &&
+                          c.preview.startsWith(c.subject.replace(/…$/, ''))
+                        ) && <span className="preview">{c.preview}</span>}
                       <span className="fine">
                         {c.reference} ·{' '}
                         <span
@@ -662,6 +845,24 @@ export function Widget(props: WidgetProps) {
                     </button>
                   ))}
               </div>
+            </div>
+          )}
+          {view.name === 'list' && !single && data && (
+            <div className="list-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setView({ name: 'chat' })}>
+                <Svg d={Icon.chat} />
+                {t('widget.newMessage')}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setView(ticket)}>
+                <Svg d={Icon.ticket} />
+                {t('widget.newTicket')}
+              </button>
             </div>
           )}
           {view.name === 'thread' && (
@@ -683,6 +884,26 @@ export function Widget(props: WidgetProps) {
                 })
               }
               onSeen={refreshSession}
+              changes={changes}
+              realtime={Boolean(data?.realtime)}
+              who={who ?? null}
+            />
+          )}
+          {showNav && (
+            <Nav
+              t={t}
+              current={tab}
+              help={Boolean(data?.help)}
+              unread={unread > 0}
+              onChange={next =>
+                setView(
+                  next === 'messages'
+                    ? { name: 'list' }
+                    : next === 'help'
+                      ? { name: 'help', query: '' }
+                      : home
+                )
+              }
             />
           )}
         </div>
@@ -782,7 +1003,9 @@ function NewMessage({
   t,
   session,
   inbox,
-  type,
+  type: initialType,
+  typeChoices,
+  kind,
   hostContext,
   orgId,
   appVersion,
@@ -795,6 +1018,10 @@ function NewMessage({
   api: Api;
   t: Translate;
   type: string;
+  /** A chat is the message alone; a ticket asks for a subject and, for technical types, the page's details. */
+  kind: 'chat' | 'ticket';
+  /** Types the customer picks between in the form itself; switching keeps what they wrote. */
+  typeChoices?: string[];
   prefill?: Prefill;
   session: Session;
   onToken: (token: string) => void;
@@ -808,6 +1035,7 @@ function NewMessage({
     }
   ) => void;
 }) {
+  const [type, setType] = useState(initialType);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   // A host's text goes into the fields the customer has left empty, so it
@@ -839,9 +1067,9 @@ function NewMessage({
   const [help, setHelp] = useState<
     { title: string; url: string; excerpt?: string }[]
   >([]);
-  const technical = TECHNICAL.has(type);
+  const technical = kind === 'ticket' && TECHNICAL.has(type);
   // A bug or feature report is rarely formatted; the toolbar waits behind a toggle.
-  const plain = type === 'bug' || type === 'feature';
+  const plain = technical && (type === 'bug' || type === 'feature');
   const [formatting, setFormatting] = useState(false);
   const qualify = session.inbox?.qualify;
 
@@ -935,6 +1163,7 @@ function NewMessage({
           body: {
             inbox,
             type,
+            kind,
             subject: subject.trim() || undefined,
             body,
             context: sent,
@@ -985,9 +1214,44 @@ function NewMessage({
   }
 
   const messageLabel =
-    type === 'lead' || type === 'bug'
+    kind === 'ticket' && (type === 'lead' || type === 'bug')
       ? t(`form.message.${type}`)
       : t('form.message');
+
+  // A message and a ticket keep the box being written in at the panel's floor,
+  // beside the button that sends it; what qualifies it scrolls above.
+  const pinned = kind === 'chat' || Boolean(typeChoices);
+  const messageField = (
+    <div className="field">
+      <div className="field-head">
+        <span aria-hidden="true">{messageLabel}</span>
+        {plain && (
+          <button
+            type="button"
+            className="format-toggle"
+            aria-pressed={formatting}
+            onClick={() => setFormatting(on => !on)}>
+            {t('rich.toolbar')}
+          </button>
+        )}
+      </div>
+      <RichEditor
+        ref={message}
+        className="rt-form"
+        label={messageLabel}
+        placeholder={
+          kind === 'chat'
+            ? t('form.placeholder.chat')
+            : t(`form.placeholder.${type}`)
+        }
+        value={body}
+        onChange={setBody}
+        t={t}
+        toolbar={kind === 'ticket' && (!plain || formatting)}
+        readOnly={sent}
+      />
+    </div>
+  );
 
   return (
     <form
@@ -1004,31 +1268,40 @@ function NewMessage({
       }}>
       <div className="body">
         <fieldset className="sent-fields" disabled={sent}>
-          <div className="field">
-            <div className="field-head">
-              <span aria-hidden="true">{messageLabel}</span>
-              {plain && (
-                <button
-                  type="button"
-                  className="format-toggle"
-                  aria-pressed={formatting}
-                  onClick={() => setFormatting(on => !on)}>
-                  {t('rich.toolbar')}
-                </button>
-              )}
-            </div>
-            <RichEditor
-              ref={message}
-              className="rt-form"
-              label={messageLabel}
-              placeholder={t(`form.placeholder.${type}`)}
-              value={body}
-              onChange={setBody}
-              t={t}
-              toolbar={!plain || formatting}
-              readOnly={sent}
-            />
-          </div>
+          {technical && (
+            <label className="field">
+              {t('form.subjectOptional')}
+              <input
+                type="text"
+                maxLength={200}
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+              />
+            </label>
+          )}
+          {typeChoices && typeChoices.length > 1 && (
+            <fieldset className="field type-choice">
+              <legend>{t('form.category')}</legend>
+              <div className="segmented">
+                {typeChoices.map(choice => (
+                  <label key={choice}>
+                    <input
+                      type="radio"
+                      name="support-ticket-type"
+                      value={choice}
+                      checked={type === choice}
+                      onChange={() => setType(choice)}
+                    />
+                    {choice === 'bug' || choice === 'feature'
+                      ? t(`form.category.${choice}`)
+                      : t(`type.${choice}`)}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          {kind === 'chat' && <p className="fine">{t('form.chatHint')}</p>}
+          {!pinned && messageField}
           {help.length > 0 && (
             <div className="box help">
               <span className="help-heading">{t('form.helpHeading')}</span>
@@ -1097,17 +1370,6 @@ function NewMessage({
                 </label>
               ))}
             </fieldset>
-          )}
-          {technical && (
-            <label className="field">
-              {t('form.subjectOptional')}
-              <input
-                type="text"
-                maxLength={200}
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
-              />
-            </label>
           )}
           {session.orgs.length > 1 && (
             <label className="field">
@@ -1259,6 +1521,7 @@ function NewMessage({
         )}
       </div>
       <div className="footer">
+        {pinned && messageField}
         {state === 'error' && (
           <p className="error" role="alert">
             {t(sent ? 'form.attachmentsError' : 'form.error')}
@@ -1272,12 +1535,17 @@ function NewMessage({
             </a>
           </p>
         )}
-        <button
-          type="submit"
-          className="primary"
-          disabled={state === 'sending'}>
-          {state === 'sending' ? t('form.sending') : t('form.send')}
-        </button>
+        <div className={pinned ? 'send-row' : 'contents'}>
+          {pinned && kind === 'ticket' && (
+            <span className="fine">{t('form.referenceHint')}</span>
+          )}
+          <button
+            type="submit"
+            className="primary"
+            disabled={state === 'sending'}>
+            {state === 'sending' ? t('form.sending') : t('form.send')}
+          </button>
+        </div>
       </div>
       {redacting && (
         <Redactor
@@ -1373,6 +1641,9 @@ function Thread({
   confirmation,
   onBook,
   onSeen,
+  changes,
+  realtime,
+  who,
 }: {
   api: Api;
   apiBase: string;
@@ -1387,12 +1658,37 @@ function Thread({
   confirmation: string | null;
   onBook: (reference: string) => void;
   onSeen: () => void;
+  changes: EventTarget;
+  /** Changes arrive as events, so the poll only covers a dropped stream. */
+  realtime: boolean;
+  /** Who answers, for the typing line. */
+  who: string | null;
 }) {
   const thread = useResource(
     () => api<ThreadData>(`widget/conversations/${id}`),
     id,
-    5000
+    realtime ? 30_000 : 5000
   );
+  const { refresh } = thread;
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      if (
+        (event as CustomEvent<{ conversationId: string }>).detail
+          .conversationId === id
+      ) {
+        void refresh();
+      }
+    };
+    changes.addEventListener('change', onChange);
+    return () => changes.removeEventListener('change', onChange);
+  }, [changes, id, refresh]);
+  const typing = Boolean(thread.data?.conversation.typing);
+  // Typing lapses on the server without an event, so the thread looks again once it would have.
+  useEffect(() => {
+    if (!typing) return;
+    const timer = setTimeout(() => void refresh(), 7000);
+    return () => clearTimeout(timer);
+  }, [typing, refresh]);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -1565,6 +1861,13 @@ function Thread({
               )}
             </Fragment>
           ))}
+          {typing && (
+            <span className="typing" role="status">
+              {who
+                ? t('thread.typingNamed', { name: who })
+                : t('thread.typing')}
+            </span>
+          )}
         </div>
         {linkFiles && data.attachments.length > 0 && (
           <div className="files">
@@ -1710,5 +2013,274 @@ function RatingPrompt({
         </p>
       )}
     </fieldset>
+  );
+}
+
+function Home({
+  t,
+  locale,
+  session,
+  searches,
+  onSearch,
+  onChat,
+  onTicket,
+  onOpen,
+  onAll,
+}: {
+  t: Translate;
+  locale: Locale;
+  session: Session;
+  searches: string[];
+  onSearch: (query: string) => void;
+  onChat: () => void;
+  onTicket: () => void;
+  onOpen: (id: string) => void;
+  onAll: () => void;
+}) {
+  const firstName = session.name?.trim().split(/\s+/)[0];
+  const recent = [...session.conversations]
+    .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))
+    .slice(0, 3);
+  return (
+    <div className="body home">
+      <div className="greeting">
+        <strong>
+          {firstName
+            ? t('widget.greetingNamed', { name: firstName })
+            : t('widget.greeting')}
+        </strong>
+        <span className="muted">
+          {session.help ? t('widget.homeIntro') : t('widget.homeIntroNoHelp')}
+        </span>
+      </div>
+      {session.help && (
+        <section className="section">
+          <h2 className="section-label">{t('widget.searchDocs')}</h2>
+          <label className="search">
+            <Svg d={Icon.search} />
+            <span className="sr-only">{t('widget.searchDocs')}</span>
+            <input
+              type="search"
+              placeholder={t('widget.searchDocs')}
+              value=""
+              onChange={e => onSearch(e.target.value)}
+            />
+          </label>
+        </section>
+      )}
+      <section className="section">
+        <h2 className="section-label">{t('widget.writeToUs')}</h2>
+        <button type="button" className="secondary action" onClick={onChat}>
+          <Svg d={Icon.chat} />
+          {t('widget.sendMessage')}
+        </button>
+        <button type="button" className="secondary action" onClick={onTicket}>
+          <Svg d={Icon.ticket} />
+          {t('widget.submitTicket')}
+        </button>
+      </section>
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-label">{t('widget.recentMessages')}</h2>
+          {recent.length > 0 && (
+            <button type="button" className="link" onClick={onAll}>
+              {t('widget.viewAll')}
+            </button>
+          )}
+        </div>
+        {recent.length === 0 ? (
+          <span className="fine">{t('widget.recentEmpty')}</span>
+        ) : (
+          <ul className="recent">
+            {recent.map(c => (
+              <li key={c.id}>
+                <button type="button" onClick={() => onOpen(c.id)}>
+                  <Svg d={c.kind === 'chat' ? Icon.chat : Icon.ticket} />
+                  <span className="recent-title">
+                    {c.subject ?? t(`type.${c.type}`)}
+                  </span>
+                  <span className="fine">
+                    {timeAgo(c.lastMessageAt, locale, t)}
+                  </span>
+                  {c.unread && (
+                    <span className="unread-dot">
+                      <span className="sr-only">{t('widget.unread')}</span>
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {session.help && searches.length > 0 && (
+        <section className="section">
+          <h2 className="section-label">{t('widget.recentSearches')}</h2>
+          <ul className="chips">
+            {searches.map(query => (
+              <li key={query}>
+                <button type="button" onClick={() => onSearch(query)}>
+                  <Svg d={Icon.search} />
+                  {query}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
+type HelpResult = { title: string; url: string; excerpt?: string };
+
+function HelpSearch({
+  api,
+  t,
+  locale,
+  query,
+  onQuery,
+  onRemember,
+  onAsk,
+}: {
+  api: Api;
+  t: Translate;
+  locale: Locale;
+  query: string;
+  onQuery: (query: string) => void;
+  onRemember: (query: string) => void;
+  onAsk: (query: string) => void;
+}) {
+  const [results, setResults] = useState<HelpResult[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const q = query.trim();
+  useEffect(() => {
+    setFailed(false);
+    if (q.length < 2) {
+      setResults(null);
+      return;
+    }
+    setResults(null);
+    let current = true;
+    const timer = setTimeout(() => {
+      api<{ results: HelpResult[] }>(
+        `widget/help?q=${encodeURIComponent(q.slice(0, 200))}&locale=${locale}`
+      )
+        .then(r => current && setResults(r.results))
+        .catch(() => current && setFailed(true));
+    }, 250);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [q, api, locale]);
+
+  const ask = (
+    <button type="button" className="secondary" onClick={() => onAsk(query)}>
+      <Svg d={Icon.chat} />
+      {t('widget.askUs')}
+    </button>
+  );
+  return (
+    <div className="body help-view">
+      <label className="search">
+        <Svg d={Icon.search} />
+        <span className="sr-only">{t('widget.searchDocs')}</span>
+        <input
+          type="search"
+          placeholder={t('widget.searchDocs')}
+          value={query}
+          // biome-ignore lint/a11y/noAutofocus: Home's search hands the typing over to this field.
+          autoFocus
+          onChange={e => onQuery(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onRemember(query);
+          }}
+        />
+      </label>
+      {q.length < 2 ? (
+        <span className="fine">{t('widget.searchHint')}</span>
+      ) : failed ? (
+        <div className="empty">
+          <strong>{t('widget.searchFailed')}</strong>
+          {ask}
+        </div>
+      ) : results === null ? (
+        <span className="fine" role="status">
+          {t('widget.searching')}
+        </span>
+      ) : results.length === 0 ? (
+        <div className="empty">
+          <strong>{t('widget.noResults')}</strong>
+          <span className="fine">{t('widget.noResultsHint')}</span>
+          {ask}
+        </div>
+      ) : (
+        <ul className="results">
+          {results.map(r => (
+            <li key={r.url}>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => onRemember(query)}>
+                <span className="help-title">
+                  {r.title}
+                  <Svg d={Icon.external} />
+                  <span className="sr-only">{t('widget.opensNewTab')}</span>
+                </span>
+                {r.excerpt && <span className="help-excerpt">{r.excerpt}</span>}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+type NavTab = 'home' | 'messages' | 'help';
+
+function Nav({
+  t,
+  current,
+  help,
+  unread,
+  onChange,
+}: {
+  t: Translate;
+  current: NavTab;
+  help: boolean;
+  unread: boolean;
+  onChange: (tab: NavTab) => void;
+}) {
+  const tabs: [NavTab, string, string][] = [
+    ['home', Icon.home, t('widget.home')],
+    ['messages', Icon.messages, t('widget.messages')],
+    ...(help
+      ? [['help', Icon.help, t('widget.help')] as [NavTab, string, string]]
+      : []),
+  ];
+  return (
+    <nav className="nav" aria-label={t('widget.title')}>
+      {tabs.map(([tab, icon, label]) => (
+        <button
+          key={tab}
+          type="button"
+          aria-current={current === tab ? 'page' : undefined}
+          onClick={() => onChange(tab)}>
+          <span className="nav-icon">
+            <Svg d={icon} />
+            {tab === 'messages' && unread && (
+              <span className="nav-dot" aria-hidden="true" />
+            )}
+          </span>
+          {label}
+          {tab === 'messages' && unread && (
+            <span className="sr-only">{t('widget.unread')}</span>
+          )}
+        </button>
+      ))}
+    </nav>
   );
 }

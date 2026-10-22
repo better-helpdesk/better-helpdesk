@@ -165,7 +165,7 @@ Key presses in the widget's text fields stop at the element, so they do not reac
 
 ## What the widget captures
 
-For a `bug`, `feature` or `question`, a new conversation's context holds the page URL and title, user agent, viewport, locale, `appVersion`, the last 10 errors and unhandled rejections on the page (300 characters each), and the host context as `host`. The form lists each item, and the customer can leave any of them out. For any other type, it holds the page URL, the locale, the first page of the visit, the external referrer and the UTM parameters of that first page. The fields and their limits are on [HTTP routes](/docs/reference/routes#context).
+A message sent with **Send us a message** is a `chat` and carries the page URL and locale. A ticket for a `bug`, `feature` or `question` is a `ticket`, and its context holds the page URL and title, user agent, viewport, locale, `appVersion`, the last 10 errors and unhandled rejections on the page (300 characters each), and the host context as `host`. The form lists each item, and the customer can leave any of them out. For any other type, it holds the page URL, the locale, the first page of the visit, the external referrer and the UTM parameters of that first page. The fields and their limits are on [HTTP routes](/docs/reference/routes#context).
 
 ## Browser storage
 
@@ -175,6 +175,7 @@ For a `bug`, `feature` or `question`, a new conversation's context holds the pag
 | `helpdesk-visitor` | `localStorage` | Read when the key above is empty; written by earlier versions. |
 | `helpdesk-landing` | `sessionStorage` | The first page of the visit. |
 | `helpdesk-referrer` | `sessionStorage` | The external referrer of the visit, or an empty string. |
+| `helpdesk-searches:{api}` | `localStorage` | The last five documentation searches, shown on Home. |
 
 ## CSS custom properties
 

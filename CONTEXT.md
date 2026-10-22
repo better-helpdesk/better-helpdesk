@@ -56,6 +56,11 @@ says **conversation**. Each has:
 - A **subject**, what the customer called it and the only name they ever
   see, and a **title**, the team's name from triage or a rename, which
   agents see first.
+- A **kind**: a **chat** is a message the customer wrote, a **ticket** a
+  form with a type and a subject, or an email. Only the widget shows it;
+  every conversation is worked the same way.
+- **Typing**: `agentTypingUntil` is set while an agent writes a reply, and
+  the customer sees them typing until it passes or the reply lands.
 - **Tags**, free text the team adds, lower-cased and unique per
   conversation; the inbox filters by one.
 - **Messages** by a `contact`, an `agent` or the `system`. An **internal**

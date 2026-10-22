@@ -21,3 +21,9 @@ export {
 } from './db/kysely';
 export { migrate } from './db/migrate';
 export { helpdeskModel, type ModelName, type Row } from './db/model';
+export {
+  memoryRealtime,
+  postgresRealtime,
+  type RealtimeAdapter,
+  type RealtimeChange,
+} from './realtime';

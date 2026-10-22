@@ -97,6 +97,7 @@ A row is written on an agent's first request, keyed by the host's user id. The p
 | `number` | `integer` | no | | The number in the reference, from [`counter`](#counter). Unique. |
 | `inbox` | `text` | no | | A key of `inboxes`. |
 | `type` | `text` | no | | One of `types`. |
+| `kind` | `text` | no | `ticket` | `chat` for a message the customer wrote, `ticket` for a form with a subject or an email. |
 | `status` | `text` | no | `open` | `open`, `pending` or `resolved`. |
 | `priority` | `text` | no | `normal` | `low`, `normal`, `high` or `urgent`. |
 | `subject` | `text` | yes | | What the customer called it; the only name they see. |
@@ -112,6 +113,7 @@ A row is written on an agent's first request, keyed by the host's user id. The p
 | `snoozed_until` | `timestamptz` | yes | | On a `pending` conversation, when `runJobs` reopens it. |
 | `customer_seen_at` | `timestamptz` | yes | | When the customer last read it in the widget. |
 | `agent_seen_at` | `timestamptz` | yes | | `last_message_at` as of the last time any agent opened it. |
+| `agent_typing_until` | `timestamptz` | yes | | Set while an agent writes a reply; the customer sees them typing until it passes. |
 | `last_message_at` | `timestamptz` | no | `now()` | |
 | `resolved_at` | `timestamptz` | yes | | Retention counts from it. |
 | `merged_into_id` | `uuid` | yes | | The conversation this one was merged into; set to `null` when that one is deleted. |

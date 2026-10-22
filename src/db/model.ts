@@ -79,6 +79,7 @@ export type CustomValues = Record<string, string | number | null>;
 export type IdentityChannel = 'host' | 'email' | 'visitor' | 'github';
 export type AuthorType = 'contact' | 'agent' | 'system';
 export type ActivityKind = 'note' | 'call' | 'meeting' | 'event';
+export type ConversationKind = 'chat' | 'ticket';
 
 export type ConversationContext = {
   url?: string;
@@ -184,6 +185,8 @@ export const helpdeskModel = {
       number: f.integer(),
       inbox: f.string(),
       type: f.string(),
+      /** How the customer started it: a `chat` is a message, a `ticket` a form with a subject; email arrives as a ticket. */
+      kind: f.string<ConversationKind>().withDefault('ticket'),
       status: f.string().withDefault('open'),
       priority: f.string().withDefault('normal'),
       /** What the customer called it; they only ever see this. */
@@ -202,6 +205,8 @@ export const helpdeskModel = {
       customerSeenAt: f.date().orNull(),
       /** `lastMessageAt` as of the last time any agent opened it; a newer message makes it unread. */
       agentSeenAt: f.date().orNull(),
+      /** Set while an agent writes a reply; the customer sees them typing until it passes. */
+      agentTypingUntil: f.date().orNull(),
       lastMessageAt: f.date().withDefault('now'),
       resolvedAt: f.date().orNull(),
       mergedIntoId: f.uuid().orNull().ref('conversation', 'set null'),
