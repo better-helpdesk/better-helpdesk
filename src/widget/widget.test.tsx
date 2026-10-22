@@ -200,6 +200,57 @@ describe('Widget', () => {
     expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeTruthy();
   });
 
+  it('keeps the formatting toolbar behind the same toggle on a new message and on a reply', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.includes('widget/session')) {
+          return new Response(
+            JSON.stringify({ ...session, conversations: [ownThread] })
+          );
+        }
+        if (url.endsWith('widget/conversations/c1/')) {
+          return new Response(
+            JSON.stringify({
+              conversation: ownThread,
+              messages: [],
+              attachments: [],
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }));
+      })
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    const toggled = () => {
+      expect(screen.queryByRole('toolbar', { name: 'Formatting' })).toBeNull();
+      const toggle = screen.getByRole('button', { name: 'Formatting' });
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+      expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeTruthy();
+    };
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Send us a message' })
+    );
+    toggled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
+    fireEvent.click(await screen.findByText('Export broken'));
+    await screen.findByRole('textbox', { name: 'Write a reply…' });
+    toggled();
+  });
+
   it('sends a pasted three-line trace as a code block', async () => {
     const calls = mockApi({
       'widget/session': session,
