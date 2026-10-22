@@ -80,6 +80,11 @@ export type IdentityChannel = 'host' | 'email' | 'visitor' | 'github';
 export type AuthorType = 'contact' | 'agent' | 'system';
 export type ActivityKind = 'note' | 'call' | 'meeting' | 'event';
 export type ConversationKind = 'chat' | 'ticket';
+/** Where a conversation came in: the widget, a mail relay, an agent, or host code without a request. */
+export type Channel = 'widget' | 'email' | 'agent' | 'api';
+export type AgentRole = 'agent' | 'supervisor' | 'viewer';
+/** The last notice sent about a service-level target. */
+export type SlaNotice = 'warning' | 'breach';
 
 export type ConversationContext = {
   url?: string;
@@ -93,6 +98,8 @@ export type ConversationContext = {
   landingPage?: string;
   referrer?: string;
   utm?: Record<string, string>;
+  /** Where an imported conversation came from, and what it was called there. */
+  imported?: { reference?: string; source?: string };
 };
 
 export type AiSuggestion = {
@@ -173,6 +180,8 @@ export const helpdeskModel = {
       lastSeenAt: f.date().withDefault('now'),
       /** Set once the host no longer counts them as an agent; they get no more mail. */
       deactivatedAt: f.date().orNull(),
+      /** From `identify`; a viewer reads and changes nothing, a supervisor also gets SLA notices. */
+      role: f.string<AgentRole>().withDefault('agent'),
       /** The conversation the agent last had open; others see them on it while `viewingAt` is recent. */
       viewingId: f.uuid().orNull().ref('conversation', 'set null'),
       viewingAt: f.date().orNull(),
@@ -189,6 +198,9 @@ export const helpdeskModel = {
       kind: f.string<ConversationKind>().withDefault('ticket'),
       status: f.string().withDefault('open'),
       priority: f.string().withDefault('normal'),
+      /** The customer's support tier, from `resolveTier` or an agent; picks the SLA policy. */
+      tier: f.string().orNull(),
+      channel: f.string<Channel>().withDefault('widget'),
       /** What the customer called it; they only ever see this. */
       subject: f.text().orNull(),
       /** The team's name for it, from triage or a rename; agents see this first. */
@@ -211,8 +223,23 @@ export const helpdeskModel = {
       resolvedAt: f.date().orNull(),
       mergedIntoId: f.uuid().orNull().ref('conversation', 'set null'),
       rating: f.string<'good' | 'bad'>().orNull(),
+      /** 1 to 5 when the helpdesk asks for a score; `rating` is derived from it. */
+      ratingScore: f.integer().orNull(),
       ratingComment: f.text().orNull(),
       ratedAt: f.date().orNull(),
+      /** The first public agent reply; the response target is met when it is not after `respondBy`. */
+      firstRespondedAt: f.date().orNull(),
+      respondBy: f.date().orNull(),
+      /** Moves forward by the time the clock was paused, so it is read as of the last resume. */
+      resolveBy: f.date().orNull(),
+      /** The nearest deadline still to meet while the clock runs; the inbox sorts by it. */
+      slaDueAt: f.date().orNull(),
+      /** Set while the clock is paused: the status is not `open`. */
+      slaPausedAt: f.date().orNull(),
+      /** Open-hours time the clock has spent paused so far. */
+      slaPausedSeconds: f.integer().withDefault(0),
+      respondNotice: f.string<SlaNotice>().orNull(),
+      resolveNotice: f.string<SlaNotice>().orNull(),
       createdAt: f.createdAt(),
     },
     { unique: [{ fields: ['number'] }] }
@@ -326,6 +353,17 @@ export const helpdeskModel = {
     },
     { primaryKey: ['key', 'windowStart'] }
   ),
+  /** What agents changed through the agent routes, one row per request. */
+  audit_log: table({
+    id: f.id(),
+    agentId: f.uuid().orNull().ref('agent', 'set null'),
+    /** The method and route, such as `PATCH conversations/:id`. */
+    action: f.string(),
+    /** The id in the route, when it has one. */
+    target: f.string().orNull(),
+    data: f.json<Record<string, unknown>>().withDefault({}),
+    createdAt: f.createdAt(),
+  }),
   /** Named counters, such as the next conversation reference. */
   counter: table(
     { name: f.string(), value: f.integer() },
