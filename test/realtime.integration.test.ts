@@ -62,6 +62,9 @@ async function follow(path: string, user: string) {
     },
     async stop() {
       controller.abort();
+      // Cancelling the reader ends the stream on its own; Node 22 can lose an
+      // abort on a Request nothing else holds.
+      await reader?.cancel().catch(() => undefined);
       await reading;
     },
   };
