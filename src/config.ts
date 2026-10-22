@@ -2,9 +2,11 @@ import type { DNSResolver } from 'mailauth';
 import { z } from 'zod';
 
 import type { DatabaseAdapter } from './db/adapter';
+import type { AgentRole, ConversationContext } from './db/model';
 import { createStore, type HelpdeskStore } from './db/store';
 import type { HelpdeskEvent } from './events';
 import type { RealtimeAdapter } from './realtime';
+import { type SlaClockFor, slaClockFor } from './sla';
 
 export type Locale = 'en' | 'de' | 'fr' | 'it';
 
@@ -45,6 +47,44 @@ export type Identity = {
   user: HelpdeskUser;
   orgs: HelpdeskOrg[];
   isAgent: boolean;
+  /**
+   * What an agent may do: `agent` works the queue, `supervisor` also gets
+   * SLA notices and, once any supervisor exists, alone changes settings and
+   * the team; `viewer` reads and changes nothing. Unset, an agent.
+   */
+  role?: AgentRole;
+};
+
+export type Priority = (typeof PRIORITIES)[number];
+
+/** Hours to answer and to resolve, counted in `hours`, the policy's, the inbox's, or round the clock. */
+export type SlaTarget = {
+  respond?: number;
+  resolve?: number;
+  hours?: BusinessHours | 'always';
+};
+
+export type SlaPolicy = {
+  hours?: BusinessHours | 'always';
+  targets: Partial<Record<Priority, SlaTarget>>;
+};
+
+export type SlaConfig = {
+  /** A policy per tier. */
+  tiers?: Record<string, SlaPolicy>;
+  /** For a conversation whose tier has no policy, or that has none. */
+  default?: SlaPolicy;
+  /** The share of a target after which agents are warned; 0.8 by default. */
+  warnAt?: number;
+};
+
+/** What `resolveTier` sees when a conversation opens. */
+export type TierInput = {
+  user: HelpdeskUser | null;
+  orgId: string | null;
+  email: string | null;
+  inbox: string;
+  context: ConversationContext;
 };
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
@@ -60,7 +100,7 @@ export type BusinessHours = {
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const endTime = z.union([time, z.literal('24:00')]);
-const businessHours = z.object({
+export const businessHours = z.object({
   timeZone: z.string().refine(zone => {
     try {
       // supportedValuesOf lists canonical names only, so an alias such as US/Eastern is checked by what it resolves to.
@@ -100,6 +140,11 @@ export type InboxConfig = {
   hours?: BusinessHours;
   /** Priority new conversations start with, e.g. `high` for sales. */
   defaultPriority?: (typeof PRIORITIES)[number];
+  /**
+   * Priorities a customer may pick on a ticket form, each with the text that
+   * says what it means; for an inbox whose customers raise P1 to P3 themselves.
+   */
+  priorities?: Partial<Record<Priority, Translated>>;
   /** Widget header for this inbox, per locale. */
   title?: Partial<Record<Locale, string>>;
   /** What the widget promises about replies, per locale. */
@@ -138,9 +183,14 @@ export type HelpdeskEmail =
       inReplyTo?: string;
       /**
        * When the conversation is resolved: links that let the customer rate it
-       * from the email, each opening a page under `basePath` to confirm.
+       * from the email, each opening a page under `basePath` to confirm. On
+       * the five-point scale, one per score, and `good` and `bad` are 5 and 1.
        */
-      ratingLinks?: { good: string; bad: string };
+      ratingLinks?: {
+        good: string;
+        bad: string;
+        scores?: Record<1 | 2 | 3 | 4 | 5, string>;
+      };
     }
   | {
       kind: 'customer-receipt';
@@ -159,6 +209,8 @@ export type HelpdeskEmail =
       backOn?: string;
       bookingUrl?: string;
       replyTo?: string;
+      /** When the team aims to answer by, from the SLA policy; ISO timestamp. */
+      respondBy?: string;
     }
   | {
       kind: 'agent-new' | 'agent-reminder';
@@ -179,6 +231,20 @@ export type HelpdeskEmail =
       body: string;
       url: string;
       authorName: string;
+    }
+  | {
+      kind: 'agent-sla';
+      to: string;
+      locale: Locale;
+      reference: string;
+      subject: string;
+      body: string;
+      url: string;
+      target: 'response' | 'resolution';
+      /** `warning` once the configured share of the target has passed, `breach` once it is missed. */
+      stage: 'warning' | 'breach';
+      /** The deadline; ISO timestamp. */
+      due: string;
     };
 
 export type StorageAdapter = {
@@ -238,6 +304,16 @@ export type HelpdeskConfig = {
   /** Absolute URL of the agent UI, used in agent emails. */
   adminUrl: string;
   types?: string[];
+  /** Support tiers agents may set; unset, the keys of `sla.tiers`. */
+  tiers?: string[];
+  /** The tier a new conversation gets, from what the host knows about the customer; a throw leaves it unset. */
+  resolveTier?(input: TierInput): string | null | Promise<string | null>;
+  /** Response and resolution targets per tier and priority, tracked by the jobs run. */
+  sla?: SlaConfig;
+  /** What agents and customers see instead of `low`, `normal`, `high` and `urgent`, such as P3 to P1. */
+  priorityLabels?: Partial<Record<Priority, Translated>>;
+  /** Customers rate a resolved conversation good or bad, or from 1 to 5. */
+  ratingScale?: 2 | 5;
   inboxes: Record<string, InboxConfig>;
   identify(request: Request): Promise<Identity | null>;
   /**
@@ -323,6 +399,9 @@ export type ResolvedConfig = HelpdeskConfig & {
   store: HelpdeskStore;
   basePath: string;
   types: string[];
+  tiers: string[];
+  ratingScale: 2 | 5;
+  slaClock: SlaClockFor;
   leadStages: string[];
   dealStages: string[];
   features: Record<Feature, boolean>;
@@ -350,11 +429,21 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
         `Invalid hours for inbox ${key}: ${z.prettifyError(parsed.error)}`
       );
   }
-  return {
+  if (config.sla) {
+    const parsed = slaConfig.safeParse(config.sla);
+    if (!parsed.success) {
+      throw new Error(`Invalid sla: ${z.prettifyError(parsed.error)}`);
+    }
+  }
+  const tiers = config.tiers ?? Object.keys(config.sla?.tiers ?? {});
+  const resolved: ResolvedConfig = {
     ...config,
-    store: createStore(config.db),
+    store: undefined as unknown as HelpdeskStore,
     basePath: (config.basePath ?? '/api/helpdesk').replace(/\/$/, ''),
     types: config.types ?? DEFAULT_TYPES,
+    tiers,
+    ratingScale: config.ratingScale ?? 2,
+    slaClock: () => null,
     leadStages: config.leadStages ?? DEFAULT_LEAD_STAGES,
     dealStages: config.dealStages ?? DEFAULT_DEAL_STAGES,
     features: Object.fromEntries(
@@ -364,4 +453,28 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
     anonymousRateLimit: config.anonymousRateLimit ?? 20,
     customerRateLimit: config.customerRateLimit ?? 60,
   };
+  // The store starts and pauses the clocks itself, so every status change keeps them right.
+  resolved.slaClock = slaClockFor(resolved);
+  resolved.store = createStore(config.db, { slaClock: resolved.slaClock });
+  return resolved;
 }
+
+const hoursOrAlways = z.union([businessHours, z.literal('always')]).optional();
+const slaTarget = z
+  .object({
+    respond: z.number().positive().optional(),
+    resolve: z.number().positive().optional(),
+    hours: hoursOrAlways,
+  })
+  .refine(t => t.respond !== undefined || t.resolve !== undefined, {
+    message: 'A target needs respond or resolve',
+  });
+const slaPolicy = z.object({
+  hours: hoursOrAlways,
+  targets: z.partialRecord(z.enum(PRIORITIES), slaTarget),
+});
+const slaConfig = z.object({
+  tiers: z.record(z.string().min(1).max(100), slaPolicy).optional(),
+  default: slaPolicy.optional(),
+  warnAt: z.number().gt(0).lt(1).optional(),
+});

@@ -2,8 +2,8 @@
 // the repository, with pg as the only database driver: the published entry
 // points import, the adapters without the drivers they don't use, an identity
 // token round-trips, the standalone widget is built, the CLI migrates the
-// database in HELPDESK_DATABASE_URL, and the import CLI writes contacts and
-// canned replies into it.
+// database in HELPDESK_DATABASE_URL, the import CLI writes contacts and
+// canned replies into it, and the export CLI reads the conversations back.
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
@@ -58,5 +58,18 @@ for (const [kind, text] of Object.entries(csv)) {
   if (!out.includes('2 created')) {
     throw new Error(`smoke: importing ${kind} printed: ${out}`);
   }
+}
+const exported = execFileSync(
+  process.execPath,
+  [join(root, 'bin/export.mjs'), '--prefix', 'SMOKE'],
+  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+);
+if (
+  exported
+    .split('\n')
+    .filter(Boolean)
+    .some(line => !line.startsWith('{'))
+) {
+  throw new Error('smoke: the export printed something that is not JSON');
 }
 console.log('smoke: ok');

@@ -23,6 +23,8 @@ const fakeDist = `
 export const parseCsv = () => [];
 export const importContacts = () => {};
 export const importCannedReplies = () => {};
+export const importConversations = () => {};
+export const exportConversations = () => {};
 export const postgresAdapter = () => {};
 export const mysqlAdapter = () => {};
 export const mssqlAdapter = () => {};
@@ -64,6 +66,7 @@ function sslFor(
 describe.each([
   ['migrate.mjs', []],
   ['import.mjs', ['contacts', fileURLToPath(import.meta.url)]],
+  ['export.mjs', []],
 ])('DATABASE_SSL in %s', (bin, args) => {
   it('connects without TLS when unset or set to anything else', () => {
     expect(sslFor(bin, args, undefined)).toBe(false);

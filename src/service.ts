@@ -14,12 +14,16 @@ import {
   type Identity,
   type InboundMessage,
   type Locale,
+  PRIORITIES,
   type ResolvedConfig,
   resolveConfig,
+  STATUSES,
+  type TierInput,
 } from './config';
 import { clock } from './db/adapter';
-import type { Insert } from './db/model';
+import type { Channel, Insert } from './db/model';
 import type {
+  Agent,
   Company,
   Contact,
   Conversation,
@@ -31,7 +35,8 @@ import { emit, emitUpdated } from './events';
 import { verifyIdentityToken } from './identity-token';
 import { publishChange } from './realtime';
 import { plainText } from './rich';
-import { nextOpening, openCutoff, openHoursBetween } from './ui/hours';
+import { deadline, hoursBetween, slaPatch } from './sla';
+import { nextOpening, openCutoff } from './ui/hours';
 import { nextWorkday } from './ui/i18n';
 import { unlabelLinks } from './ui/rich';
 
@@ -114,6 +119,10 @@ export function ipBucket(ip: string) {
 }
 
 const RATING_LINK_DAYS = 30;
+const MAX_TAGS = 50;
+const uuid = z.uuid();
+const RATINGS = ['good', 'bad', '1', '2', '3', '4', '5'] as const;
+type RatingValue = (typeof RATINGS)[number];
 /** How long one sign of typing shows; the composer repeats it well inside this. */
 export const TYPING_MS = 6000;
 
@@ -325,7 +334,20 @@ export function createHelpdesk(input: HelpdeskConfig) {
       name: identity.user.name,
       email: identity.user.email,
       avatarUrl: identity.user.image,
+      role: identity.role,
     });
+  }
+
+  /** The tier the host assigns a new conversation; a failing hook leaves it unset. */
+  async function resolveTier(input: TierInput) {
+    if (!config.resolveTier) return null;
+    try {
+      const tier = await config.resolveTier(input);
+      return tier && config.tiers.includes(tier) ? tier : null;
+    } catch (error) {
+      console.error('[helpdesk] resolveTier failed', error);
+      return null;
+    }
   }
 
   const createInput = z.object({
@@ -354,6 +376,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       })
       .optional(),
     segment: z.string().max(100).optional(),
+    priority: z.enum(PRIORITIES).optional(),
     orgId: z.string().optional(),
     sharedWithCompany: z.boolean().optional(),
     name: z.string().trim().max(200).optional(),
@@ -361,7 +384,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
     website: z.string().optional(),
   });
 
-  async function createConversation(request: Request, raw: unknown) {
+  async function createConversation(
+    request: Request,
+    raw: unknown,
+    channel: Channel = 'api'
+  ) {
     const data = createInput.parse(raw);
     const inbox = Object.hasOwn(config.inboxes, data.inbox)
       ? config.inboxes[data.inbox]
@@ -369,6 +396,10 @@ export function createHelpdesk(input: HelpdeskConfig) {
     if (!inbox) throw new HelpdeskError(400, 'Unknown inbox');
     if (!config.types.includes(data.type)) {
       throw new HelpdeskError(400, 'Unknown type');
+    }
+    // Only the priorities the inbox offers the customer; the rest are the team's to set.
+    if (data.priority && !inbox.priorities?.[data.priority]) {
+      throw new HelpdeskError(400, 'Priority not offered');
     }
     const segment = data.segment
       ? inbox.qualify?.options.find(o => o.value === data.segment)?.value
@@ -442,21 +473,30 @@ export function createHelpdesk(input: HelpdeskConfig) {
         tags: [...contact.tags, segment],
       });
     }
+    const context = {
+      ...data.context,
+      ...(segment ? { host: { ...data.context?.host, segment } } : {}),
+    };
     const created = await store.createConversation(
       {
         inbox: data.inbox,
         type: data.type,
         // A form names its subject; a message only has one derived from its words.
         kind: data.kind ?? (data.subject ? 'ticket' : 'chat'),
+        channel,
         subject: data.subject || deriveSubject(data.body),
-        priority: inbox.defaultPriority ?? 'normal',
+        priority: data.priority ?? inbox.defaultPriority ?? 'normal',
+        tier: await resolveTier({
+          user: customer.identity?.user ?? null,
+          orgId: data.orgId ?? null,
+          email: contact.email,
+          inbox: data.inbox,
+          context,
+        }),
         contactId: contact.id,
         companyId,
         sharedWithCompany: Boolean(companyId && data.sharedWithCompany),
-        context: {
-          ...data.context,
-          ...(segment ? { host: { ...data.context?.host, segment } } : {}),
-        },
+        context,
       },
       {
         body: data.body,
@@ -569,6 +609,20 @@ export function createHelpdesk(input: HelpdeskConfig) {
     { conversation, message }: { conversation: Conversation; message: Message },
     origin: 'host' | 'other'
   ) {
+    // Opened by an agent: nobody on the team needs telling, and the customer gets the message itself.
+    if (message.authorType === 'agent') {
+      await store.enqueueJob(
+        'notify-customer',
+        { messageId: message.id },
+        { runAt: new Date(Date.now() + 2 * 60_000) }
+      );
+      await emit(config, {
+        kind: 'conversation.created',
+        conversation,
+        message,
+      });
+      return;
+    }
     if (
       (await store.hitRateLimit(`agent-notices:${origin}`)) <=
       MAX_AGENT_NOTICES_PER_HOUR
@@ -708,6 +762,17 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return assignee ? [assignee] : team;
   }
 
+  /** The assignee, or the whole team when there is none, and every supervisor. */
+  async function slaRecipients(conversation: Conversation) {
+    const team = (await store.mailableAgents(AGENT_IDLE_DAYS)).filter(
+      a => a.email
+    );
+    const assignee = team.find(a => a.id === conversation.assigneeId);
+    const supervisors = team.filter(a => a.role === 'supervisor');
+    const first = assignee ? [assignee] : team;
+    return [...first, ...supervisors.filter(s => !first.includes(s))];
+  }
+
   async function firstCustomerText(conversation: Conversation) {
     const rows = await store.listMessages(conversation.id, {
       includeInternal: false,
@@ -808,10 +873,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
       // Anyone can type any address into a public form; only words their
       // author proved come back in a subject we sign. Proving the address
       // later does not vouch for what was written before.
-      const opening = thread.find(m => m.authorType === 'contact');
+      const opening = thread[0];
       const proven =
-        opening?.verified ??
-        (await store.listIdentities(contact.id)).some(i => i.verified);
+        opening?.authorType === 'agent' ||
+        (opening?.verified ??
+          (await store.listIdentities(contact.id)).some(i => i.verified));
       await sendEmail({
         kind: 'customer-reply',
         to: contact.email,
@@ -860,8 +926,42 @@ export function createHelpdesk(input: HelpdeskConfig) {
           config.inboxes[conversation.inbox]?.bookingLink?.(ref) ??
           config.inboxes[conversation.inbox]?.bookingUrl,
         replyTo: config.replyToAddress?.(ref),
+        respondBy: conversation.respondBy?.toISOString(),
       });
       await recordEmails(conversation, 'customer-receipt', [contact.email]);
+    },
+
+    async 'sla-notice'(payload) {
+      const conversation = await store.getConversation(
+        String(payload.conversationId)
+      );
+      if (!conversation) return;
+      const target = payload.target === 'resolve' ? 'resolution' : 'response';
+      const stage = payload.stage === 'breach' ? 'breach' : 'warning';
+      const body = await firstCustomerText(conversation);
+      const recipients = await slaRecipients(conversation);
+      for (const agent of recipients) {
+        await sendEmail({
+          kind: 'agent-sla',
+          to: agent.email as string,
+          locale: 'en',
+          reference: reference(conversation),
+          subject:
+            conversation.title ??
+            conversation.subject ??
+            truncate(plainText(body.slice(0, 2000)), 80),
+          body: truncate(body, 1000),
+          url: agentUrl(conversation),
+          target,
+          stage,
+          due: String(payload.due),
+        });
+      }
+      await recordEmails(
+        conversation,
+        'agent-sla',
+        recipients.map(a => a.email as string)
+      );
     },
 
     async 'agent-reminder'(payload) {
@@ -942,6 +1042,61 @@ export function createHelpdesk(input: HelpdeskConfig) {
           conversationId: conversation.id,
         });
         queued++;
+      }
+    }
+    return queued;
+  }
+
+  /**
+   * Warns once a share of a target has passed and again once it is missed,
+   * each once per target: a claim on the row keeps concurrent runs apart.
+   */
+  async function sendSlaNotices() {
+    const warnAt = config.sla?.warnAt ?? 0.8;
+    let queued = 0;
+    for (const c of await store.slaCandidates()) {
+      const targets = config.slaClock(c);
+      if (!targets) continue;
+      const now = clock();
+      for (const target of ['respond', 'resolve'] as const) {
+        const by = target === 'respond' ? c.respondBy : c.resolveBy;
+        const hours = targets[target];
+        if (!by || hours === null) continue;
+        if (target === 'respond' && c.firstRespondedAt) continue;
+        const notice = c[`${target}Notice`];
+        const paused = target === 'resolve' ? c.slaPausedSeconds / 3600 : 0;
+        const stage =
+          now >= by
+            ? 'breach'
+            : notice === null &&
+                now >=
+                  deadline(c.createdAt, hours * warnAt + paused, targets.hours)
+              ? 'warning'
+              : null;
+        if (!stage || stage === notice) continue;
+        if (!(await store.claimSlaNotice(c.id, target, notice, stage)))
+          continue;
+        const name = target === 'respond' ? 'response' : 'resolution';
+        await store.recordEvents([
+          {
+            conversationId: c.id,
+            kind: `sla.${stage}`,
+            data: { target: name, due: by.toISOString() },
+          },
+        ]);
+        await store.enqueueJob('sla-notice', {
+          conversationId: c.id,
+          target,
+          stage,
+          due: by.toISOString(),
+        });
+        queued++;
+        await emit(config, {
+          kind: `sla.${stage}`,
+          conversation: c,
+          target: name,
+          due: by,
+        });
       }
     }
     return queued;
@@ -1079,12 +1234,23 @@ export function createHelpdesk(input: HelpdeskConfig) {
     const inbox = config.inboundInbox ?? Object.keys(config.inboxes)[0];
     const type = config.types[0];
     if (!inbox || !type) throw new Error('No inbox or type configured');
+    const company = contact.companyId
+      ? await store.getCompany(contact.companyId)
+      : null;
     const created = await store.createConversation(
       {
         id: conversationId,
         inbox,
         type,
+        channel: 'email',
         subject: mail.subject || deriveSubject(mail.text),
+        tier: await resolveTier({
+          user: null,
+          orgId: company?.externalOrgId ?? null,
+          email: from,
+          inbox,
+          context: {},
+        }),
         contactId: contact.id,
         companyId: contact.companyId,
         context: {},
@@ -1412,21 +1578,35 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return unlabelLinks(result.reply);
   }
 
-  /** Ratings come from the customer: a bad one hands the conversation back to the team. */
+  /**
+   * Ratings come from the customer. A bad one, or a score of 1 or 2, hands
+   * the conversation back to the team; a score of 4 or 5 counts as good.
+   */
   async function rateAsCustomer(
     conversation: Conversation,
-    rating: 'good' | 'bad',
+    value: RatingValue,
     comment?: string
   ) {
+    const score = /^[1-5]$/.test(value) ? Number(value) : null;
+    const rating: 'good' | 'bad' =
+      score === null ? (value as 'good' | 'bad') : score >= 4 ? 'good' : 'bad';
+    const reopen = score === null ? rating === 'bad' : score <= 2;
     const now = clock();
     const patch: Partial<Conversation> = {
       rating,
+      ratingScore: score,
       ratingComment: comment || null,
       ratedAt: now,
-      ...(rating === 'bad' && {
+      ...(reopen && {
         status: 'open',
         waitingSince: now,
         resolvedAt: null,
+        ...slaPatch(
+          config.slaClock(conversation),
+          conversation,
+          { status: 'open' },
+          now
+        ),
       }),
     };
     const updated = await store.rateConversation(conversation.id, patch);
@@ -1467,7 +1647,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
     const secret = await ratingSecret();
     const expires = Math.floor(Date.now() / 1000) + RATING_LINK_DAYS * 86_400;
-    const link = (rating: 'good' | 'bad') => {
+    const link = (rating: RatingValue) => {
       const url = new URL(`${config.basePath}/rate/`, config.adminUrl);
       url.search = new URLSearchParams({
         c: conversation.id,
@@ -1477,16 +1657,30 @@ export function createHelpdesk(input: HelpdeskConfig) {
       }).toString();
       return url.toString();
     };
-    return { good: link('good'), bad: link('bad') };
+    // On a five-point scale, `good` and `bad` stay as the top and bottom scores.
+    return config.ratingScale === 5
+      ? {
+          good: link('5'),
+          bad: link('1'),
+          scores: {
+            1: link('1'),
+            2: link('2'),
+            3: link('3'),
+            4: link('4'),
+            5: link('5'),
+          },
+        }
+      : { good: link('good'), bad: link('bad') };
   }
 
   /** The conversation and rating a link names, or null when it is forged or expired. */
   async function verifyRatingLink(params: URLSearchParams) {
     const id = params.get('c') ?? '';
-    const rating = params.get('r');
+    const rating = params.get('r') as RatingValue | null;
     const expires = Number(params.get('e'));
     if (
-      (rating !== 'good' && rating !== 'bad') ||
+      !rating ||
+      !RATINGS.includes(rating) ||
       !Number.isSafeInteger(expires) ||
       expires < Date.now() / 1000
     ) {
@@ -1518,6 +1712,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     const report = {
       woken: 0,
       reminders: 0,
+      sla: 0,
       retention: 0,
       jobs: 0,
       failed: 0,
@@ -1535,6 +1730,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     };
     report.woken = await step('wake', wakeSnoozed);
     report.reminders = await step('reminders', sendReminders);
+    report.sla = await step('sla', sendSlaNotices);
     report.retention = await step('retention', applyRetention);
     while (Date.now() - started < budgetMs) {
       const claimed = await store.claimJobs(10);
@@ -1559,33 +1755,58 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return report;
   }
 
-  /** Volume and median reply and resolution times; open hours only for inboxes with business hours. */
+  /** Volume, reply and resolution times, and SLA attainment; open hours only for inboxes with business hours. */
   async function overview(sinceDays: number) {
-    // ponytail: every conversation in the window comes into memory so open hours can apply per inbox; move the plain-clock medians into SQL if a window reaches tens of thousands.
+    // ponytail: every conversation in the window comes into memory so open hours can apply per inbox; move the plain-clock figures into SQL if a window reaches tens of thousands.
     const rows = await store.overview(sinceDays);
+    const reopened = await store.reopenedAmong(rows.map(r => r.id));
+    for (const r of rows) r.reopened = reopened.has(r.id);
     const since = Date.now() - sinceDays * 86_400_000;
     const span = (inbox: string, from: Date, to: Date) => {
       const hours = config.inboxes[inbox]?.hours;
-      return hours
-        ? openHoursBetween(from, to, hours)
-        : (to.getTime() - from.getTime()) / 3_600_000;
+      return hoursBetween(from, to, hours ?? null);
     };
     const summarize = (group: typeof rows) => {
       const opened = group.filter(r => r.createdAt.getTime() >= since);
       const resolved = group.filter(
         r => r.resolvedAt && r.resolvedAt.getTime() >= since
       );
+      const responses = opened.flatMap(r =>
+        r.firstRespondedAt
+          ? [span(r.inbox, r.createdAt, r.firstRespondedAt)]
+          : []
+      );
+      const resolutions = resolved.map(
+        r =>
+          span(r.inbox, r.createdAt, r.resolvedAt as Date) -
+          r.slaPausedSeconds / 3600
+      );
+      const met = (
+        target: 'respond' | 'resolve',
+        list: typeof rows,
+        at: (r: (typeof rows)[number]) => Date | null
+      ) => {
+        const targeted = list.filter(r => r[`${target}By`]);
+        const missed = targeted.filter(r => {
+          const done = at(r);
+          const by = r[`${target}By`] as Date;
+          return done ? done > by : by.getTime() < Date.now();
+        });
+        return {
+          met: targeted.length - missed.length,
+          breached: missed.length,
+        };
+      };
       return {
         new: opened.length,
         resolved: resolved.length,
-        firstResponse: median(
-          opened.flatMap(r =>
-            r.firstReplyAt ? [span(r.inbox, r.createdAt, r.firstReplyAt)] : []
-          )
-        ),
-        resolution: median(
-          resolved.map(r => span(r.inbox, r.createdAt, r.resolvedAt as Date))
-        ),
+        reopened: opened.filter(r => r.reopened).length,
+        firstResponse: median(responses),
+        firstResponseP90: percentile(responses, 0.9),
+        resolution: median(resolutions),
+        resolutionP90: percentile(resolutions, 0.9),
+        response: met('respond', opened, r => r.firstRespondedAt),
+        resolutionTarget: met('resolve', opened, r => r.resolvedAt),
       };
     };
     const groupBy = (key: (r: (typeof rows)[number]) => string) => {
@@ -1599,12 +1820,45 @@ export function createHelpdesk(input: HelpdeskConfig) {
       if (r.createdAt.getTime() >= since)
         for (const tag of r.tags) tags.set(tag, (tags.get(tag) ?? 0) + 1);
     const rated = rows.filter(r => r.ratedAt && r.ratedAt.getTime() >= since);
+    const scored = rated.flatMap(r =>
+      r.ratingScore === null ? [] : [r.ratingScore]
+    );
+    const breached = rows
+      .filter(r => r.createdAt.getTime() >= since)
+      .flatMap(r =>
+        (['respond', 'resolve'] as const).flatMap(target => {
+          const by = r[`${target}By`];
+          const done = target === 'respond' ? r.firstRespondedAt : r.resolvedAt;
+          const missed = by && (done ? done > by : by.getTime() < Date.now());
+          return missed
+            ? [
+                {
+                  conversationId: r.id,
+                  reference: formatReference(config.referencePrefix, r.number),
+                  target: target === 'respond' ? 'response' : 'resolution',
+                  tier: r.tier,
+                  priority: r.priority,
+                  contactName: r.contactName,
+                  due: by.toISOString(),
+                  late: done ? span(r.inbox, by, done) : null,
+                },
+              ]
+            : [];
+        })
+      )
+      .sort((a, b) => b.due.localeCompare(a.due))
+      .slice(0, 100);
     return {
       openHours: rows.some(r => config.inboxes[r.inbox]?.hours),
+      sla: Boolean(config.sla),
+      ratingScale: config.ratingScale,
       ratings: rated.length
         ? {
             good: rated.filter(r => r.rating === 'good').length,
             bad: rated.filter(r => r.rating === 'bad').length,
+            average: scored.length
+              ? scored.reduce((a, b) => a + b, 0) / scored.length
+              : null,
           }
         : null,
       total: summarize(rows),
@@ -1617,6 +1871,19 @@ export function createHelpdesk(input: HelpdeskConfig) {
         name: g[0]?.agentName ?? null,
         ...summarize(g),
       })),
+      tiers: groupBy(r => r.tier ?? '').map(g => ({
+        tier: g[0]?.tier ?? null,
+        ...summarize(g),
+      })),
+      priorities: groupBy(r => r.priority).map(g => ({
+        priority: g[0]?.priority as string,
+        ...summarize(g),
+      })),
+      channels: groupBy(r => r.channel).map(g => ({
+        channel: g[0]?.channel as string,
+        ...summarize(g),
+      })),
+      breaches: breached,
       tags: [...tags]
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .slice(0, 10)
@@ -1624,10 +1891,299 @@ export function createHelpdesk(input: HelpdeskConfig) {
     };
   }
 
+  // Changes an agent makes to a conversation -----------------------------------
+
+  const tag = z.string().trim().min(1).max(50);
+  const changeInput = z.object({
+    status: z.enum(STATUSES).optional(),
+    priority: z.enum(PRIORITIES).optional(),
+    tier: z
+      .string()
+      .refine(t => config.tiers.includes(t))
+      .nullable()
+      .optional(),
+    type: z
+      .string()
+      .refine(t => config.types.includes(t))
+      .optional(),
+    inbox: z
+      .string()
+      .refine(i => Object.hasOwn(config.inboxes, i))
+      .optional(),
+    subject: z.string().trim().max(200).nullable().optional(),
+    assigneeId: uuid.nullable().optional(),
+    companyId: uuid.nullable().optional(),
+    tags: z
+      .array(tag.toLowerCase())
+      .max(MAX_TAGS)
+      .transform(list => [...new Set(list)])
+      .optional(),
+    snoozedUntil: z.iso
+      .datetime({ offset: true })
+      .transform(v => new Date(v))
+      .refine(d => d.getTime() > Date.now(), 'Must be in the future')
+      .nullable()
+      .optional(),
+  });
+  type ChangeInput = z.infer<typeof changeInput>;
+
+  async function checkChange(data: ChangeInput) {
+    if (data.snoozedUntil) {
+      if (data.status && data.status !== 'pending') {
+        throw new HelpdeskError(400, 'A snoozed conversation is pending');
+      }
+      data.status = 'pending';
+    }
+    if (data.assigneeId && !(await store.getActiveAgent(data.assigneeId))) {
+      throw new HelpdeskError(400, 'Unknown agent');
+    }
+    if (data.companyId && !(await store.getCompany(data.companyId))) {
+      throw new HelpdeskError(400, 'Unknown company');
+    }
+    return data;
+  }
+
+  /**
+   * The row update an agent's change makes to `conversation` as it stands, with
+   * whether it resolves it. `last` is its newest public message, needed when
+   * a resolved conversation is reopened.
+   */
+  function changePatch(
+    conversation: Conversation,
+    data: ChangeInput,
+    last: Message | undefined
+  ) {
+    const { subject, ...rest } = data;
+    const patch: Partial<Conversation> = {
+      ...rest,
+      ...(subject !== undefined ? { title: subject } : {}),
+    };
+    // A snooze left on an open thread would hold back its reminders.
+    if (data.status && data.status !== 'pending') patch.snoozedUntil = null;
+    // Sharing was granted to one organization; it does not follow a move.
+    if (
+      data.companyId !== undefined &&
+      data.companyId !== conversation.companyId
+    ) {
+      patch.sharedWithCompany = false;
+    }
+    const now = clock();
+    const resolving =
+      data.status === 'resolved' && conversation.status !== 'resolved';
+    if (resolving) {
+      patch.resolvedAt = now;
+      patch.waitingSince = null;
+    } else if (data.status && data.status !== 'resolved') {
+      patch.resolvedAt = null;
+      // Reopened while the customer had the last word: they are waiting again.
+      if (
+        conversation.status === 'resolved' &&
+        last?.authorType === 'contact'
+      ) {
+        patch.waitingSince = last.createdAt;
+      }
+    }
+    const status = data.status ?? conversation.status;
+    const retarget =
+      (data.tier !== undefined && data.tier !== conversation.tier) ||
+      (data.priority !== undefined &&
+        data.priority !== conversation.priority) ||
+      (data.inbox !== undefined && data.inbox !== conversation.inbox);
+    if (status !== conversation.status || retarget) {
+      Object.assign(
+        patch,
+        slaPatch(
+          config.slaClock({
+            inbox: data.inbox ?? conversation.inbox,
+            tier: data.tier === undefined ? conversation.tier : data.tier,
+            priority: data.priority ?? conversation.priority,
+          }),
+          conversation,
+          { status, retarget },
+          now
+        )
+      );
+    }
+    return { patch, resolving };
+  }
+
+  /** Applies a change as `PATCH agent/conversations/{id}` does; `agentId` is null for host code. */
+  async function changeConversation(
+    conversation: Conversation,
+    raw: unknown,
+    agentId: string | null
+  ) {
+    const data = await checkChange(changeInput.parse(raw));
+    const last =
+      conversation.status === 'resolved'
+        ? (await store.lastMessages([conversation.id])).get(conversation.id)
+        : undefined;
+    const { patch, resolving } = changePatch(conversation, data, last);
+    // A concurrent resolve that lands first keeps its resolvedAt and its timeline row.
+    const updated = await store.updateConversation(conversation.id, patch, {
+      unlessResolved: resolving,
+    });
+    await emitUpdated(config, conversation, updated, patch, agentId);
+    return updated ?? (await store.getConversation(conversation.id));
+  }
+
+  async function requireConversation(id: string) {
+    const conversation = UUID.test(id) ? await store.getConversation(id) : null;
+    if (!conversation) throw new HelpdeskError(404, 'Not found');
+    return conversation;
+  }
+
+  async function agentByUserId(externalUserId: string | undefined) {
+    if (!externalUserId) return null;
+    const agent = await store.findAgentByUserId(externalUserId);
+    if (!agent) throw new HelpdeskError(400, 'Unknown agent');
+    return agent;
+  }
+
+  // Opened by an agent ---------------------------------------------------------
+
+  const openInput = z
+    .object({
+      inbox: z.string(),
+      type: z.string(),
+      contactId: uuid.optional(),
+      email: z.email().max(MAX_ADDRESS).optional(),
+      name: z.string().trim().max(200).optional(),
+      companyId: uuid.nullable().optional(),
+      priority: z.enum(PRIORITIES).optional(),
+      tier: z.string().nullable().optional(),
+      subject: z.string().trim().min(1).max(200),
+      body: z.string().trim().min(1).max(20_000),
+      tags: z.array(tag.toLowerCase()).max(MAX_TAGS).optional(),
+      /** Who the conversation is assigned to; the opening agent unless set. */
+      assigneeId: uuid.nullable().optional(),
+    })
+    .refine(d => d.contactId || d.email, {
+      message: 'A contact or an email address',
+    });
+
+  /**
+   * A conversation the team starts: after a phone call, or to reach a customer
+   * before they write in. The first message is the agent's and is emailed to the
+   * customer, who answers in the widget or by mail as usual.
+   */
+  async function openConversation(raw: unknown, agent: Agent) {
+    const data = openInput.parse(raw);
+    const inbox = Object.hasOwn(config.inboxes, data.inbox)
+      ? config.inboxes[data.inbox]
+      : undefined;
+    if (!inbox) throw new HelpdeskError(400, 'Unknown inbox');
+    if (!config.types.includes(data.type)) {
+      throw new HelpdeskError(400, 'Unknown type');
+    }
+    if (data.tier && !config.tiers.includes(data.tier)) {
+      throw new HelpdeskError(400, 'Unknown tier');
+    }
+    if (data.assigneeId && !(await store.getActiveAgent(data.assigneeId))) {
+      throw new HelpdeskError(400, 'Unknown agent');
+    }
+    let contact = data.contactId
+      ? await store.getContact(data.contactId)
+      : null;
+    if (data.contactId && !contact) {
+      throw new HelpdeskError(400, 'Unknown contact');
+    }
+    if (!contact && data.email) {
+      const email = normalizeEmail(data.email);
+      contact =
+        (await store.findContactByIdentity('email', email, {
+          verifiedOnly: false,
+        })) ??
+        (await store.findContactByEmail(email)) ??
+        (await store.createContact(
+          { name: data.name ?? null, email },
+          { channel: 'email', externalId: email, verified: false }
+        ));
+    }
+    if (!contact) throw new HelpdeskError(400, 'Unknown contact');
+    await refuseBlocked(contact);
+    const companyId =
+      data.companyId === undefined ? contact.companyId : data.companyId;
+    if (companyId && !(await store.getCompany(companyId))) {
+      throw new HelpdeskError(400, 'Unknown company');
+    }
+    const company = companyId ? await store.getCompany(companyId) : null;
+    const created = await store.createConversation(
+      {
+        inbox: data.inbox,
+        type: data.type,
+        channel: 'agent',
+        subject: data.subject,
+        priority: data.priority ?? inbox.defaultPriority ?? 'normal',
+        tier:
+          data.tier === undefined
+            ? await resolveTier({
+                user: null,
+                orgId: company?.externalOrgId ?? null,
+                email: contact.email,
+                inbox: data.inbox,
+                context: {},
+              })
+            : data.tier,
+        contactId: contact.id,
+        companyId,
+        assigneeId: data.assigneeId === undefined ? agent.id : data.assigneeId,
+        context: {},
+        tags: data.tags,
+      },
+      { body: data.body, agentId: agent.id }
+    );
+    await afterNewConversation(created, 'host');
+    return created;
+  }
+
+  /** An internal note, or a public message when `internal` is false, from host code or an agent. */
+  async function addNote(
+    conversationId: string,
+    body: string,
+    {
+      agentUserId,
+      internal = true,
+      notify = [],
+    }: { agentUserId?: string; internal?: boolean; notify?: string[] } = {}
+  ) {
+    const conversation = await requireConversation(conversationId);
+    if (conversation.mergedIntoId) {
+      throw new HelpdeskError(409, 'Conversation merged');
+    }
+    const text = z.string().trim().min(1).max(20_000).parse(body);
+    const agent = await agentByUserId(agentUserId);
+    if (agent) {
+      return addAgentMessage(agent.id, conversation, text, internal, notify);
+    }
+    const message = await store.appendMessage({
+      conversationId: conversation.id,
+      authorType: 'system',
+      body: text,
+      internal,
+    });
+    if (!internal) {
+      await store.enqueueJob(
+        'notify-customer',
+        { messageId: message.id },
+        { runAt: new Date(Date.now() + 2 * 60_000) }
+      );
+    }
+    await messageCreated(message);
+    return message;
+  }
+
+  /** The database answers; for a health check. */
+  async function ping() {
+    await store.ping();
+  }
+
   return {
     config,
     store,
     reference,
+    ping,
+    resolveTier,
     resolveCustomer,
     namedOrgs,
     canCustomerSee,
@@ -1657,17 +2213,32 @@ export function createHelpdesk(input: HelpdeskConfig) {
     linkVerified,
     toLocale,
     overview,
+    changeInput,
+    checkChange,
+    changePatch,
+    changeConversation,
+    requireConversation,
+    agentByUserId,
+    openConversation,
+    addNote,
   };
 }
 
 /** The median as Postgres' `percentile_cont(0.5)` has it: the middle two averaged. */
 function median(values: number[]) {
+  return percentile(values, 0.5);
+}
+
+/** Interpolated between the two nearest values, as `percentile_cont` does. */
+function percentile(values: number[], p: number) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2
-    ? (sorted[mid] as number)
-    : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
+  const rank = (sorted.length - 1) * p;
+  const low = Math.floor(rank);
+  const high = Math.ceil(rank);
+  const a = sorted[low] as number;
+  const b = sorted[high] as number;
+  return a + (b - a) * (rank - low);
 }
 
 export type Helpdesk = ReturnType<typeof createHelpdesk>;

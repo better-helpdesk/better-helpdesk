@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { type BusinessHours, resolveConfig } from '../config';
-import { nextOpening, openCutoff, openHoursBetween } from './hours';
+import {
+  nextOpening,
+  openCutoff,
+  openDeadline,
+  openHoursBetween,
+} from './hours';
 
 const office: BusinessHours = {
   timeZone: 'Europe/Zurich',
@@ -214,5 +219,21 @@ describe('hours in the config', () => {
     ['no open span', { timeZone: 'UTC', weekly: { mon: [] } }],
   ])('rejects %s', (_, hours) => {
     expect(() => resolveConfig(config(hours))).toThrow(/support/);
+  });
+});
+
+describe('openDeadline', () => {
+  it('is the mirror of openCutoff', () => {
+    const due = openDeadline(at('2026-03-27T16:30:00Z'), 6, office);
+    // Friday after closing: six open hours end at 14:00 CEST on Monday, and
+    // looking back from there they began when Monday opened.
+    expect(due).toEqual(at('2026-03-30T12:00:00Z'));
+    expect(openCutoff(due, 6, office)).toEqual(at('2026-03-30T06:00:00Z'));
+  });
+
+  it('starts counting at the next opening', () => {
+    expect(openDeadline(at('2026-10-24T12:00:00Z'), 0, office)).toEqual(
+      at('2026-10-26T07:00:00Z')
+    );
   });
 });

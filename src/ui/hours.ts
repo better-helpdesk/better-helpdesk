@@ -99,6 +99,28 @@ export function openCutoff(now: Date, openHours: number, hours: BusinessHours) {
   }
 }
 
+/** The moment `openHours` of open time after `from` have passed. The counterpart of `openCutoff`. */
+export function openDeadline(
+  from: Date,
+  openHours: number,
+  hours: BusinessHours
+) {
+  const start = from.getTime();
+  for (let weeks = 1; ; weeks *= 2) {
+    let left = openHours * 3_600_000;
+    for (const [begin, end] of intervals(
+      start,
+      start + weeks * 7 * DAY,
+      hours
+    )) {
+      if (end <= start) continue;
+      const opens = Math.max(begin, start);
+      if (end - opens >= left) return new Date(opens + left);
+      left -= end - opens;
+    }
+  }
+}
+
 /** `at` itself while open, else when the schedule next opens; null for a schedule with no span. */
 export function nextOpening(at: Date, hours: BusinessHours) {
   const now = at.getTime();

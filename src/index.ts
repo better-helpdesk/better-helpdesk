@@ -46,10 +46,48 @@ export {
 } from './realtime';
 export { HelpdeskError, ipBucket } from './service';
 
+import { HelpdeskError } from './service';
+
+export { exportConversations, importConversations } from './export';
+export type {
+  SlaClock,
+  SlaClockFor,
+  SlaTargetName,
+} from './sla';
+
 /** Builds the support instance a host mounts: `handler` serves every route under `basePath`. */
 export function buildHelpdesk(config: HelpdeskConfig) {
   const support = createHelpdesk(config);
-  return { ...support, handler: createHandler(support) };
+  return {
+    ...support,
+    handler: createHandler(support),
+    /**
+     * Opens a conversation as an agent does from the agent UI, in the name
+     * of the agent whose host user id is `agentUserId`.
+     */
+    openConversation: async ({
+      agentUserId,
+      ...input
+    }: Record<string, unknown> & { agentUserId: string }) => {
+      const agent = await support.agentByUserId(agentUserId);
+      if (!agent) throw new HelpdeskError(400, 'Unknown agent');
+      return support.openConversation(input, agent);
+    },
+    /**
+     * Changes a conversation as `PATCH agent/conversations/{id}` does: the
+     * timeline, `onEvent` and open agent UIs all hear of it.
+     */
+    changeConversation: async (
+      conversationId: string,
+      patch: Record<string, unknown>,
+      { agentUserId }: { agentUserId?: string } = {}
+    ) =>
+      support.changeConversation(
+        await support.requireConversation(conversationId),
+        patch,
+        (await support.agentByUserId(agentUserId))?.id ?? null
+      ),
+  };
 }
 
 export type BuiltHelpdesk = ReturnType<typeof buildHelpdesk>;
