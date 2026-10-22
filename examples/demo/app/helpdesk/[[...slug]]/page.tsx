@@ -1,6 +1,6 @@
 import { HelpdeskAdmin } from 'better-helpdesk/admin';
 
-import { currentRole } from '../../../lib/role';
+import { currentRole, STAFF } from '../../../lib/role';
 import { Bar, Foot, RoleSwitcher } from '../../chrome';
 
 export default async function Page() {
@@ -10,7 +10,7 @@ export default async function Page() {
     <>
       <Bar here="helpdesk" />
       <main id="main">
-        {role === 'agent' ? (
+        {STAFF.includes(role) ? (
           <div className="admin">
             <div className="admin-inner">
               <HelpdeskAdmin
@@ -26,7 +26,7 @@ export default async function Page() {
               <h1>Only agents get this far</h1>
               <p>
                 The inbox refuses anyone whose identity is not an agent. Become
-                Rowan and it opens.
+                Rowan, Mina or Theo and it opens.
               </p>
             </div>
             <RoleSwitcher role={role} />

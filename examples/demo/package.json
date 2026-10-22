@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "db:migrate": "node --env-file-if-exists=.env.local node_modules/better-helpdesk/bin/migrate.mjs",
-    "seed": "tsx --env-file-if-exists=.env.local scripts/seed.ts"
+    "seed": "tsx --env-file-if-exists=.env.local scripts/seed.ts",
+    "pager": "tsx --env-file-if-exists=.env.local scripts/pager.ts"
   },
   "dependencies": {
     "better-helpdesk": "workspace:*",
