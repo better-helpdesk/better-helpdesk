@@ -1691,7 +1691,6 @@ function Thread({
     return () => clearTimeout(timer);
   }, [typing, refresh]);
   const [reply, setReply] = useState('');
-  const [formatting, setFormatting] = useState(false);
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -1894,13 +1893,13 @@ function Thread({
         }}>
         <RichEditor
           ref={editor}
-          className="rt-reply rt-form"
+          className="rt-reply"
           label={t('thread.reply')}
           placeholder={t('thread.reply')}
           value={reply}
           onChange={setReply}
           t={t}
-          toolbar={formatting}
+          toolbar={false}
           onKeyDown={e => {
             // Enter sends; Shift+Enter breaks the line.
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1909,13 +1908,6 @@ function Thread({
             }
           }}
         />
-        <button
-          type="button"
-          className="format-toggle"
-          aria-pressed={formatting}
-          onClick={() => setFormatting(on => !on)}>
-          {t('rich.toolbar')}
-        </button>
         <button
           type="submit"
           className="send"
