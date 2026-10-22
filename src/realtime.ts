@@ -159,12 +159,13 @@ const encoder = new TextEncoder();
 export function eventStream(
   realtime: RealtimeAdapter,
   {
-    signal,
+    request,
     visible,
     heartbeatSeconds = 25,
     maxSeconds = 300,
   }: {
-    signal: AbortSignal;
+    /** Held while the stream is open: a collected Request no longer passes on the client's abort. */
+    request: Request;
     visible(change: RealtimeChange): boolean | Promise<boolean>;
     heartbeatSeconds?: number;
     maxSeconds?: number;
@@ -195,14 +196,14 @@ export function eventStream(
         unsubscribe();
         clearInterval(heartbeat);
         clearTimeout(end);
-        signal.removeEventListener('abort', stop);
+        request.signal.removeEventListener('abort', stop);
         try {
           controller.close();
         } catch {
           // Already closed by the reader.
         }
       };
-      signal.addEventListener('abort', stop);
+      request.signal.addEventListener('abort', stop);
       send(`retry: 3000\n: open\n\n`);
     },
     cancel() {

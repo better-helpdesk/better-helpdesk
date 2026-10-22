@@ -37,7 +37,7 @@ describe('eventStream', () => {
     const realtime = memoryRealtime();
     const abort = new AbortController();
     const response = eventStream(realtime, {
-      signal: abort.signal,
+      request: new Request('https://app.test/events', { signal: abort.signal }),
       visible: c => c.conversationId === 'c1',
     });
     expect(response.headers.get('content-type')).toBe(
@@ -62,7 +62,7 @@ describe('eventStream', () => {
     vi.useFakeTimers();
     const realtime = memoryRealtime();
     const response = eventStream(realtime, {
-      signal: new AbortController().signal,
+      request: new Request('https://app.test/events'),
       visible: () => true,
       heartbeatSeconds: 1,
       maxSeconds: 3,
