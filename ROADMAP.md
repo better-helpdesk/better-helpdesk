@@ -21,11 +21,12 @@ Next.js app, so what it leaves out matters as much as what it adds.
 - **An AI that answers your customers.** AI triages and drafts for an agent;
   every reply a customer reads was sent by a person with a name.
 - **Per-seat pricing or a gated feature.** It is MIT, all of it. You add the
-  tenth agent the way you added the first: `isAgent: true`.
-- **A rule builder or an SLA policy engine.** Your rules are code in your
-  repository, reviewed in a pull request, on the events hook. You get one
-  reminder threshold and one set of business hours per inbox, not a
-  dropdown of conditions.
+  tenth agent the way you added the first: `isAgent: true`, and a `role`
+  when a supervisor or a read-only seat is wanted.
+- **A rule builder.** Your rules are code in your repository, reviewed in a
+  pull request: the SLA policy is a value in your config, and what happens
+  on a breach is a handler on the events hook. There is no dropdown of
+  conditions and no automation editor.
 - **A hosted help centre.** Your docs already live in your app. The widget
   searches them through the help adapter and keeps no second copy.
 - **API tokens or a public REST API.** Your app calls the helpdesk as a
@@ -64,15 +65,28 @@ The design partners' feedback sets the order, so items move between waves.
 - A list and thread side by side on wide screens
 - Merge a duplicate conversation into another
 - @mention a teammate in an internal note (shipped)
-- A rating after resolution, shown in the agent UI
-- An overview of volume, first-response and resolution times
-- Open the next conversation after sending
+- A rating after resolution, shown in the agent UI (shipped)
+- An overview of volume, first-response and resolution times (shipped)
+- Open the next conversation after sending (shipped)
+
+### Wave 5: enterprise support (shipped)
+
+- Tiers, and an SLA policy per tier and priority with response and
+  resolution targets, a clock that pauses while the customer has the ball,
+  warnings and breaches, and attainment on the Statistics page
+- Priorities a customer picks at intake, named as the host names them
+- Conversations the team opens, after a phone call or to reach a customer
+- Host functions to write notes and changes with events, for pagers and
+  trackers
+- Roles: agent, supervisor, viewer; an audit log of every change
+- Export and import of conversation history
+- A five-point rating scale, and a health route for status pages
 
 ### On request
 
 Built when a team running Better Helpdesk asks for it:
 
-- Saved views, personal or shared
+- Saved views, personal or shared (shipped)
 - "Seen" under the customer's last message
 - An in-app notification bell
 - CSV import of contacts, companies and canned replies

@@ -69,7 +69,14 @@ database, its deploy and its design tokens.
 - **Shared inbox.** Several inboxes (say, support and sales), priorities,
   human-readable references like `ACME-1042`, internal notes, canned replies,
   keyboard navigation, saved views of the inbox filters for one agent or the
-  whole team, and reminder emails when a customer has waited too long.
+  whole team, reminder emails when a customer has waited too long, and
+  conversations the team opens itself.
+- **Service levels.** Tiers and an SLA policy per tier and priority in your
+  config, with response and resolution targets in business hours or round
+  the clock, a clock that pauses while the customer has the ball, warnings
+  and breaches to the assignee and the supervisors, and attainment on the
+  Statistics page. Roles for agents, supervisors and read-only seats, and
+  an audit log of every change.
 - **Lightweight CRM.** Contacts and companies taken from your app's identity,
   lead stages, deals with stages and values, logged activities, tags and
   custom fields.
@@ -80,6 +87,8 @@ database, its deploy and its design tokens.
   referrer, UTM) and a dark theme.
 - **Email.** Outbound through your own sender. Inbound through a webhook from
   any relay, verified against DKIM and threaded back into the conversation.
+- **No lock-in.** Conversation history exports and imports as JSON Lines,
+  so another tool's history moves in and the next tool can take over.
 - **Everything optional is an adapter.** File storage, AI suggestions and
   draft replies, help center search and scheduled jobs are small interfaces
   you implement, or leave out.

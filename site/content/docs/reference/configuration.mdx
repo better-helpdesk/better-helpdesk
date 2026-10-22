@@ -113,6 +113,35 @@ export const helpdesk = buildHelpdesk({
   }}
 />
 
+## Service levels and tiers
+
+<TypeTable
+  type={{
+    tiers: {
+      type: 'string[]',
+      default: 'the keys of sla.tiers',
+      description: <>The support tiers a conversation can carry, such as <code>gold</code> and <code>platinum</code>. Agents set one in the properties card, <code>resolveTier</code> sets it when a conversation opens, and the tier picks the SLA policy. A tier not in the list is refused with 400.</>,
+    },
+    resolveTier: {
+      type: '(input: TierInput) => string | null | Promise<string | null>',
+      description: <>The tier a new conversation gets, from what your app knows about the customer: their user, the organization they filed it under, their address, the inbox and the captured context. Called when a conversation opens from the widget, by email or from host code. A value not in <code>tiers</code>, or a throw, leaves the tier unset. See <a href="#tierinput">TierInput</a>.</>,
+    },
+    sla: {
+      type: 'SlaConfig',
+      description: <>Response and resolution targets per tier and priority. With it set, every conversation that falls under a target carries deadlines, the jobs run sends a warning and a breach notice per target, the inbox sorts by the nearest deadline, and Statistics reports attainment. See <a href="#slaconfig">SlaConfig</a> and <a href="/docs/inbox/sla">Set service levels</a>.</>,
+    },
+    priorityLabels: {
+      type: 'Partial<Record<Priority, Translated>>',
+      description: <>What agents and customers see instead of <code>low</code>, <code>normal</code>, <code>high</code> and <code>urgent</code>, for example <code>{"{ urgent: { en: 'P1' }, high: { en: 'P2' }, normal: { en: 'P3' } }"}</code>. The stored values do not change.</>,
+    },
+    ratingScale: {
+      type: '2 | 5',
+      default: '2',
+      description: <>How customers rate a resolved conversation: <code>good</code> or <code>bad</code>, or a score from 1 to 5. On the five-point scale 4 and 5 count as good, 1 and 2 reopen the conversation, and the reply email carries one link per score.</>,
+    },
+  }}
+/>
+
 ## Email
 
 <TypeTable
@@ -229,6 +258,7 @@ Fixed limits that are not configurable are listed under [HTTP routes](/docs/refe
 
 - `identityTokenSecret` is set and shorter than 32 bytes.
 - An inbox's `hours` fails validation; the message names the inbox. The rules are on [Inboxes](/docs/inbox/inboxes#businesshours).
+- `sla` fails validation: a target without `respond` or `resolve`, a target that is not a positive number of hours, `warnAt` outside 0 to 1, or hours that break the rules above.
 
 ## Identity
 
@@ -250,6 +280,11 @@ What `identify` returns. `Identity`, `HelpdeskUser` and `HelpdeskOrg` are export
       type: 'boolean',
       required: true,
       description: 'Grants the agent UI and every agent route.',
+    },
+    role: {
+      type: "'agent' | 'supervisor' | 'viewer'",
+      default: "'agent'",
+      description: <>What an agent may do. An <code>agent</code> works the queue. A <code>supervisor</code> does too, receives every SLA notice, and, once any supervisor exists, alone changes Settings, removes agents and reads the audit log. A <code>viewer</code> reads everything and changes nothing but their own away time, read marks and saved views. See <a href="/docs/inbox/team#roles">Roles</a>.</>,
     },
   }}
 />
@@ -276,6 +311,70 @@ What `identify` returns. `Identity`, `HelpdeskUser` and `HelpdeskOrg` are export
   type={{
     id: { type: 'string', required: true, description: "The host's organization id, stored as a company's external_org_id." },
     name: { type: 'string', description: <>Display name. When absent, <code>orgNames</code> is asked.</> },
+  }}
+/>
+
+## SlaConfig
+
+The value of `sla`. `SlaConfig`, `SlaPolicy`, `SlaTarget` and `Priority` are exported as types.
+
+<TypeTable
+  type={{
+    tiers: { type: 'Record<string, SlaPolicy>', description: 'A policy per tier, keyed by the tier name.' },
+    default: { type: 'SlaPolicy', description: 'The policy for a conversation whose tier has none, or that has no tier.' },
+    warnAt: { type: 'number', default: '0.8', description: 'The share of a target after which the warning notice goes out; between 0 and 1.' },
+  }}
+/>
+
+### SlaPolicy
+
+<TypeTable
+  type={{
+    targets: { type: 'Partial<Record<Priority, SlaTarget>>', required: true, description: 'A target per priority. A priority left out has no deadline under this policy.' },
+    hours: { type: "BusinessHours | 'always'", description: <>The hours every target in this policy counts, unless a target names its own. <code>'always'</code> counts every hour. Unset, the inbox's <code>hours</code> apply, and every hour when the inbox has none.</> },
+  }}
+/>
+
+### SlaTarget
+
+<TypeTable
+  type={{
+    respond: { type: 'number', description: 'Hours until the first public agent reply is due.' },
+    resolve: { type: 'number', description: <>Hours until the conversation is due to be resolved, counted while it is <code>open</code>: the clock pauses while it is <code>pending</code> or <code>resolved</code> and resumes when the customer writes.</> },
+    hours: { type: "BusinessHours | 'always'", description: 'The hours this target counts; see SlaPolicy.' },
+  }}
+/>
+
+A target needs `respond` or `resolve`, each a positive number.
+
+```ts title="lib/helpdesk.ts"
+sla: {
+  tiers: {
+    gold: {
+      hours: 'always',
+      targets: {
+        urgent: { respond: 4, resolve: 24 },
+        high: { respond: 8, resolve: 48 },
+        normal: { respond: 16, resolve: 80, hours: office },
+      },
+    },
+  },
+  default: { targets: { normal: { respond: 24 } } },
+  warnAt: 0.75,
+},
+```
+
+## TierInput
+
+What `resolveTier` receives. Exported as a type.
+
+<TypeTable
+  type={{
+    user: { type: 'HelpdeskUser | null', required: true, description: <>The signed-in customer, or <code>null</code> for a visitor, an email or a conversation an agent opened.</> },
+    orgId: { type: 'string | null', required: true, description: 'The organization the conversation is filed under, as your app ids it.' },
+    email: { type: 'string | null', required: true, description: "The customer's address, lower-cased." },
+    inbox: { type: 'string', required: true },
+    context: { type: 'ConversationContext', required: true, description: <>What the widget captured, with the host context under <code>host</code>; empty for email and agent-opened conversations.</> },
   }}
 />
 
@@ -343,4 +442,6 @@ These are not configurable and not exported.
 | --- | --- |
 | Locales | `en`, `de`, `fr`, `it` |
 | Statuses | `open`, `pending`, `resolved` |
-| Priorities | `low`, `normal`, `high`, `urgent` |
+| Priorities | `low`, `normal`, `high`, `urgent`; `priorityLabels` changes what is shown, not what is stored |
+| Channels | `widget`, `email`, `agent`, `api` |
+| Roles | `agent`, `supervisor`, `viewer` |

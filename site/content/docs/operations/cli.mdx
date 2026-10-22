@@ -1,13 +1,13 @@
 ---
 title: CLI
-description: The two commands the package installs, better-helpdesk-migrate and better-helpdesk-import, with their arguments, environment and output.
+description: The three commands the package installs, better-helpdesk-migrate, better-helpdesk-import and better-helpdesk-export, with their arguments, environment and output.
 ---
 
-The package installs two commands, run with `npx` from the host app. Both open one connection to the database the URL names, through the driver the host installed, and close it on exit. Related guide: [Switch from another helpdesk](/docs/operations/switching).
+The package installs three commands, run with `npx` from the host app. Each opens one connection to the database the URL names, through the driver the host installed, and closes it on exit. Related guide: [Switch from another helpdesk](/docs/operations/switching).
 
 ## Environment
 
-Both commands read the same variables.
+All three commands read the same variables.
 
 | Variable | Meaning |
 | --- | --- |
@@ -30,15 +30,17 @@ Applies the package's migrations: it creates the `helpdesk` schema and its table
 ```sh
 npx better-helpdesk-import contacts <file.csv> [--lead-stages a,b,c]
 npx better-helpdesk-import canned <file.csv>
+npx better-helpdesk-import conversations <file.jsonl> [--source Freshdesk]
 ```
 
-Imports contacts and their companies, or canned replies, from a CSV file. The file is read and parsed before the connection opens, so a malformed file writes nothing. Running an import again adds what is new and changes nothing an agent edited.
+Imports contacts and their companies, or canned replies, from a CSV file, or conversation history from a JSON Lines file. The file is read before the connection opens, so a file that cannot be read writes nothing. Running a CSV import again adds what is new and changes nothing an agent edited. A conversation import opens every line as a new conversation, so run it once.
 
 | Argument | Meaning |
 | --- | --- |
-| `contacts` or `canned` | What the file holds. |
-| `<file.csv>` | Path to the file. |
+| `contacts`, `canned` or `conversations` | What the file holds. |
+| `<file>` | Path to the file. |
 | `--lead-stages a,b,c` | The host's `leadStages`, for `contacts`. Unset, the package's defaults: `lead`, `qualified`, `customer`, `churned`. |
+| `--source Freshdesk` | For `conversations`: where the history came from, kept with each conversation. |
 
 Any other arguments print the usage line and exit with status 1.
 
@@ -71,10 +73,25 @@ A new contact is created with the row's values. An existing contact only gains w
 
 A row without a title or a body, or over either limit, is skipped. A reply whose title and locale match an existing one is left alone.
 
+### conversations
+
+One JSON object per line, in the format `better-helpdesk-export` writes; see [the export](#better-helpdesk-export). A line needs `inbox`, `type`, `createdAt`, a `contact` and at least one message. Each line opens a new conversation with a new reference; the old reference and `--source` are kept in the conversation's context as `imported`, so agents can still quote it. Contacts are found by email, or made; a company by domain, then name, or made; agents by email, and a message from an agent nobody here has is kept as an agent message without a name. Attachments and timeline events are not imported, and no deadline starts. A line that is not JSON, or fails validation, is skipped with a note naming the line.
+
 ### Output
 
-Each value left out prints a note to stderr, such as `helpdesk: row 4: no usable email, skipped`, where the row number counts the header as row 1. The last line counts the rows:
+Each value left out prints a note to stderr, such as `helpdesk: row 4: no usable email, skipped`, where the row number counts the header as row 1 and a JSON Lines file counts from line 1. The last line counts the rows:
 
 ```txt
 helpdesk: 12 created, 3 updated, 1 unchanged or skipped
 ```
+
+## better-helpdesk-export
+
+```sh
+HELPDESK_DATABASE_URL=postgres://… npx better-helpdesk-export --prefix ACME > conversations.jsonl
+npx better-helpdesk-export --prefix ACME --since 2026-01-01 > this-year.jsonl
+```
+
+Writes every conversation to stdout as one JSON object per line, oldest id first, and counts them on stderr. `--prefix` is your `referencePrefix`, so the references match what customers were told; `HD` when unset. `--since` keeps the conversations opened on or after that day.
+
+Each line holds the conversation's `reference`, `inbox`, `type`, `kind`, `channel`, `status`, `priority`, `tier`, `subject`, `title`, `tags`, `context`, `createdAt`, `resolvedAt`, `rating`, `ratingScore` and `ratingComment`; its `contact` and `company` by name, email and domain; its `participants`; its `messages` with `author` (`contact`, `agent` or `system`), the author's `name` and `email`, `body`, `internal`, `createdAt` and `emailMessageId`; its `attachments` by filename, type, size, storage `key` and the index of their message; and its timeline `events`. People are named by email rather than id, so the file reads into another install, and a script that maps another tool's export to these fields moves its history in through `better-helpdesk-import conversations`.

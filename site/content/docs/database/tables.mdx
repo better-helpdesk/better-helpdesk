@@ -20,6 +20,7 @@ Better Helpdesk keeps everything in the host's database: in one schema, `helpdes
 | [`message`](#message) | Messages and internal notes |
 | [`conversation_event`](#conversation_event) | A conversation's timeline |
 | [`attachment`](#attachment) | Files, by storage key |
+| [`audit_log`](#audit_log) | What agents changed through the agent routes |
 | [`canned_reply`](#canned_reply) | Saved answers |
 | [`setting`](#setting) | Values the package and agents keep |
 | [`deal`](#deal) | Deals |
@@ -81,6 +82,7 @@ A verified `(channel, external_id)` belongs to one contact only. `(channel, exte
 | `name` | `text` | yes | | From `identify`, rewritten on each agent request. |
 | `email` | `text` | yes | | Where agent emails go. Rewritten on each agent request. |
 | `avatar_url` | `text` | yes | | From the identity's `image`, rewritten on each agent request. |
+| `role` | `text` | no | `agent` | `agent`, `supervisor` or `viewer`, from the identity's `role`, rewritten on each agent request. |
 | `away_until` | `timestamptz` | yes | | Set while away; the widget promises a reply after it. |
 | `last_seen_at` | `timestamptz` | no | `now()` | Updated on each agent request. |
 | `deactivated_at` | `timestamptz` | yes | | Set when the agent is removed from the team; cleared on their next agent request. |
@@ -100,6 +102,8 @@ A row is written on an agent's first request, keyed by the host's user id. The p
 | `kind` | `text` | no | `ticket` | `chat` for a message the customer wrote, `ticket` for a form with a subject or an email. |
 | `status` | `text` | no | `open` | `open`, `pending` or `resolved`. |
 | `priority` | `text` | no | `normal` | `low`, `normal`, `high` or `urgent`. |
+| `tier` | `text` | yes | | One of `tiers`, from `resolveTier` or an agent; picks the SLA policy. |
+| `channel` | `text` | no | `widget` | Where it came in: `widget`, `email`, `agent` or `api`. |
 | `subject` | `text` | yes | | What the customer called it; the only name they see. |
 | `title` | `text` | yes | | The team's name for it, from triage or a rename. |
 | `contact_id` | `uuid` | no | | The contact it belongs to; deleted with the contact. |
@@ -118,8 +122,17 @@ A row is written on an agent's first request, keyed by the host's user id. The p
 | `resolved_at` | `timestamptz` | yes | | Retention counts from it. |
 | `merged_into_id` | `uuid` | yes | | The conversation this one was merged into; set to `null` when that one is deleted. |
 | `rating` | `text` | yes | | `good` or `bad`. |
+| `rating_score` | `integer` | yes | | 1 to 5 on the five-point scale; `rating` is derived from it. |
 | `rating_comment` | `text` | yes | | |
 | `rated_at` | `timestamptz` | yes | | |
+| `first_responded_at` | `timestamptz` | yes | | The first public agent reply. Backfilled from the messages when the column arrived. |
+| `respond_by` | `timestamptz` | yes | | When the first reply is due, from the SLA policy; kept once answered, so a report can tell whether it was met. |
+| `resolve_by` | `timestamptz` | yes | | When the resolution is due. Moves forward by the time the clock was paused, so it is read as of the last resume. |
+| `sla_due_at` | `timestamptz` | yes | | The nearest deadline still to meet while the status is `open`; the inbox sorts by it. Indexed. |
+| `sla_paused_at` | `timestamptz` | yes | | Set while the clock is paused: the status is `pending` or `resolved`. |
+| `sla_paused_seconds` | `integer` | no | `0` | Time the clock has spent paused, in the hours the target counts. |
+| `respond_notice` | `text` | yes | | The last notice sent about the response target: `warning` or `breach`. |
+| `resolve_notice` | `text` | yes | | The same for the resolution target. |
 | `created_at` | `timestamptz` | no | `now()` | |
 | `search` | `tsvector` | | generated | From `title` and `subject`, with the `simple` configuration. |
 
@@ -161,9 +174,10 @@ The primary key is the pair.
 
 | `kind` | `data` |
 | --- | --- |
-| `status`, `priority`, `assigneeId`, `type`, `inbox`, `title`, `tags`, `snoozedUntil`, `rating` | `{ from, to }`, plus `by: 'customer'` when the customer changed it. Removing an agent from the team writes an `assigneeId` row with no `agent_id` for each conversation it unassigns. |
+| `status`, `priority`, `tier`, `assigneeId`, `type`, `inbox`, `title`, `tags`, `snoozedUntil`, `rating` | `{ from, to }`, plus `by: 'customer'` when the customer changed it. Removing an agent from the team writes an `assigneeId` row with no `agent_id` for each conversation it unassigns. |
+| `sla.warning`, `sla.breach` | `{ target, due }`: `response` or `resolution`, and the deadline as an ISO timestamp |
 | `reopened` | none; a customer wrote on a resolved conversation |
-| `email.sent` | `{ kind, to }`: the email kind, or `agent-reopened`, and the list of addresses |
+| `email.sent` | `{ kind, to }`: the email kind (`agent-sla` among them), or `agent-reopened`, and the list of addresses |
 | `mentioned` | `{ agentIds }` |
 | `participant.added` | `{ contactId }` |
 | `merged.into`, `merged.from` | `{ conversationId, reference }` |
@@ -184,6 +198,19 @@ The primary key is the pair.
 | `created_at` | `timestamptz` | no | `now()` | |
 
 The files themselves live with the [storage adapter](/docs/reference/adapters#storage).
+
+## audit_log
+
+| Column | Type | Null | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `id` | `uuid` | no | | |
+| `agent_id` | `uuid` | yes | | The agent; set to `null` when the agent row is deleted. |
+| `action` | `text` | no | | The method and route, such as `PATCH conversations/:id`. |
+| `target` | `text` | yes | | The id in the route, when it has one. |
+| `data` | `jsonb` | no | | `{ fields }`: the names of the fields the request sent, never their values. |
+| `created_at` | `timestamptz` | no | | |
+
+One row per agent request that is not a `GET` and succeeded. The package never deletes these rows; `retentionDays` and the delete functions leave them, so what an agent did to a conversation since deleted is still on record.
 
 ## canned_reply
 
@@ -265,6 +292,7 @@ A job's row is deleted once it completes.
 | `notify-customer` | Sends `customer-reply`, two minutes after the reply. |
 | `send-receipt` | Sends `customer-receipt`. |
 | `agent-reminder` | Sends `agent-reminder`. |
+| `sla-notice` | Sends `agent-sla`. |
 | `ai-triage` | Runs AI triage. |
 
 ## rate_limit

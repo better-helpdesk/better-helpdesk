@@ -21,7 +21,8 @@ export { handle as GET, handle as POST, handle as PATCH, handle as PUT, handle a
 | Caller | How the handler knows them | Routes |
 | --- | --- | --- |
 | Customer | `identify(request)`; else, when `identityTokenSecret` is set, an `x-helpdesk-identity` token signed with it; else an `x-helpdesk-visitor` token | `widget/*` |
-| Agent | `identify(request)` returning `isAgent: true`. 401 without an identity, 403 when it is not an agent | `agent/*` |
+| Agent | `identify(request)` returning `isAgent: true`. 401 without an identity, 403 when it is not an agent, 403 on a change from a `viewer` | `agent/*` |
+| Anyone | Nothing | `health` |
 | Email link | The signature in the query string | `rate` |
 | Mail relay | `Authorization: Bearer {inboundWebhookSecret}` | `inbound` |
 | Scheduler | `Authorization: Bearer {jobsSecret}` | `jobs` |
@@ -47,7 +48,9 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
 | `GET` | `widget/events` | Customer | An event stream of changes to the conversations the caller can see, internal notes left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 
-A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, and `typing`, true while an agent writes a reply. `widget/session` says with `realtime` whether `widget/events` is there.
+A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, `typing`, true while an agent writes a reply, `respondBy`, the time the team aims to answer by while nobody has, and `ratingScore`. `widget/session` says with `realtime` whether `widget/events` is there, lists the inbox's `priorities` a customer may pick with their descriptions, and carries `priorityLabels` and `ratingScale`.
+
+`POST widget/conversations/{id}/rating` takes `{ rating: 'good' | 'bad', comment? }` on the default scale and `{ score: 1..5, comment? }` when `ratingScale` is 5; the other shape is refused with 400.
 
 ### Opening a conversation
 
@@ -62,6 +65,7 @@ The body of `POST widget/conversations`, which `helpdesk.createConversation(requ
     kind: { type: "'chat' | 'ticket'", description: <>How the customer started it. Unset, a conversation with a <code>subject</code> is a ticket and one without is a chat. Email always arrives as a ticket.</> },
     context: { type: 'object', description: <>What the widget captured. See <a href="#context">context</a>.</> },
     segment: { type: 'string', description: <>A <code>value</code> of the inbox's <code>qualify</code> options. 400 otherwise.</> },
+    priority: { type: 'string', description: <>One of the inbox's <code>priorities</code>. 400 otherwise. Unset, the inbox's <code>defaultPriority</code>.</> },
     orgId: { type: 'string', description: <>One of the caller's <code>orgs</code>; files the conversation under that company. 403 otherwise.</> },
     sharedWithCompany: { type: 'boolean', description: 'Shares it with that company.' },
     name: { type: 'string', description: "An anonymous visitor's name, up to 200 characters." },
@@ -92,7 +96,9 @@ An unidentified caller on an inbox that is not `public` gets 401. A blocked cont
 
 ## Agent
 
-Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent/overview` routes answer 404 when [`features`](/docs/reference/configuration#crm) switched their section off.
+Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent/overview` routes answer 404 when [`features`](/docs/reference/configuration#crm) switched their section off. A `viewer` may call every `GET`, and of the rest only `PATCH agent/me`, `POST agent/notifications/seen` and the `agent/views` routes; anything else answers 403. Once any agent has the `supervisor` role, `PUT agent/settings`, `DELETE agent/agents/{id}` and `GET agent/audit` answer 403 to everyone else.
+
+Every request that is not a `GET` and succeeded is written to [`audit_log`](/docs/database/tables#audit_log) with the agent, the route, the id in its path and the names of the fields it sent.
 
 | Method | Path | What it does |
 | --- | --- | --- |
@@ -100,15 +106,17 @@ Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent
 | `PATCH` | `agent/me` | Sets the agent's away time. |
 | `GET` | `agent/settings` | The settings agents change. |
 | `PUT` | `agent/settings` | Changes them. |
-| `GET` | `agent/overview` | The Statistics page: volume, response and resolution times, ratings and tags. |
+| `GET` | `agent/overview` | The Statistics page: volume, response and resolution times with their 90th percentiles, SLA attainment and missed targets, ratings and tags, by inbox, agent, tier, priority and channel. |
+| `GET` | `agent/audit` | The audit log, newest first, up to 100 entries; `?agentId=` and `?target=` narrow it. |
 | `GET` | `agent/unread` | The count of waiting conversations. |
 | `GET` | `agent/tags` | The most used conversation tags. |
 | `GET` | `agent/agents` | The team. |
 | `DELETE` | `agent/agents/{id}` | Removes an agent from the team. |
 | `GET` | `agent/conversations` | The inbox list, filtered by the query string, with the counts of all, the agent's own and unassigned conversations under the same filters. |
-| `POST` | `agent/conversations/bulk` | Changes several conversations at once. |
+| `POST` | `agent/conversations` | Opens a conversation in the agent's name; see [the body](#opening-a-conversation-as-an-agent). |
+| `POST` | `agent/conversations/bulk` | Changes several conversations at once; with `reply` or `note`, writes that text to each as a reply or an internal note. |
 | `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
-| `PATCH` | `agent/conversations/{id}` | Changes its status, priority, type, inbox, title, assignee, company, tags or snooze. |
+| `PATCH` | `agent/conversations/{id}` | Changes its status, priority, tier, type, inbox, title, assignee, company, tags or snooze. |
 | `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. |
 | `POST` | `agent/conversations/{id}/typing` | Shows the customer that the agent is writing a reply, for a few seconds; the agent UI repeats it while the agent types. |
 | `GET` | `agent/events` | An event stream of every change, internal notes included. 404 without [`realtime`](/docs/reference/configuration#conversations). |
@@ -144,6 +152,31 @@ Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent
 | `DELETE` | `agent/deals/{id}` | Deletes a deal. |
 | `POST` | `agent/activities` | Logs a note, call or meeting. |
 
+The inbox list reads `inbox`, `status`, `assignee`, `q`, `tag`, `priority`, `days`, `tier`, `channel` and `sort` from the query string; `sort` is `waiting`, `priority` or `sla`, the nearest deadline first.
+
+### Opening a conversation as an agent
+
+The body of `POST agent/conversations`, which `helpdesk.openConversation()` takes as well with `agentUserId` added:
+
+<TypeTable
+  type={{
+    inbox: { type: 'string', required: true, description: <>A key of <code>inboxes</code>. 400 otherwise.</> },
+    type: { type: 'string', required: true, description: <>One of <code>types</code>. 400 otherwise.</> },
+    subject: { type: 'string', required: true, description: '1 to 200 characters.' },
+    body: { type: 'string', required: true, description: "The agent's message, 1 to 20,000 characters; the customer is emailed it." },
+    contactId: { type: 'string', description: 'The contact to write to. 400 when unknown.' },
+    email: { type: 'string', description: <>Instead of <code>contactId</code>: the address to write to. A contact that holds it is used, else one is made with <code>name</code>.</> },
+    name: { type: 'string', description: 'Up to 200 characters, for a contact made from the address.' },
+    companyId: { type: 'string | null', description: "The company to file it under; the contact's own unless set." },
+    priority: { type: 'string', description: <>Unset, the inbox's <code>defaultPriority</code>.</> },
+    tier: { type: 'string | null', description: <>One of <code>tiers</code>. Unset, <code>resolveTier</code> decides.</> },
+    tags: { type: 'string[]', description: 'Up to 50.' },
+    assigneeId: { type: 'string | null', description: 'An active agent. Unset, the opening agent.' },
+  }}
+/>
+
+A conversation opened this way has the channel `agent`, starts `pending` with the customer's turn, has no response target, and raises `conversation.created` with the agent's message. A blocked contact answers 404.
+
 ## Rate
 
 | Method | Path | Caller | What it does |
@@ -151,7 +184,13 @@ Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent
 | `GET` | `rate` | Email link | An HTML page that asks the customer to confirm the rating in the link, with a button. |
 | `POST` | `rate` | Email link | Records the rating and answers an HTML page. A `bad` rating opens the conversation again. |
 
-The links come in a [`customer-reply`](/docs/email/messages#customer-reply). A forged or expired link answers 404. A conversation already rated answers 200 and records nothing; one that is no longer resolved, or was merged, answers 409.
+The links come in a [`customer-reply`](/docs/email/messages#customer-reply). A forged or expired link answers 404. A conversation already rated answers 200 and records nothing; one that is no longer resolved, or was merged, answers 409. With `ratingScale: 5` the link names a score from 1 to 5, and a score of 1 or 2 opens the conversation again.
+
+## Health
+
+| Method | Path | Caller | What it does |
+| --- | --- | --- | --- |
+| `GET` | `health` | Anyone | `{ ok: true }` once the database answered one query, `{ ok: false }` with 503 otherwise. For your status page or load balancer. |
 
 ## Inbound
 
@@ -169,16 +208,17 @@ Without `inboundWebhookSecret`, or with another bearer token, it answers 401. Th
 
 Without `jobsSecret`, or with another bearer token, it answers 401.
 
-`runJobs({ budgetMs }: { budgetMs?: number } = {})`, with `budgetMs` 20,000 by default, wakes due snoozes, queues due reminders, applies `retentionDays`, then works through due jobs until the budget is spent. It returns:
+`runJobs({ budgetMs }: { budgetMs?: number } = {})`, with `budgetMs` 20,000 by default, wakes due snoozes, queues due reminders, queues due SLA notices, applies `retentionDays`, then works through due jobs until the budget is spent. It returns:
 
 <TypeTable
   type={{
     woken: { type: 'number', required: true, description: 'Snoozed conversations reopened.' },
     reminders: { type: 'number', required: true, description: 'Reminders queued.' },
+    sla: { type: 'number', required: true, description: 'SLA warnings and breaches queued.' },
     retention: { type: 'number', required: true, description: 'Conversations deleted by retention.' },
     jobs: { type: 'number', required: true, description: 'Jobs completed.' },
     failed: { type: 'number', required: true, description: 'Jobs that threw.' },
-    errors: { type: 'string[]', required: true, description: <>The steps that failed: <code>wake</code>, <code>reminders</code>, <code>retention</code>.</> },
+    errors: { type: 'string[]', required: true, description: <>The steps that failed: <code>wake</code>, <code>reminders</code>, <code>sla</code>, <code>retention</code>.</> },
   }}
 />
 
@@ -186,7 +226,7 @@ A failed job runs again after 2, 4, 8 and 16 minutes, and is kept with its last 
 
 ## Origins and CORS
 
-- A mutation is any method but `GET`, on any route but `rate`, `inbound` and `jobs`. A `POST` mutation must send `Content-Type: application/json` (415 otherwise).
+- A mutation is any method but `GET`, on any route but `rate`, `inbound` and `jobs`. A `POST` mutation must send `Content-Type: application/json` (415 otherwise). `health` takes only `GET`.
 - A mutation that carries an `Origin` header must come from the origin of `adminUrl`, or, on a `widget/*` route, from an origin in an inbox's `allowedOrigins`. Otherwise it answers 403.
 - `widget/*` responses to an allowed origin carry CORS headers: methods `GET, POST, PATCH, OPTIONS`, headers `content-type, x-helpdesk-visitor, x-helpdesk-identity`, max age 600 seconds. Agent routes never do.
 - `OPTIONS` on any path answers 204.

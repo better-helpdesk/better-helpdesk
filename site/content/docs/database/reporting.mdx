@@ -41,6 +41,49 @@ WHERE status = 'resolved' AND resolved_at > now() - interval '30 days'
 
 These two count every hour on the clock. The Overview counts only open hours for an inbox with [business hours](/docs/inbox/setup#set-business-hours), so its numbers for such an inbox are usually lower than these.
 
+## 90th percentile first response
+
+The same query with `percentile_cont(0.9)`. On a conversation opened since the column arrived, `first_responded_at` already holds the first public reply, so the join can go:
+
+```sql
+SELECT percentile_cont(0.9) WITHIN GROUP (ORDER BY first_responded_at - created_at)
+  AS p90_first_response
+FROM helpdesk.conversation
+WHERE created_at > now() - interval '30 days' AND merged_into_id IS NULL
+  AND first_responded_at IS NOT NULL;
+```
+
+## SLA attainment per customer and month
+
+Only conversations that fell under a target count. A response target is met when the first reply came before `respond_by`; a resolution target when the conversation was resolved before `resolve_by`, which already allows for the time the clock was paused. An open conversation whose deadline has passed counts as missed:
+
+```sql
+SELECT co.name AS company, date_trunc('month', c.created_at) AS month,
+  count(*) FILTER (WHERE c.respond_by IS NOT NULL) AS response_targets,
+  count(*) FILTER (WHERE c.respond_by IS NOT NULL
+    AND coalesce(c.first_responded_at, now()) <= c.respond_by) AS response_met,
+  count(*) FILTER (WHERE c.resolve_by IS NOT NULL) AS resolution_targets,
+  count(*) FILTER (WHERE c.resolve_by IS NOT NULL
+    AND coalesce(c.resolved_at, now()) <= c.resolve_by) AS resolution_met
+FROM helpdesk.conversation c
+LEFT JOIN helpdesk.company co ON co.id = c.company_id
+WHERE c.created_at > now() - interval '12 months' AND c.merged_into_id IS NULL
+GROUP BY 1, 2
+ORDER BY 1, 2;
+```
+
+Every breach the jobs run recorded is a row in `conversation_event` with the kind `sla.breach` and `data->>'target'`, so a credit report can list them by conversation:
+
+```sql
+SELECT c.number, co.name AS company, c.tier, c.priority,
+  e.data->>'target' AS target, e.data->>'due' AS due, e.created_at AS recorded_at
+FROM helpdesk.conversation_event e
+JOIN helpdesk.conversation c ON c.id = e.conversation_id
+LEFT JOIN helpdesk.company co ON co.id = c.company_id
+WHERE e.kind = 'sla.breach' AND e.created_at > now() - interval '30 days'
+ORDER BY e.created_at DESC;
+```
+
 ## Volume per inbox and type
 
 ```sql
@@ -102,4 +145,4 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA helpdesk GRANT SELECT ON TABLES TO helpdesk_r
 REVOKE SELECT ON helpdesk.setting, helpdesk.identity, helpdesk.rate_limit FROM helpdesk_reports;
 ```
 
-The last line keeps three tables out of the dashboard that no report needs: `setting` holds the key that signs rating links, `identity` holds visitor token hashes and your users' ids, and `rate_limit` holds client IP addresses. On another database, grant read access in its own way and keep the same three tables out.
+The last line keeps three tables out of the dashboard that no report needs: `setting` holds the key that signs rating links, `identity` holds visitor token hashes and your users' ids, and `rate_limit` holds client IP addresses. `audit_log` holds who changed what, which a dashboard may read; add it to the `REVOKE` line if yours should not. On another database, grant read access in its own way and keep the same tables out.

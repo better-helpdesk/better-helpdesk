@@ -32,7 +32,9 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | `createAdapter(input)` | function | Turns an `AdapterInput`, the contract a custom adapter implements, into a `DatabaseAdapter`: it sets ids and defaults and converts values to and from what the input supports. |
 | `memoryRealtime()` | function | A `RealtimeAdapter` for the [`realtime`](/docs/reference/configuration#conversations) option that reaches the event streams of one process. |
 | `postgresRealtime({ pool, retryMs? })` | function | A `RealtimeAdapter` over Postgres `LISTEN` and `NOTIFY` on the host's `pg.Pool`, so a stream on one process hears a change made on another. It holds one pooled connection while anyone is subscribed. |
-| `createStore(adapter)` | function | The `HelpdeskStore` over an adapter, for code that runs without `buildHelpdesk`. |
+| `createStore(adapter, options?)` | function | The `HelpdeskStore` over an adapter, for code that runs without `buildHelpdesk`. Without `options.slaClock`, the targets `buildHelpdesk` derives from `sla`, the store starts no deadlines. |
+| `exportConversations(store, { prefix, since? })` | function | An async iterator over every conversation in the [export format](/docs/operations/cli#better-helpdesk-export), as `better-helpdesk-export` writes it. |
+| `importConversations(store, lines, options?)` | function | Reads lines of that format, as `better-helpdesk-import conversations` does; returns the same report as the other imports. |
 | `helpdeskModel` | object | Every table and field, with its kind, whether it may be null, its default and its references. |
 | `signIdentityToken(payload, secret, options?)` | function | Signs an identity token. |
 | `verifyIdentityToken(token, secret)` | function | Returns the `Identity` a token vouches for, with `isAgent: false`, or `null` when it is forged, malformed or expired. |
@@ -45,10 +47,11 @@ The package is ESM only and ships its type declarations. Its peer dependencies a
 | `HelpdeskStore` | type | The query layer, `buildHelpdesk(...).store`. |
 | `DatabaseAdapter`, `AdapterInput`, `Capabilities`, `Where`, `OrderBy`, `FindQuery`, `Notification` | type | The adapter contract. |
 | `HelpdeskEvent` | type | See [Events](/docs/app/events). |
+| `SlaClock`, `SlaClockFor`, `SlaTargetName` | type | The targets a conversation runs under, as `createStore` takes them. |
 | `RealtimeAdapter`, `RealtimeChange` | type | What the `realtime` option takes, and the change it carries. |
 | `IdentityClaims` | type | The claims of an identity token. |
 
-Every type in the configuration module is exported as well: `HelpdeskConfig`, `InboxConfig`, `BusinessHours`, `Identity`, `HelpdeskUser`, `HelpdeskOrg`, `HostLink`, `LinkContact`, `LinkCompany`, `HelpdeskEmail`, `StorageAdapter`, `AiAdapter`, `HelpResult`, `InboundMessage`, `CustomFieldDef`, `Locale`, `Translated` and `ResolvedConfig`. The default lists, such as the statuses and the default types, are not exported.
+Every type in the configuration module is exported as well: `HelpdeskConfig`, `InboxConfig`, `BusinessHours`, `Identity`, `HelpdeskUser`, `HelpdeskOrg`, `HostLink`, `LinkContact`, `LinkCompany`, `HelpdeskEmail`, `StorageAdapter`, `AiAdapter`, `HelpResult`, `InboundMessage`, `CustomFieldDef`, `Locale`, `Translated`, `Priority`, `SlaConfig`, `SlaPolicy`, `SlaTarget`, `TierInput` and `ResolvedConfig`. The default lists, such as the statuses and the default types, are not exported.
 
 ### What buildHelpdesk returns
 
@@ -72,7 +75,19 @@ Every type in the configuration module is exported as well: `HelpdeskConfig`, `I
     },
     createConversation: {
       type: '(request: Request, input: unknown) => Promise<{ conversation: Conversation | null; visitorToken?: string }>',
-      description: <>Opens a conversation as <code>POST widget/conversations</code> does, for the customer the request identifies, and raises <code>conversation.created</code>. <code>input</code> takes <a href="/docs/reference/routes#opening-a-conversation">that route's body</a>; where the route would answer an error, it throws: a <code>HelpdeskError</code> with that status, or a Zod error for an invalid body.</>,
+      description: <>Opens a conversation as <code>POST widget/conversations</code> does, for the customer the request identifies, and raises <code>conversation.created</code>. <code>input</code> takes <a href="/docs/reference/routes#opening-a-conversation">that route's body</a>; where the route would answer an error, it throws: a <code>HelpdeskError</code> with that status, or a Zod error for an invalid body. The conversation's channel is <code>api</code>.</>,
+    },
+    openConversation: {
+      type: '(input: { agentUserId: string; … }) => Promise<{ conversation: Conversation; message: Message }>',
+      description: <>Opens a conversation the team starts, in the name of the agent whose host user id is <code>agentUserId</code>, as <code>POST agent/conversations</code> does with <a href="/docs/reference/routes#opening-a-conversation-as-an-agent">that route's body</a>. Throws a <code>HelpdeskError</code> with status 400 for an unknown agent.</>,
+    },
+    addNote: {
+      type: '(conversationId: string, body: string, options?: { agentUserId?: string; internal?: boolean; notify?: string[] }) => Promise<Message>',
+      description: <>Writes an internal note, or a public message when <code>internal</code> is <code>false</code>, from the agent named or from the system. Raises <code>message.created</code> and reaches open agent UIs; a public message is emailed to the customer. For what your own systems learn, such as an incident acknowledged or an issue closed.</>,
+    },
+    changeConversation: {
+      type: '(conversationId: string, patch: unknown, options?: { agentUserId?: string }) => Promise<Conversation | null>',
+      description: <>Changes a conversation as <code>PATCH agent/conversations/{'{id}'}</code> does, with the same body and checks, in the name of the agent given or of nobody. Writes the timeline and raises <code>conversation.updated</code>.</>,
     },
     runJobs: {
       type: '(options?: { budgetMs?: number }) => Promise<JobsReport>',
@@ -131,7 +146,7 @@ Every type in the configuration module is exported as well: `HelpdeskConfig`, `I
     },
     listInbox: {
       type: '(filter: InboxFilter) => Promise<{ conversation: Conversation; contact: Contact }[]>',
-      description: <>The agent inbox, longest waiting first, at most <code>limit</code> (200 by default). The filter takes <code>inbox</code>, <code>status</code> (also <code>snoozed</code>, <code>rated-good</code> and <code>rated-bad</code>), <code>assigneeId</code> (<code>null</code> for unassigned), <code>contactId</code>, <code>companyId</code>, <code>tag</code>, <code>query</code>, <code>priority: 'high'</code>, <code>since</code> (a <code>Date</code>: resolved, rated, or for any other status opened, resolved or rated since then), <code>sort</code> and <code>limit</code>. Blocked contacts' conversations are left out unless <code>contactId</code> is given.</>,
+      description: <>The agent inbox, longest waiting first, at most <code>limit</code> (200 by default). The filter takes <code>inbox</code>, <code>status</code> (also <code>snoozed</code>, <code>rated-good</code> and <code>rated-bad</code>), <code>assigneeId</code> (<code>null</code> for unassigned), <code>contactId</code>, <code>companyId</code>, <code>tag</code>, <code>tier</code>, <code>channel</code>, <code>query</code>, <code>priority: 'high'</code>, <code>since</code> (a <code>Date</code>: resolved, rated, or for any other status opened, resolved or rated since then), <code>sort</code> (<code>waiting</code>, <code>priority</code> or <code>sla</code>) and <code>limit</code>. Blocked contacts' conversations are left out unless <code>contactId</code> is given.</>,
     },
     updateConversation: {
       type: '(id: string, patch: Partial<Conversation>) => Promise<Conversation | null>',

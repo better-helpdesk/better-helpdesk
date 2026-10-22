@@ -8,7 +8,12 @@ matters most for anyone reading this file.
 A **support team member**: a host user whose identity came back with
 `isAgent: true`. Their first request writes an `agent` row keyed by the
 host's user id. Agents use the agent UI (`HelpdeskAdmin`, "the admin"),
-answer conversations and own deals. **An agent is never an AI.** AI is the
+answer conversations and own deals. The identity may carry a **role**:
+`agent` (the default), `supervisor` (also gets SLA notices and, once one
+exists, alone changes settings and the team) or `viewer` (reads, changes
+nothing). The **audit log** (`audit_log`) records every agent request that
+changed something: who, the route, the id and the field names, never the
+values. **An agent is never an AI.** AI is the
 optional `ai` adapter, and what it produces is a **suggestion**
 (`aiSuggestion`: a triage of type, priority, title and likely duplicates that
 an agent accepts or dismisses) or a **draft** reply an agent may send. In
@@ -59,6 +64,12 @@ says **conversation**. Each has:
 - A **kind**: a **chat** is a message the customer wrote, a **ticket** a
   form with a type and a subject, or an email. Only the widget shows it;
   every conversation is worked the same way.
+- A **channel**: where it came in. `widget`, `email`, `agent` for one the
+  team opened (`POST agent/conversations`, `openConversation`), `api` for
+  one host code opened through `createConversation`.
+- A **tier**, a free word from `tiers` (`gold`, `platinum`): set by
+  `resolveTier` when the conversation opens, or by an agent. It picks the
+  SLA policy, and is the one thing besides priority the policy keys on.
 - **Typing**: `agentTypingUntil` is set while an agent writes a reply, and
   the customer sees them typing until it passes or the reply lands.
 - **Tags**, free text the team adds, lower-cased and unique per
@@ -83,6 +94,29 @@ says **conversation**. Each has:
   viewport, locale, recent errors, referrer, UTM), plus whatever the host
   adds through `resolveContext`.
 
+## Service level (SLA)
+
+The `sla` config is the policy: per tier (or `default`), per priority, a
+**response target** (`respond`, hours to the first public agent reply) and
+a **resolution target** (`resolve`, hours to resolution), each counted in
+its own hours, the policy's, the inbox's, or every hour (`'always'`).
+`slaClockFor(config)` in `src/sla.ts` turns a conversation's inbox, tier and
+priority into its `SlaClock`; the store gets it at creation, so every
+status write keeps the clock right without the service's help.
+
+- `respondBy` and `resolveBy` are the **deadlines**; `slaDueAt` is the one
+  nearest while the clock runs, and the inbox sorts by it.
+- The **clock** runs while the status is `open`. `slaPausedAt` is set on
+  `pending` and `resolved`; on resume, `slaPausedSeconds` grows by the
+  paused time in the target's hours and `resolveBy` moves by it. A snooze
+  does not pause it. `firstRespondedAt` stops the response clock.
+- A **notice** is the jobs run's `sla.warning` (at `warnAt` of a target)
+  or `sla.breach` (past it), once per target, claimed on the row
+  (`respondNotice`, `resolveNotice`), recorded as a timeline row, an
+  `agent-sla` email to the assignee or team plus supervisors, and an event.
+- A new tier or priority **retargets**: both deadlines are set afresh from
+  `createdAt`, and a notice whose target moved into the future is forgotten.
+
 ## Deal and activity
 
 A **deal** is a company's: it moves through `dealStages`, has a value in a
@@ -93,11 +127,11 @@ is on the deal; they are different ladders.
 
 ## Email
 
-- **Outbound** goes through the host's `email.send` adapter as one of five
+- **Outbound** goes through the host's `email.send` adapter as one of six
   `HelpdeskEmail` kinds: `customer-reply`, `customer-receipt` (the
   acknowledgement a visitor gets when the inbox has `receipt`), `agent-new`,
-  `agent-reminder` and `agent-mention` (to a teammate picked with `@` in an
-  internal note).
+  `agent-reminder`, `agent-mention` (to a teammate picked with `@` in an
+  internal note) and `agent-sla` (a warning or breach notice).
 - **Inbound** arrives when a **relay** (any forwarder; `relays/` has a
   Cloudflare Email Worker) POSTs the raw message to `{basePath}/inbound/`
   with `inboundWebhookSecret`. `src/inbound/` parses it and checks DKIM;
@@ -111,9 +145,9 @@ is on the deal; they are different ladders.
 A **job** is queued work in the `job` table, run by a handler keyed on its
 `kind`. `helpdesk.runJobs()` on the host's schedule, or
 `POST {basePath}/jobs` with `jobsSecret`, first wakes due snoozes, then
-sends due reminders, then applies **retention** (resolved conversations are
-deleted `retentionDays` after resolution), then works through due jobs within
-a time budget.
+sends due reminders, then SLA notices, then applies **retention** (resolved
+conversations are deleted `retentionDays` after resolution), then works
+through due jobs within a time budget.
 
 ## Widget and admin
 
@@ -134,3 +168,12 @@ Two UIs over one API client (`src/ui/api.ts`):
 A **canned reply** is a saved answer agents insert. **Settings** are the few
 values agents change in the admin, one JSON value per key in the `setting`
 table.
+
+## Export and import
+
+`src/export.ts` writes conversations as JSON Lines (`exportConversations`,
+`bin/export.mjs`) and reads them back (`importConversations`,
+`bin/import.mjs conversations`). People are named by email, never by id, so
+a file moves between installs and from another tool's export. An imported
+conversation gets a new reference and keeps the old one in
+`context.imported`; it starts no SLA clock.

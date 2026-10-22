@@ -7,7 +7,7 @@ Several everyday words mean one particular thing in Better Helpdesk. The code, t
 
 ## Agent
 
-An **agent** is a member of your support team: a user of your app whose identity came back with `isAgent: true`. Agents work in the agent UI, answer conversations and own deals. Their first request writes an agent row keyed to your user id.
+An **agent** is a member of your support team: a user of your app whose identity came back with `isAgent: true`. Agents work in the agent UI, answer conversations and own deals. Their first request writes an agent row keyed to your user id. The identity may name a **role**: an `agent` works the queue, a `supervisor` also receives service-level notices and, once one exists, alone changes settings and the team, and a `viewer` reads and changes nothing. The **audit log** records every change an agent made through the agent UI.
 
 An agent is never an AI. AI is the optional `ai` adapter, and what it produces is either a **suggestion**, a triage of type, priority, title and likely duplicates that an agent accepts or dismisses, or a **draft** reply that an agent may edit and send.
 
@@ -35,7 +35,9 @@ A **reference**, such as `ACME-1042`: the `referencePrefix` and a number from a 
 
 An **inbox**, one of the keys of `inboxes`, such as `support` or `sales`. The inbox's configuration decides whether visitors may write to it, when agents are reminded, and what the widget says at the top. Its `allowedOrigins` are pooled with every other inbox's into one list of origins that may call the widget routes. "Inbox" is also the name of the agent UI's screen that lists conversations.
 
-A **type**, a **status** and a **priority**. Types are `question`, `bug`, `feature` and `lead` unless you configure your own. Priorities are `low`, `normal`, `high` and `urgent`. Statuses are named from the customer's side: `open` means the conversation is with your team, `pending` means it awaits the customer's reply, and `resolved` means it is done.
+A **type**, a **status** and a **priority**. Types are `question`, `bug`, `feature` and `lead` unless you configure your own. Priorities are `low`, `normal`, `high` and `urgent`; `priorityLabels` can show them as P3 to P1. Statuses are named from the customer's side: `open` means the conversation is with your team, `pending` means it awaits the customer's reply, and `resolved` means it is done.
+
+A **tier**, such as `gold` or `platinum`: the word your app attaches to a conversation through `resolveTier`, or an agent sets, which picks its service-level policy. A **channel**: where the conversation came in, `widget`, `email`, `agent` for one the team opened, or `api` for one opened from host code.
 
 A **subject** and a **title**. The subject is what the customer called it, and the only name they ever see. The title is the team's name for it, from AI triage or a rename, and agents see it first.
 
@@ -55,7 +57,11 @@ A waiting conversation is **unread** in the inbox until an agent opens it after 
 
 A **snoozed** conversation is a pending one with a `snoozedUntil` time. It gets no reminder and is left out of the waiting count until the scheduled jobs wake it back to `open` at that time, or a customer message wakes it sooner.
 
-A **rating** is the customer's verdict on a resolved conversation, `good` or `bad`, given in the widget or through the links in the reply email. A bad rating opens the conversation again.
+A **rating** is the customer's verdict on a resolved conversation, `good` or `bad`, or a score from 1 to 5 with `ratingScale: 5`, given in the widget or through the links in the reply email. A bad rating, or a score of 1 or 2, opens the conversation again.
+
+## Service levels
+
+A **service level** is the `sla` policy: per tier and priority, a **response target**, the hours until the first public reply, and a **resolution target**, the hours until the conversation is resolved, each counted in business hours or round the clock. A conversation under a target carries a **deadline** for each (`respondBy`, `resolveBy`). The **clock** runs while the status is `open` and pauses while the customer has the ball; a snooze does not pause it. The jobs run sends a **warning** once a share of a target has passed and records a **breach** once the deadline has, each once per target, on the timeline and as an event.
 
 ## The CRM
 
@@ -65,13 +71,13 @@ A **lead stage** sits on a contact or a company, and a **deal stage** sits on a 
 
 ## Email
 
-**Outbound** mail goes through your `email.send` adapter as one of five kinds: `customer-reply`, `customer-receipt` (the acknowledgement sent when the inbox has `receipt`), `agent-new`, `agent-reminder`, and `agent-mention` (to a teammate picked with `@` in an internal note).
+**Outbound** mail goes through your `email.send` adapter as one of six kinds: `customer-reply`, `customer-receipt` (the acknowledgement sent when the inbox has `receipt`), `agent-new`, `agent-reminder`, `agent-mention` (to a teammate picked with `@` in an internal note), and `agent-sla` (a service-level warning or breach).
 
 **Inbound** mail arrives when a **relay**, any service that can forward a raw message to a URL, posts it to `{basePath}/inbound/` with `inboundWebhookSecret`. A message is **verified** when its From domain signed it. A reply finds its conversation by the message ids it answers, or by the reference in a plus-address such as `support+ACME-1042@example.com`, which `replyToAddress` puts into the Reply-To header.
 
 ## Jobs and retention
 
-A **job** is a piece of queued work in the `job` table, such as sending an email or running AI triage. Your scheduler runs them through `helpdesk.runJobs()` or `POST {basePath}/jobs` with `jobsSecret`. A run wakes snoozed conversations that are due, queues reminders, applies **retention**, which deletes resolved conversations `retentionDays` after they were resolved, and then works through due jobs within a time budget.
+A **job** is a piece of queued work in the `job` table, such as sending an email or running AI triage. Your scheduler runs them through `helpdesk.runJobs()` or `POST {basePath}/jobs` with `jobsSecret`. A run wakes snoozed conversations that are due, queues reminders and service-level notices, applies **retention**, which deletes resolved conversations `retentionDays` after they were resolved, and then works through due jobs within a time budget.
 
 ## The two interfaces
 

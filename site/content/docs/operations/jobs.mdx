@@ -3,7 +3,7 @@ title: Run jobs and retention
 description: Call runJobs on a schedule so emails go out, reminders fire, snoozes wake and old conversations are deleted.
 ---
 
-Better Helpdesk runs no background process. Work that should not hold up a request is queued in the `helpdesk.job` table, and nothing happens to it until your app calls `helpdesk.runJobs()`. Every email goes through that queue, so does AI triage, and the same call wakes snoozed conversations, queues reminders and applies retention. Run it every minute or every few minutes. [How it works](/docs/how-it-works#what-runs-where) explains why this work waits for your scheduler.
+Better Helpdesk runs no background process. Work that should not hold up a request is queued in the `helpdesk.job` table, and nothing happens to it until your app calls `helpdesk.runJobs()`. Every email goes through that queue, so does AI triage, and the same call wakes snoozed conversations, queues reminders and SLA notices, and applies retention. Run it every minute or every few minutes. [How it works](/docs/how-it-works#what-runs-where) explains why this work waits for your scheduler.
 
 ## Pick a scheduler
 
@@ -81,10 +81,10 @@ The route runs with the default budget of 20 seconds, so give the scheduler a ti
 `runJobs` returns a report, which the HTTP route and the cron route above send back as JSON:
 
 ```json
-{ "woken": 0, "reminders": 1, "retention": 0, "jobs": 4, "failed": 0, "errors": [] }
+{ "woken": 0, "reminders": 1, "sla": 0, "retention": 0, "jobs": 4, "failed": 0, "errors": [] }
 ```
 
-`errors` names a step that threw (`wake`, `reminders` or `retention`); the error itself is logged, and the run goes on with the next step. [Jobs](/docs/reference/routes#jobs) in the routes reference describes every field.
+`errors` names a step that threw (`wake`, `reminders`, `sla` or `retention`); the error itself is logged, and the run goes on with the next step. [Jobs](/docs/reference/routes#jobs) in the routes reference describes every field.
 
 ## Delete resolved conversations after a while
 

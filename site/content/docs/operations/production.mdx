@@ -126,6 +126,15 @@ Emails, reminders, snoozes and retention all wait for `runJobs`. Without a sched
 
 On Vercel's Hobby plan a cron job runs at most once a day, and a more frequent schedule fails the deploy. A daily run is too rare for email, so on Hobby use the jobs route with a scheduler of your own, or move to a plan with per-minute cron jobs.
 
+## Keep support reachable when your product is down
+
+The helpdesk runs inside the app it is mounted in and shares its database, its sign-in and its fate. When that app is your product, an outage of the product is also an outage of support, at the moment customers need it most. Two things keep a channel open:
+
+- **Mount the helpdesk in an app of its own** when your product's uptime is the thing customers write in about: a small Next.js app on separate hosting with its own database, as the marketing site at better-helpdesk.com does for itself. Your product then embeds the widget cross-origin with an [identity token](/docs/identity/other-origin), and your website carries the same widget on a `public` inbox for anyone who cannot sign in. Agents sign into that app through whatever `identify` you give it; if your usual identity provider can be part of the same outage, give the support app a sign-in that is not.
+- **Give the mail relay somewhere to go.** The example [Cloudflare Email Worker](https://github.com/better-helpdesk/better-helpdesk/blob/main/relays/README.md) forwards each message to `FALLBACK_ADDRESS` when the inbound route does not answer, so mail waits in a mailbox instead of bouncing; the Postmark and Mailgun relays retry on their own for a while. When the app is back, the mail that waited still threads in by its message ids.
+
+Point your status page at `GET {basePath}/health/`, which answers `{ ok: true }` once the database has answered one query and 503 otherwise, so the support channel is a component customers can see the state of. Name the channel that stays up in your support documentation before anyone needs it.
+
 ## Allow the helpdesk in your Content Security Policy
 
 If your app sends a `Content-Security-Policy`, the helpdesk needs these sources in it:

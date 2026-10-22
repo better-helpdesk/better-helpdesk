@@ -46,6 +46,10 @@ inboxes: {
       default: "'normal'",
       description: 'Priority new conversations start with. Conversations opened by inbound email start at normal.',
     },
+    priorities: {
+      type: 'Partial<Record<Priority, Translated>>',
+      description: <>The priorities a customer may pick on a ticket form, each with the text that says what it means, for an inbox whose customers raise P1 to P3 themselves. The widget shows them with <code>priorityLabels</code> as their names. A priority sent that is not listed here is refused with 400; unset, customers pick none and <code>defaultPriority</code> applies.</>,
+    },
     title: {
       type: 'Partial<Record<Locale, string>>',
       description: "The widget's header for this inbox, per locale.",

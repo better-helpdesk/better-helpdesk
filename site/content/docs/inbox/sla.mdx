@@ -1,0 +1,117 @@
+---
+title: Set service levels
+description: Give each tier of customer response and resolution targets, let the jobs run warn and record breaches, and read attainment on the Statistics page.
+---
+
+A service level is a promise to answer and to resolve within a time, usually different for an enterprise customer than for everyone else. Better Helpdesk keeps the promise as code in your config: tiers, a target per tier and priority, and the hours each one counts. The package starts the clocks, pauses them while the customer has the ball, warns before a deadline and records a breach after it, and reports attainment. There is no rule builder; a change to a target is a pull request. Every option is described in the [configuration reference](/docs/reference/configuration#service-levels-and-tiers).
+
+## Name the tiers
+
+A tier is a word your app attaches to a conversation, such as the plan a customer is on or the SLA their contract names. Decide it in `resolveTier` from what the helpdesk knows when a conversation opens: the customer's user, the organization they filed it under, their address, the inbox, and the context your widget captured. Most hosts look up the organization:
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  tiers: ['gold', 'platinum'],
+  resolveTier: async ({ orgId, context }) => {
+    // The cloud space the report is about decides, when the widget knows it.
+    const space = context.host?.space;
+    if (space) return (await db.space(space))?.slaTier ?? null;
+    return orgId ? (await db.org(orgId))?.slaTier ?? null : null;
+  },
+});
+```
+
+A tier can also be set or changed by an agent in the conversation's properties card, which sets the deadlines afresh. `tiers` lists what agents may choose; unset, it is the keys of `sla.tiers`.
+
+## Write the policy
+
+Targets are hours. `respond` is the time to the first public reply; `resolve` the time to resolution. Each target counts its own `hours`, else the policy's, else the inbox's business hours, else every hour:
+
+```ts title="lib/helpdesk.ts"
+const office: BusinessHours = {
+  timeZone: 'Europe/Zurich',
+  weekly: Object.fromEntries(
+    ['mon', 'tue', 'wed', 'thu', 'fri'].map(d => [d, [['08:00', '17:00']]])
+  ),
+};
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  sla: {
+    tiers: {
+      gold: {
+        targets: {
+          urgent: { respond: 4, resolve: 24, hours: 'always' },
+          high: { respond: 8, resolve: 48, hours: 'always' },
+          normal: { respond: 16, resolve: 80, hours: office },
+        },
+      },
+      platinum: {
+        targets: {
+          urgent: { respond: 1, resolve: 8, hours: 'always' },
+          high: { respond: 4, resolve: 24, hours: 'always' },
+          normal: { respond: 8, resolve: 40, hours: office },
+        },
+      },
+    },
+    default: { targets: { normal: { respond: 24, hours: office } } },
+    warnAt: 0.75,
+  },
+});
+```
+
+A priority a policy leaves out has no deadline. The `default` policy is for conversations without a tier, or whose tier has no policy of its own: a best-effort tier gets a response target and no resolution target, or no entry at all.
+
+## Let customers pick the priority
+
+Enterprise customers often raise P1, P2 and P3 themselves. Name the priorities with `priorityLabels` and offer them on the inbox their tickets land in, each with the text that says what it means. The widget shows the choice on every ticket form of that inbox:
+
+```ts title="lib/helpdesk.ts"
+priorityLabels: { urgent: { en: 'P1' }, high: { en: 'P2' }, normal: { en: 'P3' } },
+inboxes: {
+  enterprise: {
+    priorities: {
+      urgent: { en: 'Complete loss of functionality, or a security vulnerability.' },
+      high: { en: 'A key function is unavailable.' },
+      normal: { en: 'Partial functionality, display or performance.' },
+    },
+  },
+  support: {},
+},
+```
+
+Leave `priorities` off an inbox whose customers should not set their own; its conversations start at `defaultPriority`, and the team sets the rest.
+
+## How the clock runs
+
+- A conversation opened by a customer starts both clocks. The response clock stops at the first public agent reply and is never paused.
+- The resolution clock runs while the status is `open`, the conversation being with your team. It pauses on `pending`, after an agent replied, and on `resolved`, and resumes when the customer writes again. The deadline moves forward by the time paused, in the hours the target counts.
+- A snooze does not pause it: a snoozed conversation is still with your team.
+- A conversation an agent opens starts pending and has no response target; its resolution clock starts when the customer answers.
+- A new tier or priority sets both deadlines afresh from the conversation's start. A deadline that moved into the future gets a new warning and breach.
+
+The widget and the receipt tell the customer when a reply is due. The inbox shows the time left or overdue on each row and sorts by the nearest deadline with **Sort: Nearest deadline**; the conversation shows both deadlines under its properties.
+
+## Warnings and breaches
+
+Each `runJobs` looks at every open conversation with a deadline. Once `warnAt` of a target has passed, it queues an [`agent-sla`](/docs/email/messages#agent-sla) email with `stage: 'warning'` to the assignee, or the whole team when there is none, and to every [supervisor](/docs/inbox/team#roles). Once the deadline has passed, it queues one with `stage: 'breach'`. Each goes once per target, writes an `sla.warning` or `sla.breach` row on the conversation's timeline, and raises the [event](/docs/app/events#slawarning-and-slabreach) of the same name.
+
+To page someone, hang it on the event:
+
+```ts title="lib/helpdesk.ts"
+onEvent: async event => {
+  if (event.kind !== 'sla.breach' || event.conversation.priority !== 'urgent') return;
+  await pagerduty.trigger({
+    dedup_key: helpdesk.reference(event.conversation),
+    summary: `${helpdesk.reference(event.conversation)} missed its ${event.target} target`,
+    links: [{ href: `${adminUrl}/conversations/${event.conversation.id}/` }],
+  });
+},
+```
+
+When the incident is acknowledged or resolved on the other side, write it back with [`addNote`](/docs/app/own-code#write-what-your-systems-learn), so the thread stays the one place the story is told.
+
+## Read attainment
+
+The Statistics page shows, per period and per inbox, agent, tier, priority and channel, the share of response and resolution targets met, the median and 90th percentile first response and resolution times, and a list of every target missed in the period with how late it was. Each figure links into the inbox. [Report from your own database](/docs/database/reporting#sla-attainment-per-customer-and-month) has the SQL for attainment per customer and month, which enterprise credits usually ask for.

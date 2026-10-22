@@ -24,6 +24,7 @@ Raised by:
 - `POST widget/conversations`
 - An inbound email that does not thread into an existing conversation
 - `helpdesk.createConversation(request, input)` called from host code
+- `POST agent/conversations` and `helpdesk.openConversation()`, where `message` is the agent's opening message
 
 ## message.created
 
@@ -38,11 +39,25 @@ Raised by:
 
 Raised by:
 
-- An agent's reply or internal note, `POST agent/conversations/{id}/messages`
+- An agent's reply or internal note, `POST agent/conversations/{id}/messages`, and each reply or note of `POST agent/conversations/bulk`
+- `helpdesk.addNote()` from host code
 - A customer's message on an existing conversation, `POST widget/conversations/{id}/messages`
 - An inbound email that threads into an existing conversation
 
 A customer message on a resolved conversation reopens it and raises only `message.created`; its `conversation.status` is `open`. The first message of a new conversation raises `conversation.created` instead. An automated inbound email (an out-of-office or a bounce) raises nothing. When it is signed and answers a conversation, it is stored there as an internal system note; otherwise it is dropped.
+
+## sla.warning and sla.breach
+
+<TypeTable
+  type={{
+    kind: { type: "'sla.warning' | 'sla.breach'", required: true },
+    conversation: { type: 'Conversation', required: true },
+    target: { type: "'response' | 'resolution'", required: true, description: 'Which target the notice is about.' },
+    due: { type: 'Date', required: true, description: 'The deadline.' },
+  }}
+/>
+
+Raised by `runJobs`, once per target per conversation: the warning once the configured share of the target has passed, the breach once the deadline has, each at the run that finds it. A conversation whose deadline is already past when the run looks gets the breach alone. The same run writes a timeline row and queues the `agent-sla` email. [Set service levels](/docs/inbox/sla) says what to hang on these, such as a PagerDuty incident.
 
 ## conversation.updated
 
@@ -68,6 +83,7 @@ Raised by:
 | Change | `agentId` |
 | --- | --- |
 | `PATCH agent/conversations/{id}` | The agent |
+| `helpdesk.changeConversation()` from host code | The agent named, else `null` |
 | `POST agent/conversations/bulk`, once per conversation changed | The agent |
 | Accepting an AI suggestion, `POST agent/conversations/{id}/suggestion` | The agent |
 | The customer resolving it, `PATCH widget/conversations/{id}` | `null` |
@@ -84,4 +100,4 @@ Raised by:
 
 ## Timeline rows
 
-A `conversation.updated` also writes rows to [`conversation_event`](/docs/database/tables#conversation_event) for each of these fields that changed: `status`, `priority`, `assigneeId`, `type`, `inbox`, `title`, `tags`, `snoozedUntil`, `rating`. The row's `data` is `{ from, to }`, with `by: 'customer'` added when the customer made the change.
+A `conversation.updated` also writes rows to [`conversation_event`](/docs/database/tables#conversation_event) for each of these fields that changed: `status`, `priority`, `tier`, `assigneeId`, `type`, `inbox`, `title`, `tags`, `snoozedUntil`, `rating`. The row's `data` is `{ from, to }`, with `by: 'customer'` added when the customer made the change. The SLA fields written alongside a status change, such as `slaPausedAt`, appear in `before` but get no row.
