@@ -142,9 +142,13 @@ export type InboxConfig = {
   defaultPriority?: (typeof PRIORITIES)[number];
   /**
    * Priorities a customer may pick on a ticket form, each with the text that
-   * says what it means; for an inbox whose customers raise P1 to P3 themselves.
+   * says what it means, and the tiers whose customers may pick one: unset,
+   * every signed-in customer may. A visitor never picks one.
    */
-  priorities?: Partial<Record<Priority, Translated>>;
+  priorities?: {
+    options: Partial<Record<Priority, Translated>>;
+    tiers?: string[];
+  };
   /** Widget header for this inbox, per locale. */
   title?: Partial<Record<Locale, string>>;
   /** What the widget promises about replies, per locale. */

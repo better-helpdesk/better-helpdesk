@@ -191,6 +191,22 @@ export function createHandler(support: Helpdesk) {
     const awayUntil = await support.teamAwayUntil();
     const confirmation =
       await store.getSetting<ConfirmationSetting>('confirmation');
+    // The widget names the organization it files under; else the first one.
+    const org = url.searchParams.get('org');
+    const orgId =
+      customer.identity?.orgs.find(o => o.id === org)?.id ??
+      customer.identity?.orgs[0]?.id ??
+      null;
+    const tier =
+      inbox?.priorities && customer.identity
+        ? await support.resolveTier({
+            user: customer.identity.user,
+            orgId,
+            email: customer.contact?.email ?? null,
+            inbox: key,
+            context: {},
+          })
+        : null;
     return json({
       // Agents using the widget in the host app see what waits in their inbox.
       agent: customer.identity?.isAgent
@@ -213,13 +229,7 @@ export function createHandler(support: Helpdesk) {
                 support.toLocale(url.searchParams.get('locale'))
               ] ?? null,
             qualify: inbox.qualify ?? null,
-            priorities: inbox.priorities
-              ? PRIORITIES.flatMap(p =>
-                  inbox.priorities?.[p]
-                    ? [{ value: p, description: inbox.priorities[p] }]
-                    : []
-                )
-              : null,
+            priorities: support.offeredPriorities(key, customer.identity, tier),
             bookingUrl: inbox.bookingUrl ?? null,
           }
         : null,

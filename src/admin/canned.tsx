@@ -14,7 +14,7 @@ type Reply = {
 };
 
 export function CannedReplies() {
-  const { api, t } = useAdmin();
+  const { api, t, readOnly } = useAdmin();
   const list = useResource(
     () => api<{ replies: Reply[] }>('agent/canned'),
     'canned'
@@ -34,13 +34,15 @@ export function CannedReplies() {
     <div className="sa">
       <div className="sa-toolbar">
         <span className="sa-grow" />
-        <button
-          type="button"
-          className="sa-btn sa-primary"
-          onClick={() => open('new')}>
-          <Svg d={paths.plus} />
-          {t('admin.newCanned')}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="sa-btn sa-primary"
+            onClick={() => open('new')}>
+            <Svg d={paths.plus} />
+            {t('admin.newCanned')}
+          </button>
+        )}
       </div>
       {list.data && (
         <div className="sa-table-wrap">
@@ -53,14 +55,16 @@ export function CannedReplies() {
                   <th>{t('admin.title')}</th>
                   <th>{t('admin.body')}</th>
                   <th>{t('admin.language')}</th>
-                  <th>
-                    <span className="sa-sr-only">{t('admin.edit')}</span>
-                  </th>
+                  {!readOnly && (
+                    <th>
+                      <span className="sa-sr-only">{t('admin.edit')}</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {list.data.replies.map(r => (
-                  <tr key={r.id} onClick={() => open(r)}>
+                  <tr key={r.id} onClick={() => !readOnly && open(r)}>
                     <td>
                       <strong>{r.title}</strong>
                     </td>
@@ -80,32 +84,34 @@ export function CannedReplies() {
                         </span>
                       )}
                     </td>
-                    <td>
-                      <span className="sa-row-actions">
-                        <button
-                          type="button"
-                          className="sa-btn sa-ghost"
-                          onClick={e => {
-                            e.stopPropagation();
-                            open(r);
-                          }}>
-                          {t('admin.edit')}
-                        </button>
-                        <button
-                          type="button"
-                          className="sa-btn sa-ghost sa-danger"
-                          onClick={async e => {
-                            e.stopPropagation();
-                            if (!(await confirmDelete.ask())) return;
-                            await api(`agent/canned/${r.id}`, {
-                              method: 'DELETE',
-                            });
-                            await list.refresh();
-                          }}>
-                          {t('admin.delete')}
-                        </button>
-                      </span>
-                    </td>
+                    {!readOnly && (
+                      <td>
+                        <span className="sa-row-actions">
+                          <button
+                            type="button"
+                            className="sa-btn sa-ghost"
+                            onClick={e => {
+                              e.stopPropagation();
+                              open(r);
+                            }}>
+                            {t('admin.edit')}
+                          </button>
+                          <button
+                            type="button"
+                            className="sa-btn sa-ghost sa-danger"
+                            onClick={async e => {
+                              e.stopPropagation();
+                              if (!(await confirmDelete.ask())) return;
+                              await api(`agent/canned/${r.id}`, {
+                                method: 'DELETE',
+                              });
+                              await list.refresh();
+                            }}>
+                            {t('admin.delete')}
+                          </button>
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

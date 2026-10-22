@@ -186,6 +186,7 @@ export function HelpdeskAdmin({
               translated(me.data?.priorityLabels?.[priority], locale) ??
               t(`priority.${priority}`),
             nav,
+            readOnly: me.data.agent.role === 'viewer',
             queue,
             setQueue,
             openShortcuts: () => setSheet(true),

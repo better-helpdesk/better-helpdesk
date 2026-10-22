@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { RichEditor } from '../ui/rich-editor';
 import { useAdmin } from './context';
 import { ContactPicker } from './pickers';
 import { Dialog, Select } from './ui';
@@ -41,7 +42,7 @@ export function NewConversationDialog({
       <form
         onSubmit={async e => {
           e.preventDefault();
-          if (busy) return;
+          if (busy || !body.trim()) return;
           setBusy(true);
           setError(false);
           try {
@@ -157,16 +158,16 @@ export function NewConversationDialog({
             onChange={e => setSubject(e.target.value)}
           />
         </label>
-        <label className="sa-field">
-          {t('admin.message')}
-          <textarea
-            className="sa-textarea"
-            required
-            maxLength={20_000}
+        <div className="sa-field">
+          <span aria-hidden="true">{t('admin.message')}</span>
+          <RichEditor
+            className="rt-dialog"
+            label={t('admin.message')}
             value={body}
-            onChange={e => setBody(e.target.value)}
+            onChange={setBody}
+            t={t}
           />
-        </label>
+        </div>
         {error && (
           <p className="sa-error" role="alert">
             {t('admin.error')}

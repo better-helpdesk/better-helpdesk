@@ -176,6 +176,7 @@ export function ConversationView({ id }: { id: string }) {
     locale,
     inboxName,
     priorityName,
+    readOnly,
     queue,
   } = useAdmin();
   const queueOn = useQueueOn();
@@ -280,21 +281,23 @@ export function ConversationView({ id }: { id: string }) {
     composer.current?.focus();
   };
   useShortcuts(
-    loaded
-      ? {
-          e: () =>
-            loaded.status !== 'resolved' &&
-            act({ status: 'resolved' }, () =>
-              t('admin.resolvedToast', { reference: loaded.reference })
-            ),
-          a: () =>
-            loaded.assigneeId !== me.agent.id &&
-            act({ assigneeId: me.agent.id }, () => t('admin.assignedToYou')),
-          r: () => compose(false),
-          n: () => compose(true),
-          s: queueOn ? advance : undefined,
-        }
-      : {}
+    loaded && readOnly
+      ? { s: queueOn ? advance : undefined }
+      : loaded
+        ? {
+            e: () =>
+              loaded.status !== 'resolved' &&
+              act({ status: 'resolved' }, () =>
+                t('admin.resolvedToast', { reference: loaded.reference })
+              ),
+            a: () =>
+              loaded.assigneeId !== me.agent.id &&
+              act({ assigneeId: me.agent.id }, () => t('admin.assignedToYou')),
+            r: () => compose(false),
+            n: () => compose(true),
+            s: queueOn ? advance : undefined,
+          }
+        : {}
   );
   const [aside, setAside] = useState(readAside);
   const [merging, setMerging] = useState(false);
@@ -593,6 +596,7 @@ export function ConversationView({ id }: { id: string }) {
             <TitleEditor
               value={c.subject ?? ''}
               fallback={t(`agentType.${c.type}`)}
+              readOnly={readOnly}
               onSave={subject => patch({ subject })}
             />
           </h2>
@@ -611,7 +615,11 @@ export function ConversationView({ id }: { id: string }) {
               {t('admin.customerSees', { subject: c.customerSubject })}
             </p>
           )}
-          <TagsEditor value={c.tags} onSave={tags => patch({ tags })} />
+          <TagsEditor
+            value={c.tags}
+            readOnly={readOnly}
+            onSave={tags => patch({ tags })}
+          />
           {mergedInto && (
             <p className="sa-fine" role="status">
               <a
@@ -643,7 +651,7 @@ export function ConversationView({ id }: { id: string }) {
               </button>
             </span>
           )}
-          {!c.mergedIntoId && (
+          {!c.mergedIntoId && !readOnly && (
             <button
               type="button"
               className="sa-btn"
@@ -665,99 +673,144 @@ export function ConversationView({ id }: { id: string }) {
       </div>
       <div className="sa-split">
         <div className="sa">
-          <fieldset
-            className="sa-toolbar sa-fields sa-props"
-            aria-label={t('admin.properties')}>
-            <Property label={t('admin.assignee')}>
-              <Select
-                labelled
-                label={t('admin.assignee')}
-                value={c.assigneeId ?? ''}
-                options={['', ...(agents.data?.agents.map(a => a.id) ?? [])]}
-                render={id => {
-                  const agent = agents.data?.agents.find(a => a.id === id);
-                  return agent
-                    ? (agent.name ?? agent.email ?? id)
-                    : t('admin.unassigned');
-                }}
-                onChange={v => patch({ assigneeId: v || null })}
-              />
-            </Property>
-            <Property label={t('admin.status')}>
-              <Select
-                labelled
-                label={t('admin.status')}
-                value={c.status}
-                options={me.statuses}
-                render={s => t(`agentStatus.${s}`)}
-                onChange={v => patch({ status: v })}
-              />
-            </Property>
-            {/* An action more than a property: its own text says what it is. */}
-            <SnoozeControl
-              until={c.snoozedUntil ?? null}
-              onSave={async snoozedUntil => {
-                await api(`agent/conversations/${id}`, {
-                  method: 'PATCH',
-                  body: { snoozedUntil },
-                });
-                await detail.refresh();
-              }}
-            />
-            <Property label={t('admin.priority')}>
-              <Select
-                labelled
-                label={t('admin.priority')}
-                value={c.priority}
-                options={me.priorities}
-                render={priorityName}
-                onChange={v => patch({ priority: v })}
-              />
-            </Property>
-            {me.tiers.length > 0 && (
-              <Property label={t('admin.tier')}>
+          {readOnly ? (
+            <dl
+              className="sa-toolbar sa-fields sa-props"
+              aria-label={t('admin.properties')}>
+              {(
+                [
+                  [
+                    t('admin.assignee'),
+                    c.assigneeId
+                      ? agentLabel(c.assigneeId)
+                      : t('admin.unassigned'),
+                  ],
+                  [t('admin.status'), t(`agentStatus.${c.status}`)],
+                  ...(c.snoozedUntil
+                    ? [
+                        [
+                          t('admin.snooze'),
+                          formatSnooze(c.snoozedUntil, locale),
+                        ],
+                      ]
+                    : []),
+                  [t('admin.priority'), priorityName(c.priority)],
+                  ...(me.tiers.length > 0
+                    ? [[t('admin.tier'), c.tier ?? t('admin.noTier')]]
+                    : []),
+                  [t('admin.type'), t(`agentType.${c.type}`)],
+                  [t('admin.inboxLabel'), inboxName(c.inbox)],
+                  [t('admin.channel'), t(`channel.${c.channel}`)],
+                ] as [string, string][]
+              ).map(([label, value]) => (
+                <Property key={label} label={label}>
+                  <span className="sa-fine">{value}</span>
+                </Property>
+              ))}
+              {c.rating && (
+                <RatingChip
+                  t={t}
+                  rating={c.rating}
+                  score={c.ratingScore}
+                  comment={c.ratingComment}
+                />
+              )}
+            </dl>
+          ) : (
+            <fieldset
+              className="sa-toolbar sa-fields sa-props"
+              aria-label={t('admin.properties')}>
+              <Property label={t('admin.assignee')}>
                 <Select
                   labelled
-                  label={t('admin.tier')}
-                  value={c.tier ?? ''}
-                  options={['', ...me.tiers]}
-                  render={v => v || t('admin.noTier')}
-                  onChange={v => patch({ tier: v || null })}
+                  label={t('admin.assignee')}
+                  value={c.assigneeId ?? ''}
+                  options={['', ...(agents.data?.agents.map(a => a.id) ?? [])]}
+                  render={id => {
+                    const agent = agents.data?.agents.find(a => a.id === id);
+                    return agent
+                      ? (agent.name ?? agent.email ?? id)
+                      : t('admin.unassigned');
+                  }}
+                  onChange={v => patch({ assigneeId: v || null })}
                 />
               </Property>
-            )}
-            <Property label={t('admin.type')}>
-              <Select
-                labelled
-                label={t('admin.type')}
-                value={c.type}
-                options={me.types}
-                render={v => t(`agentType.${v}`)}
-                onChange={v => patch({ type: v })}
+              <Property label={t('admin.status')}>
+                <Select
+                  labelled
+                  label={t('admin.status')}
+                  value={c.status}
+                  options={me.statuses}
+                  render={s => t(`agentStatus.${s}`)}
+                  onChange={v => patch({ status: v })}
+                />
+              </Property>
+              {/* An action more than a property: its own text says what it is. */}
+              <SnoozeControl
+                until={c.snoozedUntil ?? null}
+                onSave={async snoozedUntil => {
+                  await api(`agent/conversations/${id}`, {
+                    method: 'PATCH',
+                    body: { snoozedUntil },
+                  });
+                  await detail.refresh();
+                }}
               />
-            </Property>
-            <Property label={t('admin.inboxLabel')}>
-              <Select
-                labelled
-                label={t('admin.inboxLabel')}
-                value={c.inbox}
-                options={me.inboxes}
-                render={inboxName}
-                onChange={v => patch({ inbox: v })}
-              />
-            </Property>
-            <Property label={t('admin.channel')}>
-              <span className="sa-fine">{t(`channel.${c.channel}`)}</span>
-            </Property>
-            {c.rating && (
-              <RatingChip
-                t={t}
-                rating={c.rating}
-                score={c.ratingScore}
-                comment={c.ratingComment}
-              />
-            )}
-          </fieldset>
+              <Property label={t('admin.priority')}>
+                <Select
+                  labelled
+                  label={t('admin.priority')}
+                  value={c.priority}
+                  options={me.priorities}
+                  render={priorityName}
+                  onChange={v => patch({ priority: v })}
+                />
+              </Property>
+              {me.tiers.length > 0 && (
+                <Property label={t('admin.tier')}>
+                  <Select
+                    labelled
+                    label={t('admin.tier')}
+                    value={c.tier ?? ''}
+                    options={['', ...me.tiers]}
+                    render={v => v || t('admin.noTier')}
+                    onChange={v => patch({ tier: v || null })}
+                  />
+                </Property>
+              )}
+              <Property label={t('admin.type')}>
+                <Select
+                  labelled
+                  label={t('admin.type')}
+                  value={c.type}
+                  options={me.types}
+                  render={v => t(`agentType.${v}`)}
+                  onChange={v => patch({ type: v })}
+                />
+              </Property>
+              <Property label={t('admin.inboxLabel')}>
+                <Select
+                  labelled
+                  label={t('admin.inboxLabel')}
+                  value={c.inbox}
+                  options={me.inboxes}
+                  render={inboxName}
+                  onChange={v => patch({ inbox: v })}
+                />
+              </Property>
+              <Property label={t('admin.channel')}>
+                <span className="sa-fine">{t(`channel.${c.channel}`)}</span>
+              </Property>
+              {c.rating && (
+                <RatingChip
+                  t={t}
+                  rating={c.rating}
+                  score={c.ratingScore}
+                  comment={c.ratingComment}
+                />
+              )}
+            </fieldset>
+          )}
           {(c.respondBy || c.resolveBy) && c.status !== 'resolved' && (
             <p className="sa-sla">
               {c.respondBy && !c.firstRespondedAt && (
@@ -877,287 +930,297 @@ export function ConversationView({ id }: { id: string }) {
                   </span>
                 )}
               </span>
-              <button
-                type="button"
-                className="sa-btn"
-                onClick={async () => {
-                  await api(`agent/conversations/${id}/suggestion`, {
-                    body: { action: 'accept' },
-                  });
-                  await detail.refresh();
-                }}>
-                {t('admin.accept')}
-              </button>
-              <button
-                type="button"
-                className="sa-btn sa-ghost sa-quiet"
-                aria-label={t('admin.dismiss')}
-                onClick={async () => {
-                  await api(`agent/conversations/${id}/suggestion`, {
-                    body: { action: 'dismiss' },
-                  });
-                  await detail.refresh();
-                }}>
-                <Svg d={paths.x} />
-              </button>
+              {!readOnly && (
+                <>
+                  <button
+                    type="button"
+                    className="sa-btn"
+                    onClick={async () => {
+                      await api(`agent/conversations/${id}/suggestion`, {
+                        body: { action: 'accept' },
+                      });
+                      await detail.refresh();
+                    }}>
+                    {t('admin.accept')}
+                  </button>
+                  <button
+                    type="button"
+                    className="sa-btn sa-ghost sa-quiet"
+                    aria-label={t('admin.dismiss')}
+                    onClick={async () => {
+                      await api(`agent/conversations/${id}/suggestion`, {
+                        body: { action: 'dismiss' },
+                      });
+                      await detail.refresh();
+                    }}>
+                    <Svg d={paths.x} />
+                  </button>
+                </>
+              )}
             </div>
           )}
 
-          <form
-            className="sa-composer"
-            data-internal={internal}
-            onSubmit={e => {
-              e.preventDefault();
-              void send(false);
-            }}>
-            <fieldset className="sa-seg">
-              <button
-                type="button"
-                aria-pressed={!internal}
-                aria-keyshortcuts={keysOn ? 'R' : undefined}
-                onClick={() => setInternal(false)}>
-                {t('admin.reply')}
-              </button>
-              <button
-                type="button"
-                aria-pressed={internal}
-                aria-keyshortcuts={keysOn ? 'N' : undefined}
-                onClick={() => setInternal(true)}>
-                {t('admin.note')}
-              </button>
-            </fieldset>
-            {/* Mounted while empty, so screen readers announce the warning when it appears. */}
-            <p className="sa-viewing-warning" role="status">
-              {data.viewers.length > 0 && t('admin.viewingWarning')}
-            </p>
-            <RichEditor
-              ref={composer}
-              className="rt-composer"
-              t={t}
-              label={internal ? t('admin.note') : t('admin.reply')}
-              placeholder={
-                internal
-                  ? t('admin.noteHint')
-                  : me.features.canned
-                    ? t('admin.slashHint')
-                    : undefined
-              }
-              value={body}
-              onChange={next => {
-                setBody(() => next);
-                setSlashIndex(0);
-                if (!internal && next.trim()) typing();
-              }}
-              onKeyDown={e => {
-                if (picks.length > 0) {
-                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    const step = e.key === 'ArrowDown' ? 1 : -1;
-                    setSlashIndex(
-                      i => (i + step + picks.length) % picks.length
-                    );
-                    return;
-                  }
-                  if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
-                    const canned = slashMatches[slashIndex];
-                    const agent = atMatches[slashIndex];
-                    if (canned) insert(fill(canned.body));
-                    else if (agent) mention(agent);
-                    if (canned || agent) {
+          {!readOnly && (
+            <form
+              className="sa-composer"
+              data-internal={internal}
+              onSubmit={e => {
+                e.preventDefault();
+                void send(false);
+              }}>
+              <fieldset className="sa-seg">
+                <button
+                  type="button"
+                  aria-pressed={!internal}
+                  aria-keyshortcuts={keysOn ? 'R' : undefined}
+                  onClick={() => setInternal(false)}>
+                  {t('admin.reply')}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={internal}
+                  aria-keyshortcuts={keysOn ? 'N' : undefined}
+                  onClick={() => setInternal(true)}>
+                  {t('admin.note')}
+                </button>
+              </fieldset>
+              {/* Mounted while empty, so screen readers announce the warning when it appears. */}
+              <p className="sa-viewing-warning" role="status">
+                {data.viewers.length > 0 && t('admin.viewingWarning')}
+              </p>
+              <RichEditor
+                ref={composer}
+                className="rt-composer"
+                t={t}
+                label={internal ? t('admin.note') : t('admin.reply')}
+                placeholder={
+                  internal
+                    ? t('admin.noteHint')
+                    : me.features.canned
+                      ? t('admin.slashHint')
+                      : undefined
+                }
+                value={body}
+                onChange={next => {
+                  setBody(() => next);
+                  setSlashIndex(0);
+                  if (!internal && next.trim()) typing();
+                }}
+                onKeyDown={e => {
+                  if (picks.length > 0) {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                       e.preventDefault();
+                      const step = e.key === 'ArrowDown' ? 1 : -1;
+                      setSlashIndex(
+                        i => (i + step + picks.length) % picks.length
+                      );
                       return;
                     }
+                    if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+                      const canned = slashMatches[slashIndex];
+                      const agent = atMatches[slashIndex];
+                      if (canned) insert(fill(canned.body));
+                      else if (agent) mention(agent);
+                      if (canned || agent) {
+                        e.preventDefault();
+                        return;
+                      }
+                    }
                   }
-                }
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  void send(e.shiftKey);
-                }
-              }}
-            />
-            {slashMatches.length > 0 && (
-              <div
-                className="sa-slash"
-                role="listbox"
-                aria-label={t('admin.insertCanned')}>
-                {slashMatches.map((r, index) => (
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    void send(e.shiftKey);
+                  }
+                }}
+              />
+              {slashMatches.length > 0 && (
+                <div
+                  className="sa-slash"
+                  role="listbox"
+                  aria-label={t('admin.insertCanned')}>
+                  {slashMatches.map((r, index) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === slashIndex}
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        insert(fill(r.body));
+                      }}>
+                      <strong>{r.title}</strong>
+                      {r.locale && (
+                        <span className="sa-pill">
+                          {r.locale.toUpperCase()}
+                        </span>
+                      )}
+                      <span className="sa-fine">{plainText(r.body)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {slashMatches.length === 0 && atMatches.length > 0 && (
+                <div
+                  className="sa-slash"
+                  role="listbox"
+                  aria-label={t('admin.mentionAgent')}>
+                  {atMatches.map((a, index) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      role="option"
+                      aria-selected={index === slashIndex}
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        mention(a);
+                      }}>
+                      <strong>{a.label}</strong>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {error && (
+                <p className="sa-error" role="alert">
+                  {t(
+                    error === 'resolve'
+                      ? 'admin.sentNotResolved'
+                      : 'admin.error'
+                  )}
+                </p>
+              )}
+              <div className="sa-composer-foot">
+                <div className="sa-send">
                   <button
-                    key={r.id}
-                    type="button"
-                    role="option"
-                    aria-selected={index === slashIndex}
-                    onMouseDown={e => {
-                      e.preventDefault();
-                      insert(fill(r.body));
-                    }}>
-                    <strong>{r.title}</strong>
-                    {r.locale && (
-                      <span className="sa-pill">{r.locale.toUpperCase()}</span>
-                    )}
-                    <span className="sa-fine">{plainText(r.body)}</span>
+                    type="submit"
+                    className="sa-btn sa-primary"
+                    title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
+                    disabled={busy !== null || !body.trim()}>
+                    {busy === 'send' ? t('admin.sending') : t('admin.send')}
                   </button>
-                ))}
-              </div>
-            )}
-            {slashMatches.length === 0 && atMatches.length > 0 && (
-              <div
-                className="sa-slash"
-                role="listbox"
-                aria-label={t('admin.mentionAgent')}>
-                {atMatches.map((a, index) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    role="option"
-                    aria-selected={index === slashIndex}
-                    onMouseDown={e => {
-                      e.preventDefault();
-                      mention(a);
-                    }}>
-                    <strong>{a.label}</strong>
-                  </button>
-                ))}
-              </div>
-            )}
-            {error && (
-              <p className="sa-error" role="alert">
-                {t(
-                  error === 'resolve' ? 'admin.sentNotResolved' : 'admin.error'
-                )}
-              </p>
-            )}
-            <div className="sa-composer-foot">
-              <div className="sa-send">
-                <button
-                  type="submit"
-                  className="sa-btn sa-primary"
-                  title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
-                  disabled={busy !== null || !body.trim()}>
-                  {busy === 'send' ? t('admin.sending') : t('admin.send')}
-                </button>
-                {/* Live while Send is not: resolving needs no reply. */}
-                {c.status !== 'resolved' && (
-                  <Menu
-                    label={t('admin.sendOptions')}
-                    className="sa-btn sa-primary sa-send-more"
-                    button={<Svg d={paths.chevron} />}
-                    above>
-                    {close => (
-                      <>
-                        {!internal && (
+                  {/* Live while Send is not: resolving needs no reply. */}
+                  {c.status !== 'resolved' && (
+                    <Menu
+                      label={t('admin.sendOptions')}
+                      className="sa-btn sa-primary sa-send-more"
+                      button={<Svg d={paths.chevron} />}
+                      above>
+                      {close => (
+                        <>
+                          {!internal && (
+                            <button
+                              type="button"
+                              className="sa-btn sa-ghost"
+                              aria-keyshortcuts={
+                                isMac()
+                                  ? 'Meta+Shift+Enter'
+                                  : 'Control+Shift+Enter'
+                              }
+                              disabled={busy !== null || !body.trim()}
+                              onClick={() => {
+                                close();
+                                void send(true);
+                              }}>
+                              {t('admin.sendResolve')}
+                              <span
+                                className="sa-kbd sa-menu-key"
+                                aria-hidden="true">
+                                <kbd>{isMac() ? '⌘ ⇧ ↵' : 'Ctrl ⇧ ↵'}</kbd>
+                              </span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             className="sa-btn sa-ghost"
-                            aria-keyshortcuts={
-                              isMac()
-                                ? 'Meta+Shift+Enter'
-                                : 'Control+Shift+Enter'
-                            }
-                            disabled={busy !== null || !body.trim()}
+                            aria-keyshortcuts={keysOn ? 'E' : undefined}
+                            disabled={busy !== null}
                             onClick={() => {
                               close();
-                              void send(true);
+                              act({ status: 'resolved' }, () =>
+                                t('admin.resolvedToast', {
+                                  reference: c.reference,
+                                })
+                              );
                             }}>
-                            {t('admin.sendResolve')}
-                            <span
-                              className="sa-kbd sa-menu-key"
-                              aria-hidden="true">
-                              <kbd>{isMac() ? '⌘ ⇧ ↵' : 'Ctrl ⇧ ↵'}</kbd>
-                            </span>
+                            {t('admin.resolveOnly')}
+                            {keysOn && (
+                              <span
+                                className="sa-kbd sa-menu-key"
+                                aria-hidden="true">
+                                <kbd>e</kbd>
+                              </span>
+                            )}
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="sa-btn sa-ghost"
-                          aria-keyshortcuts={keysOn ? 'E' : undefined}
-                          disabled={busy !== null}
-                          onClick={() => {
-                            close();
-                            act({ status: 'resolved' }, () =>
-                              t('admin.resolvedToast', {
-                                reference: c.reference,
-                              })
-                            );
-                          }}>
-                          {t('admin.resolveOnly')}
-                          {keysOn && (
-                            <span
-                              className="sa-kbd sa-menu-key"
-                              aria-hidden="true">
-                              <kbd>e</kbd>
-                            </span>
-                          )}
-                        </button>
-                      </>
-                    )}
-                  </Menu>
-                )}
-              </div>
-              <span className="sa-kbd">
-                <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
-              </span>
-              <span className="sa-grow" />
-              {me.ai && (
-                <button
-                  type="button"
-                  className="sa-btn sa-ghost"
-                  disabled={busy !== null}
-                  onClick={async () => {
-                    setBusy('draft');
-                    try {
-                      const draft = await api<{ text: string }>(
-                        `agent/conversations/${id}/draft`,
-                        { body: {} }
-                      );
-                      setInternal(false);
-                      insert(draft.text);
-                    } catch {
-                      setError('send');
-                    } finally {
-                      setBusy(null);
-                    }
-                  }}>
-                  <Svg d={paths.sparkle} />
-                  {busy === 'draft' ? t('admin.drafting') : t('admin.draft')}
-                </button>
-              )}
-              {me.ai &&
-                body.trim() !== '' &&
-                (['shorten', 'formal', 'translate'] as const).map(mode => (
+                        </>
+                      )}
+                    </Menu>
+                  )}
+                </div>
+                <span className="sa-kbd">
+                  <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
+                </span>
+                <span className="sa-grow" />
+                {me.ai && (
                   <button
-                    key={mode}
                     type="button"
                     className="sa-btn sa-ghost"
                     disabled={busy !== null}
                     onClick={async () => {
-                      setBusy('rewrite');
+                      setBusy('draft');
                       try {
-                        const sent = body;
-                        const rewritten = await api<{ text: string }>(
+                        const draft = await api<{ text: string }>(
                           `agent/conversations/${id}/draft`,
-                          { body: { mode, text: sent } }
+                          { body: {} }
                         );
-                        // Typing in the meantime wins over the rewrite.
-                        setBody(current =>
-                          current === sent ? rewritten.text : current
-                        );
+                        setInternal(false);
+                        insert(draft.text);
                       } catch {
                         setError('send');
                       } finally {
                         setBusy(null);
                       }
                     }}>
-                    {t(`admin.rewrite.${mode}`)}
+                    <Svg d={paths.sparkle} />
+                    {busy === 'draft' ? t('admin.drafting') : t('admin.draft')}
                   </button>
-                ))}
-              {me.features.canned && (
-                <CannedMenu
-                  replies={replies}
-                  onPick={text => insert(fill(text))}
-                />
-              )}
-            </div>
-          </form>
+                )}
+                {me.ai &&
+                  body.trim() !== '' &&
+                  (['shorten', 'formal', 'translate'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className="sa-btn sa-ghost"
+                      disabled={busy !== null}
+                      onClick={async () => {
+                        setBusy('rewrite');
+                        try {
+                          const sent = body;
+                          const rewritten = await api<{ text: string }>(
+                            `agent/conversations/${id}/draft`,
+                            { body: { mode, text: sent } }
+                          );
+                          // Typing in the meantime wins over the rewrite.
+                          setBody(current =>
+                            current === sent ? rewritten.text : current
+                          );
+                        } catch {
+                          setError('send');
+                        } finally {
+                          setBusy(null);
+                        }
+                      }}>
+                      {t(`admin.rewrite.${mode}`)}
+                    </button>
+                  ))}
+                {me.features.canned && (
+                  <CannedMenu
+                    replies={replies}
+                    onPick={text => insert(fill(text))}
+                  />
+                )}
+              </div>
+            </form>
+          )}
         </div>
 
         <aside className="sa" id={asideId} hidden={!aside}>
@@ -1212,7 +1275,7 @@ export function ConversationView({ id }: { id: string }) {
             ) : (
               <>
                 <span className="sa-muted">{t('admin.company.none')}</span>
-                {data.suggestedCompany ? (
+                {readOnly ? null : data.suggestedCompany ? (
                   <button
                     type="button"
                     className="sa-btn"
@@ -1256,24 +1319,27 @@ export function ConversationView({ id }: { id: string }) {
                 ))}
               </dl>
             )}
-            {c.type === 'lead' && data.contact && me.features.deals && (
-              <button
-                type="button"
-                className="sa-btn"
-                onClick={async () => {
-                  await api('agent/deals', {
-                    body: {
-                      title: c.subject ?? data.contact?.name ?? c.reference,
-                      contactId: data.contact?.id,
-                      companyId: data.company?.id ?? c.companyId ?? undefined,
-                    },
-                  });
-                  toast.show(t('admin.saved'));
-                }}>
-                <Svg d={paths.plus} />
-                {t('admin.createDeal')}
-              </button>
-            )}
+            {c.type === 'lead' &&
+              data.contact &&
+              me.features.deals &&
+              !readOnly && (
+                <button
+                  type="button"
+                  className="sa-btn"
+                  onClick={async () => {
+                    await api('agent/deals', {
+                      body: {
+                        title: c.subject ?? data.contact?.name ?? c.reference,
+                        contactId: data.contact?.id,
+                        companyId: data.company?.id ?? c.companyId ?? undefined,
+                      },
+                    });
+                    toast.show(t('admin.saved'));
+                  }}>
+                  <Svg d={paths.plus} />
+                  {t('admin.createDeal')}
+                </button>
+              )}
           </div>
 
           {Object.keys(context).length > 0 && (
@@ -1382,15 +1448,17 @@ export function ConversationView({ id }: { id: string }) {
                 {p.name ?? p.email}
               </span>
             ))}
-            <ContactPicker
-              label={t('admin.addParticipant')}
-              onPick={async contact => {
-                await api(`agent/conversations/${id}/participants`, {
-                  body: { contactId: contact.id },
-                });
-                await detail.refresh();
-              }}
-            />
+            {!readOnly && (
+              <ContactPicker
+                label={t('admin.addParticipant')}
+                onPick={async contact => {
+                  await api(`agent/conversations/${id}/participants`, {
+                    body: { contactId: contact.id },
+                  });
+                  await detail.refresh();
+                }}
+              />
+            )}
           </div>
         </aside>
       </div>
@@ -1411,14 +1479,17 @@ export function ConversationView({ id }: { id: string }) {
 function TitleEditor({
   value,
   fallback,
+  readOnly = false,
   onSave,
 }: {
   value: string;
   fallback: string;
+  readOnly?: boolean;
   onSave: (title: string) => Promise<void>;
 }) {
   const { t } = useAdmin();
   const [draft, setDraft] = useState<string | null>(null);
+  if (readOnly) return <span>{value || fallback}</span>;
   if (draft === null) {
     return (
       <button
@@ -1460,9 +1531,11 @@ function TitleEditor({
 
 function TagsEditor({
   value,
+  readOnly = false,
   onSave,
 }: {
   value: string[];
+  readOnly?: boolean;
   onSave: (tags: string[]) => Promise<void>;
 }) {
   const { api, t } = useAdmin();
@@ -1490,6 +1563,17 @@ function TagsEditor({
     const next = [...new Set([...value, ...names])];
     if (next.length > value.length) await save(next);
   };
+  if (readOnly) {
+    return (
+      <fieldset className="sa-tags-edit" aria-label={t('admin.tags')}>
+        {value.map(tag => (
+          <span key={tag} className="sa-pill sa-tag">
+            {tag}
+          </span>
+        ))}
+      </fieldset>
+    );
+  }
   return (
     <fieldset className="sa-tags-edit" aria-label={t('admin.tags')}>
       {value.map(tag => (

@@ -35,7 +35,7 @@ A customer **can see** a conversation they opened, one they were added to as a p
 
 | Method | Path | Who | What it does |
 | --- | --- | --- | --- |
-| `GET` | `widget/session` | Anyone | The caller, their conversations and what the widget shows; `?inbox=` and `?locale=`. |
+| `GET` | `widget/session` | Anyone | The caller, their conversations and what the widget shows; `?inbox=`, `?locale=` and `?org=`, the organization the widget files under, which `resolveTier` is asked about for the priorities on offer. |
 | `POST` | `widget/conversations` | Customer, or a visitor on a `public` inbox | Opens a conversation; see [the body](#opening-a-conversation). |
 | `GET` | `widget/conversations/{id}` | Can see | The conversation, its public messages and its attachments. |
 | `POST` | `widget/conversations/{id}/messages` | Can see | Adds a message. |
@@ -48,7 +48,7 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
 | `GET` | `widget/events` | Customer | An event stream of changes to the conversations the caller can see, internal notes left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 
-A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, `typing`, true while an agent writes a reply, `respondBy`, the time the team aims to answer by while nobody has, and `ratingScore`. `widget/session` says with `realtime` whether `widget/events` is there, lists the inbox's `priorities` a customer may pick with their descriptions, and carries `priorityLabels` and `ratingScale`.
+A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, `typing`, true while an agent writes a reply, `respondBy`, the time the team aims to answer by while nobody has, and `ratingScore`. `widget/session` says with `realtime` whether `widget/events` is there, lists under the inbox the `priorities` this caller may pick with their descriptions (`null` for a visitor or a tier the inbox does not offer them to), and carries `priorityLabels` and `ratingScale`.
 
 `POST widget/conversations/{id}/rating` takes `{ rating: 'good' | 'bad', comment? }` on the default scale and `{ score: 1..5, comment? }` when `ratingScale` is 5; the other shape is refused with 400.
 
@@ -65,7 +65,7 @@ The body of `POST widget/conversations`, which `helpdesk.createConversation(requ
     kind: { type: "'chat' | 'ticket'", description: <>How the customer started it. Unset, a conversation with a <code>subject</code> is a ticket and one without is a chat. Email always arrives as a ticket.</> },
     context: { type: 'object', description: <>What the widget captured. See <a href="#context">context</a>.</> },
     segment: { type: 'string', description: <>A <code>value</code> of the inbox's <code>qualify</code> options. 400 otherwise.</> },
-    priority: { type: 'string', description: <>One of the inbox's <code>priorities</code>. 400 otherwise. Unset, the inbox's <code>defaultPriority</code>.</> },
+    priority: { type: 'string', description: <>One of the priorities the inbox offers this customer, by their tier; 400 otherwise, and always for a visitor. Unset, the inbox's <code>defaultPriority</code>.</> },
     orgId: { type: 'string', description: <>One of the caller's <code>orgs</code>; files the conversation under that company. 403 otherwise.</> },
     sharedWithCompany: { type: 'boolean', description: 'Shares it with that company.' },
     name: { type: 'string', description: "An anonymous visitor's name, up to 200 characters." },

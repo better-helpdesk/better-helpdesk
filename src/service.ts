@@ -15,6 +15,7 @@ import {
   type InboundMessage,
   type Locale,
   PRIORITIES,
+  type Priority,
   type ResolvedConfig,
   resolveConfig,
   STATUSES,
@@ -338,6 +339,25 @@ export function createHelpdesk(input: HelpdeskConfig) {
     });
   }
 
+  /**
+   * The priorities this customer may pick in `inbox`, with their meanings:
+   * none for a visitor, for an inbox that offers none, or for a tier the
+   * inbox does not offer them to.
+   */
+  function offeredPriorities(
+    inbox: string,
+    identity: Identity | null,
+    tier: string | null
+  ) {
+    const offered = config.inboxes[inbox]?.priorities;
+    if (!offered || !identity) return null;
+    if (offered.tiers && !(tier && offered.tiers.includes(tier))) return null;
+    return PRIORITIES.flatMap(p => {
+      const description = offered.options[p as Priority];
+      return description ? [{ value: p, description }] : [];
+    });
+  }
+
   /** The tier the host assigns a new conversation; a failing hook leaves it unset. */
   async function resolveTier(input: TierInput) {
     if (!config.resolveTier) return null;
@@ -396,10 +416,6 @@ export function createHelpdesk(input: HelpdeskConfig) {
     if (!inbox) throw new HelpdeskError(400, 'Unknown inbox');
     if (!config.types.includes(data.type)) {
       throw new HelpdeskError(400, 'Unknown type');
-    }
-    // Only the priorities the inbox offers the customer; the rest are the team's to set.
-    if (data.priority && !inbox.priorities?.[data.priority]) {
-      throw new HelpdeskError(400, 'Priority not offered');
     }
     const segment = data.segment
       ? inbox.qualify?.options.find(o => o.value === data.segment)?.value
@@ -477,6 +493,22 @@ export function createHelpdesk(input: HelpdeskConfig) {
       ...data.context,
       ...(segment ? { host: { ...data.context?.host, segment } } : {}),
     };
+    const tier = await resolveTier({
+      user: customer.identity?.user ?? null,
+      orgId: data.orgId ?? null,
+      email: contact.email,
+      inbox: data.inbox,
+      context,
+    });
+    // Only what the inbox offers this customer; the rest is the team's to set.
+    if (
+      data.priority &&
+      !offeredPriorities(data.inbox, customer.identity, tier)?.some(
+        o => o.value === data.priority
+      )
+    ) {
+      throw new HelpdeskError(400, 'Priority not offered');
+    }
     const created = await store.createConversation(
       {
         inbox: data.inbox,
@@ -486,13 +518,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         channel,
         subject: data.subject || deriveSubject(data.body),
         priority: data.priority ?? inbox.defaultPriority ?? 'normal',
-        tier: await resolveTier({
-          user: customer.identity?.user ?? null,
-          orgId: data.orgId ?? null,
-          email: contact.email,
-          inbox: data.inbox,
-          context,
-        }),
+        tier,
         contactId: contact.id,
         companyId,
         sharedWithCompany: Boolean(companyId && data.sharedWithCompany),
@@ -2184,6 +2210,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     reference,
     ping,
     resolveTier,
+    offeredPriorities,
     resolveCustomer,
     namedOrgs,
     canCustomerSee,

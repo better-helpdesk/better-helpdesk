@@ -4,6 +4,7 @@ import { type ApiError, useResource } from '../ui/api';
 import { openCutoff } from '../ui/hours';
 import { duration, nextWorkday } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
+import { RichEditor } from '../ui/rich-editor';
 import { HELPDESK_CHANGED, type Route, useAdmin } from './context';
 import { NewConversationDialog } from './new-conversation';
 import { NotificationBell } from './notifications';
@@ -67,6 +68,7 @@ export function Inbox() {
     navigate,
     inboxName,
     nav,
+    readOnly,
     openShortcuts,
     setQueue,
   } = useAdmin();
@@ -255,7 +257,7 @@ export function Inbox() {
           </span>
           {moreActive > 0 && <span className="sa-count num">{moreActive}</span>}
         </button>
-        {me.agent.role !== 'viewer' && (
+        {!readOnly && (
           <button
             type="button"
             className="sa-btn"
@@ -445,12 +447,12 @@ export function Inbox() {
           hideContact={Boolean(route.conversation)}
           onTag={name => set('tag', name)}
           onOpen={id => navigate({ ...route, conversation: id })}
-          selected={visibleSelected}
-          onSelect={setSelected}
+          selected={readOnly ? undefined : visibleSelected}
+          onSelect={readOnly ? undefined : setSelected}
           keyboard
         />
       )}
-      {visibleSelected.length > 0 && (
+      {!readOnly && visibleSelected.length > 0 && (
         <BulkBar
           rows={rows.filter(r => visibleSelected.includes(r.id))}
           tags={topTags.data?.tags ?? []}
@@ -611,16 +613,18 @@ function BulkBar({
               {t(writing === 'note' ? 'admin.bulkNote' : 'admin.bulkReply')}
             </h2>
             <p className="sa-muted">{t('admin.bulkReplyHint')}</p>
-            <label className="sa-field">
-              {t(writing === 'note' ? 'admin.note' : 'admin.reply')}
-              <textarea
-                className="sa-textarea"
-                maxLength={20_000}
-                required
+            <div className="sa-field">
+              <span aria-hidden="true">
+                {t(writing === 'note' ? 'admin.note' : 'admin.reply')}
+              </span>
+              <RichEditor
+                className="rt-dialog"
+                label={t(writing === 'note' ? 'admin.note' : 'admin.reply')}
                 value={text}
-                onChange={e => setText(e.target.value)}
+                onChange={setText}
+                t={t}
               />
-            </label>
+            </div>
             <div className="sa-dialog-foot">
               <button
                 type="button"

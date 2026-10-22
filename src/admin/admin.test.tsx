@@ -2923,3 +2923,28 @@ describe('typing', () => {
     await waitFor(() => expect(pings).toEqual(['POST']));
   });
 });
+
+describe('a viewer', () => {
+  it('reads the conversation and the inbox and is offered nothing to change', async () => {
+    routes['agent/me/'] = { ...me, agent: { ...me.agent, role: 'viewer' } };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    expect(
+      await screen.findByText(
+        'You can read everything here and change nothing.'
+      )
+    ).toBeTruthy();
+    await screen.findAllByText('Export broken');
+    expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Status' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Merge into…' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'New conversation' })
+    ).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /Select/ })).toBeNull();
+  });
+});

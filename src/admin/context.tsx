@@ -73,6 +73,8 @@ export type AdminContext = {
   priorityName: (priority: string) => string;
   /** False when the host renders its own section tabs instead of the rail. */
   nav: boolean;
+  /** A viewer: the UI shows what there is and offers no change. */
+  readOnly: boolean;
   /** The inbox list's rows in their current order, kept by `Inbox` for working the queue. */
   queue: QueueEntry[];
   setQueue: (update: (queue: QueueEntry[]) => QueueEntry[]) => void;

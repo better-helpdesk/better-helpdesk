@@ -28,13 +28,20 @@ const h = createHarness({
   },
   inboxes: {
     support: {
+      public: true,
       receipt: true,
       priorities: {
-        urgent: { en: 'P1: the platform is down' },
-        high: { en: 'P2: a key function is unavailable' },
+        options: {
+          urgent: { en: 'P1: the platform is down' },
+          high: { en: 'P2: a key function is unavailable' },
+        },
+        tiers: ['gold', 'platinum'],
       },
     },
-    office: { hours: office, priorities: { urgent: { en: 'P1' } } },
+    office: {
+      hours: office,
+      priorities: { options: { urgent: { en: 'P1' } } },
+    },
   },
   sla: {
     tiers: {
@@ -133,12 +140,52 @@ describe('tiers and priorities at intake', () => {
   });
 
   it('refuses a priority the inbox does not offer', async () => {
-    h.addUser('ada');
+    h.addUser('ada', { orgs: [orgGold] });
     const res = await h.call('POST', 'widget/conversations', {
       user: 'ada',
-      body: { inbox: 'support', type: 'bug', body: 'x', priority: 'low' },
+      body: {
+        inbox: 'support',
+        type: 'bug',
+        body: 'x',
+        priority: 'low',
+        orgId: orgGold.id,
+      },
     });
     expect(res.status).toBe(400);
+  });
+
+  it('offers the priorities only to the tiers the inbox names, and never to a visitor', async () => {
+    h.addUser('ada', { orgs: [orgGold] });
+    h.addUser('bob');
+    const offered = async (user?: string, org = '') =>
+      (
+        await h.call('GET', `widget/session?inbox=support&org=${org}`, {
+          user,
+        })
+      ).data.inbox.priorities;
+    expect(await offered('ada', orgGold.id)).toHaveLength(2);
+    expect(await offered('bob')).toBeNull();
+    expect(await offered()).toBeNull();
+    const standard = await h.call('POST', 'widget/conversations', {
+      user: 'bob',
+      body: { inbox: 'support', type: 'bug', body: 'x', priority: 'urgent' },
+    });
+    expect(standard.status).toBe(400);
+    const visitor = await h.call('POST', 'widget/conversations', {
+      body: {
+        inbox: 'support',
+        type: 'bug',
+        body: 'x',
+        email: 'someone@example.test',
+        priority: 'urgent',
+      },
+    });
+    expect(visitor.status).toBe(400);
+    // The office inbox names no tiers: any signed-in customer may pick.
+    expect(
+      (await h.call('GET', 'widget/session?inbox=office', { user: 'bob' })).data
+        .inbox.priorities
+    ).toHaveLength(1);
   });
 
   it('leaves the deadlines unset without a target, and a tier alone sets the policy', async () => {

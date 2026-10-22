@@ -84,7 +84,7 @@ function AuditLog() {
 
 /** Everyone who still gets agent mail; removing someone stops it until they open the admin again. */
 function Team() {
-  const { api, t, me } = useAdmin();
+  const { api, t, me, readOnly } = useAdmin();
   const team = useResource(
     () => api<{ agents: TeamMember[] }>('agent/agents'),
     'agents'
@@ -108,7 +108,7 @@ function Team() {
               </span>
             )}
           </span>
-          {a.id !== me.agent.id && (
+          {a.id !== me.agent.id && !readOnly && (
             <button
               type="button"
               className="sa-btn sa-ghost"
@@ -141,7 +141,7 @@ function Team() {
 }
 
 export function Settings() {
-  const { api, t } = useAdmin();
+  const { api, t, readOnly } = useAdmin();
   const toast = useToast();
   const saved = useResource(
     () =>
@@ -181,6 +181,7 @@ export function Settings() {
             <textarea
               className="sa-textarea"
               maxLength={1000}
+              readOnly={readOnly}
               // The default shows what is sent while this stays empty.
               placeholder={translator(key)('thread.confirmEmail')}
               value={confirmation[key] ?? ''}
@@ -190,12 +191,14 @@ export function Settings() {
             />
           </label>
         ))}
-        <div className="sa-toolbar">
-          <span className="sa-grow" />
-          <button type="submit" className="sa-btn sa-primary">
-            {t('admin.save')}
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="sa-toolbar">
+            <span className="sa-grow" />
+            <button type="submit" className="sa-btn sa-primary">
+              {t('admin.save')}
+            </button>
+          </div>
+        )}
         {error && <p className="sa-error">{t('admin.error')}</p>}
         {toast.node}
       </form>

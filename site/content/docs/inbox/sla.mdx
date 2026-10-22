@@ -65,23 +65,25 @@ A priority a policy leaves out has no deadline. The `default` policy is for conv
 
 ## Let customers pick the priority
 
-Enterprise customers often raise P1, P2 and P3 themselves. Name the priorities with `priorityLabels` and offer them on the inbox their tickets land in, each with the text that says what it means. The widget shows the choice on every ticket form of that inbox:
+Enterprise customers often raise P1, P2 and P3 themselves, while everyone else gets a priority from the team. Name the priorities with `priorityLabels`, and on the inbox their tickets land in say which ones may be picked, what each means, and which tiers get the choice:
 
 ```ts title="lib/helpdesk.ts"
 priorityLabels: { urgent: { en: 'P1' }, high: { en: 'P2' }, normal: { en: 'P3' } },
 inboxes: {
-  enterprise: {
+  support: {
     priorities: {
-      urgent: { en: 'Complete loss of functionality, or a security vulnerability.' },
-      high: { en: 'A key function is unavailable.' },
-      normal: { en: 'Partial functionality, display or performance.' },
+      options: {
+        urgent: { en: 'Complete loss of functionality, or a security vulnerability.' },
+        high: { en: 'A key function is unavailable.' },
+        normal: { en: 'Partial functionality, display or performance.' },
+      },
+      tiers: ['gold', 'platinum'],
     },
   },
-  support: {},
 },
 ```
 
-Leave `priorities` off an inbox whose customers should not set their own; its conversations start at `defaultPriority`, and the team sets the rest.
+The widget asks `resolveTier` who the signed-in customer is before it shows the form, with the organization the widget's `orgId` names or their first one, so a gold customer sees the choice on every ticket form of that inbox and a customer without a tier does not. Leave `tiers` out to offer the choice to every signed-in customer. A visitor never gets it: whoever is not signed in writes at `defaultPriority`, and the team sets the rest. The same rule holds on the server, so a request that names a priority its sender may not pick is refused.
 
 ## How the clock runs
 

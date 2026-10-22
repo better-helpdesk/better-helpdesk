@@ -18,13 +18,13 @@ export const ROLES = [
   },
   {
     id: 'customer',
-    label: 'Nadia, customer',
-    note: 'Signed in at Brightline Logistics, gold tier. Her conversations follow her around.',
+    label: 'Nadia, standard support',
+    note: 'Signed in at Brightline Logistics on standard support: no tier, best-effort targets, no priority to pick.',
   },
   {
     id: 'platinum',
-    label: 'Jonas, platinum customer',
-    note: 'Signed in at Nordkai Shipping, platinum tier: the tightest response targets.',
+    label: 'Jonas, premium support',
+    note: 'Signed in at Nordkai Shipping on premium support: picks P1 to P3 and gets the tightest targets.',
   },
   {
     id: 'agent',

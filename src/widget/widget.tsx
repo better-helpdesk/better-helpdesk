@@ -380,12 +380,15 @@ export function Widget(props: WidgetProps) {
   // or, for an agent, a customer who wrote in.
   const [awaitingTeam, setAwaitingTeam] = useState(false);
   const [isAgent, setIsAgent] = useState(false);
+  const orgId = props.orgId;
   const session = useResource(
     () =>
       api<Session>(
-        `widget/session?inbox=${encodeURIComponent(inbox)}&locale=${locale}`
+        `widget/session?inbox=${encodeURIComponent(inbox)}&locale=${locale}${
+          orgId ? `&org=${encodeURIComponent(orgId)}` : ''
+        }`
       ),
-    `session:${inbox}:${locale}:${subject}`,
+    `session:${inbox}:${locale}:${subject}:${orgId ?? ''}`,
     open || isAgent ? 60_000 : awaitingTeam ? 300_000 : undefined
   );
   useEffect(() => {

@@ -92,10 +92,9 @@ const IDENTITIES = {
   },
 } satisfies Record<Exclude<DemoRole, 'visitor'>, Identity>;
 
-/** The support tier of each customer organization, as Harbor's billing would know it. */
+/** The support tier of each customer organization, as Harbor's billing would know it; Brightline is on standard support and has none. */
 const TIERS: Record<string, string> = {
-  'demo-org': 'gold',
-  'demo-org-nordkai': 'platinum',
+  'demo-org-nordkai': 'premium',
 };
 
 const office: BusinessHours = {
@@ -141,20 +140,20 @@ export const helpdesk = buildHelpdesk({
   referencePrefix: 'HRB',
   teamName: { en: 'the Harbor crew' },
   // Short targets, so a warning and a breach can be watched within a demo.
-  tiers: ['gold', 'platinum'],
+  tiers: ['priority', 'premium'],
   resolveTier: async ({ orgId, email }) =>
     (orgId && TIERS[orgId]) ??
-    (email?.endsWith('@nordkai.test') ? 'platinum' : null),
+    (email?.endsWith('@nordkai.test') ? 'premium' : null),
   sla: {
     tiers: {
-      gold: {
+      priority: {
         targets: {
           urgent: { respond: 0.25, resolve: 1, hours: 'always' },
           high: { respond: 0.5, resolve: 2, hours: 'always' },
           normal: { respond: 4, resolve: 24, hours: office },
         },
       },
-      platinum: {
+      premium: {
         targets: {
           urgent: { respond: 0.1, resolve: 0.5, hours: 'always' },
           high: { respond: 0.25, resolve: 1, hours: 'always' },
@@ -162,6 +161,7 @@ export const helpdesk = buildHelpdesk({
         },
       },
     },
+    // Standard support: a best-effort reply within a working day, nothing on resolution.
     default: { targets: { normal: { respond: 8, hours: office } } },
     warnAt: 0.5,
   },
@@ -182,17 +182,20 @@ export const helpdesk = buildHelpdesk({
       replyPromise: { en: 'We answer within a few hours on weekdays.' },
       receipt: true,
       privacyUrl: { en: '/privacy/' },
-      // Enterprise customers raise P1 to P3 themselves; the definitions are the support policy's.
+      // Premium customers raise P1 to P3 themselves; the definitions are the support policy's.
       priorities: {
-        urgent: {
-          en: 'Complete loss of functionality, damaging public content, or a security vulnerability.',
+        options: {
+          urgent: {
+            en: 'Complete loss of functionality, damaging public content, or a security vulnerability.',
+          },
+          high: {
+            en: 'A key function is unavailable or an urgent action is impossible.',
+          },
+          normal: {
+            en: 'Partial functionality, a display or behaviour error, or performance.',
+          },
         },
-        high: {
-          en: 'A key function is unavailable or an urgent action is impossible.',
-        },
-        normal: {
-          en: 'Partial functionality, a display or behaviour error, or performance.',
-        },
+        tiers: ['premium'],
       },
     },
     sales: {
