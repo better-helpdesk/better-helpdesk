@@ -1,6 +1,8 @@
 import { buildHelpdesk, postgresAdapter } from 'better-helpdesk';
 
 import { auth } from './auth';
+import { docsSearch } from './docs-search';
+import { toHelpResults } from './help-results';
 import { sendMail } from './mail';
 import { pool, siteUrl } from './site';
 
@@ -49,4 +51,8 @@ export const helpdesk = buildHelpdesk({
     };
   },
   email: { send: sendMail },
+  // The docs are English only, so every locale searches them.
+  help: {
+    search: async query => toHelpResults(await docsSearch.search(query)),
+  },
 });
