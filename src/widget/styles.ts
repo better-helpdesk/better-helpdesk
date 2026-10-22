@@ -314,7 +314,6 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .composer { border-top: 1px solid var(--s-border); background: var(--s-subtle); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end; }
 .rt-reply { flex: 1; min-width: 0; }
 .rt-reply .rt-input { min-height: 42px; max-height: 160px; }
-.composer .format-toggle { flex: none; min-height: 42px; }
 .send { width: 42px; height: 42px; border-radius: var(--s-r-round); border: 0; background: var(--s-accent); color: var(--s-accent-fg); display: grid; place-items: center; flex: none; }
 .send:disabled { background: var(--s-subtle); color: var(--s-muted); }
 .send svg { width: 18px; height: 18px; }

@@ -200,7 +200,7 @@ describe('Widget', () => {
     expect(screen.getByRole('toolbar', { name: 'Formatting' })).toBeTruthy();
   });
 
-  it('keeps the formatting toolbar behind the same toggle on a new message and on a reply', async () => {
+  it('keeps the formatting toolbar behind a toggle on a new message, and offers none on a reply', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
@@ -248,7 +248,9 @@ describe('Widget', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
     fireEvent.click(await screen.findByText('Export broken'));
     await screen.findByRole('textbox', { name: 'Write a reply…' });
-    toggled();
+    // A reply is a line or two: the box stays a plain one beside Send.
+    expect(screen.queryByRole('button', { name: 'Formatting' })).toBeNull();
+    expect(screen.queryByRole('toolbar', { name: 'Formatting' })).toBeNull();
   });
 
   it('sends a pasted three-line trace as a code block', async () => {
