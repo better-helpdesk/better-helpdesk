@@ -1068,8 +1068,9 @@ function NewMessage({
     { title: string; url: string; excerpt?: string }[]
   >([]);
   const technical = kind === 'ticket' && TECHNICAL.has(type);
-  // A bug or feature report is rarely formatted; the toolbar waits behind a toggle.
-  const plain = technical && (type === 'bug' || type === 'feature');
+  // A message, a bug or a feature report is rarely formatted; the toolbar waits behind a toggle.
+  const plain =
+    kind === 'chat' || (technical && (type === 'bug' || type === 'feature'));
   const [formatting, setFormatting] = useState(false);
   const qualify = session.inbox?.qualify;
 
@@ -1247,7 +1248,7 @@ function NewMessage({
         value={body}
         onChange={setBody}
         t={t}
-        toolbar={kind === 'ticket' && (!plain || formatting)}
+        toolbar={!plain || formatting}
         readOnly={sent}
       />
     </div>
@@ -1690,6 +1691,7 @@ function Thread({
     return () => clearTimeout(timer);
   }, [typing, refresh]);
   const [reply, setReply] = useState('');
+  const [formatting, setFormatting] = useState(false);
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -1892,13 +1894,13 @@ function Thread({
         }}>
         <RichEditor
           ref={editor}
-          className="rt-reply"
+          className="rt-reply rt-form"
           label={t('thread.reply')}
           placeholder={t('thread.reply')}
           value={reply}
           onChange={setReply}
           t={t}
-          toolbar={false}
+          toolbar={formatting}
           onKeyDown={e => {
             // Enter sends; Shift+Enter breaks the line.
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1907,6 +1909,13 @@ function Thread({
             }
           }}
         />
+        <button
+          type="button"
+          className="format-toggle"
+          aria-pressed={formatting}
+          onClick={() => setFormatting(on => !on)}>
+          {t('rich.toolbar')}
+        </button>
         <button
           type="submit"
           className="send"
