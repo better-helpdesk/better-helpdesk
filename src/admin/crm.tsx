@@ -7,6 +7,7 @@ import { useAdmin } from './context';
 import { FREE_MAIL } from './conversation';
 import { DealDialog } from './deals';
 import { type ConversationRow, ConversationTable } from './inbox';
+import { NewConversationDialog } from './new-conversation';
 import { CompanyPicker, ContactPicker } from './pickers';
 import {
   Avatar,
@@ -313,6 +314,7 @@ export function ContactView({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [merging, setMerging] = useState(false);
   const [newDeal, setNewDeal] = useState(false);
+  const [starting, setStarting] = useState(false);
   const detail = useResource(
     () =>
       api<{
@@ -409,6 +411,24 @@ export function ContactView({ id }: { id: string }) {
             )}
           </div>
         </div>
+        {me.agent.role !== 'viewer' && (
+          <button
+            type="button"
+            className="sa-btn"
+            onClick={() => setStarting(true)}>
+            <Svg d={paths.plus} />
+            {t('admin.newConversation')}
+          </button>
+        )}
+        <NewConversationDialog
+          open={starting}
+          contact={{ id: c.id, name: c.name, email: c.email }}
+          onClose={() => setStarting(false)}
+          onCreated={cid => {
+            setStarting(false);
+            navigate({ conversation: cid });
+          }}
+        />
         <button
           type="button"
           className="sa-btn"

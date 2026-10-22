@@ -24,13 +24,25 @@ export const HELPDESK_CHANGED = 'helpdesk:changed';
 export const HELPDESK_REMOTE = 'helpdesk:remote';
 
 export type Me = {
-  agent: { id: string; name: string | null; awayUntil: string | null };
+  agent: {
+    id: string;
+    name: string | null;
+    awayUntil: string | null;
+    role: 'agent' | 'supervisor' | 'viewer';
+  };
   /** The server pushes changes over `agent/events`; polling slows to a fallback. */
   realtime?: boolean;
   referencePrefix: string;
   types: string[];
   statuses: string[];
   priorities: string[];
+  /** What the host calls each priority, such as P1; the package's own words otherwise. */
+  priorityLabels: Partial<Record<string, Translated>>;
+  tiers: string[];
+  channels: string[];
+  /** The config has SLA targets, so deadlines show. */
+  sla: boolean;
+  ratingScale: 2 | 5;
   inboxes: string[];
   inboxNames: Record<string, Partial<Record<Locale, string>>>;
   /** Only the inboxes that have `hours`. */
@@ -58,6 +70,7 @@ export type AdminContext = {
   navigate: (route: Route) => void;
   href: (route: Route) => string;
   inboxName: (key: string) => string;
+  priorityName: (priority: string) => string;
   /** False when the host renders its own section tabs instead of the rail. */
   nav: boolean;
   /** The inbox list's rows in their current order, kept by `Inbox` for working the queue. */

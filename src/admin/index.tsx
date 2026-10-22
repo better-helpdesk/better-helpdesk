@@ -10,7 +10,7 @@ import {
   useEvents,
   useResource,
 } from '../ui/api';
-import { type Translate, translator } from '../ui/i18n';
+import { type Translate, translated, translator } from '../ui/i18n';
 import { isMac, SHORTCUT } from '../ui/rich-editor';
 import { CannedReplies } from './canned';
 import {
@@ -182,12 +182,20 @@ export function HelpdeskAdmin({
             inboxName: key =>
               me.data?.inboxNames?.[key]?.[locale] ??
               key.charAt(0).toUpperCase() + key.slice(1),
+            priorityName: priority =>
+              translated(me.data?.priorityLabels?.[priority], locale) ??
+              t(`priority.${priority}`),
             nav,
             queue,
             setQueue,
             openShortcuts: () => setSheet(true),
           }}>
           <div className="sa">
+            {me.data.agent.role === 'viewer' && (
+              <p className="sa-readonly" role="status">
+                {t('admin.readOnly')}
+              </p>
+            )}
             {nav && (
               <div className="sa-rail">
                 <nav

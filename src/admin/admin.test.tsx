@@ -24,11 +24,16 @@ import { formatSnooze } from './snooze';
 import { setQueueOn } from './ui';
 
 const me = {
-  agent: { id: 'a1', name: 'Agent' },
+  agent: { id: 'a1', name: 'Agent', role: 'agent' },
   referencePrefix: 'DG',
   types: ['question', 'bug'],
   statuses: ['open', 'pending', 'resolved'],
   priorities: ['low', 'normal', 'high', 'urgent'],
+  priorityLabels: {},
+  tiers: [],
+  channels: ['widget', 'email', 'agent', 'api'],
+  sla: false,
+  ratingScale: 2,
   inboxes: ['support', 'sales'],
   inboxNames: { sales: { en: 'Sales' } },
   inboxHours: {},
@@ -94,34 +99,86 @@ const routes: Record<string, unknown> = {
   'agent/views/': { views: [] },
   'agent/notifications/': { unread: 0, notifications: [] },
   'agent/settings/': { confirmation: {} },
+  'agent/audit/': { entries: [] },
   'agent/deals/': { deals: [] },
   'agent/overview/?days=30': {
     openHours: false,
-    ratings: { good: 3, bad: 1 },
-    total: { new: 4, resolved: 2, firstResponse: 2, resolution: 50 },
+    sla: false,
+    ratingScale: 2,
+    ratings: { good: 3, bad: 1, average: null },
+    total: numbers({ new: 4, resolved: 2, firstResponse: 2, resolution: 50 }),
     inboxes: [
-      { inbox: 'sales', new: 4, resolved: 2, firstResponse: 2, resolution: 50 },
+      numbers({
+        inbox: 'sales',
+        new: 4,
+        resolved: 2,
+        firstResponse: 2,
+        resolution: 50,
+      }),
     ],
     agents: [
-      {
+      numbers({
         agentId: null,
         name: null,
         new: 4,
         resolved: 2,
         firstResponse: 0.5,
         resolution: null,
-      },
+      }),
     ],
+    tiers: [],
+    priorities: [
+      numbers({
+        priority: 'normal',
+        new: 4,
+        resolved: 2,
+        firstResponse: 2,
+        resolution: 50,
+      }),
+    ],
+    channels: [
+      numbers({
+        channel: 'widget',
+        new: 4,
+        resolved: 2,
+        firstResponse: 2,
+        resolution: 50,
+      }),
+    ],
+    breaches: [],
     tags: [{ tag: 'billing', count: 3 }],
   },
   'agent/overview/?days=7': {
     openHours: false,
-    total: { new: 0, resolved: 0, firstResponse: null, resolution: null },
+    sla: false,
+    ratingScale: 2,
+    total: numbers({
+      new: 0,
+      resolved: 0,
+      firstResponse: null,
+      resolution: null,
+    }),
     inboxes: [],
     agents: [],
+    tiers: [],
+    priorities: [],
+    channels: [],
+    breaches: [],
     tags: [],
   },
 };
+
+/** A Statistics row with the figures the fixture leaves out at their empty values. */
+function numbers<T extends object>(row: T) {
+  return {
+    reopened: 0,
+    firstResponseP90: null,
+    resolutionP90: null,
+    response: { met: 0, breached: 0 },
+    resolutionTarget: { met: 0, breached: 0 },
+    ...row,
+  };
+}
 
 const original = routes['agent/conversations/c1/'];
 
@@ -2614,8 +2671,11 @@ describe('details sidebar', () => {
       [
         'New4',
         'Resolved2',
+        'Reopened0',
         'Median first response2 hr',
+        '90th percentile first response—',
         'Median resolution2 days',
+        '90th percentile resolution—',
         'Rated good3',
         'Rated bad1',
       ]
@@ -2640,11 +2700,11 @@ describe('details sidebar', () => {
     expect(
       within(byInbox as HTMLElement).getByRole('row', { name: /Sales/ })
         .textContent
-    ).toBe('Sales422 hr2 days');
+    ).toBe('Sales422 hr—2 days—');
     expect(
       within(byAgent as HTMLElement).getByRole('row', { name: /Unassigned/ })
         .textContent
-    ).toBe('Unassigned4230 min—');
+    ).toBe('Unassigned4230 min———');
     expect(screen.getByText('billing · 3')).toBeTruthy();
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Period' }), {

@@ -5,11 +5,13 @@ import { openCutoff } from '../ui/hours';
 import { duration, nextWorkday } from '../ui/i18n';
 import { TYPE_ICONS } from '../ui/icons';
 import { HELPDESK_CHANGED, type Route, useAdmin } from './context';
+import { NewConversationDialog } from './new-conversation';
 import { NotificationBell } from './notifications';
 import { formatSnooze, localInput } from './snooze';
 import {
   Avatar,
   Dialog,
+  DueChip,
   Empty,
   LoadError,
   paths,
@@ -40,9 +42,13 @@ export type ConversationRow = {
   lastMessageAt: string;
   assigneeId: string | null;
   tags: string[];
+  tier?: string | null;
+  channel?: string;
+  slaDueAt?: string | null;
   unread?: boolean;
   snoozedUntil?: string | null;
   rating?: 'good' | 'bad' | null;
+  ratingScore?: number | null;
   preview?: string | null;
   contact?: { id: string; name: string | null; email: string | null };
   viewers?: Viewer[];
@@ -72,6 +78,7 @@ export function Inbox() {
   const tagInputId = useId();
   const moreId = useId();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
   // Beside an open thread the list is a narrow pane: the bar keeps the tabs and
   // the icon buttons, and the tray under it takes the search and the rest.
   const root = useRef<HTMLDivElement>(null);
@@ -85,6 +92,8 @@ export function Inbox() {
     sort: route.sort ?? '',
     priority: route.priority ?? '',
     days: route.days ?? '',
+    tier: route.tier ?? '',
+    channel: route.channel ?? '',
   };
   const { priority } = filters;
   const params = new URLSearchParams(
@@ -149,6 +158,8 @@ export function Inbox() {
     filters.tag,
     filters.sort,
     filters.days,
+    filters.tier,
+    filters.channel,
   ].filter(Boolean).length;
   const anyMore = trayActive > 0;
   useEffect(() => {
@@ -165,7 +176,9 @@ export function Inbox() {
         filters.q ||
         filters.tag ||
         priority ||
-        filters.days
+        filters.days ||
+        filters.tier ||
+        filters.channel
     ) || filters.status !== 'open';
   const clear = () => {
     setQuery('');
@@ -242,6 +255,18 @@ export function Inbox() {
           </span>
           {moreActive > 0 && <span className="sa-count num">{moreActive}</span>}
         </button>
+        {me.agent.role !== 'viewer' && (
+          <button
+            type="button"
+            className="sa-btn"
+            title={t('admin.newConversation')}
+            onClick={() => setStarting(true)}>
+            <Svg d={paths.plus} />
+            <span className={narrow ? 'sa-sr-only' : undefined}>
+              {t('admin.newConversation')}
+            </span>
+          </button>
+        )}
         {!nav && <NotificationBell />}
         {!nav && !narrow && <AwayControl />}
       </div>
@@ -317,6 +342,36 @@ export function Inbox() {
                 ))}
               </datalist>
             </form>
+            {me.tiers.length > 0 && (
+              <label className="sa-field">
+                {t('admin.tier')}
+                <select
+                  className="sa-select"
+                  value={filters.tier}
+                  onChange={e => set('tier', e.target.value)}>
+                  <option value="">{t('admin.allTiers')}</option>
+                  {me.tiers.map(tier => (
+                    <option key={tier} value={tier}>
+                      {tier}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="sa-field">
+              {t('admin.channel')}
+              <select
+                className="sa-select"
+                value={filters.channel}
+                onChange={e => set('channel', e.target.value)}>
+                <option value="">{t('admin.allChannels')}</option>
+                {me.channels.map(channel => (
+                  <option key={channel} value={channel}>
+                    {t(`channel.${channel}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="sa-field">
               {t('admin.sort')}
               <select
@@ -325,6 +380,7 @@ export function Inbox() {
                 onChange={e => set('sort', e.target.value)}>
                 <option value="">{t('admin.sortWaiting')}</option>
                 <option value="priority">{t('admin.sortPriority')}</option>
+                {me.sla && <option value="sla">{t('admin.sortSla')}</option>}
               </select>
             </label>
             <div className="sa-filters-wide sa-filters-foot">
@@ -401,6 +457,14 @@ export function Inbox() {
           onClear={() => setSelected([])}
         />
       )}
+      <NewConversationDialog
+        open={starting}
+        onClose={() => setStarting(false)}
+        onCreated={id => {
+          setStarting(false);
+          navigate({ ...route, conversation: id });
+        }}
+      />
     </div>
   );
 }
@@ -418,9 +482,11 @@ function BulkBar({
   tags: string[];
   onClear: () => void;
 }) {
-  const { api, t, me } = useAdmin();
+  const { api, t, me, priorityName } = useAdmin();
   const [error, setError] = useState<string | null>(null);
   const [tag, setTag] = useState('');
+  const [writing, setWriting] = useState<'reply' | 'note' | null>(null);
+  const [text, setText] = useState('');
   const tagListId = useId();
   const toast = useToast();
   const tooMany = rows.length > BULK_LIMIT;
@@ -436,6 +502,8 @@ function BulkBar({
     status?: string;
     priority?: string;
     addTag?: string;
+    reply?: string;
+    note?: string;
   }) => {
     if (tooMany) return;
     setError(null);
@@ -507,10 +575,65 @@ function BulkBar({
           value=""
           placeholder
           options={me.priorities}
-          render={p => t(`priority.${p}`)}
+          render={priorityName}
           onChange={v => apply({ priority: v })}
           disabled={tooMany}
         />
+        <button
+          type="button"
+          className="sa-btn"
+          disabled={tooMany}
+          onClick={() => setWriting('reply')}>
+          {t('admin.bulkReply')}
+        </button>
+        <button
+          type="button"
+          className="sa-btn"
+          disabled={tooMany}
+          onClick={() => setWriting('note')}>
+          {t('admin.bulkNote')}
+        </button>
+        <Dialog
+          open={writing !== null}
+          title={t(writing === 'note' ? 'admin.bulkNote' : 'admin.bulkReply')}
+          onClose={() => setWriting(null)}>
+          <form
+            onSubmit={async e => {
+              e.preventDefault();
+              const body = text.trim();
+              if (!body) return;
+              const kind = writing;
+              setWriting(null);
+              setText('');
+              await apply(kind === 'note' ? { note: body } : { reply: body });
+            }}>
+            <h2>
+              {t(writing === 'note' ? 'admin.bulkNote' : 'admin.bulkReply')}
+            </h2>
+            <p className="sa-muted">{t('admin.bulkReplyHint')}</p>
+            <label className="sa-field">
+              {t(writing === 'note' ? 'admin.note' : 'admin.reply')}
+              <textarea
+                className="sa-textarea"
+                maxLength={20_000}
+                required
+                value={text}
+                onChange={e => setText(e.target.value)}
+              />
+            </label>
+            <div className="sa-dialog-foot">
+              <button
+                type="button"
+                className="sa-btn"
+                onClick={() => setWriting(null)}>
+                {t('admin.cancel')}
+              </button>
+              <button type="submit" className="sa-btn sa-primary">
+                {t('admin.send')}
+              </button>
+            </div>
+          </form>
+        </Dialog>
         <form
           onSubmit={e => {
             e.preventDefault();
@@ -647,7 +770,7 @@ export function ConversationTable({
   /** j/k move, Enter opens; for the inbox, which owns the page. */
   keyboard?: boolean;
 }) {
-  const { t, href, locale, inboxName, me, route } = useAdmin();
+  const { t, href, locale, inboxName, priorityName, me, route } = useAdmin();
   const now = new Date();
   const cutoffsByInbox = new Map<string, [number, number]>();
   const cutoffs = (inbox: string) => {
@@ -846,7 +969,17 @@ export function ConversationTable({
                         {c.viewers?.length ? (
                           <ViewerStack t={t} viewers={c.viewers} />
                         ) : null}
-                        {c.rating && <RatingChip t={t} rating={c.rating} />}
+                        {c.tier && <span className="sa-pill">{c.tier}</span>}
+                        {c.slaDueAt && c.status !== 'resolved' && (
+                          <DueChip t={t} locale={locale} dueAt={c.slaDueAt} />
+                        )}
+                        {c.rating && (
+                          <RatingChip
+                            t={t}
+                            rating={c.rating}
+                            score={c.ratingScore}
+                          />
+                        )}
                         {c.tags.map(name =>
                           onTag ? (
                             <button
@@ -891,7 +1024,7 @@ export function ConversationTable({
                   <td className="sa-col-pri">
                     {(c.priority === 'high' || c.priority === 'urgent') && (
                       <span className="sa-pill" data-tone={c.priority}>
-                        {t(`priority.${c.priority}`)}
+                        {priorityName(c.priority)}
                       </span>
                     )}
                   </td>

@@ -13,6 +13,7 @@ import { formatSnooze, SnoozeControl } from './snooze';
 import {
   Avatar,
   browserLabel,
+  DueChip,
   HostLinks,
   humanizeKey,
   LoadError,
@@ -45,10 +46,17 @@ type Detail = {
     assigneeId: string | null;
     companyId: string | null;
     tags: string[];
+    tier: string | null;
+    channel: string;
     snoozedUntil: string | null;
     mergedIntoId: string | null;
     rating: 'good' | 'bad' | null;
+    ratingScore: number | null;
     ratingComment: string | null;
+    firstRespondedAt: string | null;
+    respondBy: string | null;
+    resolveBy: string | null;
+    slaPausedAt: string | null;
     context: {
       url?: string;
       title?: string;
@@ -167,6 +175,7 @@ export function ConversationView({ id }: { id: string }) {
     route,
     locale,
     inboxName,
+    priorityName,
     queue,
   } = useAdmin();
   const queueOn = useQueueOn();
@@ -412,7 +421,7 @@ export function ConversationView({ id }: { id: string }) {
             ? `${t(`agentType.${c.type}`)} → ${t(`agentType.${suggestion.type}`)}`
             : null,
           suggestion.priority && suggestion.priority !== c.priority
-            ? `${t(`priority.${c.priority}`)} → ${t(`priority.${suggestion.priority}`)}`
+            ? `${priorityName(c.priority)} → ${priorityName(suggestion.priority)}`
             : null,
           suggestionTitleChange
             ? `${t('admin.title')}: ${suggestion.title}`
@@ -458,7 +467,20 @@ export function ConversationView({ id }: { id: string }) {
             : t('event.reopenedByRating')
           : t('event.statusAuto', { to: t(`agentStatus.${to}`) });
       case 'priority':
-        return t('event.priority', { name, to: t(`priority.${to}`) });
+        return t('event.priority', { name, to: priorityName(String(to)) });
+      case 'tier':
+        return to
+          ? t('event.tier', { name, to: String(to) })
+          : t('event.tierCleared', { name });
+      case 'sla.warning':
+      case 'sla.breach':
+        return t(
+          e.kind === 'sla.breach' ? 'event.slaBreach' : 'event.slaWarning',
+          {
+            target: t(`event.target.${e.data.target}`),
+            date: formatSnooze(String(e.data.due), locale),
+          }
+        );
       case 'type':
         return t('event.type', { name, to: t(`agentType.${to}`) });
       case 'inbox':
@@ -688,10 +710,22 @@ export function ConversationView({ id }: { id: string }) {
                 label={t('admin.priority')}
                 value={c.priority}
                 options={me.priorities}
-                render={p => t(`priority.${p}`)}
+                render={priorityName}
                 onChange={v => patch({ priority: v })}
               />
             </Property>
+            {me.tiers.length > 0 && (
+              <Property label={t('admin.tier')}>
+                <Select
+                  labelled
+                  label={t('admin.tier')}
+                  value={c.tier ?? ''}
+                  options={['', ...me.tiers]}
+                  render={v => v || t('admin.noTier')}
+                  onChange={v => patch({ tier: v || null })}
+                />
+              </Property>
+            )}
             <Property label={t('admin.type')}>
               <Select
                 labelled
@@ -712,10 +746,43 @@ export function ConversationView({ id }: { id: string }) {
                 onChange={v => patch({ inbox: v })}
               />
             </Property>
+            <Property label={t('admin.channel')}>
+              <span className="sa-fine">{t(`channel.${c.channel}`)}</span>
+            </Property>
             {c.rating && (
-              <RatingChip t={t} rating={c.rating} comment={c.ratingComment} />
+              <RatingChip
+                t={t}
+                rating={c.rating}
+                score={c.ratingScore}
+                comment={c.ratingComment}
+              />
             )}
           </fieldset>
+          {(c.respondBy || c.resolveBy) && c.status !== 'resolved' && (
+            <p className="sa-sla">
+              {c.respondBy && !c.firstRespondedAt && (
+                <span>
+                  <span className="sa-eyebrow">{t('admin.respondBy')}</span>
+                  <DueChip t={t} locale={locale} dueAt={c.respondBy} />
+                </span>
+              )}
+              {c.resolveBy && (
+                <span>
+                  <span className="sa-eyebrow">{t('admin.resolveBy')}</span>
+                  {c.slaPausedAt ? (
+                    <span className="sa-pill" data-tone="muted">
+                      {formatSnooze(c.resolveBy, locale)}
+                    </span>
+                  ) : (
+                    <DueChip t={t} locale={locale} dueAt={c.resolveBy} />
+                  )}
+                </span>
+              )}
+              {c.slaPausedAt && (
+                <span className="sa-fine">{t('admin.slaPaused')}</span>
+              )}
+            </p>
+          )}
 
           <div className="sa-thread">
             {timeline.map(item => {
