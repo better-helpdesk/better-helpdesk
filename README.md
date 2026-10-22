@@ -332,12 +332,13 @@ week.
 
 ## Status
 
-Better Helpdesk is young and under active development. Until 1.0 a minor
-version may change the API, and every release's notes list the pull requests
-it contains. Releases are published to npm with provenance through trusted
-publishing. The architecture is settled, though: embedded in the host, Next.js
-first, the host's own database through an adapter, the host owns identity. A standalone server, a hosted
-mode or its own login are not planned.
+Better Helpdesk is at 1.0 and under active development. From here a minor
+version adds and a major version may change the API or the schema, and every
+release's notes list the pull requests it contains. Releases are published to
+npm with provenance through trusted publishing. The architecture is settled:
+embedded in the host, Next.js first, the host's own database through an
+adapter, the host owns identity. A standalone server, a hosted mode or its
+own login are not planned.
 [`ROADMAP.md`](https://github.com/better-helpdesk/better-helpdesk/blob/main/ROADMAP.md)
 lists what Better Helpdesk will not do and what comes next.
 

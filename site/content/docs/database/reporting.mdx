@@ -10,7 +10,7 @@ Each query below covers the last 30 days and leaves out conversations that were 
 The queries are written for Postgres. On SQL Server the tables sit in the same `helpdesk` schema; on MySQL and SQLite they carry a prefix instead, so `helpdesk.conversation` is `helpdesk_conversation`. Medians, date arithmetic and `JOIN LATERAL` need each database's own SQL. On SQLite and SQL Server a boolean such as `internal` is stored as `1` or `0`, and on SQLite a time is ISO 8601 text in UTC.
 
 <Callout>
-  Until version 1.0, a minor release can rename or drop a column. The release notes say when one does, so check them before you upgrade a helpdesk that reports depend on.
+  A minor release only adds columns and tables. Renaming or dropping one takes a major release, and its notes say so, so check them before you upgrade a helpdesk that reports depend on.
 </Callout>
 
 ## Median first response
