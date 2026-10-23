@@ -818,7 +818,7 @@ describe('Widget', () => {
                 conversation: { id: 'c1', reference: 'DG-1000' },
                 visitorToken: 'n'.repeat(43),
               }
-            : { conversation: ownThread, messages: [] },
+            : { conversation: ownThread, messages: [], attachments: [] },
         { status: init?.method === 'POST' ? 201 : 200 }
       )
     );
@@ -1829,6 +1829,65 @@ describe('home, messages and help', () => {
     fireEvent.click(screen.getByRole('button', { name: '4 of 5' }));
     await screen.findByText('Thanks for your feedback.');
     expect(ratings).toEqual([{ score: 4, comment: '' }]);
+  });
+
+  it('shows each file under its message, and the opening message’s uploads under it', async () => {
+    mockApi({
+      'widget/session': { ...session, conversations: [ownThread] },
+      'widget/conversations/c1/': {
+        conversation: ownThread,
+        messages: [
+          {
+            id: 'm1',
+            author: 'contact',
+            name: 'Ada',
+            own: true,
+            body: 'Export broken, see the screenshot',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+          {
+            id: 'm2',
+            author: 'agent',
+            name: 'Angelo',
+            own: false,
+            body: 'Try this build',
+            createdAt: '2026-01-01T01:00:00.000Z',
+          },
+        ],
+        attachments: [
+          { id: 'f1', messageId: null, filename: 'shot.png' },
+          { id: 'f2', messageId: 'm2', filename: 'build.zip' },
+        ],
+      },
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
+    fireEvent.click(await screen.findByText('Export broken'));
+    await screen.findByText('Try this build');
+    const files = (text: string) =>
+      Array.from(
+        (
+          screen.getByText(text).closest('.msg') as HTMLElement
+        ).querySelectorAll('a')
+      ).map(a => `${a.textContent}: ${a.getAttribute('href')}`);
+    expect(files('Export broken, see the screenshot')).toEqual([
+      expect.stringMatching(
+        /^shot\.png: .*\/widget\/conversations\/c1\/attachments\/f1\/$/
+      ),
+    ]);
+    expect(files('Try this build')).toEqual([
+      expect.stringMatching(
+        /^build\.zip: .*\/widget\/conversations\/c1\/attachments\/f2\/$/
+      ),
+    ]);
   });
 
   it('submits a ticket of the type picked', async () => {

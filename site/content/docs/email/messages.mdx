@@ -84,12 +84,12 @@ Both kinds share one shape.
     subject: {
       type: 'string',
       required: true,
-      description: "The conversation's title, else its subject, else the first 80 characters of the customer's text.",
+      description: "The conversation's title, else its subject, else the first 80 characters of the customer's first message.",
     },
     body: {
       type: 'string',
       required: true,
-      description: "The customer's first message, at most 1,000 characters. For a reopened conversation, the message that reopened it.",
+      description: "The customer's newest message, at most 1,000 characters. For a reopened conversation, the message that reopened it.",
     },
     url: { type: 'string', required: true, description: <>The conversation in the agent UI, <code>{'{adminUrl}'}/conversations/{'{id}'}/</code>.</> },
     reopened: { type: 'boolean', description: <><code>true</code> on an <code>agent-new</code> sent because a customer wrote on a resolved conversation.</> },
@@ -118,7 +118,7 @@ Sent to each agent picked in the note who has an email address and has not been 
 <TypeTable
   type={{
     subject: { type: 'string', required: true, description: <>As for <code>agent-new</code>.</> },
-    body: { type: 'string', required: true, description: "The customer's first message, at most 1,000 characters." },
+    body: { type: 'string', required: true, description: "The customer's newest message, at most 1,000 characters." },
     url: { type: 'string', required: true, description: 'The conversation in the agent UI.' },
     target: { type: "'response' | 'resolution'", required: true },
     stage: { type: "'warning' | 'breach'", required: true, description: <><code>warning</code> once the configured share of the target has passed, <code>breach</code> once the deadline has.</> },

@@ -284,7 +284,8 @@ export const adminCss = `
 
 .sa-thread { display: grid; gap: 24px; padding-block: 8px; }
 .sa-event { margin: 0; text-align: center; color: var(--a-muted); font-size: 12px; text-wrap: balance; }
-.sa .rich { display: grid; gap: 6px; }
+.sa .rich { display: grid; gap: 6px; min-width: 0; }
+.sa .rich > * { min-width: 0; }
 .sa .rich p, .sa .rich ul, .sa .rich ol { margin: 0; }
 .sa .rich ul { padding-left: 20px; list-style: disc; }
 .sa .rich ol { padding-left: 20px; list-style: decimal; }
@@ -307,7 +308,7 @@ export const adminCss = `
 .sa .rt-toolbar button:hover { background: var(--a-subtle); color: var(--a-fg); }
 .sa .rt-toolbar svg { width: 16px; height: 16px; }
 .sa-msg { display: grid; grid-template-columns: 28px 1fr; gap: 12px; }
-.sa-msg-body { border-radius: var(--a-radius); padding: 14px 18px; white-space: pre-wrap; word-wrap: break-word; border: 1px solid var(--a-border); background: var(--a-bg); }
+.sa-msg-body { border-radius: var(--a-radius); padding: 14px 18px; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; border: 1px solid var(--a-border); background: var(--a-bg); }
 /* Ours carries the accent's tint, as the active row does; the subtle tone is many hosts' page colour and would vanish into it. */
 .sa-msg[data-author="agent"] .sa-msg-body { position: relative; background: color-mix(in srgb, var(--a-accent) 6%, var(--a-bg)); border-color: color-mix(in srgb, var(--a-accent) 15%, var(--a-border)); }
 .sa-msg[data-author="agent"] { grid-template-columns: 1fr 28px; }
@@ -317,6 +318,8 @@ export const adminCss = `
 .sa-msg-body { max-width: min(100%, 65ch); }
 .sa-msg[data-internal="true"] .sa-msg-body { background: var(--a-note); border: 1px dashed var(--a-note-border); }
 .sa-msg header { font-size: 12px; color: var(--a-muted); margin-bottom: 6px; white-space: normal; }
+.sa-msg-files { display: grid; gap: 2px; margin-top: 6px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.sa-msg-files a { color: var(--a-accent); }
 .sa-msg header strong { color: var(--a-fg); font-weight: 600; }
 
 .sa-suggest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--a-radius); background: var(--a-subtle); border: 1px solid var(--a-border); font-size: 13px; }
@@ -471,6 +474,7 @@ export const adminCss = `
 .sa-filters > .sa-toolbar { flex-wrap: nowrap; }
 .sa-filters > .sa-toolbar > .sa-grow { min-width: 0; }
 .sa-filters-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 8px; border-top: 1px solid var(--a-border); }
+.sa-filters-foot .sa-grow { flex: 1; }
 .sa-filters-foot .sa-hint { margin-inline-start: auto; }
 .sa-filters .sa-field { gap: 2px; margin: 0; color: var(--a-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 /* The controls inherit the label's type through ".sa select". */
@@ -479,7 +483,8 @@ export const adminCss = `
 .sa-btn > .sa-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--a-accent); color: var(--a-accent-fg); font-size: 11px; line-height: 18px; text-align: center; }
 .sa-links { display: flex; flex-wrap: wrap; gap: 4px; }
 .sa-links .sa-btn svg { width: 12px; height: 12px; }
-.sa-views { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+/* The views are a second segmented control under the bar; many of them scroll sideways rather than wrap. */
+.sa-views { max-width: 100%; overflow-x: auto; justify-self: start; }
 .sa-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
 .sa-meta .sa-viewers { margin: 0; }
 .sa .sa-tag { height: 20px; padding: 0 7px; font-size: 12px; font-weight: 500; color: var(--a-muted); }

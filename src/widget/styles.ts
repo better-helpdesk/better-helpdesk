@@ -61,7 +61,8 @@ button { cursor: pointer; }
 .agent-dot::after { content: ''; position: absolute; inset: 0; border-radius: var(--s-r-round); background: inherit; animation: agent-ping 4s cubic-bezier(0, 0, 0.2, 1) infinite; }
 .agent-dot.on-launcher { position: absolute; top: 6px; right: 6px; background: var(--s-launcher-fg); box-shadow: 0 0 0 2px var(--s-launcher-bg); }
 @keyframes agent-ping { 0% { transform: scale(1); opacity: 0.6; } 40%, 100% { transform: scale(2.6); opacity: 0; } }
-.rich { display: grid; gap: 6px; }
+.rich { display: grid; gap: 6px; min-width: 0; }
+.rich > * { min-width: 0; }
 .rich p, .rich ul, .rich ol { margin: 0; }
 .rich ul, .rich ol { padding-left: 20px; }
 .rich a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
@@ -302,14 +303,17 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .msg-row.mine { justify-content: flex-end; }
 .seen { margin-top: -8px; font-size: 12px; color: var(--s-muted); }
 .seen.mine { align-self: flex-end; }
-.msg { max-width: 80%; padding: 9px 12px; border-radius: var(--s-radius); white-space: pre-wrap; word-wrap: break-word; }
+.msg { max-width: 80%; min-width: 0; padding: 9px 12px; border-radius: var(--s-radius); white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg-row.mine .msg { background: var(--s-accent); color: var(--s-accent-fg); border-bottom-right-radius: min(4px, var(--s-r-inner)); }
 .msg-row.theirs .msg { background: var(--s-subtle); border-bottom-left-radius: min(4px, var(--s-r-inner)); }
 .msg-meta { display: block; font-size: 12px; margin-bottom: 2px; color: color-mix(in srgb, var(--s-fg) 80%, var(--s-subtle)); }
 /* The accent pair is the host's own contrast ceiling, so mixing toward the accent could only lower it. */
 .msg-row.mine .msg-meta { color: var(--s-accent-fg); }
 .msg-row .avatar { width: 26px; height: 26px; font-size: 10px; border: 0; background: var(--s-accent); color: var(--s-accent-fg); }
-.files a { display: block; color: var(--s-accent); font-size: 13px; padding: 2px 0; }
+.msg-files { margin-top: 6px; font-size: 13px; }
+.msg-files a, .msg-files span { display: block; padding: 2px 0; }
+.msg-files a { color: var(--s-accent); }
+.msg-row.mine .msg-files a { color: inherit; text-decoration: underline; }
 
 .composer { border-top: 1px solid var(--s-border); background: var(--s-subtle); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end; }
 .rt-reply { flex: 1; min-width: 0; }

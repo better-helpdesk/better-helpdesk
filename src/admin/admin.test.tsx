@@ -259,6 +259,50 @@ describe('HelpdeskAdmin', () => {
     expect(window.location.search).toBe('?q=DG-1001&status=any');
   });
 
+  it('lists a message’s files under it, and the widget’s uploads under the opening message', async () => {
+    const base = original as {
+      messages: { id: string; body: string; createdAt: string }[];
+    };
+    routes['agent/conversations/c1/'] = {
+      ...base,
+      messages: [
+        base.messages[0],
+        {
+          ...base.messages[0],
+          id: 'm2',
+          body: 'Here is the log',
+          createdAt: new Date(Date.now() + 1000).toISOString(),
+        },
+      ],
+      attachments: [
+        { id: 'a1', messageId: null, filename: 'export.csv', size: 10 },
+        { id: 'a2', messageId: 'm2', filename: 'app.log', size: 20 },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = original;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByText('Here is the log');
+    const files = (text: string) =>
+      Array.from(
+        (
+          screen.getByText(text).closest('article') as HTMLElement
+        ).querySelectorAll('a')
+      ).map(a => `${a.textContent}: ${a.getAttribute('href')}`);
+    expect(files('The CSV export fails')).toEqual([
+      expect.stringMatching(
+        /^export\.csv: .*\/agent\/conversations\/c1\/attachments\/a1\/$/
+      ),
+    ]);
+    expect(files('Here is the log')).toEqual([
+      expect.stringMatching(
+        /^app\.log: .*\/agent\/conversations\/c1\/attachments\/a2\/$/
+      ),
+    ]);
+  });
+
   it('offers the host’s links for the customer beside the conversation', async () => {
     routes['agent/conversations/c1/'] = {
       ...(original as object),
@@ -700,6 +744,54 @@ describe('HelpdeskAdmin', () => {
         },
       ])
     );
+  });
+
+  it('shows saved views as tabs under the assignee tabs, and keeps the save link in the tray', async () => {
+    routes['agent/views/'] = {
+      views: [
+        {
+          id: 'v1',
+          name: 'Urgent anywhere',
+          query: 'status=any&priority=high',
+          shared: false,
+          count: 1,
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/views/'] = { views: [] };
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const views = await screen.findByRole('group', { name: 'Views' });
+    expect(views.closest('.sa-filters')).toBeNull();
+    expect(
+      within(views).getByRole('button', { name: /Urgent anywhere/ }).textContent
+    ).toBe('Urgent anywhere 1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unassigned' }));
+    expect(screen.queryByRole('button', { name: 'Save as view' })).toBeNull();
+    await openTray();
+    const save = await screen.findByRole('button', { name: 'Save as view' });
+    expect(save.closest('.sa-filters-foot')).not.toBeNull();
+  });
+
+  it('filters the inbox by any agent from the tray', async () => {
+    routes['agent/agents/'] = {
+      agents: [
+        { id: 'a1', name: 'Agent', email: 'agent@devguard.test' },
+        { id: 'a2', name: 'Bea', email: 'bea@devguard.test' },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/agents/'] = { agents: [] };
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await openTray();
+    const select = await screen.findByRole('combobox', { name: 'Assignee' });
+    await within(select).findByRole('option', { name: 'Bea' });
+    fireEvent.change(select, { target: { value: 'a2' } });
+    expect(window.location.search).toBe('?status=open&assignee=a2');
+    await waitFor(() => expect((select as HTMLSelectElement).value).toBe('a2'));
   });
 
   it('counts new notifications on the bell and in the tab title, marks them seen when opened, and opens their conversation', async () => {

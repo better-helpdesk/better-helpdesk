@@ -94,10 +94,14 @@ describe('onEvent', () => {
         .map(e =>
           e.kind === 'message.created'
             ? [e.message.body, e.internal, e.conversation.status]
-            : e.kind
+            : e.kind === 'conversation.updated'
+              ? [e.kind, e.before]
+              : e.kind
         )
     ).toEqual([
       ['Looking into it', false, 'pending'],
+      // The first reply claims the unassigned conversation for the agent.
+      ['conversation.updated', { assigneeId: null }],
       ['Same as last week', true, 'pending'],
       ['Thanks', false, 'open'],
       ['Still failing', false, 'open'],

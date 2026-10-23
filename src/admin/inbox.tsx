@@ -114,6 +114,13 @@ export function Inbox() {
     () => api<{ tags: string[] }>('agent/tags'),
     'tags'
   );
+  const agents = useResource(
+    () =>
+      api<{
+        agents: { id: string; name: string | null; email: string | null }[];
+      }>('agent/agents'),
+    'agents'
+  );
   // A filter changes the list beside an open conversation, not the conversation.
   const thread: Route = route.conversation
     ? { conversation: route.conversation }
@@ -152,10 +159,11 @@ export function Inbox() {
     // Polling hands over new rows every time; only a changed order is news.
     setQueue(current => (key(current) === key(next) ? current : next));
   });
-  // Status, inbox, tag, sort and priority sit in the tray, which opens when one of them is set.
+  // Status, inbox, an assignee by name, tag, sort, period, tier and channel sit in the tray, which opens when one of them is set.
   const trayActive = [
     filters.status !== 'open',
     filters.inbox,
+    !['', 'me', 'none'].includes(filters.assignee),
     filters.tag,
     filters.sort,
     filters.days,
@@ -272,148 +280,166 @@ export function Inbox() {
         {!nav && !narrow && <AwayControl />}
       </div>
       <SavedViews filters={filters} canSave={filtered}>
-        {(chips, actions) => (
-          <div id={moreId} className="sa-filters" hidden={!moreOpen}>
-            {narrow && (
-              <div className="sa-filters-wide sa-toolbar">{search}</div>
-            )}
-            {chips && <div className="sa-filters-wide">{chips}</div>}
-            {filters.days && (
-              <div className="sa-filters-wide sa-toolbar">
-                <button
-                  type="button"
-                  className="sa-btn sa-chip"
-                  aria-pressed="true"
-                  onClick={() => set('days', '')}>
-                  {t('admin.lastDays', { count: filters.days })}
-                  <Svg d={paths.x} />
-                </button>
-              </div>
-            )}
-            <label className="sa-field">
-              {t('admin.status')}
-              <select
-                className="sa-select"
-                value={filters.status}
-                onChange={e => set('status', e.target.value)}>
-                <option value="any">{t('admin.all')}</option>
-                {me.statuses.map(s => (
-                  <option key={s} value={s}>
-                    {t(`agentStatus.${s}`)}
-                  </option>
-                ))}
-                <option value="snoozed">{t('admin.snoozed')}</option>
-                <option value="rated-good">{t('admin.rated.good')}</option>
-                <option value="rated-bad">{t('admin.rated.bad')}</option>
-              </select>
-            </label>
-            <label className="sa-field">
-              {t('admin.inboxLabel')}
-              <select
-                className="sa-select"
-                value={filters.inbox}
-                onChange={e => set('inbox', e.target.value)}>
-                <option value="">{t('admin.allInboxes')}</option>
-                {me.inboxes.map(i => (
-                  <option key={i} value={i}>
-                    {inboxName(i)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <form
-              className="sa-field"
-              onSubmit={e => {
-                e.preventDefault();
-                set('tag', tag.trim().toLowerCase());
-              }}>
-              <label htmlFor={tagInputId}>{t('admin.tag')}</label>
-              <input
-                id={tagInputId}
-                type="search"
-                className="sa-input"
-                placeholder={t('admin.tagFilter')}
-                list={tagListId}
-                value={tag}
-                onChange={e => setTag(e.target.value)}
-              />
-              <datalist id={tagListId}>
-                {(topTags.data?.tags ?? []).map(name => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-            </form>
-            {me.tiers.length > 0 && (
+        {(views, actions) => (
+          <>
+            {views}
+            <div id={moreId} className="sa-filters" hidden={!moreOpen}>
+              {narrow && (
+                <div className="sa-filters-wide sa-toolbar">{search}</div>
+              )}
+              {filters.days && (
+                <div className="sa-filters-wide sa-toolbar">
+                  <button
+                    type="button"
+                    className="sa-btn sa-chip"
+                    aria-pressed="true"
+                    onClick={() => set('days', '')}>
+                    {t('admin.lastDays', { count: filters.days })}
+                    <Svg d={paths.x} />
+                  </button>
+                </div>
+              )}
               <label className="sa-field">
-                {t('admin.tier')}
+                {t('admin.status')}
                 <select
                   className="sa-select"
-                  value={filters.tier}
-                  onChange={e => set('tier', e.target.value)}>
-                  <option value="">{t('admin.allTiers')}</option>
-                  {me.tiers.map(tier => (
-                    <option key={tier} value={tier}>
-                      {tier}
+                  value={filters.status}
+                  onChange={e => set('status', e.target.value)}>
+                  <option value="any">{t('admin.all')}</option>
+                  {me.statuses.map(s => (
+                    <option key={s} value={s}>
+                      {t(`agentStatus.${s}`)}
+                    </option>
+                  ))}
+                  <option value="snoozed">{t('admin.snoozed')}</option>
+                  <option value="rated-good">{t('admin.rated.good')}</option>
+                  <option value="rated-bad">{t('admin.rated.bad')}</option>
+                </select>
+              </label>
+              <label className="sa-field">
+                {t('admin.inboxLabel')}
+                <select
+                  className="sa-select"
+                  value={filters.inbox}
+                  onChange={e => set('inbox', e.target.value)}>
+                  <option value="">{t('admin.allInboxes')}</option>
+                  {me.inboxes.map(i => (
+                    <option key={i} value={i}>
+                      {inboxName(i)}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
-            <label className="sa-field">
-              {t('admin.channel')}
-              <select
-                className="sa-select"
-                value={filters.channel}
-                onChange={e => set('channel', e.target.value)}>
-                <option value="">{t('admin.allChannels')}</option>
-                {me.channels.map(channel => (
-                  <option key={channel} value={channel}>
-                    {t(`channel.${channel}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="sa-field">
-              {t('admin.sort')}
-              <select
-                className="sa-select"
-                value={filters.sort}
-                onChange={e => set('sort', e.target.value)}>
-                <option value="">{t('admin.sortWaiting')}</option>
-                <option value="priority">{t('admin.sortPriority')}</option>
-                {me.sla && <option value="sla">{t('admin.sortSla')}</option>}
-              </select>
-            </label>
-            <div className="sa-filters-wide sa-filters-foot">
-              <label className="sa-toggle">
-                <input
-                  type="checkbox"
-                  checked={queueOn}
-                  onChange={e => setQueueOn(e.target.checked)}
-                />
-                {t('admin.workQueue')}
+              <label className="sa-field">
+                {t('admin.assignee')}
+                <select
+                  className="sa-select"
+                  value={filters.assignee}
+                  onChange={e => set('assignee', e.target.value)}>
+                  <option value="">{t('admin.anyone')}</option>
+                  <option value="me">{t('admin.mine')}</option>
+                  <option value="none">{t('admin.unassigned')}</option>
+                  {(agents.data?.agents ?? []).map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name ?? a.email ?? a.id}
+                    </option>
+                  ))}
+                </select>
               </label>
-              {!nav && narrow && <AwayControl />}
-              <span className="sa-grow" />
-              {!keysOn ? (
-                <button
-                  type="button"
-                  className="sa-btn sa-ghost"
-                  onClick={openShortcuts}>
-                  {t('admin.shortcuts')}
-                </button>
-              ) : (
-                rows.length > 1 && (
-                  <span className="sa-kbd sa-hint">
-                    <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
-                    {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')} ·{' '}
-                    <kbd>?</kbd> {t('admin.allShortcuts')}
-                  </span>
-                )
+              <form
+                className="sa-field"
+                onSubmit={e => {
+                  e.preventDefault();
+                  set('tag', tag.trim().toLowerCase());
+                }}>
+                <label htmlFor={tagInputId}>{t('admin.tag')}</label>
+                <input
+                  id={tagInputId}
+                  type="search"
+                  className="sa-input"
+                  placeholder={t('admin.tagFilter')}
+                  list={tagListId}
+                  value={tag}
+                  onChange={e => setTag(e.target.value)}
+                />
+                <datalist id={tagListId}>
+                  {(topTags.data?.tags ?? []).map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </form>
+              {me.tiers.length > 0 && (
+                <label className="sa-field">
+                  {t('admin.tier')}
+                  <select
+                    className="sa-select"
+                    value={filters.tier}
+                    onChange={e => set('tier', e.target.value)}>
+                    <option value="">{t('admin.allTiers')}</option>
+                    {me.tiers.map(tier => (
+                      <option key={tier} value={tier}>
+                        {tier}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
-              {actions}
+              <label className="sa-field">
+                {t('admin.channel')}
+                <select
+                  className="sa-select"
+                  value={filters.channel}
+                  onChange={e => set('channel', e.target.value)}>
+                  <option value="">{t('admin.allChannels')}</option>
+                  {me.channels.map(channel => (
+                    <option key={channel} value={channel}>
+                      {t(`channel.${channel}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="sa-field">
+                {t('admin.sort')}
+                <select
+                  className="sa-select"
+                  value={filters.sort}
+                  onChange={e => set('sort', e.target.value)}>
+                  <option value="">{t('admin.sortWaiting')}</option>
+                  <option value="priority">{t('admin.sortPriority')}</option>
+                  {me.sla && <option value="sla">{t('admin.sortSla')}</option>}
+                </select>
+              </label>
+              <div className="sa-filters-wide sa-filters-foot">
+                <label className="sa-toggle">
+                  <input
+                    type="checkbox"
+                    checked={queueOn}
+                    onChange={e => setQueueOn(e.target.checked)}
+                  />
+                  {t('admin.workQueue')}
+                </label>
+                {!nav && narrow && <AwayControl />}
+                <span className="sa-grow" />
+                {!keysOn ? (
+                  <button
+                    type="button"
+                    className="sa-btn sa-ghost"
+                    onClick={openShortcuts}>
+                    {t('admin.shortcuts')}
+                  </button>
+                ) : (
+                  rows.length > 1 && (
+                    <span className="sa-kbd sa-hint">
+                      <kbd>j</kbd> <kbd>k</kbd> {t('admin.move')} · <kbd>x</kbd>{' '}
+                      {t('admin.select')} · <kbd>↵</kbd> {t('admin.open')} ·{' '}
+                      <kbd>?</kbd> {t('admin.allShortcuts')}
+                    </span>
+                  )
+                )}
+                {actions}
+              </div>
             </div>
-          </div>
+          </>
         )}
       </SavedViews>
       <p className="sa-sr-only" role="status">
@@ -455,6 +481,7 @@ export function Inbox() {
         <BulkBar
           rows={rows.filter(r => visibleSelected.includes(r.id))}
           tags={topTags.data?.tags ?? []}
+          agents={agents.data?.agents ?? []}
           onClear={() => setSelected([])}
         />
       )}
@@ -477,10 +504,12 @@ const BULK_LIMIT = 100;
 function BulkBar({
   rows,
   tags,
+  agents,
   onClear,
 }: {
   rows: ConversationRow[];
   tags: string[];
+  agents: { id: string; name: string | null; email: string | null }[];
   onClear: () => void;
 }) {
   const { api, t, me, priorityName } = useAdmin();
@@ -491,13 +520,6 @@ function BulkBar({
   const tagListId = useId();
   const toast = useToast();
   const tooMany = rows.length > BULK_LIMIT;
-  const agents = useResource(
-    () =>
-      api<{
-        agents: { id: string; name: string | null; email: string | null }[];
-      }>('agent/agents'),
-    'agents'
-  );
   const apply = async (change: {
     assigneeId?: string | null;
     status?: string;
@@ -552,9 +574,9 @@ function BulkBar({
           label={t('admin.assignee')}
           value=""
           placeholder
-          options={['none', ...(agents.data?.agents.map(a => a.id) ?? [])]}
+          options={['none', ...agents.map(a => a.id)]}
           render={id => {
-            const agent = agents.data?.agents.find(a => a.id === id);
+            const agent = agents.find(a => a.id === id);
             return agent
               ? (agent.name ?? agent.email ?? id)
               : t('admin.unassigned');

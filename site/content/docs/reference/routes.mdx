@@ -114,10 +114,10 @@ Every request that is not a `GET` and succeeded is written to [`audit_log`](/doc
 | `DELETE` | `agent/agents/{id}` | Removes an agent from the team. |
 | `GET` | `agent/conversations` | The inbox list, filtered by the query string, with the counts of all, the agent's own and unassigned conversations under the same filters. |
 | `POST` | `agent/conversations` | Opens a conversation in the agent's name; see [the body](#opening-a-conversation-as-an-agent). |
-| `POST` | `agent/conversations/bulk` | Changes several conversations at once; with `reply` or `note`, writes that text to each as a reply or an internal note. |
+| `POST` | `agent/conversations/bulk` | Changes several conversations at once; with `reply` or `note`, writes that text to each as a reply or an internal note. A reply assigns each unassigned conversation to the agent, unless the same request set `assigneeId`. |
 | `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
 | `PATCH` | `agent/conversations/{id}` | Changes its status, priority, tier, type, inbox, title, assignee, company, tags or snooze. |
-| `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. |
+| `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. A reply on an unassigned conversation assigns it to the agent who replied. |
 | `POST` | `agent/conversations/{id}/typing` | Shows the customer that the agent is writing a reply, for a few seconds; the agent UI repeats it while the agent types. |
 | `GET` | `agent/events` | An event stream of every change, internal notes included. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 | `POST` | `agent/conversations/{id}/participants` | Adds a contact to it. |
