@@ -209,6 +209,8 @@ describe('event streams', () => {
     expect(stream.changes).toEqual([
       { conversationId: id, kind: 'typing' },
       { conversationId: id, kind: 'message' },
+      // The reply claimed the unassigned conversation for Sam.
+      { conversationId: id, kind: 'conversation' },
     ]);
   });
 

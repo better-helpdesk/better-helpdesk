@@ -818,7 +818,7 @@ describe('Widget', () => {
                 conversation: { id: 'c1', reference: 'DG-1000' },
                 visitorToken: 'n'.repeat(43),
               }
-            : { conversation: ownThread, messages: [] },
+            : { conversation: ownThread, messages: [], attachments: [] },
         { status: init?.method === 'POST' ? 201 : 200 }
       )
     );
