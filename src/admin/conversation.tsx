@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
+import { filesByMessage } from '../ui/files';
 import { relativeTime, translated } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
 import { isMac, RichEditor, type RichEditorHandle } from '../ui/rich-editor';
@@ -107,7 +108,12 @@ type Detail = {
     agentName: string | null;
     contactName: string | null;
   }[];
-  attachments: { id: string; filename: string; size: number }[];
+  attachments: {
+    id: string;
+    messageId: string | null;
+    filename: string;
+    size: number;
+  }[];
   events: TimelineEvent[];
 };
 
@@ -570,6 +576,7 @@ export function ConversationView({ id }: { id: string }) {
     ...data.messages.map(m => ({ at: m.createdAt, message: m })),
     ...data.events.map(e => ({ at: e.createdAt, event: e })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const attached = filesByMessage(data.messages, data.attachments);
   const mergedInto = c.mergedIntoId && {
     id: c.mergedIntoId,
     reference: String(
@@ -855,6 +862,7 @@ export function ConversationView({ id }: { id: string }) {
                 );
               }
               const m = item.message;
+              const files = attached.get(m.id);
               const name =
                 m.authorType === 'agent'
                   ? (m.agentName ?? t('thread.support'))
@@ -894,6 +902,19 @@ export function ConversationView({ id }: { id: string }) {
                         )}
                       />
                     </div>
+                    {files && (
+                      <div className="sa-msg-files">
+                        {files.map(a => (
+                          <a
+                            key={a.id}
+                            href={`${apiBase}/agent/conversations/${id}/attachments/${a.id}/`}
+                            target="_blank"
+                            rel="noreferrer">
+                            {a.filename}
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </article>
               );

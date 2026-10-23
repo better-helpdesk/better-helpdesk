@@ -403,6 +403,11 @@ describe('SLA notices', () => {
       ['agent@devguard.test', 'resolution', 'warning'],
       ['boss@devguard.test', 'resolution', 'warning'],
     ]);
+    // The notice quotes the customer's newest message under the conversation's subject.
+    expect(notices.map(e => [e.subject, e.body])).toEqual([
+      ['Deploys fail', 'Thanks.'],
+      ['Deploys fail', 'Thanks.'],
+    ]);
   });
 });
 

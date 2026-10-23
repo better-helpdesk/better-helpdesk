@@ -17,6 +17,7 @@ import {
   useResource,
 } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
+import { filesByMessage } from '../ui/files';
 import {
   dateLocale,
   nextWorkday,
@@ -1615,7 +1616,7 @@ type ThreadData = {
     body: string;
     createdAt: string;
   }[];
-  attachments: { id: string; filename: string }[];
+  attachments: { id: string; messageId: string | null; filename: string }[];
 };
 
 function ThreadMenu({
@@ -1798,6 +1799,7 @@ function Thread({
     );
   }
   const answered = data.messages.some(m => m.author === 'agent');
+  const attached = filesByMessage(data.messages, data.attachments);
   const typed = t(`thread.thanks.${data.conversation.type}`);
   // An unknown type falls back to its own key's last part.
   const thanks = typed === data.conversation.type ? t('thread.thanks') : typed;
@@ -1859,6 +1861,23 @@ function Thread({
                     hosts={!m.own}
                     code={text => <CodeBlock text={text} t={t} />}
                   />
+                  {attached.has(m.id) && (
+                    <div className="msg-files">
+                      {attached.get(m.id)?.map(a =>
+                        linkFiles ? (
+                          <a
+                            key={a.id}
+                            href={`${apiBase}/widget/conversations/${id}/attachments/${a.id}/`}
+                            target="_blank"
+                            rel="noreferrer">
+                            {a.filename}
+                          </a>
+                        ) : (
+                          <span key={a.id}>{a.filename}</span>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               {index === all.length - 1 &&
@@ -1925,19 +1944,6 @@ function Thread({
             </span>
           )}
         </div>
-        {linkFiles && data.attachments.length > 0 && (
-          <div className="files">
-            {data.attachments.map(a => (
-              <a
-                key={a.id}
-                href={`${apiBase}/widget/conversations/${id}/attachments/${a.id}/`}
-                target="_blank"
-                rel="noreferrer">
-                {a.filename}
-              </a>
-            ))}
-          </div>
-        )}
         <div ref={end} />
       </div>
       <form

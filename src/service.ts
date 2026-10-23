@@ -683,7 +683,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
     conversation: Conversation,
     body: string,
     internal: boolean,
-    notify: string[] = []
+    notify: string[] = [],
+    /** `claim: false` leaves an unassigned conversation so, for a bulk change that set the assignee itself. */
+    { claim = true }: { claim?: boolean } = {}
   ) {
     const message = await store.appendMessage({
       conversationId: conversation.id,
@@ -692,6 +694,12 @@ export function createHelpdesk(input: HelpdeskConfig) {
       body,
       internal,
     });
+    const claimed =
+      claim && !internal && !conversation.assigneeId
+        ? await store.updateConversation(conversation.id, {
+            assigneeId: agentId,
+          })
+        : null;
     if (!internal && conversation.agentTypingUntil) {
       await store.updateConversation(conversation.id, {
         agentTypingUntil: null,
@@ -723,6 +731,15 @@ export function createHelpdesk(input: HelpdeskConfig) {
       });
     }
     await messageCreated(message);
+    if (claimed) {
+      await emitUpdated(
+        config,
+        conversation,
+        claimed,
+        { assigneeId: agentId },
+        agentId
+      );
+    }
     return message;
   }
 
@@ -801,13 +818,14 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return [...first, ...supervisors.filter(s => !first.includes(s))];
   }
 
-  async function firstCustomerText(conversation: Conversation) {
-    const rows = await store.listMessages(conversation.id, {
-      includeInternal: false,
-    });
-    return (
-      rows.find(r => r.message.authorType === 'contact')?.message.body ?? ''
-    );
+  /** The customer's words: the first for a subject that stays the same, the newest for the body. */
+  async function customerText(conversation: Conversation) {
+    const texts = (
+      await store.listMessages(conversation.id, { includeInternal: false })
+    )
+      .filter(r => r.message.authorType === 'contact')
+      .map(r => r.message.body);
+    return { first: texts[0] ?? '', last: texts.at(-1) ?? '' };
   }
 
   const jobHandlers: Record<
@@ -820,9 +838,10 @@ export function createHelpdesk(input: HelpdeskConfig) {
       );
       if (!conversation) return;
       const reopened = payload.reopened === true;
+      const text = await customerText(conversation);
       const body = reopened
         ? ((await store.getMessage(String(payload.messageId)))?.body ?? '')
-        : await firstCustomerText(conversation);
+        : text.last;
       const recipients = await agentRecipients(conversation);
       for (const agent of recipients) {
         await sendEmail({
@@ -834,7 +853,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
           subject:
             conversation.title ??
             conversation.subject ??
-            truncate(plainText(body.slice(0, 2000)), 80),
+            truncate(plainText(text.first.slice(0, 2000)), 80),
           body: truncate(body, 1000),
           url: agentUrl(conversation),
         });
@@ -966,7 +985,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       if (!conversation) return;
       const target = payload.target === 'resolve' ? 'resolution' : 'response';
       const stage = payload.stage === 'breach' ? 'breach' : 'warning';
-      const body = await firstCustomerText(conversation);
+      const text = await customerText(conversation);
       const recipients = await slaRecipients(conversation);
       for (const agent of recipients) {
         await sendEmail({
@@ -977,8 +996,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
           subject:
             conversation.title ??
             conversation.subject ??
-            truncate(plainText(body.slice(0, 2000)), 80),
-          body: truncate(body, 1000),
+            truncate(plainText(text.first.slice(0, 2000)), 80),
+          body: truncate(text.last, 1000),
           url: agentUrl(conversation),
           target,
           stage,
@@ -1004,7 +1023,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       ) {
         return;
       }
-      const body = await firstCustomerText(conversation);
+      const text = await customerText(conversation);
       const recipients = await agentRecipients(conversation);
       for (const agent of recipients) {
         await sendEmail({
@@ -1015,8 +1034,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
           subject:
             conversation.title ??
             conversation.subject ??
-            truncate(plainText(body.slice(0, 2000)), 80),
-          body: truncate(body, 1000),
+            truncate(plainText(text.first.slice(0, 2000)), 80),
+          body: truncate(text.last, 1000),
           url: agentUrl(conversation),
         });
       }

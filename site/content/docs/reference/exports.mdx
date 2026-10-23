@@ -83,7 +83,7 @@ Every type in the configuration module is exported as well: `HelpdeskConfig`, `I
     },
     addNote: {
       type: '(conversationId: string, body: string, options?: { agentUserId?: string; internal?: boolean; notify?: string[] }) => Promise<Message>',
-      description: <>Writes an internal note, or a public message when <code>internal</code> is <code>false</code>, from the agent named or from the system. Raises <code>message.created</code> and reaches open agent UIs; a public message is emailed to the customer. For what your own systems learn, such as an incident acknowledged or an issue closed.</>,
+      description: <>Writes an internal note, or a public message when <code>internal</code> is <code>false</code>, from the agent named or from the system. Raises <code>message.created</code> and reaches open agent UIs; a public message is emailed to the customer, and from an agent it assigns an unassigned conversation to them. For what your own systems learn, such as an incident acknowledged or an issue closed.</>,
     },
     changeConversation: {
       type: '(conversationId: string, patch: unknown, options?: { agentUserId?: string }) => Promise<Conversation | null>',

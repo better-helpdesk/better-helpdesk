@@ -22,7 +22,7 @@ const sameFilters = (query: string, current: Record<string, string>) => {
   return [...keys].every(k => saved[k] === now[k]);
 };
 
-/** Saved filter sets, the agent's own and the team's: their chips, and the actions that save, rename and delete them, each placed by the caller. */
+/** Saved filter sets, the agent's own and the team's: a row of tabs, and the links that save, rename and delete them, each placed by the caller. */
 export function SavedViews({
   filters,
   canSave,
@@ -31,7 +31,7 @@ export function SavedViews({
   /** The inbox's current filters; an empty value is no filter. */
   filters: Record<string, string>;
   canSave: boolean;
-  children: (chips: ReactNode, actions: ReactNode) => ReactNode;
+  children: (tabs: ReactNode, actions: ReactNode) => ReactNode;
 }) {
   const { api, t, navigate, route } = useAdmin();
   const views = useResource(
@@ -47,13 +47,12 @@ export function SavedViews({
   const [editing, setEditing] = useState<'save' | 'rename' | null>(null);
   const list = views.data?.views ?? [];
   const active = list.find(v => sameFilters(v.query, filters));
-  const chips = list.length > 0 && (
-    <fieldset className="sa-views" aria-label={t('admin.views')}>
+  const tabs = list.length > 0 && (
+    <fieldset className="sa-seg sa-views" aria-label={t('admin.views')}>
       {list.map(v => (
         <button
           key={v.id}
           type="button"
-          className="sa-btn sa-chip"
           aria-pressed={v === active}
           title={v.shared ? t('admin.sharedView') : undefined}
           onClick={() =>
@@ -162,5 +161,5 @@ export function SavedViews({
     </>
   );
 
-  return children(chips, actions);
+  return children(tabs, actions);
 }

@@ -1132,8 +1132,11 @@ export function createHandler(support: Helpdesk) {
         const current = note
           ? await store.getConversation(updated.id)
           : updated;
-        if (current)
-          await support.addAgentMessage(agent.id, current, reply, false);
+        if (current) {
+          await support.addAgentMessage(agent.id, current, reply, false, [], {
+            claim: fields.assigneeId === undefined,
+          });
+        }
       }
     }
     return json({ ok: true });

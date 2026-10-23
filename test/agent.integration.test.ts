@@ -103,6 +103,72 @@ describe('agent access', () => {
     });
   });
 
+  it('assigns an unassigned conversation to the agent who replies, and leaves notes and other assignees alone', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    h.addUser('bea', { isAgent: true });
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    await h.call('GET', 'agent/me', { user: 'bea' });
+    const me = (await h.findOne('agent', { name: 'agent' }))?.id;
+    const bea = (await h.findOne('agent', { name: 'bea' }))?.id;
+    const assigneeOf = async (id: string) =>
+      (await h.findOne('conversation', { id }))?.assigneeId ?? null;
+
+    const first = await open('ada');
+    const noted = await h.call(
+      'POST',
+      `agent/conversations/${first.id}/messages`,
+      { user: 'agent', body: { body: 'Looking into it', internal: true } }
+    );
+    expect(noted.status).toBe(201);
+    expect(await assigneeOf(first.id)).toBeNull();
+    const replied = await h.call(
+      'POST',
+      `agent/conversations/${first.id}/messages`,
+      { user: 'agent', body: { body: 'The button is under Shipments.' } }
+    );
+    expect(replied.status).toBe(201);
+    expect(await assigneeOf(first.id)).toBe(me);
+    const detail = await h.call('GET', `agent/conversations/${first.id}`, {
+      user: 'agent',
+    });
+    expect(detail.data.events.map((e: { kind: string }) => e.kind)).toContain(
+      'assigneeId'
+    );
+
+    const second = await open('ada');
+    await h.call('PATCH', `agent/conversations/${second.id}`, {
+      user: 'agent',
+      body: { assigneeId: bea },
+    });
+    await h.call('POST', `agent/conversations/${second.id}/messages`, {
+      user: 'agent',
+      body: { body: 'Bea has this one, but here is a first answer.' },
+    });
+    expect(await assigneeOf(second.id)).toBe(bea);
+
+    // Reply to all claims too, unless the same request set the assignee.
+    const third = await open('ada');
+    const fourth = await open('ada');
+    await h.call('POST', 'agent/conversations/bulk', {
+      user: 'agent',
+      body: { ids: [third.id], reply: 'We are on it.' },
+    });
+    expect(await assigneeOf(third.id)).toBe(me);
+    await h.call('POST', 'agent/conversations/bulk', {
+      user: 'agent',
+      body: { ids: [fourth.id], assigneeId: null, reply: 'Back to the pool.' },
+    });
+    expect(await assigneeOf(fourth.id)).toBeNull();
+
+    const fifth = await open('ada');
+    await h.support.addNote(fifth.id, 'Fixed in 4.12.1.', {
+      agentUserId: 'user-agent',
+      internal: false,
+    });
+    expect(await assigneeOf(fifth.id)).toBe(me);
+  });
+
   it('refuses an unknown assignee', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });
@@ -284,15 +350,25 @@ describe('jobs and email', () => {
     expect(res.status).toBe(400);
   });
 
-  it('reminds agents once about a customer left waiting', async () => {
+  it('reminds agents once about a customer left waiting, quoting their newest message', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true, email: 'agent@devguard.test' });
     await h.call('GET', 'agent/me', { user: 'agent' });
-    await open('ada');
+    const { id } = await open('ada');
+    const reply = await h.call('POST', `widget/conversations/${id}/messages`, {
+      user: 'ada',
+      body: { body: 'Still looking, any news?' },
+    });
+    expect(reply.status).toBe(201);
     await h.update('conversation', {}, { waitingSince: ago(2 * HOUR) });
     await h.runDueJobs();
     await h.runDueJobs();
-    expect(h.emails.filter(e => e.kind === 'agent-reminder')).toHaveLength(1);
+    expect(h.emails.filter(e => e.kind === 'agent-reminder')).toEqual([
+      expect.objectContaining({
+        subject: 'How do I export?',
+        body: 'Still looking, any news?',
+      }),
+    ]);
   });
 
   it('still reminds agents about every waiting customer after a send fails', async () => {
