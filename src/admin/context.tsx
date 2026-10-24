@@ -203,7 +203,8 @@ export function useAdminRoute({
         window.history.pushState(null, '', href);
         setOwn(next);
       }
-      window.scrollTo({ top: 0 });
+      // A thread brings itself into view by the least amount; every other screen starts at the top.
+      if (!next.conversation) window.scrollTo({ top: 0 });
     },
     [basePath, onNavigate]
   );

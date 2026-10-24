@@ -25,12 +25,10 @@ const sameFilters = (query: string, current: Record<string, string>) => {
 /** Saved filter sets, the agent's own and the team's: a row of tabs, and the links that save, rename and delete them, each placed by the caller. */
 export function SavedViews({
   filters,
-  canSave,
   children,
 }: {
   /** The inbox's current filters; an empty value is no filter. */
   filters: Record<string, string>;
-  canSave: boolean;
   children: (tabs: ReactNode, actions: ReactNode) => ReactNode;
 }) {
   const { api, t, navigate, route } = useAdmin();
@@ -89,14 +87,12 @@ export function SavedViews({
           </button>
         </>
       ) : (
-        canSave && (
-          <button
-            type="button"
-            className="sa-link"
-            onClick={() => setEditing('save')}>
-            {t('admin.saveView')}
-          </button>
-        )
+        <button
+          type="button"
+          className="sa-link"
+          onClick={() => setEditing('save')}>
+          {t('admin.saveView')}
+        </button>
       )}
       <Dialog
         open={editing !== null}
