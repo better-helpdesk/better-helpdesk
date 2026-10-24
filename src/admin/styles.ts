@@ -242,6 +242,9 @@ export const adminCss = `
   /* Open details take their width from the list, not the thread. */
   .sa-panes[data-open]:has(.sa-split > aside:not([hidden])) { grid-template-columns: 320px minmax(0, 1fr); }
   .sa-panes[data-open] > .sa-list-pane { display: block; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
+  /* The thread scrolls inside its pane too, so opening another one never moves the window. */
+  .sa-panes[data-open] > .sa-thread-pane { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .sa-panes[data-open] > .sa-thread-pane > .sa { min-height: 100%; }
   .sa-panes[data-open] .sa-back { display: none; }
 }
 .sa-split:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }

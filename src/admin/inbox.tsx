@@ -279,7 +279,7 @@ export function Inbox() {
         {!nav && <NotificationBell />}
         {!nav && !narrow && <AwayControl />}
       </div>
-      <SavedViews filters={filters} canSave={filtered}>
+      <SavedViews filters={filters}>
         {(views, actions) => (
           <>
             {views}
@@ -435,6 +435,11 @@ export function Inbox() {
                       <kbd>?</kbd> {t('admin.allShortcuts')}
                     </span>
                   )
+                )}
+                {filtered && (
+                  <button type="button" className="sa-link" onClick={clear}>
+                    {t('admin.resetView')}
+                  </button>
                 )}
                 {actions}
               </div>

@@ -308,6 +308,10 @@ export function ConversationView({ id }: { id: string }) {
   const [aside, setAside] = useState(readAside);
   const [merging, setMerging] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Optional: jsdom has no layout and so does not implement it.
+    root.current?.scrollIntoView?.({ block: 'nearest' });
+  }, []);
   const asideToggle = useRef<HTMLButtonElement>(null);
   const asideId = useId();
   const shown = !!detail.data;

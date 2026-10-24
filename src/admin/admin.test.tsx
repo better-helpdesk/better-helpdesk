@@ -775,6 +775,53 @@ describe('HelpdeskAdmin', () => {
     expect(save.closest('.sa-filters-foot')).not.toBeNull();
   });
 
+  it('saves the default Open list as a view, and resets the filters from the tray', async () => {
+    const { showModal, close } = HTMLDialogElement.prototype;
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+    onTestFinished(() => {
+      Object.assign(HTMLDialogElement.prototype, { showModal, close });
+    });
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          posts.push(JSON.parse(String(init.body)));
+          return new Response(JSON.stringify({ view: {} }), { status: 201 });
+        }
+        return respond(String(input));
+      })
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await openTray();
+    expect(screen.queryByRole('button', { name: 'Reset view' })).toBeNull();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Save as view' })
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Open' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(posts).toEqual([
+        { name: 'Open', query: 'status=open', shared: false },
+      ])
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unassigned' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset view' }));
+    expect(window.location.pathname + window.location.search).toBe(
+      '/support/conversations/'
+    );
+    expect(screen.queryByRole('button', { name: 'Reset view' })).toBeNull();
+  });
+
   it('filters the inbox by any agent from the tray', async () => {
     routes['agent/agents/'] = {
       agents: [
@@ -2957,6 +3004,43 @@ describe('filters beside an open conversation', () => {
     expect(window.location.pathname).toBe('/support/conversations/c1/');
     expect(window.location.search).toBe('?status=open&assignee=me');
     expect(screen.getByRole('textbox', { name: 'Reply' })).toBeTruthy();
+  });
+
+  it('leaves the window alone when a thread opens or changes, and scrolls to the top when leaving it', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    const second = {
+      ...conversation,
+      id: 'c2',
+      reference: 'DG-1001',
+      subject: 'Second',
+    };
+    routes['agent/conversations/?'] = { conversations: [conversation, second] };
+    routes['agent/conversations/c2/'] = {
+      ...(original as object),
+      conversation: second,
+    };
+    onTestFinished(() => {
+      scrollTo.mockRestore();
+      routes['agent/conversations/?'] = { conversations: [conversation] };
+      delete routes['agent/conversations/c2/'];
+    });
+    window.history.replaceState(null, '', '/support/conversations/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    fireEvent.click(await screen.findByRole('link', { name: /DG-1000/ }));
+    expect(window.location.pathname).toBe('/support/conversations/c1/');
+    await screen.findByRole('textbox', { name: 'Reply' });
+    fireEvent.click(
+      await screen.findByRole('link', { name: /DG-1001/, hidden: true })
+    );
+    expect(window.location.pathname).toBe('/support/conversations/c2/');
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    const pane = document.querySelector('.sa-thread-pane') as HTMLElement;
+    fireEvent.click(
+      await within(pane).findByRole('link', { name: 'Inbox', hidden: true })
+    );
+    expect(window.location.pathname).toBe('/support/conversations/');
+    expect(scrollTo).toHaveBeenCalledTimes(1);
   });
 });
 
