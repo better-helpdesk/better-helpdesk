@@ -275,8 +275,27 @@ describe('HelpdeskAdmin', () => {
         },
       ],
       attachments: [
-        { id: 'a1', messageId: null, filename: 'export.csv', size: 10 },
-        { id: 'a2', messageId: 'm2', filename: 'app.log', size: 20 },
+        {
+          id: 'a1',
+          messageId: null,
+          filename: 'export.csv',
+          contentType: 'text/plain',
+          size: 10,
+        },
+        {
+          id: 'a2',
+          messageId: 'm2',
+          filename: 'app.log',
+          contentType: 'text/plain',
+          size: 20,
+        },
+        {
+          id: 'a3',
+          messageId: 'm2',
+          filename: 'spinner.gif',
+          contentType: 'image/gif',
+          size: 30,
+        },
       ],
     };
     onTestFinished(() => {
@@ -289,8 +308,13 @@ describe('HelpdeskAdmin', () => {
       Array.from(
         (
           screen.getByText(text).closest('article') as HTMLElement
-        ).querySelectorAll('a')
-      ).map(a => `${a.textContent}: ${a.getAttribute('href')}`);
+        ).querySelectorAll('.sa-msg-files a')
+      ).map(a => {
+        const image = a.querySelector('img');
+        return image
+          ? `<img ${image.alt}> ${image.getAttribute('src')}: ${a.getAttribute('href')}`
+          : `${a.textContent}: ${a.getAttribute('href')}`;
+      });
     expect(files('The CSV export fails')).toEqual([
       expect.stringMatching(
         /^export\.csv: .*\/agent\/conversations\/c1\/attachments\/a1\/$/
@@ -300,6 +324,7 @@ describe('HelpdeskAdmin', () => {
       expect.stringMatching(
         /^app\.log: .*\/agent\/conversations\/c1\/attachments\/a2\/$/
       ),
+      expect.stringMatching(/^<img spinner\.gif> (.*\/attachments\/a3\/): \1$/),
     ]);
   });
 

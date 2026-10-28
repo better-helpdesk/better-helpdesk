@@ -13,3 +13,7 @@ export function filesByMessage<T extends { messageId: string | null }>(
   }
   return grouped;
 }
+
+/** The image types a browser shows in an `<img>`; animated GIF and WebP play there on their own. */
+export const isInlineImage = (file: { contentType?: string }) =>
+  /^image\/(png|jpeg|gif|webp)$/.test(file.contentType ?? '');

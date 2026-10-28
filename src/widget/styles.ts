@@ -314,6 +314,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .msg-files a, .msg-files span { display: block; padding: 2px 0; }
 .msg-files a { color: var(--s-accent); }
 .msg-row.mine .msg-files a { color: inherit; text-decoration: underline; }
+.msg-image { display: block; max-width: 100%; max-height: 220px; height: auto; border-radius: var(--s-r-inner); }
 
 .composer { border-top: 1px solid var(--s-border); background: var(--s-subtle); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end; }
 .rt-reply { flex: 1; min-width: 0; }

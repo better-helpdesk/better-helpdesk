@@ -141,7 +141,7 @@ If your app sends a `Content-Security-Policy`, the helpdesk needs these sources 
 
 - `style-src 'unsafe-inline'`: the widget puts a `<style>` element in its shadow root, and the agent UI renders one in the page. Neither takes a nonce.
 - `connect-src` with the origin of your storage bucket's upload URL, if you [store attachments](/docs/inbox/attachments): the widget posts files straight to it.
-- `img-src blob:`: the widget previews an image the customer attaches from a local `blob:` URL before it is sent. Add the origin of your agents' avatars too, if `identify` returns an `image`.
+- `img-src blob:` and the origin of your storage bucket's download URL: the widget previews an image the customer attaches from a local `blob:` URL before it is sent, and both the widget and the agent UI show image attachments from the URL `presignDownload` returns. Add the origin of your agents' avatars too, if `identify` returns an `image`.
 
 On a page of another origin that loads the widget, that page's policy needs the handler's origin in `connect-src`, and, for the script tag, the origin of `widget.js` in `script-src`.
 
