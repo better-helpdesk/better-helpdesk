@@ -1855,8 +1855,24 @@ describe('home, messages and help', () => {
           },
         ],
         attachments: [
-          { id: 'f1', messageId: null, filename: 'shot.png' },
-          { id: 'f2', messageId: 'm2', filename: 'build.zip' },
+          {
+            id: 'f1',
+            messageId: null,
+            filename: 'shot.png',
+            contentType: 'image/png',
+          },
+          {
+            id: 'f2',
+            messageId: 'm2',
+            filename: 'build.zip',
+            contentType: 'application/octet-stream',
+          },
+          {
+            id: 'f3',
+            messageId: 'm2',
+            filename: 'demo.gif',
+            contentType: 'image/gif',
+          },
         ],
       },
     });
@@ -1876,17 +1892,23 @@ describe('home, messages and help', () => {
       Array.from(
         (
           screen.getByText(text).closest('.msg') as HTMLElement
-        ).querySelectorAll('a')
-      ).map(a => `${a.textContent}: ${a.getAttribute('href')}`);
+        ).querySelectorAll('.msg-files a')
+      ).map(a => {
+        const image = a.querySelector('img');
+        return image
+          ? `<img ${image.alt}> ${image.getAttribute('src')}: ${a.getAttribute('href')}`
+          : `${a.textContent}: ${a.getAttribute('href')}`;
+      });
     expect(files('Export broken, see the screenshot')).toEqual([
       expect.stringMatching(
-        /^shot\.png: .*\/widget\/conversations\/c1\/attachments\/f1\/$/
+        /^<img shot\.png> (.*\/widget\/conversations\/c1\/attachments\/f1\/): \1$/
       ),
     ]);
     expect(files('Try this build')).toEqual([
       expect.stringMatching(
         /^build\.zip: .*\/widget\/conversations\/c1\/attachments\/f2\/$/
       ),
+      expect.stringMatching(/^<img demo\.gif> (.*\/attachments\/f3\/): \1$/),
     ]);
   });
 

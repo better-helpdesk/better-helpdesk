@@ -17,7 +17,7 @@ import {
   useResource,
 } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
-import { filesByMessage } from '../ui/files';
+import { filesByMessage, isInlineImage } from '../ui/files';
 import {
   dateLocale,
   nextWorkday,
@@ -1616,7 +1616,12 @@ type ThreadData = {
     body: string;
     createdAt: string;
   }[];
-  attachments: { id: string; messageId: string | null; filename: string }[];
+  attachments: {
+    id: string;
+    messageId: string | null;
+    filename: string;
+    contentType?: string;
+  }[];
 };
 
 function ThreadMenu({
@@ -1863,19 +1868,30 @@ function Thread({
                   />
                   {attached.has(m.id) && (
                     <div className="msg-files">
-                      {attached.get(m.id)?.map(a =>
-                        linkFiles ? (
+                      {attached.get(m.id)?.map(a => {
+                        if (!linkFiles)
+                          return <span key={a.id}>{a.filename}</span>;
+                        const file = `${apiBase}/widget/conversations/${id}/attachments/${a.id}/`;
+                        return (
                           <a
                             key={a.id}
-                            href={`${apiBase}/widget/conversations/${id}/attachments/${a.id}/`}
+                            href={file}
                             target="_blank"
-                            rel="noreferrer">
-                            {a.filename}
+                            rel="noreferrer"
+                            title={a.filename}>
+                            {isInlineImage(a) ? (
+                              <img
+                                className="msg-image"
+                                src={file}
+                                alt={a.filename}
+                                loading="lazy"
+                              />
+                            ) : (
+                              a.filename
+                            )}
                           </a>
-                        ) : (
-                          <span key={a.id}>{a.filename}</span>
-                        )
-                      )}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

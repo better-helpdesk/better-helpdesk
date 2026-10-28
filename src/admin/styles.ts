@@ -323,6 +323,7 @@ export const adminCss = `
 .sa-msg header { font-size: 12px; color: var(--a-muted); margin-bottom: 6px; white-space: normal; }
 .sa-msg-files { display: grid; gap: 2px; margin-top: 6px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
 .sa-msg-files a { color: var(--a-accent); }
+.sa-msg-image { display: block; max-width: min(100%, 360px); max-height: 280px; height: auto; border-radius: var(--a-r-inner); border: 1px solid var(--a-border); }
 .sa-msg header strong { color: var(--a-fg); font-weight: 600; }
 
 .sa-suggest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--a-radius); background: var(--a-subtle); border: 1px solid var(--a-border); font-size: 13px; }

@@ -3,7 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
-import { filesByMessage } from '../ui/files';
+import { filesByMessage, isInlineImage } from '../ui/files';
 import { relativeTime, translated } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
 import { isMac, RichEditor, type RichEditorHandle } from '../ui/rich-editor';
@@ -112,6 +112,7 @@ type Detail = {
     id: string;
     messageId: string | null;
     filename: string;
+    contentType: string;
     size: number;
   }[];
   events: TimelineEvent[];
@@ -908,15 +909,28 @@ export function ConversationView({ id }: { id: string }) {
                     </div>
                     {files && (
                       <div className="sa-msg-files">
-                        {files.map(a => (
-                          <a
-                            key={a.id}
-                            href={`${apiBase}/agent/conversations/${id}/attachments/${a.id}/`}
-                            target="_blank"
-                            rel="noreferrer">
-                            {a.filename}
-                          </a>
-                        ))}
+                        {files.map(a => {
+                          const file = `${apiBase}/agent/conversations/${id}/attachments/${a.id}/`;
+                          return (
+                            <a
+                              key={a.id}
+                              href={file}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={a.filename}>
+                              {isInlineImage(a) ? (
+                                <img
+                                  className="sa-msg-image"
+                                  src={file}
+                                  alt={a.filename}
+                                  loading="lazy"
+                                />
+                              ) : (
+                                a.filename
+                              )}
+                            </a>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
