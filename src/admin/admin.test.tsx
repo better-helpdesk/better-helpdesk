@@ -43,7 +43,24 @@ const me = {
   dealStages: ['new', 'won'],
   customFields: {},
   ai: false,
+  aiFeatures: {
+    classify: false,
+    title: false,
+    summary: false,
+    duplicates: false,
+    draft: false,
+    rewrite: false,
+  },
   features: { deals: true, canned: true, overview: true },
+};
+
+const allAi = {
+  classify: true,
+  title: true,
+  summary: true,
+  duplicates: true,
+  draft: true,
+  rewrite: true,
 };
 
 const conversation = {
@@ -1347,7 +1364,7 @@ describe('HelpdeskAdmin', () => {
   });
 
   it('puts an AI draft in the reply and leaves the note alone', async () => {
-    routes['agent/me/'] = { ...me, ai: true };
+    routes['agent/me/'] = { ...me, ai: true, aiFeatures: allAi };
     routes['agent/conversations/c1/draft'] = { text: 'Try the new export' };
     onTestFinished(() => {
       routes['agent/me/'] = me;
@@ -1373,7 +1390,7 @@ describe('HelpdeskAdmin', () => {
   });
 
   it('shortens, formalises or translates what the agent wrote, in place', async () => {
-    routes['agent/me/'] = { ...me, ai: true };
+    routes['agent/me/'] = { ...me, ai: true, aiFeatures: allAi };
     const posts: unknown[] = [];
     vi.stubGlobal(
       'fetch',
@@ -1466,6 +1483,13 @@ describe('HelpdeskAdmin', () => {
       await screen.findByRole('button', { name: 'Filter by tag: billing' })
     );
     expect(window.location.search).toContain('tag=billing');
+    // A filter set elsewhere leaves the tray shut and counts on its button.
+    const tray = screen.getByRole('button', { name: /^Filters/ });
+    expect([tray.getAttribute('aria-expanded'), tray.textContent]).toEqual([
+      'false',
+      'Filters1',
+    ]);
+    fireEvent.click(tray);
     expect(
       (screen.getByRole('combobox', { name: 'Tag' }) as HTMLInputElement).value
     ).toBe('billing');
@@ -1761,6 +1785,199 @@ describe('HelpdeskAdmin', () => {
     expect(await screen.findByText('Something went wrong.')).toBeTruthy();
   });
 
+  it('shows the AI settings only when the host configured an AI', async () => {
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('heading', { name: 'Audit log' });
+    expect(screen.queryByRole('heading', { name: 'AI' })).toBeNull();
+  });
+
+  it('turns an AI feature off for the team and refreshes what the agent sees', async () => {
+    const calls: { url: string; body?: unknown }[] = [];
+    let current = { ...allAi };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({
+          url,
+          body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        });
+        if (init?.method === 'PUT') {
+          current = { ...current, ...JSON.parse(String(init.body)).ai };
+          return new Response('{"ok":true}');
+        }
+        if (url.includes('agent/settings/'))
+          return new Response(
+            JSON.stringify({ confirmation: {}, ai: current })
+          );
+        if (url.includes('agent/me/'))
+          return new Response(
+            JSON.stringify({ ...me, ai: true, aiFeatures: current })
+          );
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (await screen.findByRole('heading', { name: 'AI' })).closest(
+      'form'
+    ) as HTMLElement;
+    const draft = within(form).getByRole('checkbox', {
+      name: 'Draft a reply (Draft with AI)',
+    }) as HTMLInputElement;
+    expect(draft.checked).toBe(true);
+    fireEvent.click(draft);
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(calls.find(c => c.body)?.body).toEqual({
+        ai: { ...allAi, draft: false },
+      })
+    );
+    const saved = calls.findIndex(c => c.body);
+    await waitFor(() =>
+      expect(
+        calls.slice(saved + 1).some(c => c.url.includes('agent/me/'))
+      ).toBe(true)
+    );
+  });
+
+  it('leaves out the AI buttons the team turned off', async () => {
+    routes['agent/me/'] = {
+      ...me,
+      ai: true,
+      aiFeatures: { ...allAi, draft: false },
+    };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    reply.innerHTML = 'Please read this.';
+    fireEvent.input(reply);
+    expect(await screen.findByRole('button', { name: 'Shorten' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Draft with AI' })).toBeNull();
+  });
+
+  it('groups the audit log by day and by what one agent changed together', async () => {
+    const noon = new Date();
+    noon.setHours(12, 0, 0, 0);
+    const at = (minutes: number) =>
+      new Date(noon.getTime() - minutes * 60_000).toISOString();
+    const entry = (
+      id: string,
+      minutes: number,
+      action: string,
+      more: Record<string, unknown> = {}
+    ) => ({
+      id,
+      agentId: 'a1',
+      agentName: 'Agent',
+      action,
+      target: 'c1',
+      targetName: 'Export broken',
+      targetReference: 'DG-1000',
+      data: {},
+      createdAt: at(minutes),
+      ...more,
+    });
+    const requested: string[] = [];
+    routes['agent/audit/'] = {
+      entries: [
+        entry('e1', 1, 'PATCH conversations/:id', {
+          data: { fields: ['status'] },
+        }),
+        entry('e2', 3, 'POST conversations/:id/messages', {
+          data: { fields: ['body', 'internal'] },
+        }),
+        entry('e3', 5, 'PATCH conversations/:id', {
+          data: { fields: ['assigneeId'] },
+        }),
+        entry('e4', 10, 'POST canned', {
+          agentId: 'a2',
+          agentName: 'Bea',
+          target: null,
+          targetName: null,
+          targetReference: null,
+        }),
+        entry('e5', 24 * 60, 'DELETE contacts/:id', {
+          target: 'p1',
+          targetName: null,
+          targetReference: null,
+        }),
+      ],
+    };
+    routes['agent/agents/'] = {
+      agents: [
+        { id: 'a1', name: 'Agent', email: null, role: 'agent' },
+        { id: 'a2', name: 'Bea', email: null, role: 'agent' },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        requested.push(String(input));
+        return respond(String(input));
+      })
+    );
+    onTestFinished(() => {
+      routes['agent/audit/'] = { entries: [] };
+      routes['agent/agents/'] = { agents: [] };
+    });
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+
+    const log = (
+      await screen.findByRole('heading', { name: 'Audit log' })
+    ).closest('.sa-audit') as HTMLElement;
+    await within(log).findByText('Added a canned reply');
+    expect(
+      Array.from(log.querySelectorAll('.sa-audit-day')).map(h => h.textContent)
+    ).toEqual(['Today', 'Yesterday']);
+    const rows = Array.from(log.querySelectorAll('.sa-audit-entry')).map(
+      section =>
+        Array.from(
+          section.querySelectorAll(':scope > .sa-toolbar > *, :scope > p')
+        )
+          .map(el => el.textContent)
+          .filter(Boolean)
+          .slice(0, 4)
+    );
+    expect(rows.map(r => r.slice(0, 3))).toEqual([
+      [
+        'Agent',
+        'Changed a conversation ×2 · Wrote a reply or note',
+        'DG-1000 Export broken',
+      ],
+      ['Bea', 'Added a canned reply', expect.any(String)],
+      ['Agent', 'Erased a contact', expect.any(String)],
+    ]);
+    const first = log.querySelector('.sa-audit-entry') as HTMLElement;
+    expect(
+      within(first)
+        .getByRole('link', { name: 'DG-1000 Export broken' })
+        .getAttribute('href')
+    ).toBe('/support/conversations/c1/');
+    expect(within(first).getByText(/^Fields:/).textContent).toBe(
+      'Fields: Status, Body, Internal, Assignee'
+    );
+    expect(within(first).getByText('3 changes')).toBeTruthy();
+
+    fireEvent.change(
+      within(log).getByRole('combobox', { name: 'Team member' }),
+      {
+        target: { value: 'a2' },
+      }
+    );
+    await waitFor(() =>
+      expect(requested.some(u => /agent\/audit\/?\?agentId=a2/.test(u))).toBe(
+        true
+      )
+    );
+  });
+
   it('removes a former teammate from the team, never the agent themselves', async () => {
     let team = [
       { id: 'a1', name: 'Agent', email: 'agent@example.test' },
@@ -1789,7 +2006,10 @@ describe('HelpdeskAdmin', () => {
     window.history.replaceState(null, '', '/support/settings/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
 
-    expect(await screen.findByText('Former')).toBeTruthy();
+    // The audit log's filter names the team too.
+    expect(
+      await screen.findByText('Former', { ignore: 'option' })
+    ).toBeTruthy();
     const removeButtons = screen.getAllByRole('button', { name: 'Remove' });
     expect(removeButtons).toHaveLength(1);
     fireEvent.click(removeButtons[0] as HTMLElement);
@@ -1798,7 +2018,9 @@ describe('HelpdeskAdmin', () => {
       screen.getByRole('button', { name: 'Remove and unassign?' })
     );
 
-    await vi.waitFor(() => expect(screen.queryByText('Former')).toBeNull());
+    await vi.waitFor(() =>
+      expect(screen.queryByText('Former', { ignore: 'option' })).toBeNull()
+    );
     expect(removed).toEqual(['a2']);
   });
 

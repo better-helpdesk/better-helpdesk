@@ -98,6 +98,21 @@ const gte = (field: string, value: unknown): Where => ({
   op: 'gte',
   value,
 });
+/** Agent requests that change nothing worth a supervisor's look. */
+export const UNAUDITED = new Set([
+  'POST conversations/:id/typing',
+  'POST notifications/seen',
+]);
+/** The route resource an audit entry names, and the table its id is in. */
+const AUDIT_TARGETS = {
+  conversations: 'conversation',
+  contacts: 'contact',
+  companies: 'company',
+  deals: 'deal',
+  canned: 'canned_reply',
+  agents: 'agent',
+} as const satisfies Record<string, ModelName>;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const oneOf = (field: string, value: unknown[]): Where => ({
   field,
   op: 'in',
@@ -1538,15 +1553,20 @@ export function createStore(
       limit = 100,
       agentId,
       target,
+      before,
     }: {
       limit?: number;
       agentId?: string;
       target?: string;
+      before?: Date;
     } = {}) {
       const rows = await adapter.findMany<AuditEntry>('audit_log', {
         where: and(
           agentId && eq('agentId', agentId),
-          target && eq('target', target)
+          target && eq('target', target),
+          before && lt('createdAt', before),
+          // Rows written before these stopped being recorded.
+          { not: oneOf('action', [...UNAUDITED]) }
         ),
         orderBy: [{ field: 'createdAt', direction: 'desc' }],
         limit,
@@ -1555,9 +1575,46 @@ export function createStore(
         'agent',
         rows.map(r => r.agentId)
       );
+      const targets = new Map<
+        string,
+        { name: string | null; number: number | null }
+      >();
+      for (const [resource, model] of Object.entries(AUDIT_TARGETS)) {
+        const ids = [
+          ...new Set(
+            rows.flatMap(r =>
+              r.target &&
+              UUID.test(r.target) &&
+              r.action.split(' ')[1]?.startsWith(`${resource}/:id`)
+                ? [r.target]
+                : []
+            )
+          ),
+        ];
+        for (const part of chunks(ids)) {
+          for (const row of await adapter.findMany<Record<string, unknown>>(
+            model,
+            { where: oneOf('id', part) }
+          )) {
+            targets.set(String(row.id), {
+              name:
+                [row.title, row.name, row.subject, row.email].find(
+                  (v): v is string => typeof v === 'string' && v !== ''
+                ) ?? null,
+              number: typeof row.number === 'number' ? row.number : null,
+            });
+          }
+        }
+      }
       return rows.map(r => {
         const agent = r.agentId ? agents.get(r.agentId) : undefined;
-        return { ...r, agentName: agent ? (agent.name ?? agent.email) : null };
+        const found = r.target ? targets.get(r.target) : undefined;
+        return {
+          ...r,
+          agentName: agent ? (agent.name ?? agent.email) : null,
+          targetName: found?.name ?? null,
+          targetNumber: found?.number ?? null,
+        };
       });
     },
 

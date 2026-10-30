@@ -1330,6 +1330,129 @@ describe('AI', () => {
     }
   });
 
+  it('does only what the team left on in the AI settings', async () => {
+    const asked: string[] = [];
+    const ai = createHarness({
+      ai: {
+        async generate<T>({ schema }: { schema: z.ZodType<T> }) {
+          const shape = (
+            schema as unknown as { shape: Record<string, unknown> }
+          ).shape;
+          const kind =
+            'duplicates' in shape
+              ? 'duplicates'
+              : 'reply' in shape
+                ? 'reply'
+                : 'triage';
+          asked.push(kind);
+          return (
+            kind === 'duplicates'
+              ? { duplicates: [] }
+              : kind === 'reply'
+                ? { reply: 'Shorter.' }
+                : {
+                    type: 'bug',
+                    priority: 'high',
+                    title: 'Export fails',
+                    summary: 'The export errors.',
+                  }
+          ) as T;
+        },
+      },
+    });
+    try {
+      ai.addUser('ada');
+      ai.addUser('agent', { isAgent: true });
+      const settings = async () =>
+        (await ai.call('GET', 'agent/settings', { user: 'agent' })).data.ai;
+      expect(Object.values(await settings())).toEqual([
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+      ]);
+      expect(
+        (
+          await ai.call('PUT', 'agent/settings', {
+            user: 'agent',
+            body: { ai: { title: false, draft: false } },
+          })
+        ).status
+      ).toBe(200);
+      const me = await ai.call('GET', 'agent/me', { user: 'agent' });
+      expect(me.data.aiFeatures).toEqual({
+        classify: true,
+        title: false,
+        summary: true,
+        duplicates: true,
+        draft: false,
+        rewrite: true,
+      });
+
+      const first = await ai.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'export fails' },
+      });
+      await ai.runDueJobs();
+      const id = first.data.conversation.id;
+      const stored = await ai.support.store.getConversation(id);
+      expect(stored?.aiSuggestion).toEqual({
+        type: 'bug',
+        priority: 'high',
+        summary: 'The export errors.',
+        duplicates: [],
+      });
+      const draft = await ai.call('POST', `agent/conversations/${id}/draft`, {
+        user: 'agent',
+        body: {},
+      });
+      expect(draft.status).toBe(403);
+      const rewrite = await ai.call('POST', `agent/conversations/${id}/draft`, {
+        user: 'agent',
+        body: { mode: 'shorten', text: 'A long reply.' },
+      });
+      expect(rewrite.data.text).toBe('Shorter.');
+
+      // Turned off later, a stored suggestion loses that part and accepting it changes nothing there.
+      await ai.call('PUT', 'agent/settings', {
+        user: 'agent',
+        body: {
+          ai: { classify: false, summary: false, duplicates: false },
+        },
+      });
+      const detail = await ai.call('GET', `agent/conversations/${id}`, {
+        user: 'agent',
+      });
+      expect(detail.data.conversation.aiSuggestion).toEqual({
+        duplicates: [],
+      });
+      await ai.call('POST', `agent/conversations/${id}/suggestion`, {
+        user: 'agent',
+        body: { action: 'accept' },
+      });
+      expect(await ai.support.store.getConversation(id)).toMatchObject({
+        type: 'question',
+        priority: 'normal',
+      });
+
+      asked.length = 0;
+      const second = await ai.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'login loops' },
+      });
+      await ai.runDueJobs();
+      expect(asked).toEqual([]);
+      expect(
+        (await ai.support.store.getConversation(second.data.conversation.id))
+          ?.aiSuggestion
+      ).toBeNull();
+    } finally {
+      await ai.close();
+    }
+  });
+
   it('keeps an agent’s own title when a suggestion is accepted', async () => {
     h.addUser('ada');
     h.addUser('agent', { isAgent: true });
@@ -1697,6 +1820,23 @@ describe('settings', () => {
     expect((await session('en')).data.confirmation).toBeNull();
     const saved = await h.call('GET', 'agent/settings', { user: 'agent' });
     expect(saved.data.confirmation.de).toBe('Danke! Antwort an {email}.');
+  });
+
+  it('keeps the French and Italian confirmation text', async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('ada');
+    await h.call('PUT', 'agent/settings', {
+      user: 'agent',
+      body: { confirmation: { fr: 'Merci !', it: 'Grazie!' } },
+    });
+    const session = await h.call(
+      'GET',
+      'widget/session?inbox=support&locale=it',
+      { user: 'ada' }
+    );
+    expect(session.data.confirmation).toBe('Grazie!');
+    const saved = await h.call('GET', 'agent/settings', { user: 'agent' });
+    expect(saved.data.confirmation).toEqual({ fr: 'Merci !', it: 'Grazie!' });
   });
 });
 

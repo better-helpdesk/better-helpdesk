@@ -2,15 +2,23 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { z } from 'zod';
 
-import { type Feature, type Locale, STATUSES } from './config';
+import {
+  AI_FEATURES,
+  type AiFeature,
+  type AiSettings,
+  type Feature,
+  type Locale,
+  STATUSES,
+} from './config';
 import { clock } from './db/adapter';
 import type { Channel } from './db/model';
-import type {
-  Agent,
-  Company,
-  Contact,
-  Conversation,
-  Message,
+import {
+  type Agent,
+  type Company,
+  type Contact,
+  type Conversation,
+  type Message,
+  UNAUDITED,
 } from './db/store';
 import { formatReference } from './domain';
 import { emitUpdated } from './events';
@@ -637,7 +645,7 @@ export function createHandler(support: Helpdesk) {
         return sent;
       };
       const response = await run({ ...ctx, body, agent });
-      if (method !== 'GET' && response.status < 400) {
+      if (method !== 'GET' && response.status < 400 && !UNAUDITED.has(action)) {
         const fields =
           sent && typeof sent === 'object' ? Object.keys(sent) : [];
         try {
@@ -687,15 +695,33 @@ export function createHandler(support: Helpdesk) {
     json({
       confirmation:
         (await store.getSetting<ConfirmationSetting>('confirmation')) ?? {},
+      ai: await support.aiSettings(),
     })
   );
 
   agentRoute('PUT', 'settings', async ({ body }) => {
     const text = z.string().trim().max(1000).optional();
     const data = z
-      .object({ confirmation: z.object({ en: text, de: text }) })
+      .object({
+        confirmation: z
+          .object({ en: text, de: text, fr: text, it: text })
+          .optional(),
+        ai: z
+          .object(
+            Object.fromEntries(
+              AI_FEATURES.map(f => [f, z.boolean().optional()])
+            ) as Record<AiFeature, z.ZodOptional<z.ZodBoolean>>
+          )
+          .strict()
+          .optional(),
+      })
       .parse(await body());
-    await store.setSetting('confirmation', data.confirmation);
+    if (data.confirmation)
+      await store.setSetting('confirmation', data.confirmation);
+    if (data.ai) {
+      const stored = (await store.getSetting<Partial<AiSettings>>('ai')) ?? {};
+      await store.setSetting('ai', { ...stored, ...data.ai });
+    }
     return json({ ok: true });
   });
 
@@ -724,11 +750,23 @@ export function createHandler(support: Helpdesk) {
     }
     const p = url.searchParams;
     const id = (key: string) => uuid.optional().parse(p.get(key) || undefined);
+    const before = z.iso
+      .datetime({ offset: true })
+      .optional()
+      .parse(p.get('before') || undefined);
+    const entries = await store.listAudit({
+      agentId: id('agentId'),
+      target: p.get('target') || undefined,
+      before: before ? new Date(before) : undefined,
+    });
     return json({
-      entries: await store.listAudit({
-        agentId: id('agentId'),
-        target: p.get('target') || undefined,
-      }),
+      entries: entries.map(({ targetNumber, ...e }) => ({
+        ...e,
+        targetReference:
+          targetNumber === null
+            ? null
+            : formatReference(config.referencePrefix, targetNumber),
+      })),
     });
   });
 
@@ -770,6 +808,7 @@ export function createHandler(support: Helpdesk) {
         )
       ),
       ai: Boolean(config.ai),
+      aiFeatures: await support.aiSettings(),
       features: config.features,
     })
   );
@@ -1044,7 +1083,12 @@ export function createHandler(support: Helpdesk) {
         ? await store.findCompanyByDomain(domain)
         : null;
     return json({
-      conversation: agentView(conversation),
+      conversation: {
+        ...agentView(conversation),
+        aiSuggestion: await support.allowedSuggestion(
+          conversation.aiSuggestion
+        ),
+      },
       contact: contact && {
         ...contact,
         verified: identities.some(i => i.verified),
@@ -1260,7 +1304,9 @@ export function createHandler(support: Helpdesk) {
     'conversations/:id/suggestion',
     async ({ params, body, agent }) => {
       const conversation = await requireConversation(params.id);
-      const suggestion = conversation.aiSuggestion;
+      const suggestion = await support.allowedSuggestion(
+        conversation.aiSuggestion
+      );
       if (!suggestion) throw new HelpdeskError(404, 'No suggestion');
       const data = z
         .object({ action: z.enum(['accept', 'dismiss']) })

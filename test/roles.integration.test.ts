@@ -128,6 +128,40 @@ describe('the audit log', () => {
     ]);
   });
 
+  it('names what each entry changed, leaves out typing and pages back', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const { id, reference } = await open('ada');
+    await h.call('POST', `agent/conversations/${id}/typing`, {
+      user: 'agent',
+      body: {},
+    });
+    await h.call('PATCH', `agent/conversations/${id}`, {
+      user: 'agent',
+      body: { subject: 'Export missing' },
+    });
+    expect(await h.find('audit_log', {})).toMatchObject([
+      { action: 'PATCH conversations/:id' },
+    ]);
+
+    const listed = await h.call('GET', 'agent/audit', { user: 'agent' });
+    expect(listed.data.entries).toMatchObject([
+      {
+        action: 'PATCH conversations/:id',
+        target: id,
+        targetName: 'Export missing',
+        targetReference: reference,
+      },
+    ]);
+    const [entry] = listed.data.entries;
+    const older = await h.call(
+      'GET',
+      `agent/audit?before=${encodeURIComponent(entry.createdAt)}`,
+      { user: 'agent' }
+    );
+    expect(older.data.entries).toEqual([]);
+  });
+
   it('is a supervisor’s once there is one', async () => {
     h.addUser('agent', { isAgent: true });
     h.addUser('boss', { isAgent: true, role: 'supervisor' });

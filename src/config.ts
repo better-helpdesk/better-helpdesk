@@ -393,6 +393,12 @@ export type HelpdeskConfig = {
 };
 
 export const DEFAULT_TYPES = ['question', 'bug', 'feature', 'lead'];
+export {
+  AI_FEATURES,
+  type AiFeature,
+  type AiSettings,
+} from './ai-features';
+
 export const STATUSES = ['open', 'pending', 'resolved'] as const;
 export const DEFAULT_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 export const DEFAULT_LEAD_STAGES = ['lead', 'qualified', 'customer', 'churned'];

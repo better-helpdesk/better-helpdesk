@@ -98,16 +98,16 @@ An unidentified caller on an inbox that is not `public` gets 401. A blocked cont
 
 Every route here requires an agent. The `agent/deals`, `agent/canned` and `agent/overview` routes answer 404 when [`features`](/docs/reference/configuration#crm) switched their section off. A `viewer` may call every `GET`, and of the rest only `PATCH agent/me`, `POST agent/notifications/seen` and the `agent/views` routes; anything else answers 403. Once any agent has the `supervisor` role, `PUT agent/settings`, `DELETE agent/agents/{id}` and `GET agent/audit` answer 403 to everyone else.
 
-Every request that is not a `GET` and succeeded is written to [`audit_log`](/docs/database/tables#audit_log) with the agent, the route, the id in its path and the names of the fields it sent.
+Every request that is not a `GET` and succeeded is written to [`audit_log`](/docs/database/tables#audit_log) with the agent, the route, the id in its path and the names of the fields it sent. `POST agent/conversations/{id}/typing` and `POST agent/notifications/seen` are not.
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| `GET` | `agent/me` | The agent, and the configuration the agent UI needs. |
+| `GET` | `agent/me` | The agent, and the configuration the agent UI needs; `aiFeatures` says which [AI switches](/docs/ai/suggestions#choose-what-the-ai-does) are on, all `false` without `ai`. |
 | `PATCH` | `agent/me` | Sets the agent's away time. |
-| `GET` | `agent/settings` | The settings agents change. |
-| `PUT` | `agent/settings` | Changes them. |
+| `GET` | `agent/settings` | The settings agents change: `confirmation`, the widget's confirmation text per language, and `ai`, the AI switches. |
+| `PUT` | `agent/settings` | Changes them. Either field may be left out; `ai` takes any of `classify`, `title`, `summary`, `duplicates`, `draft` and `rewrite` as booleans and keeps the others. |
 | `GET` | `agent/overview` | The Statistics page: volume, response and resolution times with their 90th percentiles, SLA attainment and missed targets, ratings and tags, by inbox, agent, tier, priority and channel. |
-| `GET` | `agent/audit` | The audit log, newest first, up to 100 entries; `?agentId=` and `?target=` narrow it. |
+| `GET` | `agent/audit` | The audit log, newest first, up to 100 entries; `?agentId=` and `?target=` narrow it, and `?before=` with an entry's `createdAt` pages back. Each entry carries `targetName` and, for a conversation, `targetReference`; both are `null` once the target is gone. |
 | `GET` | `agent/unread` | The count of waiting conversations. |
 | `GET` | `agent/tags` | The most used conversation tags. |
 | `GET` | `agent/agents` | The team. |
@@ -122,7 +122,7 @@ Every request that is not a `GET` and succeeded is written to [`audit_log`](/doc
 | `GET` | `agent/events` | An event stream of every change, internal notes included. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 | `POST` | `agent/conversations/{id}/participants` | Adds a contact to it. |
 | `POST` | `agent/conversations/{id}/merge` | Merges it into another. |
-| `POST` | `agent/conversations/{id}/draft` | An AI draft reply, or a rewrite of the agent's text. |
+| `POST` | `agent/conversations/{id}/draft` | An AI draft reply, or a rewrite of the agent's text. 403 while the team has turned that switch off. |
 | `POST` | `agent/conversations/{id}/triage` | Runs AI triage now. |
 | `POST` | `agent/conversations/{id}/suggestion` | Accepts or dismisses the AI suggestion. |
 | `GET` | `agent/conversations/{id}/attachments/{attachmentId}` | Redirects to a presigned download URL. |

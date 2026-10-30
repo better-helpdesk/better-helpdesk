@@ -210,7 +210,7 @@ The files themselves live with the [storage adapter](/docs/reference/adapters#st
 | `data` | `jsonb` | no | | `{ fields }`: the names of the fields the request sent, never their values. |
 | `created_at` | `timestamptz` | no | | |
 
-One row per agent request that is not a `GET` and succeeded. The package never deletes these rows; `retentionDays` and the delete functions leave them, so what an agent did to a conversation since deleted is still on record.
+One row per agent request that is not a `GET` and succeeded, except the typing indicator and marking notifications read. The package never deletes these rows; `retentionDays` and the delete functions leave them, so what an agent did to a conversation since deleted is still on record.
 
 ## canned_reply
 

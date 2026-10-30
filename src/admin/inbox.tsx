@@ -159,7 +159,7 @@ export function Inbox() {
     // Polling hands over new rows every time; only a changed order is news.
     setQueue(current => (key(current) === key(next) ? current : next));
   });
-  // Status, inbox, an assignee by name, tag, sort, period, tier and channel sit in the tray, which opens when one of them is set.
+  // Status, inbox, an assignee by name, tag, sort, period, tier and channel sit in the tray, which opens only when asked.
   const trayActive = [
     filters.status !== 'open',
     filters.inbox,
@@ -170,10 +170,6 @@ export function Inbox() {
     filters.tier,
     filters.channel,
   ].filter(Boolean).length;
-  const anyMore = trayActive > 0;
-  useEffect(() => {
-    if (anyMore) setMoreOpen(true);
-  }, [anyMore]);
   // The search and its chip count once they are in the tray too, out of sight.
   const moreActive =
     trayActive + (narrow ? [filters.q, priority].filter(Boolean).length : 0);

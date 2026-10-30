@@ -239,8 +239,6 @@ export const adminCss = `
 .sa-panes[data-open] > .sa-list-pane { display: none; }
 @container (min-width: 960px) {
   .sa-panes[data-open] { grid-template-columns: 380px minmax(0, 1fr); }
-  /* Open details take their width from the list, not the thread. */
-  .sa-panes[data-open]:has(.sa-split > aside:not([hidden])) { grid-template-columns: 320px minmax(0, 1fr); }
   .sa-panes[data-open] > .sa-list-pane { display: block; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
   /* The thread scrolls inside its pane too, so opening another one never moves the window. */
   .sa-panes[data-open] > .sa-thread-pane { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
@@ -401,6 +399,13 @@ export const adminCss = `
 .sa-bell-pop { width: min(340px, calc(100vw - 32px)); max-height: 420px; overflow-y: auto; gap: 2px; }
 .sa .sa-bell-item { height: auto; padding: 8px; display: grid; gap: 2px; text-align: left; white-space: normal; }
 .sa-bell-pop > p { margin: 8px; }
+.sa-ai-features { display: grid; gap: 8px; margin: 4px 0 8px; }
+.sa-ai-features .sa-toggle { white-space: normal; align-items: flex-start; font-size: 14px; }
+.sa-audit-entry { display: grid; gap: 2px; padding: 6px 0; }
+.sa-audit-entry + .sa-audit-entry { border-top: 1px solid var(--a-border); }
+.sa-audit-entry > p { margin: 0; }
+.sa-audit-day { margin: 10px 0 4px; font-size: 12px; font-weight: 600; color: var(--a-muted); }
+.sa-audit .sa-details > div { padding-left: 18px; }
 .sa-bell-pop > .sa-toggle { margin: 6px 8px 2px; padding-top: 8px; border-top: 1px solid var(--a-border); }
 .sa-dialog h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .sa-dialog h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--a-muted); }
