@@ -49,6 +49,21 @@ An agent can ask for a draft reply: **Draft with AI** in the reply box asks for 
 
 An agent can also have their own reply rewritten, with **Shorten**, **More formal** and **Into the customer's language**. German output is Swiss Standard German that addresses the customer as "Sie", French output addresses the customer as "vous", and Italian output as "Lei".
 
+## Choose what the AI does
+
+Under **Settings**, the **AI** card lists each thing the AI does, and the team turns any of them off. Each switch applies to everyone, and all are on until someone turns one off:
+
+| Switch | What it controls |
+| --- | --- |
+| Suggest a type and priority | The type and priority in the AI suggestion. |
+| Suggest a title | The title in the AI suggestion. |
+| Summarize new conversations | The summary under the AI suggestion. |
+| Point out possible duplicates | The duplicates the suggestion links to, and the model call that finds them. |
+| Draft a reply | **Draft with AI** in the reply box. |
+| Shorten, formalize or translate a reply | **Shorten**, **More formal** and **Into the customer's language**. |
+
+A part turned off disappears from suggestions already made, and applying such a suggestion leaves that part of the conversation alone. With the first three off, triage asks the model nothing but the duplicates question; with all four suggestion switches off, it asks nothing at all. A draft or rewrite asked for while its switch is off answers 403. Once any agent has the `supervisor` role, only supervisors change these switches, as with the rest of Settings.
+
 ## When it runs
 
 Triage runs as a job, so it needs the [jobs run](/docs/operations/jobs) like email does, and it shows up a little after the conversation arrives. It is capped at 100 new conversations an hour from your signed-in users and 100 from everyone else; past the cap, conversations arrive without a suggestion until the next hour. A failed model call is retried as any job is.

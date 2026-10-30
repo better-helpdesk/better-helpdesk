@@ -42,7 +42,7 @@ return {
 | `supervisor` | The same, and receives every [SLA warning and breach](/docs/inbox/sla#warnings-and-breaches). Once any supervisor exists, supervisors alone change Settings, remove agents and read the audit log. |
 | `viewer` | Read everything and change nothing. The agent UI says so at the top and shows no composer, no editable properties, no bulk bar and no create, edit or delete button anywhere; the routes refuse a change with 403 all the same. Their own away time, read marks and saved views still work. |
 
-The role is read on every agent request, like the name, so a change in your app applies at once. The audit log under Settings lists every change made through the agent UI, with who made it, the route and the fields sent; [`audit_log`](/docs/database/tables#audit_log) has the columns.
+The role is read on every agent request, like the name, so a change in your app applies at once. The audit log under Settings lists every change made through the agent UI, with who made it, what it was, the conversation, contact or company it touched, and the names of the fields sent. It is grouped by day, and changes one agent made to one thing within half an hour share a row that opens to list each of them. A menu narrows it to one team member, and **Show older** goes back past the newest 100. Typing indicators and read marks are not recorded. [`audit_log`](/docs/database/tables#audit_log) has the columns.
 
 ## Take away access in your app
 

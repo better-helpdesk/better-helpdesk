@@ -1198,7 +1198,7 @@ export function ConversationView({ id }: { id: string }) {
                   <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
                 </span>
                 <span className="sa-grow" />
-                {me.ai && (
+                {me.aiFeatures.draft && (
                   <button
                     type="button"
                     className="sa-btn sa-ghost"
@@ -1222,7 +1222,7 @@ export function ConversationView({ id }: { id: string }) {
                     {busy === 'draft' ? t('admin.drafting') : t('admin.draft')}
                   </button>
                 )}
-                {me.ai &&
+                {me.aiFeatures.rewrite &&
                   body.trim() !== '' &&
                   (['shorten', 'formal', 'translate'] as const).map(mode => (
                     <button
