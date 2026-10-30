@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { AI_FEATURES, type AiFeature, type Locale } from '../config';
+import { AI_FEATURES, type AiFeature } from '../ai-features';
+import type { Locale } from '../config';
 import { useResource } from '../ui/api';
 import { relativeTime, translator } from '../ui/i18n';
 import { useAdmin } from './context';

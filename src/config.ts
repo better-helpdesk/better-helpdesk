@@ -393,17 +393,11 @@ export type HelpdeskConfig = {
 };
 
 export const DEFAULT_TYPES = ['question', 'bug', 'feature', 'lead'];
-/** What the AI may do, each switched on or off in the agent UI's settings. */
-export const AI_FEATURES = [
-  'classify',
-  'title',
-  'summary',
-  'duplicates',
-  'draft',
-  'rewrite',
-] as const;
-export type AiFeature = (typeof AI_FEATURES)[number];
-export type AiSettings = Record<AiFeature, boolean>;
+export {
+  AI_FEATURES,
+  type AiFeature,
+  type AiSettings,
+} from './ai-features';
 
 export const STATUSES = ['open', 'pending', 'resolved'] as const;
 export const DEFAULT_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
