@@ -35,6 +35,7 @@ type PgClient = {
   query(text: string, values?: unknown[]): Promise<unknown>;
   on(event: 'notification', listener: (message: PgNotification) => void): void;
   on(event: 'error', listener: (error: Error) => void): void;
+  removeListener(event: 'notification' | 'error', listener: never): void;
   release(error?: Error | boolean): void;
 };
 type PgPool = {
@@ -58,7 +59,8 @@ export function postgresRealtime({
 }): RealtimeAdapter {
   const local = memoryRealtime();
   let subscribers = 0;
-  let client: PgClient | null = null;
+  /** The listening connection, and the one way to give it back. */
+  let client: { release(error?: Error): void; close(): void } | null = null;
   let connecting: Promise<void> | null = null;
   let retry: ReturnType<typeof setTimeout> | null = null;
 
@@ -73,20 +75,45 @@ export function postgresRealtime({
 
   async function listen() {
     const next = await pool.connect();
-    next.on('notification', onNotification);
-    next.on('error', error => {
+    let released = false;
+    // pg-pool throws on a second release, and that would happen inside an
+    // event handler, out of anyone's reach. Released, the pool watches the
+    // client's errors itself.
+    const handle = {
+      release(error?: Error) {
+        if (released) return;
+        released = true;
+        next.removeListener('notification', onNotification as never);
+        next.removeListener('error', onError as never);
+        next.release(error);
+      },
+      close() {
+        void next
+          .query(`UNLISTEN ${CHANNEL}`)
+          .catch(() => undefined)
+          .finally(() => handle.release());
+      },
+    };
+    function onError(error: Error) {
       // A dropped connection loses notifications until the next one listens;
       // the clients' polling covers the gap.
-      next.release(error);
-      if (client === next) client = null;
+      handle.release(error);
+      if (client === handle) client = null;
       if (subscribers > 0) schedule();
-    });
-    await next.query(`LISTEN ${CHANNEL}`);
+    }
+    next.on('notification', onNotification);
+    next.on('error', onError);
+    try {
+      await next.query(`LISTEN ${CHANNEL}`);
+    } catch (error) {
+      handle.release(error as Error);
+      throw error;
+    }
     if (subscribers === 0) {
-      next.release();
+      handle.release();
       return;
     }
-    client = next;
+    client = handle;
   }
 
   function schedule() {
@@ -126,10 +153,7 @@ export function postgresRealtime({
         if (subscribers === 0 && client) {
           const done = client;
           client = null;
-          void done
-            .query(`UNLISTEN ${CHANNEL}`)
-            .catch(() => undefined)
-            .finally(() => done.release());
+          done.close();
         }
       };
     },

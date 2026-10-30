@@ -277,7 +277,7 @@ One row per agent request that is not a `GET` and succeeded, except the typing i
 | `id` | `uuid` | no | random | |
 | `kind` | `text` | no | | See below. |
 | `payload` | `jsonb` | no | | |
-| `run_at` | `timestamptz` | no | `now()` | Due from then. `infinity` after the fifth failed attempt. |
+| `run_at` | `timestamptz` | no | `now()` | Due from then. 31 December 9999 after the fifth failed attempt, so it is never claimed again. |
 | `attempts` | `integer` | no | `0` | |
 | `locked_until` | `timestamptz` | yes | | A claim, two minutes long. |
 | `last_error` | `text` | yes | | The last failure's message, cut at 2,000 characters. |

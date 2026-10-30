@@ -87,7 +87,7 @@ const en = {
   'form.message.lead': 'What can we help you with?',
   'form.message.bug': 'What happened?',
   'form.placeholder.lead':
-    'e.g. We run ISO 27001 for 12 clients and want one place for all mandates.',
+    'e.g. We are a team of 40 and want to know which plan fits.',
   'form.placeholder.bug':
     'What did you do, what did you expect, and what happened instead?',
   'form.placeholder.question': 'What would you like to know?',
@@ -495,6 +495,7 @@ const en = {
   'admin.retry': 'Try again',
   'admin.sending': 'Sending…',
   'load.failed': 'This could not be loaded.',
+  'load.stale': 'Could not refresh. Showing what was loaded last.',
   'admin.sentNotResolved': 'Sent, but the conversation could not be resolved.',
   'stage.lead': 'Lead',
   'stage.qualified': 'Qualified',
@@ -715,7 +716,7 @@ const de: Record<MessageKey, string> = {
   'form.message.lead': 'Wobei können wir helfen?',
   'form.message.bug': 'Was ist passiert?',
   'form.placeholder.lead':
-    'z. B. Wir betreuen ISO 27001 für 12 Kunden und suchen eine Lösung für alle Mandate.',
+    'z. B. Wir sind ein Team von 40 Personen und möchten wissen, welcher Plan passt.',
   'form.placeholder.bug':
     'Was haben Sie gemacht, was haben Sie erwartet und was ist stattdessen passiert?',
   'form.placeholder.question': 'Was möchten Sie wissen?',
@@ -1134,6 +1135,8 @@ const de: Record<MessageKey, string> = {
   'admin.retry': 'Erneut versuchen',
   'admin.sending': 'Wird gesendet…',
   'load.failed': 'Das konnte nicht geladen werden.',
+  'load.stale':
+    'Aktualisieren hat nicht geklappt. Angezeigt wird der zuletzt geladene Stand.',
   'admin.sentNotResolved':
     'Gesendet, aber die Unterhaltung konnte nicht gelöst werden.',
   'stage.lead': 'Lead',
@@ -1354,7 +1357,7 @@ const fr: Record<MessageKey, string> = {
   'form.message.lead': 'Comment pouvons-nous vous aider?',
   'form.message.bug': 'Que s’est-il passé?',
   'form.placeholder.lead':
-    'p. ex. Nous gérons ISO 27001 pour 12 clients et voulons un seul endroit pour tous les mandats.',
+    'p. ex. Nous sommes une équipe de 40 personnes et voulons savoir quelle offre nous convient.',
   'form.placeholder.bug':
     'Qu’avez-vous fait, à quoi vous attendiez-vous, et que s’est-il passé à la place?',
   'form.placeholder.question': 'Que souhaitez-vous savoir?',
@@ -1765,6 +1768,8 @@ const fr: Record<MessageKey, string> = {
   'admin.retry': 'Réessayer',
   'admin.sending': 'Envoi…',
   'load.failed': 'Impossible de charger ceci.',
+  'load.stale':
+    'Actualisation impossible. Le dernier état chargé reste affiché.',
   'admin.sentNotResolved':
     'Envoyé, mais la conversation n’a pas pu être résolue.',
   'stage.lead': 'Prospect',
@@ -1981,7 +1986,7 @@ const it: Record<MessageKey, string> = {
   'form.message.lead': 'Come possiamo aiutarLa?',
   'form.message.bug': 'Cos’è successo?',
   'form.placeholder.lead':
-    'es. Gestiamo la ISO 27001 per 12 clienti e vogliamo un unico posto per tutti i mandati.',
+    'es. Siamo un team di 40 persone e vorremmo sapere quale piano fa per noi.',
   'form.placeholder.bug':
     'Cosa ha fatto, cosa si aspettava e cos’è successo invece?',
   'form.placeholder.question': 'Cosa vorrebbe sapere?',
@@ -2396,6 +2401,8 @@ const it: Record<MessageKey, string> = {
   'admin.retry': 'Riprova',
   'admin.sending': 'Invio…',
   'load.failed': 'Caricamento non riuscito.',
+  'load.stale':
+    'Aggiornamento non riuscito. Resta visibile l’ultimo stato caricato.',
   'admin.sentNotResolved': 'Inviato, ma la conversazione non è stata risolta.',
   'stage.lead': 'Lead',
   'stage.qualified': 'Qualificato',

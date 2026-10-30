@@ -62,7 +62,7 @@ The raw message may be up to 25 MiB, with headers up to 64 KiB. DNS lookups for 
 
 ## Bounds on input
 
-Every route validates its input before it acts. A JSON body is refused past 256 KiB. A message is at most 20,000 characters. A conversation holds at most 20 attachments, each within `maxAttachmentBytes` (10 MiB by default), of a few content types: PNG, JPEG, GIF and WebP images, PDF and plain text. An attachment that arrives by email in any other type is stored, but served as `application/octet-stream`. The context the widget captures, such as recent page errors, is shown to the customer before sending, and they can untick anything they do not want to share.
+Every route validates its input before it acts. A JSON body is refused past 256 KiB. A message is at most 20,000 characters. A conversation holds at most 20 attachments, each within `maxAttachmentBytes` (10 MiB by default), of a few content types: PNG, JPEG, GIF and WebP images, PDF and plain text. An attachment that arrives by email in any other type is stored, but served as `application/octet-stream`. The context the widget captures on a question, bug report or feature request filed as a ticket, such as recent page errors, is shown to the customer before sending, and they can untick anything they do not want to share. Other messages, such as a chat or a sales request, show no such review, so the page address, the first page of the visit and the referring page go without their query string and fragment, which can carry a sign-in or reset token; only `utm_` parameters stay.
 
 ## AI
 

@@ -20,6 +20,7 @@ import {
   money,
   paths,
   Skeleton,
+  StaleNotice,
   Svg,
   useConfirm,
 } from './ui';
@@ -335,7 +336,8 @@ export function ContactView({ id }: { id: string }) {
     id
   );
   const data = detail.data;
-  if (detail.error) return <LoadError t={t} onRetry={detail.refresh} />;
+  if (detail.error && !data)
+    return <LoadError t={t} onRetry={detail.refresh} />;
   if (!data)
     return <Skeleton kind="cards" summary label={t('admin.loading')} />;
   const c = data.contact;
@@ -345,6 +347,7 @@ export function ContactView({ id }: { id: string }) {
 
   return (
     <div className="sa">
+      {detail.error && <StaleNotice t={t} />}
       <div className="sa-page-head">
         <a
           className="sa-btn sa-back"
@@ -780,12 +783,14 @@ export function CompanyView({ id }: { id: string }) {
     id
   );
   const data = detail.data;
-  if (detail.error) return <LoadError t={t} onRetry={detail.refresh} />;
+  if (detail.error && !data)
+    return <LoadError t={t} onRetry={detail.refresh} />;
   if (!data) return <Skeleton kind="cards" label={t('admin.loading')} />;
   const c = data.company;
 
   return (
     <div className="sa">
+      {detail.error && <StaleNotice t={t} />}
       <div className="sa-page-head">
         <a
           className="sa-btn sa-back"
