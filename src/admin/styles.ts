@@ -27,6 +27,8 @@ export const adminCss = `
   font-size: 14px;
   line-height: 1.45;
   display: grid;
+  /* One column no wider than the container, so a one-line bar cannot widen the page. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   container-type: inline-size;
 }
@@ -238,10 +240,10 @@ export const adminCss = `
 .sa-panes > * { min-width: 0; }
 .sa-panes[data-open] > .sa-list-pane { display: none; }
 @container (min-width: 960px) {
-  .sa-panes[data-open] { grid-template-columns: 380px minmax(0, 1fr); }
-  .sa-panes[data-open] > .sa-list-pane { display: block; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
+  .sa-panes[data-open] { grid-template-columns: 380px minmax(0, 1fr); --sa-pane-height: max(420px, calc(100dvh - var(--sa-panes-top, 0px))); }
+  .sa-panes[data-open] > .sa-list-pane { display: block; position: sticky; top: 0; max-height: var(--sa-pane-height); overflow-y: auto; }
   /* The thread scrolls inside its pane too, so opening another one never moves the window. */
-  .sa-panes[data-open] > .sa-thread-pane { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .sa-panes[data-open] > .sa-thread-pane { position: sticky; top: 0; height: var(--sa-pane-height); overflow-y: auto; }
   .sa-panes[data-open] > .sa-thread-pane > .sa { min-height: 100%; }
   .sa-panes[data-open] .sa-back { display: none; }
 }
@@ -399,6 +401,7 @@ export const adminCss = `
 .sa-bell-pop { width: min(340px, calc(100vw - 32px)); max-height: 420px; overflow-y: auto; gap: 2px; }
 .sa .sa-bell-item { height: auto; padding: 8px; display: grid; gap: 2px; text-align: left; white-space: normal; }
 .sa-bell-pop > p { margin: 8px; }
+.sa-stale { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20; padding: 6px 12px; border-radius: var(--a-r-control); background: var(--a-fg); color: var(--a-bg); font-size: 13px; box-shadow: var(--a-shadow-pop); pointer-events: none; }
 .sa-ai-features { display: grid; gap: 8px; margin: 4px 0 8px; }
 .sa-ai-features .sa-toggle { white-space: normal; align-items: flex-start; font-size: 14px; }
 .sa-audit-entry { display: grid; gap: 2px; padding: 6px 0; }

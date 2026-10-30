@@ -19,6 +19,7 @@ import {
 } from 'vitest';
 
 import { ApiError } from '../ui/api';
+import { HELPDESK_REMOTE } from './context';
 import { HelpdeskAdmin } from './index';
 import { formatSnooze } from './snooze';
 import { setQueueOn } from './ui';
@@ -1783,6 +1784,101 @@ describe('HelpdeskAdmin', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
 
     expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+  });
+
+  it('reloads the inbox for a change on the stream, not for someone typing', async () => {
+    const encoder = new TextEncoder();
+    let push: (text: string) => void = () => {};
+    let lists = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.includes('agent/events')) {
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                push = text => controller.enqueue(encoder.encode(text));
+              },
+            }),
+            { headers: { 'content-type': 'text/event-stream' } }
+          );
+        }
+        if (url.includes('agent/me/'))
+          return new Response(JSON.stringify({ ...me, realtime: true }));
+        if (url.includes('agent/conversations/?')) lists += 1;
+        return respond(url);
+      })
+    );
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByText(/Export broken/);
+    await waitFor(() => expect(lists).toBeGreaterThan(0));
+    const before = lists;
+    const send = (kind: string) =>
+      act(async () => {
+        push(
+          `event: change\ndata: ${JSON.stringify({ conversationId: 'c1', kind })}\n\n`
+        );
+      });
+
+    await send('typing');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(lists).toBe(before);
+
+    await send('message');
+    await waitFor(() => expect(lists).toBe(before + 1));
+  });
+
+  it('keeps an open conversation and its unsent reply when a refresh fails', async () => {
+    let failing = false;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (failing && url.includes('agent/conversations/c1/'))
+          return new Response('{}', { status: 503 });
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const reply = await screen.findByRole('textbox', { name: 'Reply' });
+    reply.innerHTML = 'Half a reply';
+    fireEvent.input(reply);
+
+    failing = true;
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(HELPDESK_REMOTE, {
+          detail: { conversationId: 'c1', kind: 'message' },
+        })
+      );
+    });
+    expect(
+      await screen.findByText(
+        'Could not refresh. Showing what was loaded last.',
+        {},
+        { timeout: 2000 }
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText('This could not be loaded.')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Reply' }).textContent).toBe(
+      'Half a reply'
+    );
+
+    failing = false;
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(HELPDESK_REMOTE, {
+          detail: { conversationId: 'c1', kind: 'message' },
+        })
+      );
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Could not refresh. Showing what was loaded last.')
+      ).toBeNull()
+    );
   });
 
   it('shows the AI settings only when the host configured an AI', async () => {

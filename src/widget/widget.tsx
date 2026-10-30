@@ -166,10 +166,28 @@ function storage(kind: 'local' | 'session') {
 }
 
 /** A reload or in-site navigation is not where the visit came from. */
+/**
+ * A page's address without what the customer never sees on the review panel:
+ * a query or fragment can carry a sign-in or reset token, so only the
+ * campaign parameters stay.
+ */
+export function pageAddress(href: string) {
+  try {
+    const url = new URL(href);
+    const utm = [...url.searchParams].filter(([k]) => k.startsWith('utm_'));
+    const query = new URLSearchParams(utm).toString();
+    return `${url.origin}${url.pathname}${query ? `?${query}` : ''}`;
+  } catch {
+    return '';
+  }
+}
+
 function externalReferrer() {
   try {
     const ref = document.referrer;
-    return ref && new URL(ref).origin !== location.origin ? ref : '';
+    return ref && new URL(ref).origin !== location.origin
+      ? pageAddress(ref)
+      : '';
   } catch {
     return '';
   }
@@ -181,15 +199,20 @@ function attribution() {
   let landing = store?.getItem(LANDING_KEY) ?? null;
   if (!landing) {
     landing = location.href;
-    store?.setItem(LANDING_KEY, landing);
+    store?.setItem(LANDING_KEY, pageAddress(landing));
     store?.setItem(REFERRER_KEY, externalReferrer());
   }
-  const referrer = store ? store.getItem(REFERRER_KEY) : externalReferrer();
+  // A visit that began before addresses were trimmed has the full one stored.
+  landing = pageAddress(landing);
+  const stored = store ? store.getItem(REFERRER_KEY) : externalReferrer();
+  const referrer = stored ? pageAddress(stored) : '';
   const utm = Object.fromEntries(
-    [...new URL(landing).searchParams].filter(([k]) => k.startsWith('utm_'))
+    [...new URL(landing || location.origin).searchParams].filter(([k]) =>
+      k.startsWith('utm_')
+    )
   );
   return {
-    landingPage: landing,
+    ...(landing ? { landingPage: landing } : {}),
     ...(referrer ? { referrer } : {}),
     ...(Object.keys(utm).length ? { utm } : {}),
   };
@@ -405,7 +428,8 @@ export function Widget(props: WidgetProps) {
     'widget/events',
     Boolean(session.data?.realtime) && (open || awaitingTeam || isAgent),
     change => {
-      void session.refresh();
+      // Typing shows only in the open thread, not in the list the session carries.
+      if (change.kind !== 'typing') void session.refresh();
       changes.dispatchEvent(new CustomEvent('change', { detail: change }));
     }
   );
@@ -1168,6 +1192,9 @@ function NewMessage({
             (_, i) => !excluded.has(`errors:${i}`)
           );
           if (kept.length) sent.errors = kept;
+        } else if (!technical && key === 'url') {
+          // Only a technical form shows the address before it goes.
+          sent.url = pageAddress(context.url);
         } else if (!excluded.has(key)) {
           sent[key] = context[key as keyof typeof context];
         }

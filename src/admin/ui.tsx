@@ -208,6 +208,15 @@ export function Empty({ text, action }: { text: string; action?: ReactNode }) {
   );
 }
 
+/** A refresh failed while something is on screen: it stays, and this floats over it until one succeeds. */
+export function StaleNotice({ t }: { t: Translate }) {
+  return (
+    <div className="sa-stale" role="status">
+      {t('load.stale')}
+    </div>
+  );
+}
+
 export function LoadError({
   t,
   onRetry,

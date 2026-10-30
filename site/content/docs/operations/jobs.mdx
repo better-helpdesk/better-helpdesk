@@ -103,19 +103,21 @@ To delete one person's or one organization's data on request, use `deleteContact
 
 ## Find jobs that failed
 
-A job whose handler throws is tried again after 2, 4, 8 and 16 minutes. After the fifth failed attempt it is parked: it stays in the table with its last error and is never claimed again. To see the parked ones:
+A job whose handler throws is tried again after 2, 4, 8 and 16 minutes. After the fifth failed attempt it is parked: it stays in the table with its last error and a `run_at` of 31 December 9999, so it is never claimed again. To see the parked ones on Postgres:
 
 ```sql
 SELECT kind, payload, attempts, last_error, created_at
 FROM helpdesk.job
-WHERE run_at = 'infinity'
+WHERE run_at >= '9999-01-01'
 ORDER BY created_at DESC;
 ```
 
 Once the cause is fixed, a parked job can be put back in the queue:
 
 ```sql
-UPDATE helpdesk.job SET run_at = now(), attempts = 0 WHERE run_at = 'infinity';
+UPDATE helpdesk.job SET run_at = now(), attempts = 0 WHERE run_at >= '9999-01-01';
 ```
+
+On SQL Server the table is `helpdesk.job` too, and `now()` is `SYSUTCDATETIME()`. On MySQL and SQLite it is `helpdesk_job`; use that database's own current time in the same form as the other rows' `run_at`.
 
 The `helpdesk.job` table and its columns are described in [Database](/docs/database/tables).

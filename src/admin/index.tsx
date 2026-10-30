@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { Feature, Locale } from '../config';
 import {
@@ -101,9 +108,13 @@ export function HelpdeskAdmin({
   const me = useResource(() => api<Me>('agent/me'), 'me');
   useEvents(api, 'agent/events', Boolean(me.data?.realtime), change => {
     window.dispatchEvent(new CustomEvent(HELPDESK_REMOTE, { detail: change }));
-    window.dispatchEvent(new Event(HELPDESK_CHANGED));
+    // Typing shows only in the open thread; lists, counts and views stay put.
+    if (change.kind !== 'typing') {
+      window.dispatchEvent(new Event(HELPDESK_CHANGED));
+    }
   });
   const [sheet, setSheet] = useState(false);
+  const panes = usePanesTop();
   useShortcuts(me.data ? { '?': () => setSheet(true) } : {});
 
   // An action whose failure no handler caught would otherwise fail silently.
@@ -225,6 +236,7 @@ export function HelpdeskAdmin({
             {(view === 'inbox' || view === 'conversation') && (
               // The list stays mounted beside the thread, so it keeps its cursor and data; CSS hides it on a narrow container.
               <div
+                ref={panes}
                 className="sa-panes"
                 data-open={route.conversation ? '' : undefined}>
                 <div className="sa-list-pane">
@@ -371,4 +383,34 @@ function ShortcutSheet({
       </div>
     </div>
   );
+}
+
+/**
+ * Where the panes start on the page, for their height: a host's header above
+ * them would otherwise push the composer and Send below the window. Measured
+ * before paint, so the panes never draw at the wrong height first.
+ */
+function usePanesTop() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const top = `${Math.round(el.getBoundingClientRect().top + window.scrollY)}px`;
+      if (el.style.getPropertyValue('--sa-panes-top') !== top)
+        el.style.setProperty('--sa-panes-top', top);
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(measure);
+    observer?.observe(document.body);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  });
+  return ref;
 }

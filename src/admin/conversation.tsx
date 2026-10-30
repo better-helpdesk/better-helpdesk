@@ -24,6 +24,7 @@ import {
   RatingChip,
   Select,
   Skeleton,
+  StaleNotice,
   Svg,
   useKeysOn,
   useQueueOn,
@@ -328,7 +329,8 @@ export function ConversationView({ id }: { id: string }) {
   };
 
   const data = detail.data;
-  if (detail.error) return <LoadError t={t} onRetry={detail.refresh} />;
+  if (detail.error && !data)
+    return <LoadError t={t} onRetry={detail.refresh} />;
   if (!data)
     return (
       <Skeleton
@@ -1509,6 +1511,7 @@ export function ConversationView({ id }: { id: string }) {
         contactId={data.contact?.id}
         duplicates={c.aiSuggestion?.duplicates ?? []}
       />
+      {detail.error && <StaleNotice t={t} />}
       {toast.node}
     </div>
   );

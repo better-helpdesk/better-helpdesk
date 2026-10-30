@@ -1912,6 +1912,61 @@ describe('home, messages and help', () => {
     ]);
   });
 
+  it('sends a sales lead the landing page and referrer without their tokens', async () => {
+    sessionStorage.clear();
+    window.history.replaceState(
+      null,
+      '',
+      '/pricing?token=secret&utm_source=news#access_token=xyz'
+    );
+    Object.defineProperty(document, 'referrer', {
+      configurable: true,
+      value: 'https://mail.test/open?session=abc&utm_medium=email',
+    });
+    onTestFinished(() => {
+      sessionStorage.clear();
+      window.history.replaceState(null, '', '/');
+      Object.defineProperty(document, 'referrer', {
+        configurable: true,
+        value: '',
+      });
+    });
+    const calls = mockApi({ 'widget/session': session, ...posted });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="sales"
+        locale="en"
+        types={['lead']}
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    const message = await screen.findByRole('textbox', {
+      name: 'What can we help you with?',
+    });
+    message.textContent = 'Pricing for 40 seats';
+    fireEvent.input(message);
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(
+        calls.find(
+          c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+        )?.body
+      ).toMatchObject({
+        context: {
+          url: `${location.origin}/pricing?utm_source=news`,
+          landingPage: `${location.origin}/pricing?utm_source=news`,
+          referrer: 'https://mail.test/open?utm_medium=email',
+          utm: { utm_source: 'news' },
+        },
+      })
+    );
+    const body = JSON.stringify(calls.map(c => c.body));
+    expect(body).not.toMatch(/secret|xyz|abc/);
+  });
+
   it('submits a ticket of the type picked', async () => {
     const calls = mockApi({ 'widget/session': session, ...posted });
     await opened();
@@ -2000,10 +2055,11 @@ describe('home, messages and help', () => {
     expect(await within(panel).findByText('Angelo is typing…')).toBeTruthy();
   });
 
-  it('reloads an open thread when the stream says it changed', async () => {
+  it('reloads an open thread when the stream says it changed, and the list only for more than typing', async () => {
     const encoder = new TextEncoder();
     let push: (text: string) => void = () => {};
     let threadLoads = 0;
+    let sessionLoads = 0;
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
@@ -2027,6 +2083,7 @@ describe('home, messages and help', () => {
             JSON.stringify(posted['widget/conversations/c1/'])
           );
         }
+        if (url.includes('widget/session')) sessionLoads += 1;
         return new Response(
           JSON.stringify({
             ...session,
@@ -2042,6 +2099,15 @@ describe('home, messages and help', () => {
     );
     await within(panel).findByText('Broken');
     const before = threadLoads;
+    const sessions = sessionLoads;
+
+    await act(async () => {
+      push(
+        `event: change\ndata: ${JSON.stringify({ conversationId: 'c1', kind: 'typing' })}\n\n`
+      );
+    });
+    await waitFor(() => expect(threadLoads).toBe(before + 1));
+    expect(sessionLoads).toBe(sessions);
 
     await act(async () => {
       push(
@@ -2049,7 +2115,8 @@ describe('home, messages and help', () => {
       );
     });
 
-    await waitFor(() => expect(threadLoads).toBe(before + 1));
+    await waitFor(() => expect(threadLoads).toBe(before + 2));
+    await waitFor(() => expect(sessionLoads).toBe(sessions + 1));
   });
 });
 
