@@ -50,7 +50,7 @@ export const helpdesk = buildHelpdesk({
 });
 ```
 
-Writes through `helpdesk.store` raise no events, so a handler cannot set itself off. The email about a new conversation is sent later, by the [jobs run](/docs/operations/jobs), and goes to the assignee alone when the conversation has one by then and they have opened the agent UI in the last 30 days.
+Writes through `helpdesk.store` raise no events, so a handler cannot set itself off. The email about a new conversation is sent later, by the [jobs run](/docs/operations/jobs), and goes to the assignee alone when the conversation has one by then and they have opened the agent UI in the last 30 days or are one of the [recipients chosen in Settings](/docs/inbox/team#choose-who-gets-emails-about-new-requests).
 
 ## Which event you get
 

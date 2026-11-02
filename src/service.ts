@@ -802,23 +802,39 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
   }
 
-  async function agentRecipients(conversation: Conversation) {
-    const team = (await store.mailableAgents(AGENT_IDLE_DAYS)).filter(
-      a => a.email
-    );
-    const assignee = team.find(a => a.id === conversation.assigneeId);
-    return assignee ? [assignee] : team;
+  /**
+   * The team members chosen in the settings who can still be mailed, or
+   * `null` when none were chosen or none are left, so mail never goes nowhere.
+   */
+  async function chosenRecipients() {
+    const ids = (await store.getSetting<string[]>('recipients')) ?? [];
+    if (ids.length === 0) return null;
+    const chosen = (await store.activeAgents(ids)).filter(a => a.email);
+    return chosen.length ? chosen : null;
   }
 
-  /** The assignee, or the whole team when there is none, and every supervisor. */
-  async function slaRecipients(conversation: Conversation) {
-    const team = (await store.mailableAgents(AGENT_IDLE_DAYS)).filter(
+  /** The assignee, or the chosen team members, or everyone seen lately. */
+  async function agentRecipients(conversation: Conversation) {
+    const recent = (await store.mailableAgents(AGENT_IDLE_DAYS)).filter(
       a => a.email
     );
-    const assignee = team.find(a => a.id === conversation.assigneeId);
-    const supervisors = team.filter(a => a.role === 'supervisor');
-    const first = assignee ? [assignee] : team;
-    return [...first, ...supervisors.filter(s => !first.includes(s))];
+    const chosen = await chosenRecipients();
+    const assignee = [...recent, ...(chosen ?? [])].find(
+      a => a.id === conversation.assigneeId
+    );
+    return assignee ? [assignee] : (chosen ?? recent);
+  }
+
+  /** Who `agentRecipients` names, and every supervisor. */
+  async function slaRecipients(conversation: Conversation) {
+    const first = await agentRecipients(conversation);
+    const supervisors = (await store.mailableAgents(AGENT_IDLE_DAYS)).filter(
+      a => a.email && a.role === 'supervisor'
+    );
+    return [
+      ...first,
+      ...supervisors.filter(s => !first.some(f => f.id === s.id)),
+    ];
   }
 
   /** The customer's words: the first for a subject that stays the same, the newest for the body. */

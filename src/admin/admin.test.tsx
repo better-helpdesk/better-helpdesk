@@ -1780,10 +1780,132 @@ describe('HelpdeskAdmin', () => {
     );
     window.history.replaceState(null, '', '/support/settings/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (
+      await screen.findByRole('heading', {
+        name: 'Confirmation after a first message',
+      })
+    ).closest('form') as HTMLElement;
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
 
-    expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+    expect(await within(form).findByText('Something went wrong.')).toBeTruthy();
+  });
+
+  it('edits the confirmation one language at a time and saves them all', async () => {
+    const puts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          puts.push(JSON.parse(String(init.body)));
+          return new Response('{"ok":true}');
+        }
+        const url = String(input);
+        if (url.includes('agent/settings'))
+          return new Response(
+            JSON.stringify({ confirmation: { en: 'Thanks!' }, recipients: [] })
+          );
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (
+      await screen.findByRole('heading', {
+        name: 'Confirmation after a first message',
+      })
+    ).closest('form') as HTMLElement;
+    expect(within(form).getAllByRole('textbox')).toHaveLength(1);
+    await waitFor(() =>
+      expect(
+        (
+          within(form).getByRole('textbox', {
+            name: 'English',
+          }) as HTMLTextAreaElement
+        ).value
+      ).toBe('Thanks!')
+    );
+
+    fireEvent.click(within(form).getByRole('button', { name: 'Deutsch' }));
+    expect(within(form).getAllByRole('textbox')).toHaveLength(1);
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Deutsch' }), {
+      target: { value: 'Danke!' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(puts).toEqual([{ confirmation: { en: 'Thanks!', de: 'Danke!' } }])
+    );
+  });
+
+  it('sends new-request emails to the team members picked, or back to everyone', async () => {
+    const puts: unknown[] = [];
+    let recipients: string[] = [];
+    routes['agent/agents/'] = {
+      agents: [
+        { id: 'a1', name: 'Agent', email: 'agent@example.test', role: 'agent' },
+        { id: 'a2', name: 'Bea', email: 'bea@example.test', role: 'agent' },
+        { id: 'a3', name: 'Nomail', email: null, role: 'agent' },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/agents/'] = { agents: [] };
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          const body = JSON.parse(String(init.body));
+          puts.push(body);
+          recipients = body.recipients ?? recipients;
+          return new Response('{"ok":true}');
+        }
+        const url = String(input);
+        if (url.includes('agent/settings'))
+          return new Response(JSON.stringify({ confirmation: {}, recipients }));
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (
+      await screen.findByRole('heading', {
+        name: 'Who gets emails about new requests',
+      })
+    ).closest('form') as HTMLElement;
+    expect(
+      (
+        within(form).getByRole('radio', {
+          name: 'Everyone who opened the helpdesk in the last 30 days',
+        }) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+
+    fireEvent.click(
+      within(form).getByRole('radio', { name: 'Only these team members' })
+    );
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(
+      await within(form).findByText('Choose at least one team member.')
+    ).toBeTruthy();
+    expect(puts).toEqual([]);
+    expect(
+      within(form).getByRole('checkbox', { name: /Nomail/ })
+    ).toHaveProperty('disabled', true);
+
+    fireEvent.click(within(form).getByRole('checkbox', { name: 'Bea' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(puts).toEqual([{ recipients: ['a2'] }]));
+
+    fireEvent.click(
+      within(form).getByRole('radio', {
+        name: 'Everyone who opened the helpdesk in the last 30 days',
+      })
+    );
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(puts).toEqual([{ recipients: ['a2'] }, { recipients: [] }])
+    );
   });
 
   it('reloads the inbox for a change on the stream, not for someone typing', async () => {

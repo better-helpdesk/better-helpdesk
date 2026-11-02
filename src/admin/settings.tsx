@@ -351,6 +351,114 @@ function Team() {
   );
 }
 
+/** Who hears about new requests: everyone seen lately, or the team members chosen here. */
+function Recipients() {
+  const { api, t, readOnly } = useAdmin();
+  const toast = useToast();
+  const saved = useResource(
+    () => api<{ recipients?: string[] }>('agent/settings'),
+    'settings'
+  );
+  const team = useResource(
+    () => api<{ agents: TeamMember[] }>('agent/agents'),
+    'agents'
+  );
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const [mode, setMode] = useState<'recent' | 'chosen'>('recent');
+  const [error, setError] = useState<'pick' | 'save' | null>(null);
+  useEffect(() => {
+    if (!saved.data) return;
+    const ids = saved.data.recipients ?? [];
+    setChosen(ids);
+    setMode(ids.length ? 'chosen' : 'recent');
+  }, [saved.data]);
+  if (!chosen) return null;
+  const radio = (value: 'recent' | 'chosen', label: string) => (
+    <label className="sa-toggle">
+      <input
+        type="radio"
+        name="recipients"
+        checked={mode === value}
+        disabled={readOnly}
+        onChange={() => {
+          setError(null);
+          setMode(value);
+        }}
+      />
+      {label}
+    </label>
+  );
+  return (
+    <form
+      className="sa-card"
+      onSubmit={async e => {
+        e.preventDefault();
+        if (mode === 'chosen' && chosen.length === 0) {
+          setError('pick');
+          return;
+        }
+        setError(null);
+        try {
+          await api('agent/settings', {
+            method: 'PUT',
+            body: { recipients: mode === 'chosen' ? chosen : [] },
+          });
+          toast.show(t('admin.saved'));
+        } catch {
+          setError('save');
+        }
+      }}>
+      <h3>{t('admin.recipientsTitle')}</h3>
+      <p className="sa-muted">{t('admin.recipientsHint')}</p>
+      <div className="sa-choices">
+        {radio('recent', t('admin.recipientsRecent'))}
+        {radio('chosen', t('admin.recipientsChosen'))}
+      </div>
+      {mode === 'chosen' && (
+        <fieldset
+          className="sa-choices sa-indent"
+          aria-label={t('admin.recipientsChosen')}>
+          {team.data?.agents.map(a => (
+            <label key={a.id} className="sa-toggle">
+              <input
+                type="checkbox"
+                disabled={readOnly || (!a.email && !chosen.includes(a.id))}
+                checked={chosen.includes(a.id)}
+                onChange={e => {
+                  setError(null);
+                  setChosen(list =>
+                    e.target.checked
+                      ? [...(list ?? []), a.id]
+                      : (list ?? []).filter(id => id !== a.id)
+                  );
+                }}
+              />
+              {a.name ?? a.email}
+              {!a.email && (
+                <span className="sa-muted"> · {t('admin.noEmail')}</span>
+              )}
+            </label>
+          ))}
+          <p className="sa-fine sa-muted">{t('admin.recipientsJoin')}</p>
+        </fieldset>
+      )}
+      {!readOnly && (
+        <div className="sa-toolbar">
+          <span className="sa-grow" />
+          <button type="submit" className="sa-btn sa-primary">
+            {t('admin.save')}
+          </button>
+        </div>
+      )}
+      {error === 'pick' && (
+        <p className="sa-error">{t('admin.recipientsPick')}</p>
+      )}
+      {error === 'save' && <p className="sa-error">{t('admin.error')}</p>}
+      {toast.node}
+    </form>
+  );
+}
+
 export function Settings() {
   const { api, t, readOnly, me } = useAdmin();
   const toast = useToast();
@@ -363,6 +471,7 @@ export function Settings() {
   const [confirmation, setConfirmation] = useState<
     Partial<Record<Locale, string>>
   >({});
+  const [language, setLanguage] = useState<Locale>('en');
   useEffect(() => {
     if (saved.data) setConfirmation(saved.data.confirmation);
   }, [saved.data]);
@@ -386,22 +495,36 @@ export function Settings() {
         }}>
         <h3>{t('admin.confirmationTitle')}</h3>
         <p className="sa-muted">{t('admin.confirmationHint')}</p>
-        {LOCALES.map(({ key, label }) => (
-          <label key={key} className="sa-field">
-            {label}
-            <textarea
-              className="sa-textarea"
-              maxLength={1000}
-              readOnly={readOnly}
-              // The default shows what is sent while this stays empty.
-              placeholder={translator(key)('thread.confirmEmail')}
-              value={confirmation[key] ?? ''}
-              onChange={e =>
-                setConfirmation(c => ({ ...c, [key]: e.target.value }))
-              }
-            />
-          </label>
-        ))}
+        <fieldset className="sa-seg" aria-label={t('admin.language')}>
+          {LOCALES.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={key === language}
+              onClick={() => setLanguage(key)}>
+              {label}
+              {confirmation[key]?.trim() && (
+                <span className="sa-count" aria-hidden="true">
+                  {' '}
+                  •
+                </span>
+              )}
+            </button>
+          ))}
+        </fieldset>
+        <textarea
+          key={language}
+          className="sa-textarea"
+          aria-label={LOCALES.find(l => l.key === language)?.label}
+          maxLength={1000}
+          readOnly={readOnly}
+          // The default shows what is sent while this stays empty.
+          placeholder={translator(language)('thread.confirmEmail')}
+          value={confirmation[language] ?? ''}
+          onChange={e =>
+            setConfirmation(c => ({ ...c, [language]: e.target.value }))
+          }
+        />
         {!readOnly && (
           <div className="sa-toolbar">
             <span className="sa-grow" />
@@ -413,6 +536,7 @@ export function Settings() {
         {error && <p className="sa-error">{t('admin.error')}</p>}
         {toast.node}
       </form>
+      <Recipients />
       {me.ai && <AiSettings />}
       <Team />
       <AuditLog />

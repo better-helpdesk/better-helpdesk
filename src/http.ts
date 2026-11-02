@@ -696,6 +696,7 @@ export function createHandler(support: Helpdesk) {
       confirmation:
         (await store.getSetting<ConfirmationSetting>('confirmation')) ?? {},
       ai: await support.aiSettings(),
+      recipients: (await store.getSetting<string[]>('recipients')) ?? [],
     })
   );
 
@@ -714,8 +715,11 @@ export function createHandler(support: Helpdesk) {
           )
           .strict()
           .optional(),
+        recipients: z.array(uuid).max(200).optional(),
       })
       .parse(await body());
+    if (data.recipients)
+      await store.setSetting('recipients', [...new Set(data.recipients)]);
     if (data.confirmation)
       await store.setSetting('confirmation', data.confirmation);
     if (data.ai) {

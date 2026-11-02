@@ -911,6 +911,20 @@ export function createStore(
       });
     },
 
+    /** Those of `ids` who are still on the team. */
+    async activeAgents(ids: string[]) {
+      const found: Agent[] = [];
+      for (const part of chunks(ids)) {
+        found.push(
+          ...(await adapter.findMany<Agent>('agent', {
+            where: and(oneOf('id', part), eq('deactivatedAt', null)),
+            orderBy: [{ field: 'name', nulls: 'last' }],
+          }))
+        );
+      }
+      return found;
+    },
+
     async hasSupervisors() {
       return (
         (await adapter.count(

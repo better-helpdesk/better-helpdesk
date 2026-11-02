@@ -32,7 +32,7 @@ Because the helpdesk asks rather than remembers, a change in your app takes effe
 
 The agent UI and every `agent/*` route are open to one kind of caller: a request for which your `identify` returns `isAgent: true`. There are no helpdesk roles, no invitations and no separate agent accounts. Whoever your app says is an agent is one, on that request.
 
-An agent's first request writes an agent row keyed to your user id, holding the name, email and avatar from the identity, so that conversations can be assigned to them and emails can reach them. When someone leaves the team, `helpdesk.removeAgent()` or the team list in the agent UI stops their agent emails; an agent request from them undoes it. As a backstop, an agent who has not opened the agent UI for 30 days gets no emails about new conversations or reminders until they do; mentions still reach them. [Remove someone from the team](/docs/inbox/team) walks through it.
+An agent's first request writes an agent row keyed to your user id, holding the name, email and avatar from the identity, so that conversations can be assigned to them and emails can reach them. When someone leaves the team, `helpdesk.removeAgent()` or the team list in the agent UI stops their agent emails; an agent request from them undoes it. As a backstop, an agent who has not opened the agent UI for 30 days gets no emails about new conversations or reminders until they do, unless they are one of the [recipients chosen in Settings](/docs/inbox/team#choose-who-gets-emails-about-new-requests); mentions still reach them. [Remove someone from the team](/docs/inbox/team) walks through it.
 
 Only `identify` can make an agent. An identity token, described below, never does.
 

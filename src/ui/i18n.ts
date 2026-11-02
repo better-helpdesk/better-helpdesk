@@ -249,6 +249,16 @@ const en = {
   'admin.inStage': '{duration} in stage',
   'admin.canned': 'Canned replies',
   'admin.settings': 'Settings',
+  'admin.recipientsTitle': 'Who gets emails about new requests',
+  'admin.recipientsHint':
+    'New requests, reopened conversations and reminders go to these people. An assigned conversation notifies only its assignee, and a mention only the colleague named.',
+  'admin.recipientsRecent':
+    'Everyone who opened the helpdesk in the last 30 days',
+  'admin.recipientsChosen': 'Only these team members',
+  'admin.recipientsJoin':
+    'Someone appears here once they have opened the helpdesk. If none of them can be emailed any more, the emails go to everyone who opened it in the last 30 days.',
+  'admin.recipientsPick': 'Choose at least one team member.',
+  'admin.noEmail': 'no email address',
   'admin.confirmationTitle': 'Confirmation after a first message',
   'admin.confirmationHint':
     'Shown in the widget under "Thank you for your question" (or report, suggestion, message). {email} and {reference} are filled in. Leave empty for the default below.',
@@ -445,7 +455,7 @@ const en = {
     'No conversations were opened or resolved in this period.',
   'admin.teamTitle': 'Team',
   'admin.teamHint':
-    'Everyone here gets new conversations by email. Remove someone who no longer answers; opening the admin again adds them back.',
+    'Everyone who has opened the helpdesk. Remove someone who no longer answers: they stop getting its emails, and opening the admin again adds them back.',
   'admin.teamRemove': 'Remove',
   'admin.teamConfirmRemove': 'Remove and unassign?',
   'admin.customerContext': 'Customer',
@@ -881,6 +891,16 @@ const de: Record<MessageKey, string> = {
   'admin.inStage': 'seit {duration}',
   'admin.canned': 'Textbausteine',
   'admin.settings': 'Einstellungen',
+  'admin.recipientsTitle': 'Wer E-Mails zu neuen Anfragen erhält',
+  'admin.recipientsHint':
+    'Neue Anfragen, wieder eröffnete Unterhaltungen und Erinnerungen gehen an diese Personen. Eine zugewiesene Unterhaltung benachrichtigt nur die zuständige Person, eine Erwähnung nur die genannte.',
+  'admin.recipientsRecent':
+    'Alle, die den Helpdesk in den letzten 30 Tagen geöffnet haben',
+  'admin.recipientsChosen': 'Nur diese Teammitglieder',
+  'admin.recipientsJoin':
+    'Eine Person erscheint hier, sobald sie den Helpdesk geöffnet hat. Kann keine von ihnen mehr eine E-Mail erhalten, gehen die E-Mails an alle, die ihn in den letzten 30 Tagen geöffnet haben.',
+  'admin.recipientsPick': 'Wählen Sie mindestens ein Teammitglied.',
+  'admin.noEmail': 'keine E-Mail-Adresse',
   'admin.confirmationTitle': 'Bestätigung nach der ersten Nachricht',
   'admin.confirmationHint':
     'Erscheint im Widget unter «Vielen Dank für Ihre Frage» (bzw. Meldung, Vorschlag, Nachricht). {email} und {reference} werden ausgefüllt. Leer lassen für den untenstehenden Standardtext.',
@@ -1083,7 +1103,7 @@ const de: Record<MessageKey, string> = {
     'In diesem Zeitraum wurden keine Unterhaltungen eröffnet oder gelöst.',
   'admin.teamTitle': 'Team',
   'admin.teamHint':
-    'Alle hier erhalten neue Konversationen per E-Mail. Entfernen Sie, wer nicht mehr antwortet; wer den Admin wieder öffnet, ist wieder dabei.',
+    'Alle, die den Helpdesk geöffnet haben. Entfernen Sie, wer nicht mehr antwortet: Diese Person erhält dann keine E-Mails mehr, und wer den Admin wieder öffnet, ist wieder dabei.',
   'admin.teamRemove': 'Entfernen',
   'admin.teamConfirmRemove': 'Entfernen und Zuweisungen aufheben?',
   'admin.customerContext': 'Kunde',
@@ -1519,6 +1539,16 @@ const fr: Record<MessageKey, string> = {
   'admin.inStage': '{duration} à cette étape',
   'admin.canned': 'Réponses types',
   'admin.settings': 'Paramètres',
+  'admin.recipientsTitle': 'Qui reçoit les e-mails sur les nouvelles demandes',
+  'admin.recipientsHint':
+    'Les nouvelles demandes, les conversations rouvertes et les rappels vont à ces personnes. Une conversation attribuée ne prévient que la personne qui en est chargée, et une mention seulement le collègue nommé.',
+  'admin.recipientsRecent':
+    'Toutes les personnes qui ont ouvert le helpdesk ces 30 derniers jours',
+  'admin.recipientsChosen': 'Seulement ces membres de l’équipe',
+  'admin.recipientsJoin':
+    'Une personne apparaît ici dès qu’elle a ouvert le helpdesk. Si plus aucune d’entre elles ne peut recevoir d’e-mail, les e-mails vont à toutes les personnes qui l’ont ouvert ces 30 derniers jours.',
+  'admin.recipientsPick': 'Choisissez au moins un membre de l’équipe.',
+  'admin.noEmail': 'pas d’adresse e-mail',
   'admin.confirmationTitle': 'Confirmation après un premier message',
   'admin.confirmationHint':
     'Affichée dans le widget sous «Merci pour votre question» (ou signalement, suggestion, message). {email} et {reference} sont remplis. Laissez vide pour le texte par défaut ci-dessous.',
@@ -1716,7 +1746,7 @@ const fr: Record<MessageKey, string> = {
     'Aucune conversation n’a été ouverte ou résolue sur cette période.',
   'admin.teamTitle': 'Équipe',
   'admin.teamHint':
-    'Toutes les personnes ici reçoivent les nouvelles conversations par e-mail. Retirez quelqu’un qui ne répond plus; rouvrir l’admin le rajoute.',
+    'Toutes les personnes qui ont ouvert le helpdesk. Retirez quelqu’un qui ne répond plus : cette personne ne reçoit plus ses e-mails, et rouvrir l’admin la rajoute.',
   'admin.teamRemove': 'Retirer',
   'admin.teamConfirmRemove': 'Retirer et désassigner?',
   'admin.customerContext': 'Client',
@@ -2149,6 +2179,16 @@ const it: Record<MessageKey, string> = {
   'admin.inStage': '{duration} in questa fase',
   'admin.canned': 'Risposte predefinite',
   'admin.settings': 'Impostazioni',
+  'admin.recipientsTitle': 'Chi riceve le e-mail sulle nuove richieste',
+  'admin.recipientsHint':
+    'Le nuove richieste, le conversazioni riaperte e i promemoria vanno a queste persone. Una conversazione assegnata avvisa solo chi ne è incaricato, e una menzione solo il collega nominato.',
+  'admin.recipientsRecent':
+    'Tutti quelli che hanno aperto l’helpdesk negli ultimi 30 giorni',
+  'admin.recipientsChosen': 'Solo questi membri del team',
+  'admin.recipientsJoin':
+    'Una persona compare qui appena ha aperto l’helpdesk. Se nessuna di loro può più ricevere e-mail, le e-mail vanno a tutti quelli che l’hanno aperto negli ultimi 30 giorni.',
+  'admin.recipientsPick': 'Scelga almeno un membro del team.',
+  'admin.noEmail': 'nessun indirizzo e-mail',
   'admin.confirmationTitle': 'Conferma dopo un primo messaggio',
   'admin.confirmationHint':
     'Mostrata nel widget sotto «Grazie per la Sua domanda» (o segnalazione, suggerimento, messaggio). {email} e {reference} vengono compilati. Lasci vuoto per il testo predefinito qui sotto.',
@@ -2349,7 +2389,7 @@ const it: Record<MessageKey, string> = {
     'Nessuna conversazione è stata aperta o risolta in questo periodo.',
   'admin.teamTitle': 'Team',
   'admin.teamHint':
-    'Tutte le persone qui ricevono le nuove conversazioni via e-mail. Rimuova chi non risponde più; riaprire l’admin lo aggiunge di nuovo.',
+    'Tutti quelli che hanno aperto l’helpdesk. Rimuova chi non risponde più: smette di riceverne le e-mail, e riaprire l’admin lo aggiunge di nuovo.',
   'admin.teamRemove': 'Rimuovi',
   'admin.teamConfirmRemove': 'Rimuovere e togliere le assegnazioni?',
   'admin.customerContext': 'Cliente',

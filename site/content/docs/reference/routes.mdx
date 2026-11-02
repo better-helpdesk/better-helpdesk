@@ -104,8 +104,8 @@ Every request that is not a `GET` and succeeded is written to [`audit_log`](/doc
 | --- | --- | --- |
 | `GET` | `agent/me` | The agent, and the configuration the agent UI needs; `aiFeatures` says which [AI switches](/docs/ai/suggestions#choose-what-the-ai-does) are on, all `false` without `ai`. |
 | `PATCH` | `agent/me` | Sets the agent's away time. |
-| `GET` | `agent/settings` | The settings agents change: `confirmation`, the widget's confirmation text per language, and `ai`, the AI switches. |
-| `PUT` | `agent/settings` | Changes them. Either field may be left out; `ai` takes any of `classify`, `title`, `summary`, `duplicates`, `draft` and `rewrite` as booleans and keeps the others. |
+| `GET` | `agent/settings` | The settings agents change: `confirmation`, the widget's confirmation text per language; `ai`, the AI switches; and `recipients`, the agent ids chosen to receive emails about new requests, empty for the default. |
+| `PUT` | `agent/settings` | Changes them. Any field may be left out; `ai` takes any of `classify`, `title`, `summary`, `duplicates`, `draft` and `rewrite` as booleans and keeps the others, and `recipients` replaces the list, up to 200 ids. |
 | `GET` | `agent/overview` | The Statistics page: volume, response and resolution times with their 90th percentiles, SLA attainment and missed targets, ratings and tags, by inbox, agent, tier, priority and channel. |
 | `GET` | `agent/audit` | The audit log, newest first, up to 100 entries; `?agentId=` and `?target=` narrow it, and `?before=` with an entry's `createdAt` pages back. Each entry carries `targetName` and, for a conversation, `targetReference`; both are `null` once the target is gone. |
 | `GET` | `agent/unread` | The count of waiting conversations. |

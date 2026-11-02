@@ -154,7 +154,7 @@ export const adminCss = `
 .sa .sa-seg button[aria-pressed="true"] { background: var(--a-accent); color: var(--a-accent-fg); }
 
 .sa-card { border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); padding: 14px 16px; display: grid; gap: 10px; }
-.sa-card > h3 { margin: 0; font-size: 11px; font-weight: 600; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.sa-card > h3, .sa-card > .sa-toolbar > h3 { margin: 0; font-size: 11px; font-weight: 600; color: var(--a-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
 .sa-table-wrap { border: 1px solid var(--a-border); border-radius: var(--a-radius); background: var(--a-bg); overflow: hidden; }
 .sa-card .sa-table-wrap { border: 0; border-radius: 0; margin-inline: -16px; background: transparent; }
@@ -402,6 +402,10 @@ export const adminCss = `
 .sa .sa-bell-item { height: auto; padding: 8px; display: grid; gap: 2px; text-align: left; white-space: normal; }
 .sa-bell-pop > p { margin: 8px; }
 .sa-stale { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20; padding: 6px 12px; border-radius: var(--a-r-control); background: var(--a-fg); color: var(--a-bg); font-size: 13px; box-shadow: var(--a-shadow-pop); pointer-events: none; }
+.sa-card > .sa-seg { justify-self: start; max-width: 100%; overflow-x: auto; }
+.sa-choices { display: grid; gap: 8px; margin: 4px 0 8px; border: 0; padding: 0; min-width: 0; }
+.sa-choices .sa-toggle { white-space: normal; align-items: flex-start; font-size: 14px; }
+.sa-indent { padding-left: 24px; }
 .sa-ai-features { display: grid; gap: 8px; margin: 4px 0 8px; }
 .sa-ai-features .sa-toggle { white-space: normal; align-items: flex-start; font-size: 14px; }
 .sa-audit-entry { display: grid; gap: 2px; padding: 6px 0; }
