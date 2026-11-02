@@ -35,7 +35,7 @@ import { DealsBoard } from './deals';
 import { AwayControl, Inbox } from './inbox';
 import { NotificationBell } from './notifications';
 import { OverviewPage } from './overview';
-import { Settings } from './settings';
+import { AuditLog, Settings } from './settings';
 import { adminCss } from './styles';
 import {
   Avatar,
@@ -57,6 +57,7 @@ export const HELPDESK_SECTIONS = [
   'canned',
   'overview',
   'settings',
+  'audit',
 ] as const;
 
 /** The agent UI. Mount it in any React page; it routes through the query string. */
@@ -132,7 +133,9 @@ export function HelpdeskAdmin({
   useEffect(() => setUnhandled(false), [route]);
 
   const enabled = (section: string) =>
-    me.data?.features[section as Feature] !== false;
+    section === 'audit'
+      ? Boolean(me.data?.auditLog)
+      : me.data?.features[section as Feature] !== false;
   const wanted = route.conversation
     ? 'conversation'
     : route.contact
@@ -280,6 +283,7 @@ export function HelpdeskAdmin({
             {view === 'canned' && <CannedReplies />}
             {view === 'overview' && <OverviewPage />}
             {view === 'settings' && <Settings />}
+            {view === 'audit' && <AuditLog />}
           </div>
           <Dialog
             open={sheet}

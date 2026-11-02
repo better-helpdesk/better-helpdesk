@@ -44,6 +44,7 @@ const me = {
   dealStages: ['new', 'won'],
   customFields: {},
   ai: false,
+  auditLog: true,
   aiFeatures: {
     classify: false,
     title: false,
@@ -2006,7 +2007,7 @@ describe('HelpdeskAdmin', () => {
   it('shows the AI settings only when the host configured an AI', async () => {
     window.history.replaceState(null, '', '/support/settings/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
-    await screen.findByRole('heading', { name: 'Audit log' });
+    await screen.findByRole('heading', { name: 'Team' });
     expect(screen.queryByRole('heading', { name: 'AI' })).toBeNull();
   });
 
@@ -2079,6 +2080,83 @@ describe('HelpdeskAdmin', () => {
     expect(screen.queryByRole('button', { name: 'Draft with AI' })).toBeNull();
   });
 
+  it('pages the audit log 25 entries at a time, and hides its tab from who may not read it', async () => {
+    const at = Date.now();
+    const all = Array.from({ length: 30 }, (_, i) => ({
+      id: `e${String(i).padStart(2, '0')}`,
+      agentId: `a${i}`,
+      agentName: `Agent ${i}`,
+      action: 'POST canned',
+      target: null,
+      targetName: null,
+      targetReference: null,
+      data: {},
+      createdAt: new Date(at - i * 3_600_000).toISOString(),
+    }));
+    const requested: URLSearchParams[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = new URL(String(input), 'http://x.test');
+        if (url.pathname.includes('agent/audit')) {
+          requested.push(url.searchParams);
+          const id = url.searchParams.get('beforeId');
+          const from = id ? all.findIndex(e => e.id === id) + 1 : 0;
+          const limit = Number(url.searchParams.get('limit'));
+          return new Response(
+            JSON.stringify({ entries: all.slice(from, from + limit) })
+          );
+        }
+        return respond(String(input));
+      })
+    );
+    window.history.replaceState(null, '', '/support/audit/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const log = (
+      await screen.findByRole('heading', { name: 'Audit log' })
+    ).closest('.sa-audit') as HTMLElement;
+    const names = () =>
+      Array.from(log.querySelectorAll('.sa-audit-entry strong')).map(
+        el => el.textContent
+      );
+    await waitFor(() => expect(names()).toHaveLength(25));
+    expect(names()[0]).toBe('Agent 0');
+    expect(within(log).getByRole('button', { name: 'Newer' })).toHaveProperty(
+      'disabled',
+      true
+    );
+
+    fireEvent.click(within(log).getByRole('button', { name: 'Older' }));
+    await waitFor(() =>
+      expect(names()).toEqual([25, 26, 27, 28, 29].map(i => `Agent ${i}`))
+    );
+    expect(Object.fromEntries(requested.at(-1) ?? [])).toMatchObject({
+      limit: '26',
+      beforeId: 'e24',
+      before: all[24]?.createdAt,
+    });
+    expect(within(log).getByRole('button', { name: 'Older' })).toHaveProperty(
+      'disabled',
+      true
+    );
+
+    fireEvent.click(within(log).getByRole('button', { name: 'Newer' }));
+    await waitFor(() => expect(names()[0]).toBe('Agent 0'));
+    expect(screen.getByRole('button', { name: 'Audit log' })).toBeTruthy();
+  });
+
+  it('leaves the audit log out of the sections for an agent who may not read it', async () => {
+    routes['agent/me/'] = { ...me, auditLog: false };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    window.history.replaceState(null, '', '/support/audit/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('button', { name: 'Settings' });
+    expect(screen.queryByRole('button', { name: 'Audit log' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Audit log' })).toBeNull();
+  });
+
   it('groups the audit log by day and by what one agent changed together', async () => {
     const noon = new Date();
     noon.setHours(12, 0, 0, 0);
@@ -2144,7 +2222,7 @@ describe('HelpdeskAdmin', () => {
       routes['agent/audit/'] = { entries: [] };
       routes['agent/agents/'] = { agents: [] };
     });
-    window.history.replaceState(null, '', '/support/settings/');
+    window.history.replaceState(null, '', '/support/audit/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
 
     const log = (
@@ -2190,9 +2268,11 @@ describe('HelpdeskAdmin', () => {
       }
     );
     await waitFor(() =>
-      expect(requested.some(u => /agent\/audit\/?\?agentId=a2/.test(u))).toBe(
-        true
-      )
+      expect(
+        requested.some(
+          u => new URL(u, 'http://x.test').searchParams.get('agentId') === 'a2'
+        )
+      ).toBe(true)
     );
   });
 

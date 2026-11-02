@@ -1695,6 +1695,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
     ) as AiSettings;
   }
 
+  /** Supervisors read the audit log; before anyone holds that role, every agent does. */
+  async function canReadAudit(agent: { role: string }) {
+    return agent.role === 'supervisor' || !(await store.hasSupervisors());
+  }
+
   /** A stored suggestion without the parts the team has since turned off. */
   async function allowedSuggestion(suggestion: Conversation['aiSuggestion']) {
     if (!suggestion) return suggestion;
@@ -2309,6 +2314,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     track,
     triage,
     aiSettings,
+    canReadAudit,
     allowedSuggestion,
     draftReply,
     rateAsCustomer,

@@ -749,7 +749,7 @@ export function createHandler(support: Helpdesk) {
   });
 
   agentRoute('GET', 'audit', async ({ url, agent }) => {
-    if (agent.role !== 'supervisor' && (await store.hasSupervisors())) {
+    if (!(await support.canReadAudit(agent))) {
       throw new HelpdeskError(403, 'Supervisors only');
     }
     const p = url.searchParams;
@@ -758,10 +758,25 @@ export function createHandler(support: Helpdesk) {
       .datetime({ offset: true })
       .optional()
       .parse(p.get('before') || undefined);
+    const beforeId = id('beforeId');
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .catch(100)
+      .parse(p.get('limit') ?? undefined);
     const entries = await store.listAudit({
       agentId: id('agentId'),
       target: p.get('target') || undefined,
-      before: before ? new Date(before) : undefined,
+      limit,
+      before: before
+        ? {
+            createdAt: new Date(before),
+            // Without an id, every entry at that time counts as seen.
+            id: beforeId ?? '00000000-0000-0000-0000-000000000000',
+          }
+        : undefined,
     });
     return json({
       entries: entries.map(({ targetNumber, ...e }) => ({
@@ -813,6 +828,7 @@ export function createHandler(support: Helpdesk) {
       ),
       ai: Boolean(config.ai),
       aiFeatures: await support.aiSettings(),
+      auditLog: await support.canReadAudit(agent),
       features: config.features,
     })
   );

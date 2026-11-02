@@ -5,7 +5,7 @@ import type { Locale } from '../config';
 import { useResource } from '../ui/api';
 import { relativeTime, translator } from '../ui/i18n';
 import { useAdmin } from './context';
-import { humanizeKey, useToast } from './ui';
+import { humanizeKey, LoadError, useToast } from './ui';
 
 const LOCALES: { key: Locale; label: string }[] = [
   { key: 'en', label: 'English' },
@@ -34,6 +34,9 @@ type AuditRow = {
 };
 
 const fieldName = (field: string) => humanizeKey(field.replace(/Id$/, ''));
+
+/** Entries on one page of the audit log. */
+const PAGE = 25;
 
 /** Entries this close together, by one agent on one thing, read as one change. */
 const GROUP_MS = 30 * 60_000;
@@ -66,24 +69,35 @@ function groupAudit(entries: AuditRow[]) {
 }
 
 /** What the team changed, for a supervisor; 403 means the host hands out roles and this agent is not one. */
-function AuditLog() {
+export function AuditLog() {
   const { api, t, locale, href, navigate } = useAdmin();
   const [agentId, setAgentId] = useState('');
-  const [older, setOlder] = useState<AuditRow[]>([]);
-  const [more, setMore] = useState(true);
+  // The last entry of each page before this one; empty on the newest page.
+  const [pages, setPages] = useState<AuditRow[]>([]);
+  const before = pages.at(-1);
+  const query = new URLSearchParams({
+    // One more than a page, to know whether an older one exists.
+    limit: String(PAGE + 1),
+    ...(agentId && { agentId }),
+    ...(before && { before: before.createdAt, beforeId: before.id }),
+  }).toString();
   const log = useResource(
-    () =>
-      api<{ entries: AuditRow[] }>(
-        `agent/audit${agentId ? `?agentId=${agentId}` : ''}`
-      ),
-    `audit:${agentId}`
+    () => api<{ entries: AuditRow[] }>(`agent/audit?${query}`),
+    `audit:${query}`
   );
   const team = useResource(
     () => api<{ agents: TeamMember[] }>('agent/agents'),
     'agents'
   );
-  if (log.error) return null;
-  const entries = [...(log.data?.entries ?? []), ...older];
+  if (log.error)
+    return (
+      <div className="sa">
+        <LoadError t={t} onRetry={log.refresh} />
+      </div>
+    );
+  const fetched = log.data?.entries ?? [];
+  const entries = fetched.slice(0, PAGE);
+  const older = fetched.length > PAGE;
   const action = (a: string) => {
     const phrase = t(`audit.${a}`);
     return phrase === `audit.${a}` ? a : phrase;
@@ -128,110 +142,118 @@ function AuditLog() {
   ];
   const groups = groupAudit(entries);
   return (
-    <div className="sa-card sa-audit">
-      <div className="sa-toolbar">
-        <h3 className="sa-grow">{t('admin.auditTitle')}</h3>
-        <select
-          className="sa-select"
-          aria-label={t('admin.auditAgent')}
-          value={agentId}
-          onChange={e => {
-            setAgentId(e.target.value);
-            setOlder([]);
-            setMore(true);
-          }}>
-          <option value="">{t('admin.auditAllAgents')}</option>
-          {team.data?.agents.map(a => (
-            <option key={a.id} value={a.id}>
-              {a.name ?? a.email}
-            </option>
-          ))}
-        </select>
+    <div className="sa">
+      <div className="sa-card sa-audit">
+        <div className="sa-toolbar">
+          <h3 className="sa-grow">{t('admin.auditTitle')}</h3>
+          <select
+            className="sa-select"
+            aria-label={t('admin.auditAgent')}
+            value={agentId}
+            onChange={e => {
+              setAgentId(e.target.value);
+              setPages([]);
+            }}>
+            <option value="">{t('admin.auditAllAgents')}</option>
+            {team.data?.agents.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.name ?? a.email}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="sa-muted">{t('admin.auditHint')}</p>
+        {log.data && entries.length === 0 && (
+          <p className="sa-fine">{t('admin.auditEmpty')}</p>
+        )}
+        {groups.map((group, index) => {
+          const [first] = group as [AuditRow, ...AuditRow[]];
+          const last = group.at(-1) as AuditRow;
+          const previous = groups[index - 1]?.[0];
+          const actions = [...new Set(group.map(e => e.action))];
+          const changed = fields(group);
+          return (
+            <section key={first.id} className="sa-audit-entry">
+              {(!previous ||
+                new Date(previous.createdAt).toDateString() !==
+                  new Date(first.createdAt).toDateString()) && (
+                <h4 className="sa-audit-day">{day(first.createdAt)}</h4>
+              )}
+              <div className="sa-toolbar sa-fine">
+                <strong>{first.agentName ?? t('event.formerAgent')}</strong>
+                <span>
+                  {actions
+                    .map(a => {
+                      const count = group.filter(e => e.action === a).length;
+                      return count > 1 ? `${action(a)} ×${count}` : action(a);
+                    })
+                    .join(' · ')}
+                </span>
+                {target(first)}
+                <span className="sa-grow" />
+                <time dateTime={first.createdAt}>
+                  {group.length > 1 &&
+                    `${new Date(last.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}–`}
+                  {new Date(first.createdAt).toLocaleTimeString(locale, {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </time>
+              </div>
+              {changed.length > 0 && (
+                <p className="sa-fine sa-muted">
+                  {t('admin.auditFields', {
+                    fields: changed.map(fieldName).join(', '),
+                  })}
+                </p>
+              )}
+              {group.length > 1 && (
+                <details className="sa-details">
+                  <summary>
+                    {t('admin.auditChanges', { count: String(group.length) })}
+                  </summary>
+                  {group.map(e => (
+                    <div key={e.id} className="sa-toolbar sa-fine">
+                      <span>{action(e.action)}</span>
+                      {e.data.fields && (
+                        <span className="sa-muted">
+                          {e.data.fields.map(fieldName).join(', ')}
+                        </span>
+                      )}
+                      <span className="sa-grow" />
+                      <time dateTime={e.createdAt}>
+                        {relativeTime(e.createdAt, locale)}
+                      </time>
+                    </div>
+                  ))}
+                </details>
+              )}
+            </section>
+          );
+        })}
+        {(pages.length > 0 || older) && (
+          <div className="sa-toolbar">
+            <button
+              type="button"
+              className="sa-btn"
+              disabled={pages.length === 0}
+              onClick={() => setPages(list => list.slice(0, -1))}>
+              {t('admin.newer')}
+            </button>
+            <span className="sa-grow" />
+            <button
+              type="button"
+              className="sa-btn"
+              disabled={!older}
+              onClick={() => {
+                const last = entries.at(-1);
+                if (last) setPages(list => [...list, last]);
+              }}>
+              {t('admin.older')}
+            </button>
+          </div>
+        )}
       </div>
-      <p className="sa-muted">{t('admin.auditHint')}</p>
-      {log.data && entries.length === 0 && (
-        <p className="sa-fine">{t('admin.auditEmpty')}</p>
-      )}
-      {groups.map((group, index) => {
-        const [first] = group as [AuditRow, ...AuditRow[]];
-        const last = group.at(-1) as AuditRow;
-        const previous = groups[index - 1]?.[0];
-        const actions = [...new Set(group.map(e => e.action))];
-        const changed = fields(group);
-        return (
-          <section key={first.id} className="sa-audit-entry">
-            {(!previous ||
-              new Date(previous.createdAt).toDateString() !==
-                new Date(first.createdAt).toDateString()) && (
-              <h4 className="sa-audit-day">{day(first.createdAt)}</h4>
-            )}
-            <div className="sa-toolbar sa-fine">
-              <strong>{first.agentName ?? t('event.formerAgent')}</strong>
-              <span>
-                {actions
-                  .map(a => {
-                    const count = group.filter(e => e.action === a).length;
-                    return count > 1 ? `${action(a)} ×${count}` : action(a);
-                  })
-                  .join(' · ')}
-              </span>
-              {target(first)}
-              <span className="sa-grow" />
-              <time dateTime={first.createdAt}>
-                {group.length > 1 &&
-                  `${new Date(last.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}–`}
-                {new Date(first.createdAt).toLocaleTimeString(locale, {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </time>
-            </div>
-            {changed.length > 0 && (
-              <p className="sa-fine sa-muted">
-                {t('admin.auditFields', {
-                  fields: changed.map(fieldName).join(', '),
-                })}
-              </p>
-            )}
-            {group.length > 1 && (
-              <details className="sa-details">
-                <summary>
-                  {t('admin.auditChanges', { count: String(group.length) })}
-                </summary>
-                {group.map(e => (
-                  <div key={e.id} className="sa-toolbar sa-fine">
-                    <span>{action(e.action)}</span>
-                    {e.data.fields && (
-                      <span className="sa-muted">
-                        {e.data.fields.map(fieldName).join(', ')}
-                      </span>
-                    )}
-                    <span className="sa-grow" />
-                    <time dateTime={e.createdAt}>
-                      {relativeTime(e.createdAt, locale)}
-                    </time>
-                  </div>
-                ))}
-              </details>
-            )}
-          </section>
-        );
-      })}
-      {more && entries.length >= 100 && (
-        <button
-          type="button"
-          className="sa-link"
-          onClick={async () => {
-            const before = entries.at(-1)?.createdAt;
-            const next = await api<{ entries: AuditRow[] }>(
-              `agent/audit?${new URLSearchParams({ ...(agentId && { agentId }), ...(before && { before }) })}`
-            );
-            setOlder(rows => [...rows, ...next.entries]);
-            setMore(next.entries.length >= 100);
-          }}>
-          {t('admin.auditOlder')}
-        </button>
-      )}
     </div>
   );
 }
@@ -539,7 +561,6 @@ export function Settings() {
       <Recipients />
       {me.ai && <AiSettings />}
       <Team />
-      <AuditLog />
     </div>
   );
 }

@@ -1572,17 +1572,25 @@ export function createStore(
       limit?: number;
       agentId?: string;
       target?: string;
-      before?: Date;
+      /** The last entry of the page before: its time and, for entries sharing that time, its id. */
+      before?: { createdAt: Date; id: string };
     } = {}) {
       const rows = await adapter.findMany<AuditEntry>('audit_log', {
         where: and(
           agentId && eq('agentId', agentId),
           target && eq('target', target),
-          before && lt('createdAt', before),
+          before &&
+            or(
+              lt('createdAt', before.createdAt),
+              and(at('createdAt', before.createdAt), lt('id', before.id))
+            ),
           // Rows written before these stopped being recorded.
           { not: oneOf('action', [...UNAUDITED]) }
         ),
-        orderBy: [{ field: 'createdAt', direction: 'desc' }],
+        orderBy: [
+          { field: 'createdAt', direction: 'desc' },
+          { field: 'id', direction: 'desc' },
+        ],
         limit,
       });
       const agents = await namesOf(
