@@ -57,7 +57,7 @@ export default function Page() {
 | Name | Value |
 | --- | --- |
 | `HelpdeskAdmin` | The component. |
-| `HELPDESK_SECTIONS` | `['inbox', 'contacts', 'companies', 'deals', 'canned', 'overview', 'settings']` |
+| `HELPDESK_SECTIONS` | `['inbox', 'contacts', 'companies', 'deals', 'canned', 'overview', 'settings', 'audit']` |
 | `HELPDESK_CHANGED` | `'helpdesk:changed'`, an `Event` dispatched on `window` after each successful request the UI makes that is not a `GET`. |
 
 ## Sections and URLs
@@ -73,9 +73,10 @@ Each screen is a path under `basePath`; inbox filters are in the query string.
 | `deals` | `{basePath}/deals/` | The deals board. |
 | `canned` | `{basePath}/canned/` | Canned replies. |
 | `overview` | `{basePath}/overview/` | Statistics: volume, response and resolution times, ratings and tags, each figure a link into the inbox filtered to its conversations. |
-| `settings` | `{basePath}/settings/` | The widget's confirmation text, what the [AI may do](/docs/ai/suggestions#choose-what-the-ai-does) when one is configured, the team with each member's role, where an agent can remove another, and the audit log of every change made here. |
+| `settings` | `{basePath}/settings/` | The widget's confirmation text, one language tab at a time, [who gets emails about new requests](/docs/inbox/team#choose-who-gets-emails-about-new-requests), what the [AI may do](/docs/ai/suggestions#choose-what-the-ai-does) when one is configured, the team with each member's role, and where an agent can remove another. |
+| `audit` | `{basePath}/audit/` | The [audit log](/docs/inbox/team#roles) of every change made in the agent UI, 25 entries a page. |
 
-A section that [`features`](/docs/reference/configuration#crm) switched off has no tab, and a link into it lands on the inbox.
+A section that [`features`](/docs/reference/configuration#crm) switched off has no tab, and a link into it lands on the inbox. The same goes for `audit` when the agent may not read the log: once any agent has the `supervisor` role, only supervisors see it. A host that renders its own tabs from `HELPDESK_SECTIONS` can hide that tab by the `auditLog` field of [`GET agent/me`](/docs/reference/routes).
 
 The inbox list reads `inbox`, `status`, `assignee`, `q`, `tag`, `tier`, `channel`, `sort`, `priority` and `days` from the query string. `status` is one of the statuses, `any`, `snoozed`, `rated-good` or `rated-bad`; `assignee` is `me`, `none` or an agent id; `sort` is empty for longest waiting, `priority`, or `sla` for the nearest deadline, which the tray offers once the config has [service levels](/docs/inbox/sla). A row shows its tier and how long until its deadline, or how far past it. `days` is `7`, `30` or `90`, the Statistics periods: it keeps conversations resolved in that time for `status=resolved`, rated in it for `rated-good` and `rated-bad`, and opened, resolved or rated in it otherwise, so each figure on Statistics opens the conversations it counts. The All, Assigned to me and Unassigned counts are of the list the other filters give. Changing a filter keeps the open conversation open.
 

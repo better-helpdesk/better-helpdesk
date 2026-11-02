@@ -233,6 +233,8 @@ One row per agent request that is not a `GET` and succeeded, except the typing i
 | `key` | Holds |
 | --- | --- |
 | `confirmation` | What the widget says after a first message, per locale. |
+| `ai` | The AI switches the team turned off or on; a missing one is on. |
+| `recipients` | The agent ids chosen to receive emails about new requests; empty means everyone seen in the last 30 days. |
 | `rating-link-secret` | The key that signs rating links, generated on first use. |
 | `views:shared` | Saved views shared with the team. |
 | `views:agent:{agentId}` | An agent's own saved views. |

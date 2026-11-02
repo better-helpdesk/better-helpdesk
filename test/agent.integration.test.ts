@@ -1822,6 +1822,51 @@ describe('settings', () => {
     expect(saved.data.confirmation.de).toBe('Danke! Antwort an {email}.');
   });
 
+  it('mails new requests to the chosen team members, and to everyone seen lately once none are left', async () => {
+    h.addUser('ada');
+    for (const user of ['agent', 'bea', 'old']) {
+      h.addUser(user, { isAgent: true });
+      await h.call('GET', 'agent/me', { user });
+    }
+    await h.update('agent', { name: 'old' }, { lastSeenAt: ago(60 * DAY) });
+    const id = Object.fromEntries(
+      (await h.find('agent', {})).map(a => [a.name, a.id as string])
+    );
+    const mailed = async () => {
+      h.emails.length = 0;
+      await open('ada');
+      await h.runDueJobs();
+      return h.emails
+        .filter(e => e.kind === 'agent-new')
+        .map(e => e.to)
+        .sort();
+    };
+    expect(await mailed()).toEqual(['agent@example.test', 'bea@example.test']);
+
+    await h.call('PUT', 'agent/settings', {
+      user: 'agent',
+      body: { recipients: [id.bea, id.old, id.bea] },
+    });
+    expect(
+      (await h.call('GET', 'agent/settings', { user: 'agent' })).data.recipients
+    ).toEqual([id.bea, id.old]);
+    // Chosen, so mailed even after 60 days away.
+    expect(await mailed()).toEqual(['bea@example.test', 'old@example.test']);
+
+    for (const gone of [id.bea, id.old]) {
+      await h.call('DELETE', `agent/agents/${gone}`, { user: 'agent' });
+    }
+    expect(await mailed()).toEqual(['agent@example.test']);
+
+    await h.call('PUT', 'agent/settings', {
+      user: 'agent',
+      body: { recipients: [] },
+    });
+    expect(
+      (await h.call('GET', 'agent/settings', { user: 'agent' })).data.recipients
+    ).toEqual([]);
+  });
+
   it('keeps the French and Italian confirmation text', async () => {
     h.addUser('agent', { isAgent: true });
     h.addUser('ada');

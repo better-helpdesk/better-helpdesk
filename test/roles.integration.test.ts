@@ -162,6 +162,36 @@ describe('the audit log', () => {
     expect(older.data.entries).toEqual([]);
   });
 
+  it('pages through entries that share a time without skipping or repeating one', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const { id } = await open('ada');
+    for (const status of ['pending', 'open', 'pending']) {
+      await h.call('PATCH', `agent/conversations/${id}`, {
+        user: 'agent',
+        body: { status },
+      });
+    }
+    const same = new Date('2026-10-30T12:00:00.000Z');
+    await h.update('audit_log', {}, { createdAt: same });
+    const page = async (query: string) =>
+      (await h.call('GET', `agent/audit?${query}`, { user: 'agent' })).data
+        .entries as { id: string; createdAt: string }[];
+
+    const first = await page('limit=2');
+    const last = first.at(-1);
+    const second = await page(
+      new URLSearchParams({
+        limit: '2',
+        before: last?.createdAt ?? '',
+        beforeId: last?.id ?? '',
+      }).toString()
+    );
+    const ids = [...first, ...second].map(e => e.id);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3);
+  });
+
   it('is a supervisor’s once there is one', async () => {
     h.addUser('agent', { isAgent: true });
     h.addUser('boss', { isAgent: true, role: 'supervisor' });
@@ -172,6 +202,12 @@ describe('the audit log', () => {
     expect((await h.call('GET', 'agent/audit', { user: 'boss' })).status).toBe(
       200
     );
+    expect(
+      (await h.call('GET', 'agent/me', { user: 'agent' })).data.auditLog
+    ).toBe(false);
+    expect(
+      (await h.call('GET', 'agent/me', { user: 'boss' })).data.auditLog
+    ).toBe(true);
   });
 });
 

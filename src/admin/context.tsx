@@ -60,6 +60,8 @@ export type Me = {
   ai: boolean;
   /** What the team lets the AI do; all off without an AI adapter. */
   aiFeatures: AiSettings;
+  /** This agent may read the audit log. */
+  auditLog: boolean;
   /** The sections the config left on; the UI shows nothing that leads to one that is off. */
   features: Record<Feature, boolean>;
 };

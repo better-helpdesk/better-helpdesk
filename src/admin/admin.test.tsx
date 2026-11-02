@@ -44,6 +44,7 @@ const me = {
   dealStages: ['new', 'won'],
   customFields: {},
   ai: false,
+  auditLog: true,
   aiFeatures: {
     classify: false,
     title: false,
@@ -1780,10 +1781,132 @@ describe('HelpdeskAdmin', () => {
     );
     window.history.replaceState(null, '', '/support/settings/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (
+      await screen.findByRole('heading', {
+        name: 'Confirmation after a first message',
+      })
+    ).closest('form') as HTMLElement;
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
 
-    expect(await screen.findByText('Something went wrong.')).toBeTruthy();
+    expect(await within(form).findByText('Something went wrong.')).toBeTruthy();
+  });
+
+  it('edits the confirmation one language at a time and saves them all', async () => {
+    const puts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          puts.push(JSON.parse(String(init.body)));
+          return new Response('{"ok":true}');
+        }
+        const url = String(input);
+        if (url.includes('agent/settings'))
+          return new Response(
+            JSON.stringify({ confirmation: { en: 'Thanks!' }, recipients: [] })
+          );
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (
+      await screen.findByRole('heading', {
+        name: 'Confirmation after a first message',
+      })
+    ).closest('form') as HTMLElement;
+    expect(within(form).getAllByRole('textbox')).toHaveLength(1);
+    await waitFor(() =>
+      expect(
+        (
+          within(form).getByRole('textbox', {
+            name: 'English',
+          }) as HTMLTextAreaElement
+        ).value
+      ).toBe('Thanks!')
+    );
+
+    fireEvent.click(within(form).getByRole('button', { name: 'Deutsch' }));
+    expect(within(form).getAllByRole('textbox')).toHaveLength(1);
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Deutsch' }), {
+      target: { value: 'Danke!' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(puts).toEqual([{ confirmation: { en: 'Thanks!', de: 'Danke!' } }])
+    );
+  });
+
+  it('sends new-request emails to the team members picked, or back to everyone', async () => {
+    const puts: unknown[] = [];
+    let recipients: string[] = [];
+    routes['agent/agents/'] = {
+      agents: [
+        { id: 'a1', name: 'Agent', email: 'agent@example.test', role: 'agent' },
+        { id: 'a2', name: 'Bea', email: 'bea@example.test', role: 'agent' },
+        { id: 'a3', name: 'Nomail', email: null, role: 'agent' },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/agents/'] = { agents: [] };
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          const body = JSON.parse(String(init.body));
+          puts.push(body);
+          recipients = body.recipients ?? recipients;
+          return new Response('{"ok":true}');
+        }
+        const url = String(input);
+        if (url.includes('agent/settings'))
+          return new Response(JSON.stringify({ confirmation: {}, recipients }));
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (
+      await screen.findByRole('heading', {
+        name: 'Who gets emails about new requests',
+      })
+    ).closest('form') as HTMLElement;
+    expect(
+      (
+        within(form).getByRole('radio', {
+          name: 'Everyone who opened the helpdesk in the last 30 days',
+        }) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+
+    fireEvent.click(
+      within(form).getByRole('radio', { name: 'Only these team members' })
+    );
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(
+      await within(form).findByText('Choose at least one team member.')
+    ).toBeTruthy();
+    expect(puts).toEqual([]);
+    expect(
+      within(form).getByRole('checkbox', { name: /Nomail/ })
+    ).toHaveProperty('disabled', true);
+
+    fireEvent.click(within(form).getByRole('checkbox', { name: 'Bea' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(puts).toEqual([{ recipients: ['a2'] }]));
+
+    fireEvent.click(
+      within(form).getByRole('radio', {
+        name: 'Everyone who opened the helpdesk in the last 30 days',
+      })
+    );
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(puts).toEqual([{ recipients: ['a2'] }, { recipients: [] }])
+    );
   });
 
   it('reloads the inbox for a change on the stream, not for someone typing', async () => {
@@ -1884,7 +2007,7 @@ describe('HelpdeskAdmin', () => {
   it('shows the AI settings only when the host configured an AI', async () => {
     window.history.replaceState(null, '', '/support/settings/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
-    await screen.findByRole('heading', { name: 'Audit log' });
+    await screen.findByRole('heading', { name: 'Team' });
     expect(screen.queryByRole('heading', { name: 'AI' })).toBeNull();
   });
 
@@ -1957,6 +2080,83 @@ describe('HelpdeskAdmin', () => {
     expect(screen.queryByRole('button', { name: 'Draft with AI' })).toBeNull();
   });
 
+  it('pages the audit log 25 entries at a time, and hides its tab from who may not read it', async () => {
+    const at = Date.now();
+    const all = Array.from({ length: 30 }, (_, i) => ({
+      id: `e${String(i).padStart(2, '0')}`,
+      agentId: `a${i}`,
+      agentName: `Agent ${i}`,
+      action: 'POST canned',
+      target: null,
+      targetName: null,
+      targetReference: null,
+      data: {},
+      createdAt: new Date(at - i * 3_600_000).toISOString(),
+    }));
+    const requested: URLSearchParams[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = new URL(String(input), 'http://x.test');
+        if (url.pathname.includes('agent/audit')) {
+          requested.push(url.searchParams);
+          const id = url.searchParams.get('beforeId');
+          const from = id ? all.findIndex(e => e.id === id) + 1 : 0;
+          const limit = Number(url.searchParams.get('limit'));
+          return new Response(
+            JSON.stringify({ entries: all.slice(from, from + limit) })
+          );
+        }
+        return respond(String(input));
+      })
+    );
+    window.history.replaceState(null, '', '/support/audit/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const log = (
+      await screen.findByRole('heading', { name: 'Audit log' })
+    ).closest('.sa-audit') as HTMLElement;
+    const names = () =>
+      Array.from(log.querySelectorAll('.sa-audit-entry strong')).map(
+        el => el.textContent
+      );
+    await waitFor(() => expect(names()).toHaveLength(25));
+    expect(names()[0]).toBe('Agent 0');
+    expect(within(log).getByRole('button', { name: 'Newer' })).toHaveProperty(
+      'disabled',
+      true
+    );
+
+    fireEvent.click(within(log).getByRole('button', { name: 'Older' }));
+    await waitFor(() =>
+      expect(names()).toEqual([25, 26, 27, 28, 29].map(i => `Agent ${i}`))
+    );
+    expect(Object.fromEntries(requested.at(-1) ?? [])).toMatchObject({
+      limit: '26',
+      beforeId: 'e24',
+      before: all[24]?.createdAt,
+    });
+    expect(within(log).getByRole('button', { name: 'Older' })).toHaveProperty(
+      'disabled',
+      true
+    );
+
+    fireEvent.click(within(log).getByRole('button', { name: 'Newer' }));
+    await waitFor(() => expect(names()[0]).toBe('Agent 0'));
+    expect(screen.getByRole('button', { name: 'Audit log' })).toBeTruthy();
+  });
+
+  it('leaves the audit log out of the sections for an agent who may not read it', async () => {
+    routes['agent/me/'] = { ...me, auditLog: false };
+    onTestFinished(() => {
+      routes['agent/me/'] = me;
+    });
+    window.history.replaceState(null, '', '/support/audit/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('button', { name: 'Settings' });
+    expect(screen.queryByRole('button', { name: 'Audit log' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Audit log' })).toBeNull();
+  });
+
   it('groups the audit log by day and by what one agent changed together', async () => {
     const noon = new Date();
     noon.setHours(12, 0, 0, 0);
@@ -2022,7 +2222,7 @@ describe('HelpdeskAdmin', () => {
       routes['agent/audit/'] = { entries: [] };
       routes['agent/agents/'] = { agents: [] };
     });
-    window.history.replaceState(null, '', '/support/settings/');
+    window.history.replaceState(null, '', '/support/audit/');
     render(<HelpdeskAdmin basePath="/support" locale="en" />);
 
     const log = (
@@ -2068,9 +2268,11 @@ describe('HelpdeskAdmin', () => {
       }
     );
     await waitFor(() =>
-      expect(requested.some(u => /agent\/audit\/?\?agentId=a2/.test(u))).toBe(
-        true
-      )
+      expect(
+        requested.some(
+          u => new URL(u, 'http://x.test').searchParams.get('agentId') === 'a2'
+        )
+      ).toBe(true)
     );
   });
 
