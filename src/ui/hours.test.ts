@@ -237,3 +237,77 @@ describe('openDeadline', () => {
     );
   });
 });
+
+describe('closed days', () => {
+  // Christmas 2026 falls on a Friday; the 24th is a Thursday.
+  const holidays: BusinessHours = {
+    ...office,
+    closed: [
+      '2026-12-24',
+      '2026-12-25',
+      '2026-12-28',
+      '2026-12-29',
+      '2026-12-30',
+      '2026-12-31',
+      '2027-01-01',
+    ],
+  };
+
+  it('counts no open time on a closed day', () => {
+    expect(
+      openHoursBetween(
+        at('2026-12-24T00:00:00Z'),
+        at('2026-12-26T00:00:00Z'),
+        holidays
+      )
+    ).toBe(0);
+    expect(
+      openHoursBetween(
+        at('2026-12-24T00:00:00Z'),
+        at('2026-12-26T00:00:00Z'),
+        office
+      )
+    ).toBe(18);
+  });
+
+  it('carries a deadline over the closed days to the next open one', () => {
+    // Wednesday 23rd 16:00 CET, four open hours: one that day, three on Monday 4 January.
+    expect(openDeadline(at('2026-12-23T15:00:00Z'), 4, holidays)).toEqual(
+      at('2027-01-04T10:00:00Z')
+    );
+  });
+
+  it('opens on the first day after a closure longer than a week', () => {
+    expect(nextOpening(at('2026-12-23T17:00:00Z'), holidays)).toEqual(
+      at('2027-01-04T07:00:00Z')
+    );
+  });
+
+  it('keeps a span that started the evening before running into a closed day', () => {
+    const night: BusinessHours = {
+      timeZone: 'Europe/Zurich',
+      weekly: { thu: [['22:00', '02:00']] },
+      closed: ['2026-12-25'],
+    };
+    // Thursday 24th 22:00 to Friday 25th 02:00 CET still counts.
+    expect(
+      openHoursBetween(
+        at('2026-12-24T20:00:00Z'),
+        at('2026-12-25T02:00:00Z'),
+        night
+      )
+    ).toBe(4);
+  });
+
+  it('refuses a date that does not exist', () => {
+    expect(() =>
+      resolveConfig({
+        db: {} as never,
+        referencePrefix: 'DG',
+        adminUrl: 'https://app.test/helpdesk/',
+        identify: async () => null,
+        inboxes: { support: { hours: { ...office, closed: ['2026-02-30'] } } },
+      })
+    ).toThrow(/Not a calendar date/);
+  });
+});

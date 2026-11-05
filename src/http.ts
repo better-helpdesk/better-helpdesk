@@ -6,6 +6,7 @@ import {
   AI_FEATURES,
   type AiFeature,
   type AiSettings,
+  calendarDate,
   type Feature,
   type Locale,
   STATUSES,
@@ -28,6 +29,7 @@ import { eventStream, type RealtimeChange } from './realtime';
 import { plainText } from './rich';
 import {
   ATTACHMENT_TYPES,
+  type ClosedDay,
   type Customer,
   type Helpdesk,
   HelpdeskError,
@@ -710,6 +712,7 @@ export function createHandler(support: Helpdesk) {
         (await store.getSetting<ConfirmationSetting>('confirmation')) ?? {},
       ai: await support.aiSettings(),
       recipients: (await store.getSetting<string[]>('recipients')) ?? [],
+      closed: (await store.getSetting<ClosedDay[]>('closed')) ?? [],
     })
   );
 
@@ -729,8 +732,23 @@ export function createHandler(support: Helpdesk) {
           .strict()
           .optional(),
         recipients: z.array(uuid).max(200).optional(),
+        closed: z
+          .array(
+            z.object({
+              date: calendarDate,
+              name: z.string().trim().max(100).optional(),
+            })
+          )
+          .max(366)
+          .optional(),
       })
       .parse(await body());
+    if (data.closed) {
+      const byDate = new Map(data.closed.map(d => [d.date, d]));
+      await support.setTeamClosed(
+        [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+      );
+    }
     if (data.recipients)
       await store.setSetting('recipients', [...new Set(data.recipients)]);
     if (data.confirmation)
@@ -819,7 +837,7 @@ export function createHandler(support: Helpdesk) {
       inboxes: Object.keys(config.inboxes),
       inboxHours: Object.fromEntries(
         Object.entries(config.inboxes).flatMap(([key, inbox]) =>
-          inbox.hours ? [[key, inbox.hours]] : []
+          inbox.hours ? [[key, config.hoursOf(key)]] : []
         )
       ),
       inboxNames: Object.fromEntries(
@@ -1873,6 +1891,7 @@ export function createHandler(support: Helpdesk) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors });
     }
+    await support.refreshTeamClosed();
 
     for (const route of routes) {
       if (route.method !== request.method) continue;

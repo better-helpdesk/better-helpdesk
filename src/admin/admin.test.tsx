@@ -1839,6 +1839,61 @@ describe('HelpdeskAdmin', () => {
     );
   });
 
+  it('adds and removes the days the team is closed, and saves them in date order', async () => {
+    const puts: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          puts.push(JSON.parse(String(init.body)));
+          return new Response('{"ok":true}');
+        }
+        const url = String(input);
+        if (url.includes('agent/settings'))
+          return new Response(
+            JSON.stringify({
+              confirmation: {},
+              recipients: [],
+              closed: [{ date: '2026-12-25', name: 'Christmas Day' }],
+            })
+          );
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/settings/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    const form = (
+      await screen.findByRole('heading', { name: 'Closed days' })
+    ).closest('form') as HTMLElement;
+    expect(within(form).getByText(/Christmas Day/)).toBeTruthy();
+
+    fireEvent.change(within(form).getByLabelText('Date'), {
+      target: { value: '2026-12-24' },
+    });
+    fireEvent.change(within(form).getByLabelText('Name (optional)'), {
+      target: { value: 'Christmas Eve' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Add day' }));
+    fireEvent.change(within(form).getByLabelText('Date'), {
+      target: { value: '2027-01-01' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Add day' }));
+    const removes = within(form).getAllByRole('button', { name: 'Remove' });
+    fireEvent.click(removes[1] as HTMLElement);
+    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(puts).toEqual([
+        {
+          closed: [
+            { date: '2026-12-24', name: 'Christmas Eve' },
+            { date: '2027-01-01' },
+          ],
+        },
+      ])
+    );
+  });
+
   it('sends new-request emails to the team members picked, or back to everyone', async () => {
     const puts: unknown[] = [];
     let recipients: string[] = [];

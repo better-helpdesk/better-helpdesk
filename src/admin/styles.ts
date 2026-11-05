@@ -403,6 +403,8 @@ export const adminCss = `
 .sa-bell-pop > p { margin: 8px; }
 .sa-stale { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20; padding: 6px 12px; border-radius: var(--a-r-control); background: var(--a-fg); color: var(--a-bg); font-size: 13px; box-shadow: var(--a-shadow-pop); pointer-events: none; }
 .sa-card > .sa-seg { justify-self: start; max-width: 100%; overflow-x: auto; }
+.sa-closed-add { align-items: flex-end; flex-wrap: wrap; }
+.sa-closed-add .sa-field { margin: 0; }
 .sa-choices { display: grid; gap: 8px; margin: 4px 0 8px; border: 0; padding: 0; min-width: 0; }
 .sa-indent { padding-left: 24px; }
 .sa-ai-features { display: grid; gap: 8px; margin: 4px 0 8px; }

@@ -1,4 +1,9 @@
-import type { BusinessHours, ResolvedConfig, SlaPolicy } from './config';
+import {
+  type BusinessHours,
+  type ResolvedConfig,
+  type SlaPolicy,
+  withClosed,
+} from './config';
 import type { Conversation } from './db/store';
 import { openDeadline, openHoursBetween } from './ui/hours';
 
@@ -39,7 +44,7 @@ export function deadline(
 
 /** The policy a conversation falls under: its tier's, else the default; then the target for its priority. */
 export function slaClockFor(
-  config: Pick<ResolvedConfig, 'sla' | 'inboxes'>
+  config: Pick<ResolvedConfig, 'sla' | 'inboxes' | 'teamClosed'>
 ): SlaClockFor {
   return conversation => {
     const sla = config.sla;
@@ -55,7 +60,7 @@ export function slaClockFor(
       config.inboxes[conversation.inbox]?.hours ??
       'always';
     return {
-      hours: hours === 'always' ? null : hours,
+      hours: hours === 'always' ? null : withClosed(hours, config.teamClosed),
       respond: target.respond ?? null,
       resolve: target.resolve ?? null,
     };

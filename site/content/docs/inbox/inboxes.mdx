@@ -102,6 +102,10 @@ Wall-clock spans per weekday in one time zone.
       required: true,
       description: 'Open spans per day as [start, end] pairs. A day left out is closed.',
     },
+    closed: {
+      type: 'string[]',
+      description: <>Whole days closed, such as public holidays, as <code>YYYY-MM-DD</code> in <code>timeZone</code>. Up to 1,000. The days closed in the agent UI's settings are added to every schedule. See <a href="/docs/inbox/setup#close-on-holidays">Close on holidays</a>.</>,
+    },
   }}
 />
 
@@ -111,6 +115,7 @@ Wall-clock spans per weekday in one time zone.
 - A start is `HH:MM` from `00:00` to `23:59`. An end is the same or `24:00`, which ends the span at midnight.
 - At least one day has a span.
 - No key other than the seven day keys.
+- Each `closed` entry is a real calendar date.
 
 A span whose end is not after its start runs into the next day.
 

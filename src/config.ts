@@ -97,7 +97,28 @@ const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 export type BusinessHours = {
   timeZone: string;
   weekly: Partial<Record<(typeof DAY_KEYS)[number], [string, string][]>>;
+  /** Whole days closed, such as public holidays, as `YYYY-MM-DD` in `timeZone`. */
+  closed?: string[];
 };
+
+/** `hours` with more closed days; the same object when there are none to add. */
+export function withClosed(
+  hours: BusinessHours,
+  extra: readonly string[]
+): BusinessHours {
+  return extra.length
+    ? { ...hours, closed: [...(hours.closed ?? []), ...extra] }
+    : hours;
+}
+
+/** A day as `YYYY-MM-DD`; checked to be a real date. */
+export const calendarDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(
+    d => new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d,
+    'Not a calendar date'
+  );
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const endTime = z.union([time, z.literal('24:00')]);
@@ -126,6 +147,7 @@ export const businessHours = z.object({
       weekly => Object.values(weekly).some(spans => spans?.length),
       'At least one open span'
     ),
+  closed: z.array(calendarDate).max(1000).optional(),
 });
 
 export type InboxConfig = {
@@ -457,6 +479,10 @@ export type ResolvedConfig = HelpdeskConfig & {
   customerRateLimit: number;
   /** Seconds a visitor's form must be open; `null` when the check is off. */
   formMinSeconds: number | null;
+  /** The days the team closed in the agent UI's settings, kept current by the service. */
+  teamClosed: string[];
+  /** An inbox's hours with the team's closed days added; undefined when it has none. */
+  hoursOf(inbox: string): BusinessHours | undefined;
 };
 
 export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
@@ -536,6 +562,13 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
         ? null
         : (config.botProtection?.minSeconds ?? 3),
     customerRateLimit: config.customerRateLimit ?? 60,
+    teamClosed: [],
+    hoursOf: inbox => {
+      const hours = Object.hasOwn(config.inboxes, inbox)
+        ? config.inboxes[inbox]?.hours
+        : undefined;
+      return hours && withClosed(hours, resolved.teamClosed);
+    },
   };
   // The store starts and pauses the clocks itself, so every status change keeps them right.
   resolved.slaClock = slaClockFor(resolved);

@@ -373,6 +373,129 @@ function Team() {
   );
 }
 
+type ClosedDay = { date: string; name?: string };
+
+/** The days the team does not work, which every schedule with hours skips. */
+function ClosedDays() {
+  const { api, t, locale, readOnly } = useAdmin();
+  const toast = useToast();
+  const saved = useResource(
+    () => api<{ closed?: ClosedDay[] }>('agent/settings'),
+    'settings'
+  );
+  const [days, setDays] = useState<ClosedDay[] | null>(null);
+  const [date, setDate] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (saved.data) setDays(saved.data.closed ?? []);
+  }, [saved.data]);
+  if (!days) return null;
+  const format = (day: string) =>
+    new Date(`${day}T12:00:00Z`).toLocaleDateString(locale, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  const add = () => {
+    if (!date) return;
+    setDays(list =>
+      [
+        ...(list ?? []).filter(d => d.date !== date),
+        { date, ...(name.trim() ? { name: name.trim() } : {}) },
+      ].sort((a, b) => a.date.localeCompare(b.date))
+    );
+    setDate('');
+    setName('');
+  };
+  return (
+    <form
+      className="sa-card"
+      onSubmit={async e => {
+        e.preventDefault();
+        setError(false);
+        try {
+          await api('agent/settings', {
+            method: 'PUT',
+            body: { closed: days },
+          });
+          toast.show(t('admin.saved'));
+        } catch {
+          setError(true);
+        }
+      }}>
+      <h3>{t('admin.closedTitle')}</h3>
+      <p className="sa-muted">{t('admin.closedHint')}</p>
+      {days.length === 0 && <p className="sa-fine">{t('admin.closedEmpty')}</p>}
+      {days.map(d => (
+        <div key={d.date} className="sa-toolbar">
+          <span className="sa-grow">
+            {format(d.date)}
+            {d.name && <span className="sa-muted"> · {d.name}</span>}
+          </span>
+          {!readOnly && (
+            <button
+              type="button"
+              className="sa-btn sa-ghost"
+              onClick={() =>
+                setDays(list => (list ?? []).filter(x => x !== d))
+              }>
+              {t('admin.teamRemove')}
+            </button>
+          )}
+        </div>
+      ))}
+      {!readOnly && (
+        <div className="sa-toolbar sa-closed-add">
+          <label className="sa-field">
+            {t('admin.closedDate')}
+            <input
+              type="date"
+              className="sa-input"
+              value={date}
+              onChange={e => setDate(e.target.value)}
+            />
+          </label>
+          <label className="sa-field sa-grow">
+            {t('admin.closedName')}
+            <input
+              className="sa-input"
+              maxLength={100}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  add();
+                }
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className="sa-btn"
+            disabled={!date}
+            onClick={add}>
+            {t('admin.closedAdd')}
+          </button>
+        </div>
+      )}
+      {!readOnly && (
+        <div className="sa-toolbar">
+          <span className="sa-grow" />
+          <button type="submit" className="sa-btn sa-primary">
+            {t('admin.save')}
+          </button>
+        </div>
+      )}
+      {error && <p className="sa-error">{t('admin.error')}</p>}
+      {toast.node}
+    </form>
+  );
+}
+
 /** Who hears about new requests: everyone seen lately, or the team members chosen here. */
 function Recipients() {
   const { api, t, readOnly } = useAdmin();
@@ -559,6 +682,7 @@ export function Settings() {
         {toast.node}
       </form>
       <Recipients />
+      <ClosedDays />
       {me.ai && <AiSettings />}
       <Team />
     </div>
