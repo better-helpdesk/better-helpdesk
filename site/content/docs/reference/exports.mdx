@@ -97,6 +97,10 @@ Every type in the configuration module is exported as well: `HelpdeskConfig`, `I
       type: '(input: { externalUserId?: string; externalOrgId?: string; event: string; props?: Record<string, unknown> }) => Promise<boolean>',
       description: <>Puts a host event on a timeline as an <code>activity</code> of kind <code>event</code>. With <code>externalUserId</code>, on the contact that holds that host identity, and on its company; with only <code>externalOrgId</code>, on that organization's company, created when missing. Returns <code>false</code> and records nothing when no contact holds the user id, or neither id is given.</>,
     },
+    refreshTiers: {
+      type: '(target: { orgId?: string; email?: string }) => Promise<number>',
+      description: <>Asks <code>resolveTier</code> again for the open conversations of the organization <code>orgId</code>, or of the person at <code>email</code>, and moves each to the tier it gives now, with fresh deadlines. A tier an agent chose by hand stands. Returns how many changed. See <a href="/docs/inbox/sla#when-a-plan-changes">When a plan changes</a>.</>,
+    },
     removeAgent: {
       type: '(externalUserId: string) => Promise<void>',
       description: <>Removes an agent from the team and unassigns their conversations, as <code>DELETE agent/agents/{'{id}'}</code> does. Their next request to an agent route with <code>isAgent: true</code> adds them back.</>,

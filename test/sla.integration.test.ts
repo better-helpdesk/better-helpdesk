@@ -560,3 +560,99 @@ describe('the next-reply target', () => {
     expect((await row(id)).replyBy).toBeNull();
   });
 });
+
+describe('a plan change', () => {
+  const plans = new Map<string, string>();
+  let failing = false;
+  const t = createHarness({
+    tiers: ['gold'],
+    inboxes: { support: {} },
+    sla: {
+      tiers: { gold: { targets: { normal: { respond: 1 } } } },
+      default: { targets: { normal: { respond: 24 } } },
+    },
+    resolveTier: async ({ orgId }) => {
+      if (failing) throw new Error('billing is down');
+      return (orgId && plans.get(orgId)) ?? null;
+    },
+  });
+  beforeEach(async () => {
+    await t.reset();
+    plans.clear();
+    failing = false;
+  });
+  afterAll(() => t.close());
+
+  const open = async () => {
+    const res = await t.call('POST', 'widget/conversations', {
+      user: 'ada',
+      body: {
+        inbox: 'support',
+        type: 'question',
+        body: 'Export?',
+        orgId: 'org-1',
+      },
+    });
+    return res.data.conversation.id as string;
+  };
+  const tierOf = async (id: string) =>
+    (await t.findOne('conversation', { id }))?.tier ?? null;
+
+  it('moves open conversations to the tier the host gives now, with fresh deadlines', async () => {
+    t.addUser('ada', { orgs: [{ id: 'org-1', name: 'Acme' }] });
+    const id = await open();
+    const before = await t.findOne('conversation', { id });
+    expect(before?.tier).toBeNull();
+
+    plans.set('org-1', 'gold');
+    expect(await t.support.refreshTiers({ orgId: 'org-1' })).toBe(1);
+    const after = await t.findOne('conversation', { id });
+    expect(after?.tier).toBe('gold');
+    // From the conversation's start: one hour instead of 24.
+    expect(
+      (after?.respondBy?.getTime() ?? 0) - (after?.createdAt.getTime() ?? 0)
+    ).toBeCloseTo(3_600_000, -3);
+    expect(
+      (
+        await t.find('conversation_event', { conversationId: id, kind: 'tier' })
+      ).map(e => [e.agentId, e.data])
+    ).toEqual([[null, { from: null, to: 'gold' }]]);
+    expect(await t.support.refreshTiers({ orgId: 'org-1' })).toBe(0);
+  });
+
+  it('asks again when the customer writes, and leaves a tier an agent chose', async () => {
+    t.addUser('ada', { orgs: [{ id: 'org-1', name: 'Acme' }] });
+    t.addUser('agent', { isAgent: true });
+    const id = await open();
+    plans.set('org-1', 'gold');
+    await t.call('POST', `widget/conversations/${id}/messages`, {
+      user: 'ada',
+      body: { body: 'Any news?' },
+    });
+    expect(await tierOf(id)).toBe('gold');
+
+    await t.call('PATCH', `agent/conversations/${id}`, {
+      user: 'agent',
+      body: { tier: null },
+    });
+    plans.set('org-1', 'gold');
+    expect(await t.support.refreshTiers({ orgId: 'org-1' })).toBe(0);
+    await t.call('POST', `widget/conversations/${id}/messages`, {
+      user: 'ada',
+      body: { body: 'Still there?' },
+    });
+    expect(await tierOf(id)).toBeNull();
+  });
+
+  it('keeps the tier when the host cannot answer', async () => {
+    t.addUser('ada', { orgs: [{ id: 'org-1', name: 'Acme' }] });
+    plans.set('org-1', 'gold');
+    const id = await open();
+    expect(await tierOf(id)).toBe('gold');
+    failing = true;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await t.support.refreshTiers({ orgId: 'org-1' })).toBe(0);
+    error.mockRestore();
+    expect(await tierOf(id)).toBe('gold');
+  });
+});

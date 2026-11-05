@@ -409,6 +409,67 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
   }
 
+  /**
+   * Asks `resolveTier` again for an open conversation and moves it to the
+   * answer, which sets its deadlines afresh. A tier an agent chose stands, and
+   * a failed or unchanged answer changes nothing.
+   */
+  async function retier(conversation: Conversation) {
+    if (
+      !config.resolveTier ||
+      conversation.status === 'resolved' ||
+      conversation.mergedIntoId
+    )
+      return false;
+    const chosen = (await store.listEvents(conversation.id)).some(
+      e => e.kind === 'tier' && e.agentId !== null
+    );
+    if (chosen) return false;
+    const [contact, company] = await Promise.all([
+      store.getContact(conversation.contactId),
+      conversation.companyId ? store.getCompany(conversation.companyId) : null,
+    ]);
+    let tier: string | null;
+    try {
+      tier = await config.resolveTier({
+        user: null,
+        orgId: company?.externalOrgId ?? null,
+        email: contact?.email ?? null,
+        inbox: conversation.inbox,
+        context: conversation.context ?? {},
+      });
+    } catch (error) {
+      console.error('[helpdesk] resolveTier failed', error);
+      return false;
+    }
+    const next = tier && config.tiers.includes(tier) ? tier : null;
+    if (next === conversation.tier) return false;
+    await changeConversation(conversation, { tier: next }, null);
+    return true;
+  }
+
+  /**
+   * For a plan change in the host app: the open conversations of the
+   * organisation `orgId`, or of the person at `email`, get the tier
+   * `resolveTier` gives now. Returns how many changed.
+   */
+  async function refreshTiers({
+    orgId,
+    email,
+  }: {
+    orgId?: string;
+    email?: string;
+  }) {
+    let changed = 0;
+    for (const conversation of await store.openConversationsOf({
+      externalOrgId: orgId,
+      email: email ? normalizeEmail(email) : undefined,
+    })) {
+      if (await retier(conversation)) changed++;
+    }
+    return changed;
+  }
+
   const priorityValue = z
     .string()
     .refine(p => config.priorities.includes(p), 'Unknown priority');
@@ -656,6 +717,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
     conversation: Conversation,
     message: Message
   ) {
+    const current = await store.getConversation(conversation.id);
+    if (current) await retier(current);
     if (conversation.status === 'resolved') {
       await store.enqueueJob('notify-agents', {
         conversationId: conversation.id,
@@ -2420,6 +2483,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     track,
     triage,
     aiSettings,
+    refreshTiers,
     refreshTeamClosed,
     setTeamClosed,
     formToken,
