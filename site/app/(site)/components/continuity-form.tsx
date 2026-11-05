@@ -3,13 +3,14 @@
 import posthog from 'posthog-js';
 import { type FormEvent, useState } from 'react';
 
-import { isEmail, sendToInbox } from '../../../lib/submit';
+import { isEmail, sendToInbox, useFormToken } from '../../../lib/submit';
 import { ButtonIcon } from './icons';
 
 type State = 'idle' | 'sending' | 'sent' | { error: string };
 
 export function ContinuityForm({ api }: { api: string }) {
   const [state, setState] = useState<State>('idle');
+  const formToken = useFormToken(api);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,6 +24,7 @@ export function ContinuityForm({ api }: { api: string }) {
     setState('sending');
     try {
       await sendToInbox(api, {
+        formToken: await formToken(),
         inbox: 'continuity',
         email,
         subject: 'Continuity list',
