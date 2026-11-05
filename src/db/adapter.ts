@@ -91,10 +91,11 @@ export type Capabilities = {
 };
 
 export type Notification = {
-  kind: 'assigned' | 'mentioned' | 'reply';
+  kind: 'assigned' | 'mentioned' | 'reply' | 'sla-warning' | 'sla-breach';
   conversation_id: string;
   number: number;
   subject: string | null;
+  /** Who acted; for an SLA notice, the target: `response`, `resolution` or `reply`. */
   who: string | null;
   /** ISO 8601, UTC. */
   at: string;

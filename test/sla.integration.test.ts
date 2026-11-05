@@ -656,3 +656,62 @@ describe('a plan change', () => {
     expect(await tierOf(id)).toBe('gold');
   });
 });
+
+describe('service-level notices in the notification bell', () => {
+  const b = createHarness({
+    inboxes: { support: {} },
+    sla: { default: { targets: { normal: { respond: 2 } } }, warnAt: 0.5 },
+  });
+  beforeEach(async () => {
+    await b.reset();
+    vi.useFakeTimers({
+      now: new Date('2026-11-02T08:00:00Z'),
+      toFake: ['Date'],
+    });
+  });
+  afterEach(() => vi.useRealTimers());
+  afterAll(() => b.close());
+
+  const later = (minutes: number) =>
+    vi.setSystemTime(Date.now() + minutes * 60_000);
+  const bell = async (user: string) =>
+    (await b.call('GET', 'agent/notifications', { user })).data.notifications
+      .filter((n: { kind: string }) => n.kind.startsWith('sla-'))
+      .map((n: { kind: string; who: string }) => [n.kind, n.who]);
+
+  it('tells the assignee, everyone while nobody has it, and every supervisor', async () => {
+    b.addUser('ada');
+    for (const user of ['agent', 'other']) {
+      b.addUser(user, { isAgent: true });
+      await b.call('GET', 'agent/me', { user });
+    }
+    b.addUser('boss', { isAgent: true, role: 'supervisor' });
+    await b.call('GET', 'agent/me', { user: 'boss' });
+    const id = (
+      await b.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Export?' },
+      })
+    ).data.conversation.id;
+
+    later(70); // past half of the two hours, nobody assigned
+    await b.runDueJobs();
+    for (const user of ['agent', 'other', 'boss']) {
+      expect(await bell(user)).toEqual([['sla-warning', 'response']]);
+    }
+
+    const agent = await b.findOne('agent', { name: 'agent' });
+    await b.call('PATCH', `agent/conversations/${id}`, {
+      user: 'boss',
+      body: { assigneeId: agent?.id },
+    });
+    later(60); // missed
+    await b.runDueJobs();
+    expect(await bell('agent')).toEqual([
+      ['sla-breach', 'response'],
+      ['sla-warning', 'response'],
+    ]);
+    expect(await bell('boss')).toHaveLength(2);
+    expect(await bell('other')).toEqual([]);
+  });
+});
