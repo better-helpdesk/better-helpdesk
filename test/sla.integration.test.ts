@@ -474,3 +474,89 @@ describe('the inbox and the overview', () => {
     ]);
   });
 });
+
+describe('the next-reply target', () => {
+  const r = createHarness({
+    inboxes: { support: {} },
+    sla: { default: { targets: { normal: { respond: 4, reply: 2 } } } },
+  });
+  beforeEach(async () => {
+    await r.reset();
+    vi.useFakeTimers({
+      now: new Date('2026-11-02T08:00:00Z'),
+      toFake: ['Date'],
+    });
+  });
+  afterEach(() => vi.useRealTimers());
+  afterAll(() => r.close());
+
+  const later = (minutes: number) =>
+    vi.setSystemTime(Date.now() + minutes * 60_000);
+  const row = async (id: string) => {
+    const c = await r.findOne('conversation', { id });
+    const second = (d: Date | null | undefined) =>
+      d ? new Date(Math.round(d.getTime() / 1000) * 1000).toISOString() : null;
+    return { replyBy: second(c?.replyBy), slaDueAt: second(c?.slaDueAt) };
+  };
+
+  it('runs from each later customer message until an agent answers it', async () => {
+    r.addUser('ada');
+    r.addUser('agent', { isAgent: true });
+    const id = (
+      await r.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Export?' },
+      })
+    ).data.conversation.id;
+    const customer = (body: string) =>
+      r.call('POST', `widget/conversations/${id}/messages`, {
+        user: 'ada',
+        body: { body },
+      });
+    const agent = (body: string, internal = false) =>
+      r.call('POST', `agent/conversations/${id}/messages`, {
+        user: 'agent',
+        body: { body, internal },
+      });
+    // The first message waits on the response target, not this one.
+    expect((await row(id)).replyBy).toBeNull();
+
+    later(30);
+    await agent('Which export?');
+    later(30); // 09:00
+    await customer('The CSV one.');
+    expect(await row(id)).toEqual({
+      replyBy: '2026-11-02T11:00:00.000Z',
+      slaDueAt: '2026-11-02T11:00:00.000Z',
+    });
+    expect(
+      (await r.call('GET', 'widget/session?inbox=support', { user: 'ada' }))
+        .data.conversations[0].respondBy
+    ).toMatch(/^2026-11-02T11:00:00/);
+
+    later(30); // 09:30: a second message keeps the first one's deadline.
+    await customer('It is empty.');
+    await agent('Checking with billing.', true);
+    expect((await row(id)).replyBy).toBe('2026-11-02T11:00:00.000Z');
+
+    later(70); // 10:40, past 80% of the two hours at 10:36.
+    await r.runDueJobs();
+    expect(
+      (await r.find('conversation_event', { conversationId: id }))
+        .filter(e => String(e.kind).startsWith('sla.'))
+        .map(e => [e.kind, (e.data as { target: string }).target])
+    ).toEqual([['sla.warning', 'reply']]);
+
+    await agent('Fixed, try again.');
+    expect(await row(id)).toEqual({ replyBy: null, slaDueAt: null });
+
+    later(10);
+    await customer('Thanks, one more thing.');
+    expect((await row(id)).replyBy).not.toBeNull();
+    await r.call('PATCH', `agent/conversations/${id}`, {
+      user: 'agent',
+      body: { status: 'pending' },
+    });
+    expect((await row(id)).replyBy).toBeNull();
+  });
+});

@@ -12,7 +12,7 @@ The `email.send(message)` adapter receives a `HelpdeskEmail`, a union of six kin
 | `agent-new` | Agents | A conversation opens, or a customer writes on a resolved one |
 | `agent-reminder` | Agents | A customer has waited longer than the inbox's `reminderAfterHours` |
 | `agent-mention` | The agents picked | An agent picks teammates with `@` in an internal note |
-| `agent-sla` | The assignee or the team, and every supervisor | A share of a response or resolution target has passed, or the target was missed |
+| `agent-sla` | The assignee or the team, and every supervisor | A share of a response, resolution or next-reply target has passed, or the target was missed |
 
 Every kind has these fields:
 
@@ -120,7 +120,7 @@ Sent to each agent picked in the note who has an email address and has not been 
     subject: { type: 'string', required: true, description: <>As for <code>agent-new</code>.</> },
     body: { type: 'string', required: true, description: "The customer's newest message, at most 1,000 characters." },
     url: { type: 'string', required: true, description: 'The conversation in the agent UI.' },
-    target: { type: "'response' | 'resolution'", required: true },
+    target: { type: "'response' | 'resolution' | 'reply'", required: true },
     stage: { type: "'warning' | 'breach'", required: true, description: <><code>warning</code> once the configured share of the target has passed, <code>breach</code> once the deadline has.</> },
     due: { type: 'string', required: true, description: 'The deadline, as an ISO timestamp.' },
   }}

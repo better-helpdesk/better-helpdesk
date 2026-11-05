@@ -14,7 +14,7 @@ export type HelpdeskEvent =
       /** A share of a service-level target has passed, or the target was missed. */
       kind: 'sla.warning' | 'sla.breach';
       conversation: Conversation;
-      target: 'response' | 'resolution';
+      target: 'response' | 'resolution' | 'reply';
       due: Date;
     }
   | {

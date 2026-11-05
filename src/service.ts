@@ -65,6 +65,13 @@ const MAX_TRIAGES_PER_HOUR = 100;
 const MAX_INBOUND_PER_SENDER_PER_HOUR = 30;
 const MAX_INBOUND_PER_DOMAIN_PER_HOUR = 100;
 const VISITOR_IDLE_DAYS = 30;
+/** What a clock is called in events and email, by the column it writes to. */
+const SLA_TARGET_NAMES: Record<string, 'response' | 'resolution' | 'reply'> = {
+  respond: 'response',
+  resolve: 'resolution',
+  reply: 'reply',
+};
+
 /** A day the team closed in the settings, such as a public holiday. */
 export type ClosedDay = { date: string; name?: string };
 const closedDates = (days: ClosedDay[]) => days.map(d => d.date);
@@ -1046,7 +1053,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
         String(payload.conversationId)
       );
       if (!conversation) return;
-      const target = payload.target === 'resolve' ? 'resolution' : 'response';
+      const target = SLA_TARGET_NAMES[String(payload.target)] ?? 'response';
       const stage = payload.stage === 'breach' ? 'breach' : 'warning';
       const text = await customerText(conversation);
       const recipients = await slaRecipients(conversation);
@@ -1172,11 +1179,17 @@ export function createHelpdesk(input: HelpdeskConfig) {
       const targets = config.slaClock(c);
       if (!targets) continue;
       const now = clock();
-      for (const target of ['respond', 'resolve'] as const) {
-        const by = target === 'respond' ? c.respondBy : c.resolveBy;
+      for (const target of ['respond', 'resolve', 'reply'] as const) {
+        const by =
+          target === 'respond'
+            ? c.respondBy
+            : target === 'resolve'
+              ? c.resolveBy
+              : c.replyBy;
         const duration = targets[target];
-        if (!by || duration === null) continue;
-        const hours = targetHours(duration, c.createdAt, targets.hours);
+        const since = target === 'reply' ? c.replySince : c.createdAt;
+        if (!by || !since || duration === null) continue;
+        const hours = targetHours(duration, since, targets.hours);
         if (target === 'respond' && c.firstRespondedAt) continue;
         const notice = c[`${target}Notice`];
         const paused = target === 'resolve' ? c.slaPausedSeconds / 3600 : 0;
@@ -1184,14 +1197,13 @@ export function createHelpdesk(input: HelpdeskConfig) {
           now >= by
             ? 'breach'
             : notice === null &&
-                now >=
-                  deadline(c.createdAt, hours * warnAt + paused, targets.hours)
+                now >= deadline(since, hours * warnAt + paused, targets.hours)
               ? 'warning'
               : null;
         if (!stage || stage === notice) continue;
         if (!(await store.claimSlaNotice(c.id, target, notice, stage)))
           continue;
-        const name = target === 'respond' ? 'response' : 'resolution';
+        const name = SLA_TARGET_NAMES[target] ?? 'response';
         await store.recordEvents([
           {
             conversationId: c.id,

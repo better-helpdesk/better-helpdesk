@@ -356,11 +356,12 @@ The value of `sla`. `SlaConfig`, `SlaPolicy`, `SlaTarget` and `Priority` are exp
   type={{
     respond: { type: "number | `${number}d`", description: <>Hours until the first public agent reply is due, or open days as <code>'1d'</code>.</> },
     resolve: { type: "number | `${number}d`", description: <>Hours, or open days as <code>'3d'</code>, until the conversation is due to be resolved, counted while it is <code>open</code>: the clock pauses while it is <code>pending</code> or <code>resolved</code> and resumes when the customer writes.</> },
+    reply: { type: "number | `${number}d`", description: <>Hours, or open days, to answer each customer message after the first response, counted from that message. See <a href="/docs/inbox/sla#how-the-clock-runs">How the clock runs</a>.</> },
     hours: { type: "BusinessHours | 'always'", description: 'The hours this target counts; see SlaPolicy.' },
   }}
 />
 
-A target needs `respond` or `resolve`, each a positive number of hours or a whole number of days from `'1d'` to `'999d'`. A day target is due at the same time that many open days later; [In business days](/docs/inbox/sla#in-business-days) has the rules.
+A target needs `respond`, `resolve` or `reply`, each a positive number of hours or a whole number of days from `'1d'` to `'999d'`. A day target is due at the same time that many open days later; [In business days](/docs/inbox/sla#in-business-days) has the rules.
 
 ```ts title="lib/helpdesk.ts"
 sla: {

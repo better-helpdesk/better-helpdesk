@@ -10,7 +10,7 @@ const office: BusinessHours = {
   ),
 };
 const at = (iso: string) => new Date(iso);
-const clock = { hours: null, respond: 4, resolve: 24 };
+const clock = { hours: null, respond: 4, resolve: 24, reply: null };
 
 const fresh = (status = 'open', createdAt = at('2026-10-20T10:00:00Z')) => ({
   status,
@@ -22,6 +22,9 @@ const fresh = (status = 'open', createdAt = at('2026-10-20T10:00:00Z')) => ({
   slaPausedSeconds: 0,
   respondNotice: null,
   resolveNotice: null,
+  replySince: null,
+  replyBy: null,
+  replyNotice: null,
 });
 
 describe('deadline', () => {
@@ -63,13 +66,13 @@ describe('slaClockFor', () => {
   it('takes the tier policy, the default for a tier without one, and nothing for a priority the policy leaves out', () => {
     expect(
       clockFor({ inbox: 'sales', tier: 'gold', priority: 'urgent' })
-    ).toEqual({ hours: null, respond: 4, resolve: null });
+    ).toEqual({ hours: null, respond: 4, resolve: null, reply: null });
     expect(
       clockFor({ inbox: 'sales', tier: 'gold', priority: 'normal' })
     ).toBeNull();
     expect(
       clockFor({ inbox: 'sales', tier: 'silver', priority: 'normal' })
-    ).toEqual({ hours: null, respond: 24, resolve: 72 });
+    ).toEqual({ hours: null, respond: 24, resolve: 72, reply: null });
     expect(
       clockFor({ inbox: 'sales', tier: null, priority: 'low' })
     ).toBeNull();
@@ -203,7 +206,7 @@ describe('slaPatch', () => {
     const now = at('2026-10-20T15:00:00Z');
     const breached = { ...started, respondNotice: 'breach' as const };
     const longer = slaPatch(
-      { hours: null, respond: 8, resolve: 48 },
+      { hours: null, respond: 8, resolve: 48, reply: null },
       breached,
       { status: 'open', retarget: true },
       now
@@ -230,7 +233,7 @@ describe('slaPatch', () => {
       firstRespondedAt: at('2026-10-20T11:00:00Z'),
     };
     const patch = slaPatch(
-      { hours: null, respond: 1, resolve: 48 },
+      { hours: null, respond: 1, resolve: 48, reply: null },
       answered,
       { status: 'open', retarget: true },
       at('2026-10-20T12:00:00Z')

@@ -133,6 +133,9 @@ A row is written on an agent's first request, keyed by the host's user id. The p
 | `sla_paused_seconds` | `integer` | no | `0` | Time the clock has spent paused, in the hours the target counts. |
 | `respond_notice` | `text` | yes | | The last notice sent about the response target: `warning` or `breach`. |
 | `resolve_notice` | `text` | yes | | The same for the resolution target. |
+| `reply_since` | `timestamptz` | yes | | When the customer's oldest unanswered message after the first response came in, while the next-reply clock runs. |
+| `reply_by` | `timestamptz` | yes | | When the answer to it is due. Cleared by a public agent reply, or when the conversation leaves `open`. |
+| `reply_notice` | `text` | yes | | The last notice sent about the next-reply target. |
 | `created_at` | `timestamptz` | no | `now()` | |
 | `search` | `tsvector` | | generated | From `title` and `subject`, with the `simple` configuration. |
 

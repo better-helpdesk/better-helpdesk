@@ -238,6 +238,48 @@ const enterprise: Record<Family, Migration> = {
   },
 };
 
+// Each later customer message starts a reply clock of its own, which the first
+// public agent reply after it stops.
+const REPLY_TARGET = '0004_reply_target';
+
+const replyTarget: Record<Family, Migration> = {
+  postgres: {
+    up: db =>
+      run(db, [
+        `ALTER TABLE helpdesk.conversation
+          ADD COLUMN reply_since timestamp with time zone,
+          ADD COLUMN reply_by timestamp with time zone,
+          ADD COLUMN reply_notice text`,
+      ]),
+  },
+  mysql: {
+    up: db =>
+      run(db, [
+        `ALTER TABLE helpdesk_conversation
+          ADD COLUMN reply_since datetime(3) NULL,
+          ADD COLUMN reply_by datetime(3) NULL,
+          ADD COLUMN reply_notice varchar(255) NULL`,
+      ]),
+  },
+  sqlite: {
+    up: db =>
+      run(db, [
+        'ALTER TABLE helpdesk_conversation ADD COLUMN reply_since text',
+        'ALTER TABLE helpdesk_conversation ADD COLUMN reply_by text',
+        'ALTER TABLE helpdesk_conversation ADD COLUMN reply_notice text',
+      ]),
+  },
+  mssql: {
+    up: db =>
+      run(db, [
+        `ALTER TABLE helpdesk.conversation ADD
+          reply_since datetime2(3) NULL,
+          reply_by datetime2(3) NULL,
+          reply_notice nvarchar(255) ${BIN} NULL`,
+      ]),
+  },
+};
+
 export const migrations: Record<Family, Record<string, Migration>> = {
   postgres: {
     ...postgres,
@@ -249,6 +291,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
       },
     },
     [ENTERPRISE]: enterprise.postgres,
+    [REPLY_TARGET]: replyTarget.postgres,
   },
   mysql: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'mysql') },
@@ -260,6 +303,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
       },
     },
     [ENTERPRISE]: enterprise.mysql,
+    [REPLY_TARGET]: replyTarget.mysql,
   },
   sqlite: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'sqlite') },
@@ -274,6 +318,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
       },
     },
     [ENTERPRISE]: enterprise.sqlite,
+    [REPLY_TARGET]: replyTarget.sqlite,
   },
   mssql: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'mssql') },
@@ -286,6 +331,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
       },
     },
     [ENTERPRISE]: enterprise.mssql,
+    [REPLY_TARGET]: replyTarget.mssql,
   },
 };
 
