@@ -404,10 +404,11 @@ export const adminCss = `
 .sa-stale { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20; padding: 6px 12px; border-radius: var(--a-r-control); background: var(--a-fg); color: var(--a-bg); font-size: 13px; box-shadow: var(--a-shadow-pop); pointer-events: none; }
 .sa-card > .sa-seg { justify-self: start; max-width: 100%; overflow-x: auto; }
 .sa-choices { display: grid; gap: 8px; margin: 4px 0 8px; border: 0; padding: 0; min-width: 0; }
-.sa-choices .sa-toggle { white-space: normal; align-items: flex-start; font-size: 14px; }
 .sa-indent { padding-left: 24px; }
 .sa-ai-features { display: grid; gap: 8px; margin: 4px 0 8px; }
-.sa-ai-features .sa-toggle { white-space: normal; align-items: flex-start; font-size: 14px; }
+/* A box of fixed size on a line of fixed height: centred on the first line in every browser, and still there when a label wraps. */
+:is(.sa-choices, .sa-ai-features) .sa-toggle { white-space: normal; align-items: flex-start; font-size: 14px; line-height: 20px; gap: 8px; }
+:is(.sa-choices, .sa-ai-features) .sa-toggle input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--a-accent); }
 .sa-audit-entry { display: grid; gap: 2px; padding: 6px 0; }
 .sa-audit-entry + .sa-audit-entry { border-top: 1px solid var(--a-border); }
 .sa-audit-entry > p { margin: 0; }
