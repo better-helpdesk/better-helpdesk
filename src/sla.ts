@@ -1,18 +1,36 @@
 import {
   type BusinessHours,
   type ResolvedConfig,
+  type SlaDuration,
   type SlaPolicy,
   withClosed,
 } from './config';
 import type { Conversation } from './db/store';
-import { openDeadline, openHoursBetween } from './ui/hours';
+import { openDaysDeadline, openDeadline, openHoursBetween } from './ui/hours';
 
-/** The clock a conversation runs on: its targets in hours, counted in `hours` or round the clock. */
+/** The clock a conversation runs on: its targets, counted in `hours` or round the clock. */
 export type SlaClock = {
   hours: BusinessHours | null;
-  respond: number | null;
-  resolve: number | null;
+  respond: SlaDuration | null;
+  resolve: SlaDuration | null;
 };
+
+/**
+ * A target as hours of the clock it counts in, from `from`. Days become the
+ * open hours until the same time that many open days later, so pausing,
+ * warnings and breaches treat both alike; round the clock, a day is 24 hours.
+ */
+export function targetHours(
+  target: SlaDuration,
+  from: Date,
+  hours: BusinessHours | null
+): number {
+  if (typeof target === 'number') return target;
+  const days = Number(target.slice(0, -1));
+  return hours
+    ? openHoursBetween(from, openDaysDeadline(from, days, hours), hours)
+    : days * 24;
+}
 
 export type SlaClockFor = (
   conversation: Pick<Conversation, 'inbox' | 'tier' | 'priority'>
@@ -88,10 +106,12 @@ export function slaStart(
 ): Partial<Conversation> {
   const respondBy =
     clock?.respond != null && awaitingResponse
-      ? deadline(now, clock.respond, clock.hours)
+      ? deadline(now, targetHours(clock.respond, now, clock.hours), clock.hours)
       : null;
   const resolveBy =
-    clock?.resolve != null ? deadline(now, clock.resolve, clock.hours) : null;
+    clock?.resolve != null
+      ? deadline(now, targetHours(clock.resolve, now, clock.hours), clock.hours)
+      : null;
   const running = status === 'open';
   return {
     respondBy,
@@ -147,7 +167,11 @@ export function slaPatch(
   if (next.retarget) {
     respondBy =
       clock?.respond != null && !before.firstRespondedAt
-        ? deadline(before.createdAt, clock.respond, clock.hours)
+        ? deadline(
+            before.createdAt,
+            targetHours(clock.respond, before.createdAt, clock.hours),
+            clock.hours
+          )
         : before.firstRespondedAt
           ? before.respondBy
           : null;
@@ -159,7 +183,8 @@ export function slaPatch(
       clock?.resolve != null
         ? deadline(
             before.createdAt,
-            clock.resolve + pausedSeconds / 3600,
+            targetHours(clock.resolve, before.createdAt, clock.hours) +
+              pausedSeconds / 3600,
             clock.hours
           )
         : null;

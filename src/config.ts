@@ -59,9 +59,12 @@ export type Identity = {
 export type Priority = string;
 
 /** Hours to answer and to resolve, counted in `hours`, the policy's, the inbox's, or round the clock. */
+/** Hours, or whole open days as `'2d'`: the same time on the second open day after the next opening. */
+export type SlaDuration = number | `${number}d`;
+
 export type SlaTarget = {
-  respond?: number;
-  resolve?: number;
+  respond?: SlaDuration;
+  resolve?: SlaDuration;
   hours?: BusinessHours | 'always';
 };
 
@@ -586,10 +589,16 @@ const priorityList = z
   .refine(list => new Set(list).size === list.length, 'No repeats');
 
 const hoursOrAlways = z.union([businessHours, z.literal('always')]).optional();
+const slaDuration = z.custom<SlaDuration>(
+  v =>
+    (typeof v === 'number' && Number.isFinite(v) && v > 0) ||
+    (typeof v === 'string' && /^[1-9]\d{0,2}d$/.test(v)),
+  'Hours as a positive number, or whole days such as "1d"'
+);
 const slaTarget = z
   .object({
-    respond: z.number().positive().optional(),
-    resolve: z.number().positive().optional(),
+    respond: slaDuration.optional(),
+    resolve: slaDuration.optional(),
     hours: hoursOrAlways,
   })
   .refine(t => t.respond !== undefined || t.resolve !== undefined, {

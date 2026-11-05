@@ -37,7 +37,7 @@ import { emit, emitUpdated } from './events';
 import { verifyIdentityToken } from './identity-token';
 import { publishChange } from './realtime';
 import { plainText } from './rich';
-import { deadline, hoursBetween, slaPatch } from './sla';
+import { deadline, hoursBetween, slaPatch, targetHours } from './sla';
 import { nextOpening, openCutoff } from './ui/hours';
 import { nextWorkday } from './ui/i18n';
 import { unlabelLinks } from './ui/rich';
@@ -1174,8 +1174,9 @@ export function createHelpdesk(input: HelpdeskConfig) {
       const now = clock();
       for (const target of ['respond', 'resolve'] as const) {
         const by = target === 'respond' ? c.respondBy : c.resolveBy;
-        const hours = targets[target];
-        if (!by || hours === null) continue;
+        const duration = targets[target];
+        if (!by || duration === null) continue;
+        const hours = targetHours(duration, c.createdAt, targets.hours);
         if (target === 'respond' && c.firstRespondedAt) continue;
         const notice = c[`${target}Notice`];
         const paused = target === 'resolve' ? c.slaPausedSeconds / 3600 : 0;

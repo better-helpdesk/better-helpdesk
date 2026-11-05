@@ -354,13 +354,13 @@ The value of `sla`. `SlaConfig`, `SlaPolicy`, `SlaTarget` and `Priority` are exp
 
 <TypeTable
   type={{
-    respond: { type: 'number', description: 'Hours until the first public agent reply is due.' },
-    resolve: { type: 'number', description: <>Hours until the conversation is due to be resolved, counted while it is <code>open</code>: the clock pauses while it is <code>pending</code> or <code>resolved</code> and resumes when the customer writes.</> },
+    respond: { type: "number | `${number}d`", description: <>Hours until the first public agent reply is due, or open days as <code>'1d'</code>.</> },
+    resolve: { type: "number | `${number}d`", description: <>Hours, or open days as <code>'3d'</code>, until the conversation is due to be resolved, counted while it is <code>open</code>: the clock pauses while it is <code>pending</code> or <code>resolved</code> and resumes when the customer writes.</> },
     hours: { type: "BusinessHours | 'always'", description: 'The hours this target counts; see SlaPolicy.' },
   }}
 />
 
-A target needs `respond` or `resolve`, each a positive number.
+A target needs `respond` or `resolve`, each a positive number of hours or a whole number of days from `'1d'` to `'999d'`. A day target is due at the same time that many open days later; [In business days](/docs/inbox/sla#in-business-days) has the rules.
 
 ```ts title="lib/helpdesk.ts"
 sla: {
