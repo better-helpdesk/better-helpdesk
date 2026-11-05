@@ -26,7 +26,7 @@ A tier can also be set or changed by an agent in the conversation's properties c
 
 ## Write the policy
 
-Targets are hours, or business days. `respond` is the time to the first public reply; `resolve` the time to resolution. Each target counts its own `hours`, else the policy's, else the inbox's business hours, else every hour:
+Targets are hours, or business days. `respond` is the time to the first public reply; `reply` the time to answer each message the customer writes after that; `resolve` the time to resolution. Each target counts its own `hours`, else the policy's, else the inbox's business hours, else every hour:
 
 ```ts title="lib/helpdesk.ts"
 const office: BusinessHours = {
@@ -100,13 +100,14 @@ The widget asks `resolveTier` who the signed-in customer is before it shows the 
 ## How the clock runs
 
 - A conversation opened by a customer starts both clocks. The response clock stops at the first public agent reply and is never paused.
+- With a `reply` target, each customer message after the first response starts a next-reply clock, unless one already runs for an earlier message they are still waiting on. It stops at the next public agent reply; an internal note does not stop it. It also stops when the conversation leaves `open`, as when an agent sets it pending to wait on the customer. It has its own warning and breach, and the inbox sorts by it like the others.
 - The resolution clock runs while the status is `open`, the conversation being with your team. It pauses on `pending`, after an agent replied, and on `resolved`, and resumes when the customer writes again. The deadline moves forward by the time paused, in the hours the target counts.
 - A snooze does not pause it: a snoozed conversation is still with your team.
 - A conversation an agent opens starts pending and has no response target; its resolution clock starts when the customer answers.
 - A new tier or priority sets both deadlines afresh from the conversation's start. A deadline that moved into the future gets a new warning and breach.
 - A target that counts in business hours skips [closed days](/docs/inbox/setup#close-on-holidays), such as public holidays.
 
-The widget and the receipt tell the customer when a reply is due. The inbox shows the time left or overdue on each row and sorts by the nearest deadline with **Sort: Nearest deadline**; the conversation shows both deadlines under its properties.
+The widget and the receipt tell the customer when a reply is due, the next reply included. The inbox shows the time left or overdue on each row and sorts by the nearest deadline with **Sort: Nearest deadline**; the conversation shows its deadlines under its properties. Statistics count attainment for the response and resolution targets.
 
 ## Warnings and breaches
 

@@ -1545,7 +1545,7 @@ export function createStore(
     /** Records a notice as sent, once: false when another run got there first. */
     async claimSlaNotice(
       id: string,
-      target: 'respond' | 'resolve',
+      target: 'respond' | 'resolve' | 'reply',
       from: SlaNotice | null,
       to: SlaNotice
     ) {
@@ -1952,6 +1952,8 @@ export function createStore(
               {
                 status: patch.status ?? conversation.status,
                 firstRespondedAt: patch.firstRespondedAt ?? undefined,
+                customerWrote: values.authorType === 'contact',
+                agentReplied: values.authorType === 'agent' && !values.internal,
               },
               now
             )

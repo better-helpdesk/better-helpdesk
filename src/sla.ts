@@ -13,6 +13,7 @@ export type SlaClock = {
   hours: BusinessHours | null;
   respond: SlaDuration | null;
   resolve: SlaDuration | null;
+  reply: SlaDuration | null;
 };
 
 /**
@@ -36,7 +37,7 @@ export type SlaClockFor = (
   conversation: Pick<Conversation, 'inbox' | 'tier' | 'priority'>
 ) => SlaClock | null;
 
-export type SlaTargetName = 'response' | 'resolution';
+export type SlaTargetName = 'response' | 'resolution' | 'reply';
 
 const HOUR = 3_600_000;
 
@@ -81,6 +82,7 @@ export function slaClockFor(
       hours: hours === 'always' ? null : withClosed(hours, config.teamClosed),
       respond: target.respond ?? null,
       resolve: target.resolve ?? null,
+      reply: target.reply ?? null,
     };
   };
 }
@@ -96,6 +98,9 @@ type ClockState = Pick<
   | 'slaPausedSeconds'
   | 'respondNotice'
   | 'resolveNotice'
+  | 'replySince'
+  | 'replyBy'
+  | 'replyNotice'
 >;
 
 /** The deadlines a conversation starts with. The clock pauses at once unless it opens with the customer waiting. */
@@ -124,11 +129,13 @@ export function slaStart(
 function dueAt(
   respondBy: Date | null,
   resolveBy: Date | null,
-  firstRespondedAt: Date | null
+  firstRespondedAt: Date | null,
+  replyBy: Date | null = null
 ) {
   const pending = [
     ...(respondBy && !firstRespondedAt ? [respondBy] : []),
     ...(resolveBy ? [resolveBy] : []),
+    ...(replyBy ? [replyBy] : []),
   ];
   return pending.length
     ? new Date(Math.min(...pending.map(d => d.getTime())))
@@ -138,14 +145,24 @@ function dueAt(
 /**
  * The SLA fields after a change. The clock runs while the status is `open`
  * and pauses otherwise; on resume the resolution deadline moves by the time
- * paused, and on a new tier or priority both deadlines are set afresh from
+ * paused, and on a new tier or priority the deadlines are set afresh from
  * the policy. A notice already sent stands unless its target moved into the
  * future, so a fresh warning and breach cycle runs on the new target.
+ *
+ * The reply clock starts on a customer message after the first response,
+ * unless one already runs, and stops on a public agent reply or once the
+ * conversation leaves `open`.
  */
 export function slaPatch(
   clock: SlaClock | null,
   before: ClockState,
-  next: { status: string; retarget?: boolean; firstRespondedAt?: Date },
+  next: {
+    status: string;
+    retarget?: boolean;
+    firstRespondedAt?: Date;
+    customerWrote?: boolean;
+    agentReplied?: boolean;
+  },
   now: Date
 ): Partial<Conversation> {
   const patch: Partial<Conversation> = {};
@@ -193,7 +210,38 @@ export function slaPatch(
       patch.resolveNotice = null;
     }
   }
+  let { replySince, replyBy } = before;
+  if (next.agentReplied || !runs) {
+    replySince = null;
+    replyBy = null;
+  } else if (
+    next.customerWrote &&
+    before.firstRespondedAt &&
+    !replySince &&
+    clock?.reply != null
+  ) {
+    replySince = now;
+  }
+  if (replySince && clock?.reply != null) {
+    if (replySince !== before.replySince || next.retarget) {
+      replyBy = deadline(
+        replySince,
+        targetHours(clock.reply, replySince, clock.hours),
+        clock.hours
+      );
+    }
+  } else {
+    replySince = null;
+    replyBy = null;
+  }
+  if (replySince !== before.replySince) patch.replySince = replySince;
+  if (replyBy !== before.replyBy) {
+    patch.replyBy = replyBy;
+    if (!replyBy || replyBy > now) patch.replyNotice = null;
+  }
   const firstRespondedAt = next.firstRespondedAt ?? before.firstRespondedAt;
-  patch.slaDueAt = runs ? dueAt(respondBy, resolveBy, firstRespondedAt) : null;
+  patch.slaDueAt = runs
+    ? dueAt(respondBy, resolveBy, firstRespondedAt, replyBy)
+    : null;
   return patch;
 }

@@ -172,8 +172,8 @@ export function createHandler(support: Helpdesk) {
     rating: c.rating,
     ratingScore: c.ratingScore,
     merged: c.mergedIntoId !== null,
-    // When the team aims to answer by, while nobody has.
-    respondBy: c.firstRespondedAt ? null : c.respondBy,
+    // When the team aims to answer by: first, then each later message.
+    respondBy: c.firstRespondedAt ? c.replyBy : c.respondBy,
     typing: Boolean(c.agentTypingUntil && c.agentTypingUntil > clock()),
     // The newest message an agent has opened the thread on; the widget shows "Seen" from it.
     agentSeenAt: c.agentSeenAt,

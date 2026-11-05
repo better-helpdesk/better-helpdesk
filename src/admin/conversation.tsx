@@ -58,6 +58,7 @@ type Detail = {
     firstRespondedAt: string | null;
     respondBy: string | null;
     resolveBy: string | null;
+    replyBy: string | null;
     slaPausedAt: string | null;
     context: {
       url?: string;
@@ -825,31 +826,38 @@ export function ConversationView({ id }: { id: string }) {
               )}
             </fieldset>
           )}
-          {(c.respondBy || c.resolveBy) && c.status !== 'resolved' && (
-            <p className="sa-sla">
-              {c.respondBy && !c.firstRespondedAt && (
-                <span>
-                  <span className="sa-eyebrow">{t('admin.respondBy')}</span>
-                  <DueChip t={t} locale={locale} dueAt={c.respondBy} />
-                </span>
-              )}
-              {c.resolveBy && (
-                <span>
-                  <span className="sa-eyebrow">{t('admin.resolveBy')}</span>
-                  {c.slaPausedAt ? (
-                    <span className="sa-pill" data-tone="muted">
-                      {formatSnooze(c.resolveBy, locale)}
-                    </span>
-                  ) : (
-                    <DueChip t={t} locale={locale} dueAt={c.resolveBy} />
-                  )}
-                </span>
-              )}
-              {c.slaPausedAt && (
-                <span className="sa-fine">{t('admin.slaPaused')}</span>
-              )}
-            </p>
-          )}
+          {(c.respondBy || c.resolveBy || c.replyBy) &&
+            c.status !== 'resolved' && (
+              <p className="sa-sla">
+                {c.respondBy && !c.firstRespondedAt && (
+                  <span>
+                    <span className="sa-eyebrow">{t('admin.respondBy')}</span>
+                    <DueChip t={t} locale={locale} dueAt={c.respondBy} />
+                  </span>
+                )}
+                {c.replyBy && (
+                  <span>
+                    <span className="sa-eyebrow">{t('admin.replyBy')}</span>
+                    <DueChip t={t} locale={locale} dueAt={c.replyBy} />
+                  </span>
+                )}
+                {c.resolveBy && (
+                  <span>
+                    <span className="sa-eyebrow">{t('admin.resolveBy')}</span>
+                    {c.slaPausedAt ? (
+                      <span className="sa-pill" data-tone="muted">
+                        {formatSnooze(c.resolveBy, locale)}
+                      </span>
+                    ) : (
+                      <DueChip t={t} locale={locale} dueAt={c.resolveBy} />
+                    )}
+                  </span>
+                )}
+                {c.slaPausedAt && (
+                  <span className="sa-fine">{t('admin.slaPaused')}</span>
+                )}
+              </p>
+            )}
 
           <div className="sa-thread">
             {timeline.map(item => {

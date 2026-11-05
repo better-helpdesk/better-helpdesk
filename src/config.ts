@@ -65,6 +65,8 @@ export type SlaDuration = number | `${number}d`;
 export type SlaTarget = {
   respond?: SlaDuration;
   resolve?: SlaDuration;
+  /** Time to answer each customer message after the first response, from that message. */
+  reply?: SlaDuration;
   hours?: BusinessHours | 'always';
 };
 
@@ -270,7 +272,7 @@ export type HelpdeskEmail =
       subject: string;
       body: string;
       url: string;
-      target: 'response' | 'resolution';
+      target: 'response' | 'resolution' | 'reply';
       /** `warning` once the configured share of the target has passed, `breach` once it is missed. */
       stage: 'warning' | 'breach';
       /** The deadline; ISO timestamp. */
@@ -599,11 +601,16 @@ const slaTarget = z
   .object({
     respond: slaDuration.optional(),
     resolve: slaDuration.optional(),
+    reply: slaDuration.optional(),
     hours: hoursOrAlways,
   })
-  .refine(t => t.respond !== undefined || t.resolve !== undefined, {
-    message: 'A target needs respond or resolve',
-  });
+  .refine(
+    t =>
+      t.respond !== undefined ||
+      t.resolve !== undefined ||
+      t.reply !== undefined,
+    { message: 'A target needs respond, resolve or reply' }
+  );
 const slaPolicy = z.object({
   hours: hoursOrAlways,
   targets: z.record(z.string(), slaTarget),

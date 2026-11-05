@@ -240,6 +240,11 @@ export const helpdeskModel = {
       slaPausedSeconds: f.integer().withDefault(0),
       respondNotice: f.string<SlaNotice>().orNull(),
       resolveNotice: f.string<SlaNotice>().orNull(),
+      /** When the customer's latest unanswered message after the first response came in. */
+      replySince: f.date().orNull(),
+      /** When an answer to that message is due; cleared by the next public agent reply. */
+      replyBy: f.date().orNull(),
+      replyNotice: f.string<SlaNotice>().orNull(),
       createdAt: f.createdAt(),
     },
     { unique: [{ fields: ['number'] }] }

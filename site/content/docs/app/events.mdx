@@ -52,7 +52,7 @@ A customer message on a resolved conversation reopens it and raises only `messag
   type={{
     kind: { type: "'sla.warning' | 'sla.breach'", required: true },
     conversation: { type: 'Conversation', required: true },
-    target: { type: "'response' | 'resolution'", required: true, description: 'Which target the notice is about.' },
+    target: { type: "'response' | 'resolution' | 'reply'", required: true, description: <>Which target the notice is about; <code>reply</code> is the next-reply target.</> },
     due: { type: 'Date', required: true, description: 'The deadline.' },
   }}
 />
