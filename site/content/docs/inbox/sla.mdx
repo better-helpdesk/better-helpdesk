@@ -24,6 +24,20 @@ export const helpdesk = buildHelpdesk({
 
 A tier can also be set or changed by an agent in the conversation's properties card, which sets the deadlines afresh. `tiers` lists what agents may choose; unset, it is the keys of `sla.tiers`.
 
+### When a plan changes
+
+The tier is decided when a conversation opens, so a customer who upgrades keeps their old tier on the conversations already open. Two things move them:
+
+- **Your app calls `refreshTiers`** when a plan changes, with the organization's id or the person's address:
+
+```ts title="app/billing/webhook.ts"
+await helpdesk.refreshTiers({ orgId: subscription.orgId });
+```
+
+- **The customer writes again.** Each customer message asks `resolveTier` once more.
+
+Either way, `resolveTier` is asked with the conversation's organization, the customer's address, its inbox and its context; `user` is `null`. A conversation whose answer differs moves to the new tier: its deadlines are set afresh from its start, the timeline records the change, and `conversation.updated` reports it. A tier an agent chose by hand stands, so neither changes it. Resolved and merged conversations are left as they are, and a `resolveTier` that throws changes nothing.
+
 ## Write the policy
 
 Targets are hours, or business days. `respond` is the time to the first public reply; `reply` the time to answer each message the customer writes after that; `resolve` the time to resolution. Each target counts its own `hours`, else the policy's, else the inbox's business hours, else every hour:

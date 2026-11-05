@@ -796,6 +796,50 @@ export function createStore(
       });
     },
 
+    /** Conversations still being worked of a company, by its id in the host app, or of a contact, by address. */
+    async openConversationsOf({
+      externalOrgId,
+      email,
+    }: {
+      externalOrgId?: string;
+      email?: string;
+    }) {
+      const company = externalOrgId
+        ? await adapter.findOne<Row<'company'>>('company', {
+            where: eq('externalOrgId', externalOrgId),
+          })
+        : null;
+      const contacts = email
+        ? await adapter.findMany<Row<'identity'>>('identity', {
+            where: and(eq('channel', 'email'), eq('externalId', email)),
+          })
+        : [];
+      const owners = [
+        ...(company ? [eq('companyId', company.id)] : []),
+        ...(contacts.length
+          ? [
+              oneOf(
+                'contactId',
+                contacts.map(c => c.contactId)
+              ),
+            ]
+          : []),
+      ];
+      if (owners.length === 0) return [];
+      return withTags(
+        'conversation',
+        await adapter.findMany<Row<'conversation'>>('conversation', {
+          where: and(
+            ne('status', 'resolved'),
+            eq('mergedIntoId', null),
+            or(...owners)
+          ),
+          orderBy: [{ field: 'createdAt' }],
+          limit: 1000,
+        })
+      );
+    },
+
     /** Without a resolved name, a new company is named by its id and a known one keeps its name. */
     async upsertCompany(
       externalOrgId: string,
