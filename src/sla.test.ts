@@ -48,6 +48,7 @@ describe('deadline', () => {
 describe('slaClockFor', () => {
   const config = {
     inboxes: { support: { hours: office }, sales: {} },
+    teamClosed: [] as string[],
     sla: {
       tiers: {
         gold: {
@@ -83,9 +84,20 @@ describe('slaClockFor', () => {
     ).toBeNull();
   });
 
+  it('adds the days the team closed to the hours it counts in', () => {
+    const closing = { ...config, teamClosed: ['2026-12-24'] };
+    const hours = slaClockFor(closing)({
+      inbox: 'support',
+      tier: null,
+      priority: 'normal',
+    })?.hours;
+    expect(hours?.closed).toEqual(['2026-12-24']);
+    expect(hours?.weekly).toBe(office.weekly);
+  });
+
   it('is off without a policy', () => {
     expect(
-      slaClockFor({ inboxes: {} })({
+      slaClockFor({ inboxes: {}, teamClosed: [] })({
         inbox: 'x',
         tier: null,
         priority: 'normal',

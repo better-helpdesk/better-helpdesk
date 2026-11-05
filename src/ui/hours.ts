@@ -45,12 +45,25 @@ function instant(wall: number, timeZone: string) {
 const minutes = (hhmm: string) =>
   Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
 
-/** Open intervals of the days that touch [from, to], merged and in order. */
+const closedSets = new WeakMap<string[], Set<string>>();
+function closedDays(hours: BusinessHours) {
+  if (!hours.closed?.length) return null;
+  let set = closedSets.get(hours.closed);
+  if (!set) {
+    set = new Set(hours.closed);
+    closedSets.set(hours.closed, set);
+  }
+  return set;
+}
+
+/** Open intervals of the days that touch [from, to], merged and in order; a closed day opens no span, though one from the day before may run into it. */
 function intervals(from: number, to: number, hours: BusinessHours) {
   const first = Math.floor(wallClock(from, hours.timeZone) / DAY) - 1;
   const last = Math.floor(wallClock(to, hours.timeZone) / DAY);
+  const closed = closedDays(hours);
   const spans: [number, number][] = [];
   for (let day = first; day <= last; day++) {
+    if (closed?.has(new Date(day * DAY).toISOString().slice(0, 10))) continue;
     const weekday = DAYS[new Date(day * DAY).getUTCDay()] as Weekday;
     for (const [start, end] of hours.weekly[weekday] ?? []) {
       const s = minutes(start);
@@ -121,11 +134,14 @@ export function openDeadline(
   }
 }
 
-/** `at` itself while open, else when the schedule next opens; null for a schedule with no span. */
+/** `at` itself while open, else when the schedule next opens; null for a schedule with no span in the coming weeks. */
 export function nextOpening(at: Date, hours: BusinessHours) {
   const now = at.getTime();
-  const span = intervals(now, now + 8 * DAY, hours).find(
-    ([, end]) => end > now
-  );
+  // Closed days can stretch a gap past a week, as over Christmas and New Year.
+  const span = intervals(
+    now,
+    now + 8 * DAY + (hours.closed?.length ?? 0) * DAY,
+    hours
+  ).find(([, end]) => end > now);
   return span ? new Date(Math.max(span[0], now)) : null;
 }

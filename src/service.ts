@@ -65,6 +65,10 @@ const MAX_TRIAGES_PER_HOUR = 100;
 const MAX_INBOUND_PER_SENDER_PER_HOUR = 30;
 const MAX_INBOUND_PER_DOMAIN_PER_HOUR = 100;
 const VISITOR_IDLE_DAYS = 30;
+/** A day the team closed in the settings, such as a public holiday. */
+export type ClosedDay = { date: string; name?: string };
+const closedDates = (days: ClosedDay[]) => days.map(d => d.date);
+
 /** A form left open longer than this asks for a new token. */
 const DAY_MS = 86_400_000;
 // A host cannot always tell us someone stopped being an agent; one who has not
@@ -315,9 +319,34 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return new Date(Math.min(...returns));
   }
 
+  let closedReadAt = Number.NEGATIVE_INFINITY;
+  /**
+   * The days closed in the settings, read at most once a minute, so another
+   * instance's change shows within that; a failed read keeps the last ones.
+   */
+  async function refreshTeamClosed() {
+    const now = Date.now();
+    // A clock set back, as by NTP, reads again rather than never.
+    if (now >= closedReadAt && now - closedReadAt < 60_000) return;
+    closedReadAt = now;
+    try {
+      config.teamClosed = closedDates(
+        (await store.getSetting<ClosedDay[]>('closed')) ?? []
+      );
+    } catch (error) {
+      console.error('[helpdesk] reading the closed days failed', error);
+    }
+  }
+
+  async function setTeamClosed(days: ClosedDay[]) {
+    await store.setSetting('closed', days);
+    config.teamClosed = closedDates(days);
+    closedReadAt = Date.now();
+  }
+
   /** When an inbox with hours answers next, if not now: its next opening from the later of now and the team's return. */
   function reopensAt(inbox: string, awayUntil: Date | null) {
-    const hours = config.inboxes[inbox]?.hours;
+    const hours = config.hoursOf(inbox);
     if (!hours) return null;
     const now = clock();
     const opens = nextOpening(awayUntil ?? now, hours);
@@ -1116,7 +1145,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
         inbox,
         settings.reminderAfterHours,
         settings.hours &&
-          openCutoff(clock(), settings.reminderAfterHours, settings.hours)
+          openCutoff(
+            clock(),
+            settings.reminderAfterHours,
+            config.hoursOf(inbox) ?? settings.hours
+          )
       );
       for (const conversation of due) {
         await store.enqueueJob('agent-reminder', {
@@ -1875,6 +1908,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
   /** Runs periodic work and due jobs within a time budget. */
   async function runJobs({ budgetMs = 20_000 }: { budgetMs?: number } = {}) {
     const started = Date.now();
+    await refreshTeamClosed();
     const report = {
       woken: 0,
       reminders: 0,
@@ -1929,8 +1963,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     for (const r of rows) r.reopened = reopened.has(r.id);
     const since = Date.now() - sinceDays * 86_400_000;
     const span = (inbox: string, from: Date, to: Date) => {
-      const hours = config.inboxes[inbox]?.hours;
-      return hoursBetween(from, to, hours ?? null);
+      return hoursBetween(from, to, config.hoursOf(inbox) ?? null);
     };
     const summarize = (group: typeof rows) => {
       const opened = group.filter(r => r.createdAt.getTime() >= since);
@@ -2374,6 +2407,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
     track,
     triage,
     aiSettings,
+    refreshTeamClosed,
+    setTeamClosed,
     formToken,
     canReadAudit,
     allowedSuggestion,

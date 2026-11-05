@@ -73,7 +73,7 @@ Each screen is a path under `basePath`; inbox filters are in the query string.
 | `deals` | `{basePath}/deals/` | The deals board. |
 | `canned` | `{basePath}/canned/` | Canned replies. |
 | `overview` | `{basePath}/overview/` | Statistics: volume, response and resolution times, ratings and tags, each figure a link into the inbox filtered to its conversations. |
-| `settings` | `{basePath}/settings/` | The widget's confirmation text, one language tab at a time, [who gets emails about new requests](/docs/inbox/team#choose-who-gets-emails-about-new-requests), what the [AI may do](/docs/ai/suggestions#choose-what-the-ai-does) when one is configured, the team with each member's role, and where an agent can remove another. |
+| `settings` | `{basePath}/settings/` | The widget's confirmation text, one language tab at a time, [who gets emails about new requests](/docs/inbox/team#choose-who-gets-emails-about-new-requests), the [closed days](/docs/inbox/setup#close-on-holidays), what the [AI may do](/docs/ai/suggestions#choose-what-the-ai-does) when one is configured, the team with each member's role, and where an agent can remove another. |
 | `audit` | `{basePath}/audit/` | The [audit log](/docs/inbox/team#roles) of every change made in the agent UI, 25 entries a page. |
 
 A section that [`features`](/docs/reference/configuration#crm) switched off has no tab, and a link into it lands on the inbox. The same goes for `audit` when the agent may not read the log: once any agent has the `supervisor` role, only supervisors see it. A host that renders its own tabs from `HELPDESK_SECTIONS` can hide that tab by the `auditLog` field of [`GET agent/me`](/docs/reference/routes).

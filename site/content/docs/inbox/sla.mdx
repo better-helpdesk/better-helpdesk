@@ -92,6 +92,7 @@ The widget asks `resolveTier` who the signed-in customer is before it shows the 
 - A snooze does not pause it: a snoozed conversation is still with your team.
 - A conversation an agent opens starts pending and has no response target; its resolution clock starts when the customer answers.
 - A new tier or priority sets both deadlines afresh from the conversation's start. A deadline that moved into the future gets a new warning and breach.
+- A target that counts in business hours skips [closed days](/docs/inbox/setup#close-on-holidays), such as public holidays.
 
 The widget and the receipt tell the customer when a reply is due. The inbox shows the time left or overdue on each row and sorts by the nearest deadline with **Sort: Nearest deadline**; the conversation shows both deadlines under its properties.
 

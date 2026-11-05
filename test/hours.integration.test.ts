@@ -132,3 +132,73 @@ describe('business hours', () => {
     expect(receipt).not.toHaveProperty('backOn', expect.anything());
   });
 });
+
+describe('closed days', () => {
+  it('skips the days the team closed in the widget’s next opening, and keeps them in the settings', async () => {
+    h.addUser('agent', { isAgent: true });
+    const put = (closed: unknown) =>
+      h.call('PUT', 'agent/settings', { user: 'agent', body: { closed } });
+    // Wednesday 23 December 17:30 CET, after closing.
+    clock('2026-12-23T16:30:00Z');
+    expect((await session('sales')).nextOpening).toBe(
+      '2026-12-24T07:00:00.000Z'
+    );
+
+    expect(
+      (
+        await put([
+          { date: '2026-12-25', name: 'Christmas Day' },
+          { date: '2026-12-24', name: 'Christmas Eve' },
+          { date: '2026-12-25' },
+        ])
+      ).status
+    ).toBe(200);
+    try {
+      expect((await session('sales')).nextOpening).toBe(
+        '2026-12-28T07:00:00.000Z'
+      );
+      expect(
+        (await h.call('GET', 'agent/settings', { user: 'agent' })).data.closed
+      ).toEqual([
+        { date: '2026-12-24', name: 'Christmas Eve' },
+        { date: '2026-12-25' },
+      ]);
+      expect((await put([{ date: '2026-02-30' }])).status).toBe(400);
+    } finally {
+      await put([]);
+    }
+    expect((await session('sales')).nextOpening).toBe(
+      '2026-12-24T07:00:00.000Z'
+    );
+  });
+
+  it('carries a response target over a closed day', async () => {
+    const sla = createHarness({
+      inboxes: { support: { hours: office } },
+      sla: { default: { targets: { normal: { respond: 4 } } } },
+    });
+    try {
+      sla.addUser('ada');
+      sla.addUser('agent', { isAgent: true });
+      await sla.call('PUT', 'agent/settings', {
+        user: 'agent',
+        body: { closed: [{ date: '2026-12-24' }, { date: '2026-12-25' }] },
+      });
+      // Wednesday 23 December 16:00 CET: one open hour that day, three on Monday.
+      clock('2026-12-23T15:00:00Z');
+      const res = await sla.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Export?' },
+      });
+      const row = await sla.findOne('conversation', {
+        id: res.data.conversation.id,
+      });
+      // The app's clock steps a millisecond per write, so to the second.
+      expect(Math.round((row?.respondBy?.getTime() ?? 0) / 1000) * 1000).toBe(
+        Date.parse('2026-12-28T10:00:00Z')
+      );
+    } finally {
+      await sla.close();
+    }
+  });
+});
