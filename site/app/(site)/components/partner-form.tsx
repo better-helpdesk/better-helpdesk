@@ -3,7 +3,7 @@
 import posthog from 'posthog-js';
 import { type FormEvent, useState } from 'react';
 
-import { isEmail, sendToInbox } from '../../../lib/submit';
+import { isEmail, sendToInbox, useFormToken } from '../../../lib/submit';
 import { ButtonIcon } from './icons';
 
 type State =
@@ -19,6 +19,7 @@ type State =
 export function PartnerForm({ api }: { api: string }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [invalid, setInvalid] = useState<string[]>([]);
+  const formToken = useFormToken(api);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +40,7 @@ export function PartnerForm({ api }: { api: string }) {
     setState({ kind: 'sending' });
     try {
       await sendToInbox(api, {
+        formToken: await formToken(),
         inbox: 'partners',
         name: value('name'),
         email: value('email'),
