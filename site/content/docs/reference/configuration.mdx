@@ -252,6 +252,15 @@ export const helpdesk = buildHelpdesk({
       default: '60',
       description: 'Conversations, messages and uploads a signed-in customer may start per hour.',
     },
+    botProtection: {
+      type: '{ minSeconds?: number } | false',
+      default: '{ minSeconds: 3 }',
+      description: <>The invisible check on a visitor's first message from the widget: a token signed when the form opened, at least <code>minSeconds</code> and at most a day old. <code>false</code> turns it off. See <a href="/docs/widget/bot-protection">Keep bots out of the widget</a>.</>,
+    },
+    captcha: {
+      type: 'CaptchaAdapter',
+      description: <>A captcha visitors solve before their first message. See <a href="/docs/reference/adapters#captcha">Captcha</a>.</>,
+    },
   }}
 />
 

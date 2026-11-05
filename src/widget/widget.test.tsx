@@ -2162,3 +2162,178 @@ describe('submitting a ticket', () => {
     );
   });
 });
+
+describe('bot protection', () => {
+  const visitor = { ...session, identified: false, orgs: [] };
+  const writeLead = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.change(await screen.findByLabelText('Work email'), {
+      target: { value: 'ada@example.test' },
+    });
+    const message = screen.getByRole('textbox', {
+      name: 'What can we help you with?',
+    });
+    message.innerHTML = 'Pricing?';
+    fireEvent.input(message);
+  };
+  const posts = (calls: Call[]) =>
+    calls.filter(
+      c => c.method === 'POST' && c.url.endsWith('widget/conversations/')
+    );
+
+  it('sends the token the form was opened with, and a fresh one when it was refused', async () => {
+    let issued = 0;
+    let refuse = true;
+    const calls: Call[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+        calls.push({ url, method: init?.method ?? 'GET', body });
+        if (url.includes('widget/session'))
+          return Response.json({ ...visitor, captcha: null });
+        if (url.includes('widget/form'))
+          return Response.json({ token: `t${++issued}`, minSeconds: 0 });
+        if (init?.method === 'POST' && url.endsWith('widget/conversations/')) {
+          if (refuse) {
+            refuse = false;
+            return Response.json(
+              { error: 'Form check failed' },
+              { status: 400 }
+            );
+          }
+          return Response.json(
+            { conversation: { id: 'c1', reference: 'DG-1000' } },
+            { status: 201 }
+          );
+        }
+        return Response.json({
+          conversation: ownThread,
+          messages: [],
+          attachments: [],
+        });
+      })
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="sales"
+        locale="en"
+        types={['lead']}
+        errors={() => []}
+      />
+    );
+    await writeLead();
+    const trap = document.querySelector('input[name="website"]');
+    expect([
+      trap?.getAttribute('aria-hidden'),
+      trap?.getAttribute('tabindex'),
+    ]).toEqual(['true', '-1']);
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => expect(posts(calls)).toHaveLength(2));
+    expect(
+      posts(calls).map(c => (c.body as { formToken?: string }).formToken)
+    ).toEqual(['t1', 't2']);
+    expect(
+      screen.queryByText('Something went wrong. Please try again.')
+    ).toBeNull();
+  });
+
+  it('shows the host’s captcha and sends what it hands back', async () => {
+    const rendered: { el: HTMLElement; callback: (token: string) => void }[] =
+      [];
+    const reset = vi.fn();
+    vi.stubGlobal('testCaptcha', {
+      render(
+        el: HTMLElement,
+        options: { sitekey: string; callback: (t: string) => void }
+      ) {
+        expect(options.sitekey).toBe('site-key');
+        rendered.push({ el, callback: options.callback });
+        return 'w1';
+      },
+      reset,
+    });
+    onTestFinished(() => {
+      for (const s of document.head.querySelectorAll(
+        'script[src="https://captcha.test/api.js"]'
+      ))
+        s.remove();
+    });
+    let verdict = 'Captcha failed';
+    const calls: Call[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+        calls.push({ url, method: init?.method ?? 'GET', body });
+        if (url.includes('widget/session'))
+          return Response.json({
+            ...visitor,
+            captcha: {
+              script: 'https://captcha.test/api.js',
+              global: 'testCaptcha',
+              siteKey: 'site-key',
+            },
+          });
+        if (url.includes('widget/form'))
+          return Response.json({ token: 't1', minSeconds: 0 });
+        if (init?.method === 'POST' && url.endsWith('widget/conversations/')) {
+          if (verdict) {
+            const error = verdict;
+            verdict = '';
+            return Response.json({ error }, { status: 400 });
+          }
+          return Response.json(
+            { conversation: { id: 'c1', reference: 'DG-1000' } },
+            { status: 201 }
+          );
+        }
+        return Response.json({
+          conversation: ownThread,
+          messages: [],
+          attachments: [],
+        });
+      })
+    );
+    render(
+      <Widget
+        api="/api/support"
+        inbox="sales"
+        locale="en"
+        types={['lead']}
+        errors={() => []}
+      />
+    );
+    await writeLead();
+    await waitFor(() => expect(rendered).toHaveLength(1));
+    expect(
+      document.head.querySelectorAll(
+        'script[src="https://captcha.test/api.js"]'
+      )
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(
+      await screen.findByText('Please confirm you are not a robot first.')
+    ).toBeTruthy();
+    expect(posts(calls)).toEqual([]);
+
+    act(() => rendered[0]?.callback('stale'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    await waitFor(() => expect(reset).toHaveBeenCalledWith('w1'));
+    expect(
+      screen.getByText('Please confirm you are not a robot first.')
+    ).toBeTruthy();
+
+    act(() => rendered[0]?.callback('solved'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    await waitFor(() => expect(posts(calls)).toHaveLength(2));
+    expect(
+      posts(calls).map(c => (c.body as { captchaToken?: string }).captchaToken)
+    ).toEqual(['stale', 'solved']);
+  });
+});

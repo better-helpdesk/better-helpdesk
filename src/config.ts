@@ -273,6 +273,26 @@ export type AiAdapter = {
   }): Promise<T>;
 };
 
+/**
+ * A captcha the widget shows to visitors before their first message, and the
+ * server's check of the token it hands back. Any provider whose browser script
+ * offers `render(element, { sitekey, callback })`, as Cloudflare Turnstile,
+ * hCaptcha and reCAPTCHA v2 do, works through `client`.
+ */
+export type CaptchaAdapter = {
+  client: {
+    /** The provider's script, loaded for explicit rendering. */
+    script: string;
+    /** The global the script defines, such as `turnstile`, `hcaptcha` or `grecaptcha`. */
+    global: string;
+    siteKey: string;
+  };
+  /** Whether the provider accepts the token; called once per token. */
+  verify(token: string, context: { ip: string | null }): Promise<boolean>;
+  /** Who solves it: visitors without a session (the default), or every widget user. */
+  for?: 'visitors' | 'everyone';
+};
+
 export type InboundMessage = {
   messageId: string;
   from: { address: string; name?: string };
@@ -388,6 +408,13 @@ export type HelpdeskConfig = {
   maxAttachmentBytes?: number;
   /** Anonymous posts allowed per IP per hour. */
   anonymousRateLimit?: number;
+  /**
+   * The invisible check on a visitor's first message: the widget's form must
+   * have been open at least `minSeconds` (3 by default), proven by a token
+   * the server signed when it opened. `false` turns it off.
+   */
+  botProtection?: { minSeconds?: number } | false;
+  captcha?: CaptchaAdapter;
   /** Conversations, messages and uploads a signed-in customer may start per hour. */
   customerRateLimit?: number;
 };
@@ -428,6 +455,8 @@ export type ResolvedConfig = HelpdeskConfig & {
   maxAttachmentBytes: number;
   anonymousRateLimit: number;
   customerRateLimit: number;
+  /** Seconds a visitor's form must be open; `null` when the check is off. */
+  formMinSeconds: number | null;
 };
 
 export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
@@ -502,6 +531,10 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
     ) as Record<Feature, boolean>,
     maxAttachmentBytes: config.maxAttachmentBytes ?? 10 * 1024 * 1024,
     anonymousRateLimit: config.anonymousRateLimit ?? 20,
+    formMinSeconds:
+      config.botProtection === false
+        ? null
+        : (config.botProtection?.minSeconds ?? 3),
     customerRateLimit: config.customerRateLimit ?? 60,
   };
   // The store starts and pauses the clocks itself, so every status change keeps them right.

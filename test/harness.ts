@@ -72,6 +72,8 @@ export function createHarness(overrides: Partial<HelpdeskConfig> = {}) {
     jobsSecret: 'jobs-secret',
     identityTokenSecret: IDENTITY_SECRET,
     replyToAddress: ref => `support+${ref}@devguard.test`,
+    // Off here so a test posts as a visitor in one call; bots.integration.test.ts turns it on.
+    botProtection: false,
     ...overrides,
   });
 

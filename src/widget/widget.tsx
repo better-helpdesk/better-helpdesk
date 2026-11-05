@@ -2,6 +2,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -11,6 +12,7 @@ import {
 import type { Locale, Translated } from '../config';
 import {
   type Api,
+  ApiError,
   createApi,
   uploadToStorage,
   useEvents,
@@ -102,6 +104,8 @@ type Session = {
   uploads: boolean;
   /** The server pushes changes over `widget/events`. */
   realtime?: boolean;
+  /** A captcha this caller solves before a first message. */
+  captcha?: { script: string; global: string; siteKey: string } | null;
   team: { name: string; initials: string; avatarUrl: string | null }[];
   teamName?: string | null;
   awayUntil?: string | null;
@@ -1035,6 +1039,96 @@ const CONTEXT_KEYS = [
 
 const TECHNICAL = new Set(['bug', 'feature', 'question']);
 
+type CaptchaApi = {
+  render(
+    element: HTMLElement,
+    options: Record<string, unknown>
+  ): string | number;
+  reset(id?: string | number): void;
+  remove?(id: string | number): void;
+};
+
+/**
+ * The host's captcha, through any provider with an explicit `render`. Their
+ * scripts look for the box in the page itself, so inside the widget's shadow
+ * root it lives in the host element's light DOM and shows through a slot.
+ */
+function Captcha({
+  client,
+  round,
+  onToken,
+}: {
+  client: { script: string; global: string; siteKey: string };
+  /** Bumped to ask for a fresh challenge after a token was refused. */
+  round: number;
+  onToken: (token: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const slot = useId();
+  const widget = useRef<{ api: CaptchaApi; id: string | number } | null>(null);
+  const report = useRef(onToken);
+  report.current = onToken;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = el.getRootNode();
+    const box = document.createElement('div');
+    if (root instanceof ShadowRoot) {
+      box.slot = slot;
+      root.host.appendChild(box);
+    } else {
+      el.appendChild(box);
+    }
+    const loaded = [...document.scripts].some(
+      script => script.getAttribute('src') === client.script
+    );
+    if (!loaded) {
+      const script = document.createElement('script');
+      script.src = client.script;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+    let stopped = false;
+    const start = () => {
+      if (stopped) return;
+      const api = (window as unknown as Record<string, CaptchaApi | undefined>)[
+        client.global
+      ];
+      if (typeof api?.render !== 'function') {
+        setTimeout(start, 100);
+        return;
+      }
+      widget.current = {
+        api,
+        id: api.render(box, {
+          sitekey: client.siteKey,
+          callback: (token: string) => report.current(token),
+          'expired-callback': () => report.current(''),
+          'error-callback': () => report.current(''),
+        }),
+      };
+    };
+    start();
+    return () => {
+      stopped = true;
+      const current = widget.current;
+      if (current) current.api.remove?.(current.id);
+      widget.current = null;
+      box.remove();
+    };
+  }, [client.script, client.global, client.siteKey, slot]);
+  useEffect(() => {
+    if (round === 0) return;
+    const current = widget.current;
+    current?.api.reset(current.id);
+  }, [round]);
+  return (
+    <div ref={ref} className="captcha">
+      <slot name={slot} />
+    </div>
+  );
+}
+
 function NewMessage({
   api,
   t,
@@ -1086,6 +1180,26 @@ function NewMessage({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
+  // A visitor's first message carries a token signed when the form opened.
+  const formCheck = useRef<Promise<{
+    token: string;
+    minSeconds: number;
+    at: number;
+  } | null> | null>(null);
+  const askFormToken = useCallback(() => {
+    formCheck.current = api<{ token: string; minSeconds: number }>(
+      'widget/form'
+    ).then(
+      r => ({ ...r, at: Date.now() }),
+      () => null
+    );
+  }, [api]);
+  useEffect(() => {
+    if (!session.identified) askFormToken();
+  }, [session.identified, askFormToken]);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaRound, setCaptchaRound] = useState(0);
+  const [captchaMissing, setCaptchaMissing] = useState(false);
   const [segment, setSegment] = useState('');
   const priorities =
     kind === 'ticket' ? (session.inbox?.priorities ?? null) : null;
@@ -1200,26 +1314,67 @@ function NewMessage({
         }
       }
       if (!created.current) {
-        const result = await api<{
-          conversation: { id: string; reference: string } | null;
-          visitorToken?: string;
-        }>('widget/conversations', {
-          body: {
-            inbox,
-            type,
-            kind,
-            subject: subject.trim() || undefined,
-            body,
-            context: sent,
-            orgId: org || undefined,
-            sharedWithCompany: share,
-            segment: segment || undefined,
-            priority: priority || undefined,
-            ...(session.identified
-              ? {}
-              : { name: name || undefined, email, website }),
-          },
-        });
+        if (session.captcha && !captchaToken) {
+          setCaptchaMissing(true);
+          setState('idle');
+          return;
+        }
+        const check = async () => {
+          const issued = await formCheck.current;
+          // Someone quicker than the minimum waits out the rest; nobody sees it.
+          const wait = issued
+            ? issued.minSeconds * 1000 - (Date.now() - issued.at)
+            : 0;
+          if (wait > 0) await new Promise(r => setTimeout(r, wait + 50));
+          return issued?.token;
+        };
+        const fields = {
+          inbox,
+          type,
+          kind,
+          subject: subject.trim() || undefined,
+          body,
+          context: sent,
+          orgId: org || undefined,
+          sharedWithCompany: share,
+          segment: segment || undefined,
+          priority: priority || undefined,
+          ...(session.identified
+            ? {}
+            : { name: name || undefined, email, website }),
+        };
+        const post = async (formToken: string | undefined) =>
+          api<{
+            conversation: { id: string; reference: string } | null;
+            visitorToken?: string;
+          }>('widget/conversations', {
+            body: {
+              ...fields,
+              formToken,
+              captchaToken: captchaToken || undefined,
+            },
+          });
+        let result: Awaited<ReturnType<typeof post>>;
+        try {
+          result = await post(session.identified ? undefined : await check());
+        } catch (error) {
+          if (error instanceof ApiError && error.message === 'Captcha failed') {
+            setCaptchaToken('');
+            setCaptchaRound(n => n + 1);
+            setCaptchaMissing(true);
+            setState('idle');
+            return;
+          }
+          // A form left open past a day, or a clock that jumped: one more try with a new token.
+          if (
+            !(
+              error instanceof ApiError && error.message === 'Form check failed'
+            )
+          )
+            throw error;
+          askFormToken();
+          result = await post(await check());
+        }
         if (result.visitorToken) onToken(result.visitorToken);
         if (!result.conversation) {
           setState('idle');
@@ -1413,6 +1568,7 @@ function NewMessage({
               </label>
               <input
                 type="text"
+                name="website"
                 tabIndex={-1}
                 autoComplete="off"
                 aria-hidden="true"
@@ -1593,6 +1749,21 @@ function NewMessage({
       </div>
       <div className="footer">
         {pinned && messageField}
+        {session.captcha && !sent && (
+          <Captcha
+            client={session.captcha}
+            round={captchaRound}
+            onToken={token => {
+              setCaptchaToken(token);
+              if (token) setCaptchaMissing(false);
+            }}
+          />
+        )}
+        {captchaMissing && (
+          <p className="error" role="alert">
+            {t('form.captcha')}
+          </p>
+        )}
         {state === 'error' && (
           <p className="error" role="alert">
             {t(sent ? 'form.attachmentsError' : 'form.error')}

@@ -36,6 +36,7 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | Method | Path | Who | What it does |
 | --- | --- | --- | --- |
 | `GET` | `widget/session` | Anyone | The caller, their conversations and what the widget shows; `?inbox=`, `?locale=` and `?org=`, the organization the widget files under, which `resolveTier` is asked about for the priorities on offer. |
+| `GET` | `widget/form` | Anyone | A form token, `{ token, minSeconds }`, for a visitor's first message; see [Keep bots out of the widget](/docs/widget/bot-protection). |
 | `POST` | `widget/conversations` | Customer, or a visitor on a `public` inbox | Opens a conversation; see [the body](#opening-a-conversation). |
 | `GET` | `widget/conversations/{id}` | Can see | The conversation, its public messages and its attachments. |
 | `POST` | `widget/conversations/{id}/messages` | Can see | Adds a message. |
@@ -48,7 +49,7 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
 | `GET` | `widget/events` | Customer | An event stream of changes to the conversations the caller can see, internal notes left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 
-A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, `typing`, true while an agent writes a reply, `respondBy`, the time the team aims to answer by while nobody has, and `ratingScore`. `widget/session` says with `realtime` whether `widget/events` is there, lists under the inbox the `priorities` this caller may pick with their descriptions (`null` for a visitor or a tier the inbox does not offer them to), and carries `priorityLabels` and `ratingScale`.
+A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, `typing`, true while an agent writes a reply, `respondBy`, the time the team aims to answer by while nobody has, and `ratingScore`. `widget/session` says with `realtime` whether `widget/events` is there, carries with `captcha` the adapter's `client` when this caller must solve it (`null` otherwise), lists under the inbox the `priorities` this caller may pick with their descriptions (`null` for a visitor or a tier the inbox does not offer them to), and carries `priorityLabels` and `ratingScale`.
 
 `POST widget/conversations/{id}/rating` takes `{ rating: 'good' | 'bad', comment? }` on the default scale and `{ score: 1..5, comment? }` when `ratingScale` is 5; the other shape is refused with 400.
 
@@ -71,6 +72,8 @@ The body of `POST widget/conversations`, which `helpdesk.createConversation(requ
     name: { type: 'string', description: "An anonymous visitor's name, up to 200 characters." },
     email: { type: 'string', description: "An anonymous visitor's address, up to 320 characters. Required for them (400 otherwise)." },
     website: { type: 'string', description: <>A honeypot. When an anonymous visitor fills it, nothing is stored and <code>conversation</code> is <code>null</code>.</> },
+    formToken: { type: 'string', description: <>From <code>GET widget/form</code>. Required for an anonymous visitor unless <code>botProtection</code> is <code>false</code>: 400 <code>Form check failed</code> without one at least <code>minSeconds</code> and at most a day old.</> },
+    captchaToken: { type: 'string', description: <>The captcha's answer, when <code>captcha</code> is configured for this caller: 400 <code>Captcha required</code> without it, <code>Captcha failed</code> when <code>verify</code> refuses it.</> },
   }}
 />
 

@@ -1,0 +1,66 @@
+---
+title: Keep bots out of the widget
+description: The invisible checks every widget form has, how to add Cloudflare Turnstile, hCaptcha or reCAPTCHA on top, and what neither stops.
+---
+
+Signed-in customers come through your sign-in, so bots are a concern on a `public` inbox, where visitors write in with only an email address. Every message a visitor starts passes three checks before anything is stored. None of them shows anything to the visitor, and none needs an account anywhere.
+
+## The invisible checks
+
+- **A form token.** When a visitor opens a form, the widget asks `GET widget/form` for a token the server signs with a key of its own. Their first message carries it back, and the server takes the message only when the token is genuine, at least 3 seconds old and at most a day old. A script that posts straight to the route has to ask for a token and wait, as a person would, for every message it sends. Someone who sends within the 3 seconds never notices: the widget waits out the rest before sending.
+- **A honeypot.** The form has a field people never see or reach with the keyboard, named `website` because form-filling bots look for such names. When it comes back filled, the server answers as if the message went through and stores nothing.
+- **The rate limits.** A visitor's address may start [`anonymousRateLimit`](/docs/reference/configuration#rate-limits) conversations, messages and uploads an hour, 20 by default. Behind a proxy or CDN this depends on the right client address, as [Tell the helpdesk the client's address](/docs/operations/production#tell-the-helpdesk-the-clients-address) describes.
+
+Change the minimum time, or turn the token off, with `botProtection`:
+
+```ts title="lib/helpdesk.ts"
+export const helpdesk = buildHelpdesk({
+  // ...
+  botProtection: { minSeconds: 5 }, // or false
+});
+```
+
+Turn it off only for a client of your own that posts to `widget/conversations` without the widget; the honeypot and the rate limits stay.
+
+## What they do not stop
+
+The invisible checks stop the bulk of automated spam, which posts forms blindly. They do not stop someone who studies your widget and scripts around it, or people paid to fill in forms. When that happens, add a captcha.
+
+## Add a captcha
+
+The `captcha` adapter has two parts: what the widget shows, and how the server checks the answer. Pick a provider and copy its example into your app:
+
+| Provider | Example | Keys from |
+| --- | --- | --- |
+| Cloudflare Turnstile | [`captcha-turnstile.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/captcha-turnstile.ts) | The Turnstile dashboard. Usually passes without a click. |
+| hCaptcha | [`captcha-hcaptcha.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/captcha-hcaptcha.ts) | The hCaptcha dashboard. |
+| Google reCAPTCHA v2 | [`captcha-recaptcha.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/captcha-recaptcha.ts) | The reCAPTCHA admin console, as a v2 checkbox key. |
+
+```ts title="lib/helpdesk.ts"
+import { captcha } from './helpdesk-captcha'; // one of the examples
+
+export const helpdesk = buildHelpdesk({
+  // ...
+  captcha,
+});
+```
+
+Each example reads its site key and secret from environment variables named at its top. Turnstile publishes [test keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) that always pass, for development.
+
+The widget then shows the provider's check above the send button of every form a visitor opens, and sends its answer with their first message. The server asks your `verify` before it stores anything, and answers 400 without a valid answer; the widget asks the visitor to try the check again. To ask signed-in customers too, set `for: 'everyone'` on the adapter.
+
+Any other provider works the same way when its browser script has an explicit `render(element, { sitekey, callback })`: name its script, the global it defines and your site key in `client`, and call its verification endpoint in `verify`. [Captcha](/docs/reference/adapters#captcha) in the adapters reference has the shape.
+
+### In your Content Security Policy
+
+The provider's script and its frames come from its own origin, so a [`Content-Security-Policy`](/docs/operations/production#allow-the-helpdesk-in-your-content-security-policy) needs it in `script-src` and `frame-src`:
+
+| Provider | Origin |
+| --- | --- |
+| Cloudflare Turnstile | `https://challenges.cloudflare.com` |
+| hCaptcha | `https://hcaptcha.com` and `https://*.hcaptcha.com` |
+| Google reCAPTCHA | `https://www.google.com` and `https://www.gstatic.com` |
+
+### On another origin
+
+The check renders in the page the widget is on. The provider must accept that page's hostname, so add every site that carries the widget to the key's allowed domains.

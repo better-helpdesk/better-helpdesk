@@ -255,6 +255,11 @@ export function createHandler(support: Helpdesk) {
       help: Boolean(config.help),
       uploads: Boolean(config.storage),
       realtime: Boolean(config.realtime),
+      captcha:
+        config.captcha &&
+        (config.captcha.for === 'everyone' || !customer.identity)
+          ? config.captcha.client
+          : null,
       conversations: conversations.map(c => ({
         ...customerView(customer, c),
         preview: previewOf(last.get(c.id)?.body, 140),
@@ -285,6 +290,14 @@ export function createHandler(support: Helpdesk) {
     };
     return eventStream(config.realtime, { request, visible });
   });
+
+  // Asked when a form opens; see `formToken` in the service.
+  define('GET', 'widget/form', async () =>
+    json({
+      token: await support.formToken(),
+      minSeconds: config.formMinSeconds ?? 0,
+    })
+  );
 
   define('POST', 'widget/conversations', async ({ request, body }) => {
     const { conversation, visitorToken } = await support.createConversation(

@@ -108,6 +108,28 @@ The triage result is stored as the conversation's `ai_suggestion`, which an agen
 
 Examples: [`ai-anthropic.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/ai-anthropic.ts) and [`ai-openai-compatible.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/ai-openai-compatible.ts); [Add AI suggestions and drafts](/docs/ai/suggestions) walks through the adapter.
 
+## Captcha
+
+```ts
+type CaptchaAdapter = {
+  client: { script: string; global: string; siteKey: string };
+  verify(token: string, context: { ip: string | null }): Promise<boolean>;
+  for?: 'visitors' | 'everyone';
+};
+```
+
+<TypeTable
+  type={{
+    'client.script': { type: 'string', required: true, description: <>The provider's browser script, loaded for explicit rendering, such as Turnstile's <code>api.js?render=explicit</code>. The widget adds it to the page once.</> },
+    'client.global': { type: 'string', required: true, description: <>The global the script defines. The widget calls its <code>render(element, {'{'} sitekey, callback, 'expired-callback', 'error-callback' {'}'})</code> and <code>reset(id)</code>, and <code>remove(id)</code> when it has one.</> },
+    'client.siteKey': { type: 'string', required: true, description: 'The public site key.' },
+    verify: { type: '(token, { ip }) => Promise<boolean>', required: true, description: <>Asks the provider whether the token is good; <code>ip</code> is the caller's address, from <code>clientIp</code>, or <code>null</code>. Called once per message; a throw answers 500.</> },
+    for: { type: "'visitors' | 'everyone'", default: "'visitors'", description: 'Who solves it: visitors without a session, or signed-in customers as well.' },
+  }}
+/>
+
+The widget renders the check in the page's own DOM, beside the widget element, and shows it inside its form, so a provider's script finds it as it would anywhere else. Examples: [`captcha-turnstile.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/captcha-turnstile.ts), [`captcha-hcaptcha.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/captcha-hcaptcha.ts) and [`captcha-recaptcha.ts`](https://github.com/better-helpdesk/better-helpdesk/blob/main/examples/adapters/captcha-recaptcha.ts); [Keep bots out of the widget](/docs/widget/bot-protection) walks through it.
+
 ## Help search
 
 ```ts

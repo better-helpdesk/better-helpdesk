@@ -311,6 +311,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 .msg-row.mine .msg-meta { color: var(--s-accent-fg); }
 .msg-row .avatar { width: 26px; height: 26px; font-size: 10px; border: 0; background: var(--s-accent); color: var(--s-accent-fg); }
 .msg-files { margin-top: 6px; font-size: 13px; }
+.captcha { min-height: 65px; max-width: 100%; overflow-x: auto; }
 .msg-files a, .msg-files span { display: block; padding: 2px 0; }
 .msg-files a { color: var(--s-accent); }
 .msg-row.mine .msg-files a { color: inherit; text-decoration: underline; }
