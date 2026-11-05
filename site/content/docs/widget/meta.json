@@ -1,5 +1,11 @@
 {
   "title": "Widget",
   "icon": "widget",
-  "pages": ["add", "support-page", "---Reference---", "reference"]
+  "pages": [
+    "add",
+    "support-page",
+    "bot-protection",
+    "---Reference---",
+    "reference"
+  ]
 }

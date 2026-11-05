@@ -28,7 +28,7 @@ Rating links, which let a customer rate a resolved conversation from the reply e
 
 ## Rate limits
 
-Anything a stranger can trigger costs something: a row, an email, perhaps a call to a language model. The helpdesk counts these per hour in its `rate_limit` table.
+Anything a stranger can trigger costs something: a row, an email, perhaps a call to a language model. The helpdesk counts these per hour in its `rate_limit` table. Before a visitor's first message from the widget counts, it also passes a signed form token and a honeypot, and a captcha when you add one; [Keep bots out of the widget](/docs/widget/bot-protection) explains each.
 
 | What | Limit per hour | Counted by |
 | --- | --- | --- |

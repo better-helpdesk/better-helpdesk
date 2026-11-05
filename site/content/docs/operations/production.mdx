@@ -143,6 +143,8 @@ If your app sends a `Content-Security-Policy`, the helpdesk needs these sources 
 - `connect-src` with the origin of your storage bucket's upload URL, if you [store attachments](/docs/inbox/attachments): the widget posts files straight to it.
 - `img-src blob:` and the origin of your storage bucket's download URL: the widget previews an image the customer attaches from a local `blob:` URL before it is sent, and both the widget and the agent UI show image attachments from the URL `presignDownload` returns. Add the origin of your agents' avatars too, if `identify` returns an `image`.
 
+With a [captcha](/docs/widget/bot-protection#in-your-content-security-policy), the provider's origin goes in `script-src` and `frame-src` too.
+
 On a page of another origin that loads the widget, that page's policy needs the handler's origin in `connect-src`, and, for the script tag, the origin of `widget.js` in `script-src`.
 
 ## Upgrading

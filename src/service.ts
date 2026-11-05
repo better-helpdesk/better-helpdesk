@@ -65,6 +65,8 @@ const MAX_TRIAGES_PER_HOUR = 100;
 const MAX_INBOUND_PER_SENDER_PER_HOUR = 30;
 const MAX_INBOUND_PER_DOMAIN_PER_HOUR = 100;
 const VISITOR_IDLE_DAYS = 30;
+/** A form left open longer than this asks for a new token. */
+const DAY_MS = 86_400_000;
 // A host cannot always tell us someone stopped being an agent; one who has not
 // opened the agent UI for this long gets no agent mail until they do again.
 const AGENT_IDLE_DAYS = 30;
@@ -406,6 +408,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
     name: z.string().trim().max(200).optional(),
     email: z.email().max(MAX_ADDRESS).optional(),
     website: z.string().optional(),
+    formToken: z.string().max(200).optional(),
+    captchaToken: z.string().max(4096).optional(),
   });
 
   async function createConversation(
@@ -436,6 +440,17 @@ export function createHelpdesk(input: HelpdeskConfig) {
       if (data.website) {
         return { conversation: null, visitorToken: undefined };
       }
+      if (channel === 'widget') await checkFormToken(data.formToken);
+    }
+    if (
+      channel === 'widget' &&
+      config.captcha &&
+      (config.captcha.for === 'everyone' || !customer.identity)
+    ) {
+      await checkCaptcha(request, data.captchaToken);
+    }
+
+    if (!customer.identity) {
       if (!data.email) throw new HelpdeskError(400, 'Email required');
       if (await store.isEmailBlocked(normalizeEmail(data.email))) {
         throw new HelpdeskError(404, 'Not found');
@@ -1722,9 +1737,54 @@ export function createHelpdesk(input: HelpdeskConfig) {
     return config.ai;
   }
 
+  /**
+   * Signed when a widget form opens. A first message from a visitor carries it
+   * back, so a script has to ask for one and wait, as a person would, for each
+   * message it posts; the rate limits do the rest.
+   */
+  async function formToken() {
+    const issued = clock().getTime();
+    return `${issued}.${formSignature(await ownSecret('form-token-secret'), issued)}`;
+  }
+
+  const formSignature = (secret: string, issued: number) =>
+    createHmac('sha256', secret).update(`form:${issued}`).digest('base64url');
+
+  async function checkFormToken(token: string | undefined) {
+    if (config.formMinSeconds === null) return;
+    const [issuedText, signature] = (token ?? '').split('.');
+    const issued = Number(issuedText);
+    const expected = Number.isSafeInteger(issued)
+      ? formSignature(await ownSecret('form-token-secret'), issued)
+      : '';
+    const age = clock().getTime() - issued;
+    if (
+      !signature ||
+      expected.length !== signature.length ||
+      !timingSafeEqual(Buffer.from(expected), Buffer.from(signature)) ||
+      age < config.formMinSeconds * 1000 ||
+      age > DAY_MS
+    ) {
+      throw new HelpdeskError(400, 'Form check failed');
+    }
+  }
+
+  async function checkCaptcha(request: Request, token: string | undefined) {
+    const captcha = config.captcha;
+    if (!captcha) return;
+    if (!token) throw new HelpdeskError(400, 'Captcha required');
+    const ip = clientIp(request);
+    if (!(await captcha.verify(token, { ip: ip === 'unknown' ? null : ip }))) {
+      throw new HelpdeskError(400, 'Captcha failed');
+    }
+  }
+
   // A key of the package's own, kept in its settings, so hosts configure nothing.
   async function ratingSecret() {
-    const key = 'rating-link-secret';
+    return ownSecret('rating-link-secret');
+  }
+
+  async function ownSecret(key: string) {
     const stored = await store.getSetting<string>(key);
     if (stored) return stored;
     // Two first requests at once both read back the one that was stored.
@@ -2314,6 +2374,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     track,
     triage,
     aiSettings,
+    formToken,
     canReadAudit,
     allowedSuggestion,
     draftReply,

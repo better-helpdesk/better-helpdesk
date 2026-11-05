@@ -131,6 +131,7 @@ const en = {
   'form.sending': 'Sending…',
   'form.sent': 'Thanks. We will reply here and by email.',
   'form.error': 'Something went wrong. Please try again.',
+  'form.captcha': 'Please confirm you are not a robot first.',
   'form.attachmentsError':
     'Your message was sent, but the attachments could not be uploaded. Please try again.',
   'form.helpHeading': 'These articles might answer it',
@@ -773,6 +774,7 @@ const de: Record<MessageKey, string> = {
   'form.sending': 'Wird gesendet…',
   'form.sent': 'Vielen Dank. Wir antworten hier und per E-Mail.',
   'form.error': 'Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.',
+  'form.captcha': 'Bitte bestätigen Sie zuerst, dass Sie kein Roboter sind.',
   'form.attachmentsError':
     'Ihre Nachricht wurde gesendet, aber die Anhänge konnten nicht hochgeladen werden. Bitte versuchen Sie es erneut.',
   'form.helpHeading': 'Diese Artikel könnten weiterhelfen',
@@ -1425,6 +1427,7 @@ const fr: Record<MessageKey, string> = {
   'form.sending': 'Envoi…',
   'form.sent': 'Merci. Nous répondrons ici et par e-mail.',
   'form.error': 'Une erreur s’est produite. Veuillez réessayer.',
+  'form.captcha': 'Veuillez d’abord confirmer que vous n’êtes pas un robot.',
   'form.attachmentsError':
     'Votre message a été envoyé, mais les pièces jointes n’ont pas pu être téléversées. Veuillez réessayer.',
   'form.helpHeading': 'Ces articles pourraient répondre à votre question',
@@ -2067,6 +2070,7 @@ const it: Record<MessageKey, string> = {
   'form.sending': 'Invio…',
   'form.sent': 'Grazie. Risponderemo qui e via e-mail.',
   'form.error': 'Si è verificato un errore. Riprovi.',
+  'form.captcha': 'Confermi prima di non essere un robot.',
   'form.attachmentsError':
     'Il messaggio è stato inviato, ma gli allegati non sono stati caricati. Riprovi.',
   'form.helpHeading': 'Questi articoli potrebbero rispondere alla Sua domanda',

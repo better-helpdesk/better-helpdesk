@@ -160,10 +160,13 @@ jobs:
         run: |
           curl -fsS -o /dev/null 'http://localhost:3000/api/helpdesk/widget/session/?inbox=support'
           curl -fsS -o /dev/null http://localhost:3000/helpdesk/
+          # A visitor's first message needs a form token at least 3 seconds old.
+          TOKEN=$(curl -fsS 'http://localhost:3000/api/helpdesk/widget/form/' | sed -E 's/.*"token":"([^"]+)".*/\1/')
+          sleep 4
           curl -fsS -o /dev/null -X POST \
             -H 'content-type: application/json' \
             -H 'Origin: http://localhost:3000' \
-            -d '{"inbox":"support","type":"question","body":"Does this install still work?","email":"ci@example.test"}' \
+            -d "{\"inbox\":\"support\",\"type\":\"question\",\"body\":\"Does this install still work?\",\"email\":\"ci@example.test\",\"formToken\":\"$TOKEN\"}" \
             http://localhost:3000/api/helpdesk/widget/conversations/
           curl -fsS -o /dev/null -X PUT \
             -H 'content-type: application/json' \
