@@ -26,7 +26,7 @@ A tier can also be set or changed by an agent in the conversation's properties c
 
 ## Write the policy
 
-Targets are hours. `respond` is the time to the first public reply; `resolve` the time to resolution. Each target counts its own `hours`, else the policy's, else the inbox's business hours, else every hour:
+Targets are hours, or business days. `respond` is the time to the first public reply; `resolve` the time to resolution. Each target counts its own `hours`, else the policy's, else the inbox's business hours, else every hour:
 
 ```ts title="lib/helpdesk.ts"
 const office: BusinessHours = {
@@ -60,6 +60,18 @@ export const helpdesk = buildHelpdesk({
   },
 });
 ```
+
+### In business days
+
+A contract that promises an answer "within one business day" writes it as a string of days, such as `'1d'`:
+
+```ts
+normal: { respond: '1d', resolve: '5d', hours: office },
+```
+
+A day target is due at the same time of day that many open days later. A message at 14:00 on Friday is due at 14:00 on Monday; one at 20:00 on Friday counts from Monday's opening at 08:00, so it is due on Tuesday at 08:00. A day counts when the hours open on it and it is not a [closed day](/docs/inbox/setup#close-on-holidays), so weekends and public holidays are skipped. When that time falls outside a shorter day's hours, the day's opening or closing stands instead. Round the clock, with `hours: 'always'`, a day is 24 hours.
+
+The resolution clock still pauses while a conversation is pending, and the warning still comes at `warnAt` of the time: in open hours, between the start and that deadline.
 
 A priority a policy leaves out has no deadline. The `default` policy is for conversations without a tier, or whose tier has no policy of its own: a best-effort tier gets a response target and no resolution target, or no entry at all.
 

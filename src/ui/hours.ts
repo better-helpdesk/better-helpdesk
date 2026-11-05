@@ -145,3 +145,45 @@ export function nextOpening(at: Date, hours: BusinessHours) {
   ).find(([, end]) => end > now);
   return span ? new Date(Math.max(span[0], now)) : null;
 }
+
+/**
+ * `days` open days after `from`, at the time of day of the next opening at or
+ * after `from`: a message at 14:00 on Friday is due at 14:00 on the next open
+ * day, one at 20:00 on Friday at the opening on Monday plus one open day. A
+ * day counts when it has an open span and is not closed. When that time falls
+ * outside the day's spans, the day's first opening or last closing stands.
+ */
+export function openDaysDeadline(
+  from: Date,
+  days: number,
+  hours: BusinessHours
+) {
+  const start = nextOpening(from, hours) ?? from;
+  const wall = wallClock(start.getTime(), hours.timeZone);
+  const time = wall - Math.floor(wall / DAY) * DAY;
+  const closed = closedDays(hours);
+  let day = Math.floor(wall / DAY);
+  // A schedule has an open day every week, and closed days are finite.
+  for (let left = days; left > 0; ) {
+    day += 1;
+    const weekday = DAYS[new Date(day * DAY).getUTCDay()] as Weekday;
+    const open =
+      (hours.weekly[weekday]?.length ?? 0) > 0 &&
+      !closed?.has(new Date(day * DAY).toISOString().slice(0, 10));
+    if (open) left -= 1;
+  }
+  const spans = intervals(
+    instant(day * DAY, hours.timeZone),
+    instant(day * DAY + DAY - 1, hours.timeZone),
+    hours
+  ).filter(([begin]) => {
+    const local = Math.floor(wallClock(begin, hours.timeZone) / DAY);
+    return local === day;
+  });
+  const target = instant(day * DAY + time, hours.timeZone);
+  const first = spans[0];
+  const last = spans.at(-1);
+  if (first && target < first[0]) return new Date(first[0]);
+  if (last && target > last[1]) return new Date(last[1]);
+  return new Date(target);
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BusinessHours } from './config';
-import { deadline, slaClockFor, slaPatch, slaStart } from './sla';
+import { type BusinessHours, resolveConfig } from './config';
+import { deadline, slaClockFor, slaPatch, slaStart, targetHours } from './sla';
 
 const office: BusinessHours = {
   timeZone: 'Europe/Zurich',
@@ -251,5 +251,46 @@ describe('slaPatch', () => {
       at('2026-10-20T13:00:00Z')
     );
     expect(reopened.slaDueAt).toEqual(started.respondBy);
+  });
+});
+
+describe('targetHours', () => {
+  const office: BusinessHours = {
+    timeZone: 'Europe/Zurich',
+    weekly: Object.fromEntries(
+      ['mon', 'tue', 'wed', 'thu', 'fri'].map(d => [d, [['08:00', '17:00']]])
+    ),
+  };
+
+  it('takes hours as they are, and a day as the open hours until the same time on the next open day', () => {
+    const friday = new Date('2026-11-06T13:00:00Z');
+    expect(targetHours(4, friday, office)).toBe(4);
+    // Friday 14:00 to 17:00, then Monday 08:00 to 14:00.
+    expect(targetHours('1d', friday, office)).toBe(9);
+    expect(deadline(friday, targetHours('1d', friday, office), office)).toEqual(
+      new Date('2026-11-09T13:00:00Z')
+    );
+  });
+
+  it('counts a day as 24 hours round the clock', () => {
+    expect(targetHours('2d', new Date('2026-11-06T13:00:00Z'), null)).toBe(48);
+  });
+});
+
+describe('a target in days', () => {
+  const build = (respond: unknown) =>
+    resolveConfig({
+      db: {} as never,
+      referencePrefix: 'DG',
+      adminUrl: 'https://app.test/helpdesk/',
+      identify: async () => null,
+      inboxes: { support: {} },
+      sla: { default: { targets: { normal: { respond } } } } as never,
+    });
+
+  it('takes whole days, and refuses fractions and zero', () => {
+    expect(() => build('1d')).not.toThrow();
+    expect(() => build('1.5d')).toThrow(/days such as "1d"/);
+    expect(() => build('0d')).toThrow(/days such as "1d"/);
   });
 });

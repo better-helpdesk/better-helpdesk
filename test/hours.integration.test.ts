@@ -202,3 +202,35 @@ describe('closed days', () => {
     }
   });
 });
+
+describe('targets in days', () => {
+  it('is due at the same time on the next open day, past a closed one', async () => {
+    const sla = createHarness({
+      inboxes: { support: { hours: { ...office, closed: ['2026-12-24'] } } },
+      sla: {
+        default: { targets: { normal: { respond: '1d', resolve: '3d' } } },
+      },
+    });
+    try {
+      sla.addUser('ada');
+      // Wednesday 23 December 15:00 CET.
+      clock('2026-12-23T14:00:00Z');
+      const res = await sla.call('POST', 'widget/conversations', {
+        user: 'ada',
+        body: { inbox: 'support', type: 'question', body: 'Export?' },
+      });
+      const row = await sla.findOne('conversation', {
+        id: res.data.conversation.id,
+      });
+      const second = (d: Date | null | undefined) =>
+        new Date(Math.round((d?.getTime() ?? 0) / 1000) * 1000).toISOString();
+      // Thursday 24th is closed: Friday 25th 15:00, and Tuesday 29th 15:00.
+      expect([second(row?.respondBy), second(row?.resolveBy)]).toEqual([
+        '2026-12-25T14:00:00.000Z',
+        '2026-12-29T14:00:00.000Z',
+      ]);
+    } finally {
+      await sla.close();
+    }
+  });
+});

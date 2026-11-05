@@ -4,6 +4,7 @@ import { type BusinessHours, resolveConfig } from '../config';
 import {
   nextOpening,
   openCutoff,
+  openDaysDeadline,
   openDeadline,
   openHoursBetween,
 } from './hours';
@@ -309,5 +310,46 @@ describe('closed days', () => {
         inboxes: { support: { hours: { ...office, closed: ['2026-02-30'] } } },
       })
     ).toThrow(/Not a calendar date/);
+  });
+});
+
+describe('openDaysDeadline', () => {
+  it('is the same time on the next open day', () => {
+    // Friday 6 November 14:00 CET to Monday 9 November 14:00 CET.
+    expect(openDaysDeadline(at('2026-11-06T13:00:00Z'), 1, office)).toEqual(
+      at('2026-11-09T13:00:00Z')
+    );
+  });
+
+  it('starts from the next opening when it arrives after hours', () => {
+    // Friday 20:00 CET counts from Monday 08:00, so one day is Tuesday 08:00.
+    expect(openDaysDeadline(at('2026-11-06T19:00:00Z'), 1, office)).toEqual(
+      at('2026-11-10T07:00:00Z')
+    );
+  });
+
+  it('counts past closed days', () => {
+    const holidays: BusinessHours = {
+      ...office,
+      closed: ['2026-12-24', '2026-12-25'],
+    };
+    // Wednesday 23 December 16:00 CET to Monday 28 December 16:00 CET.
+    expect(openDaysDeadline(at('2026-12-23T15:00:00Z'), 1, holidays)).toEqual(
+      at('2026-12-28T15:00:00Z')
+    );
+    expect(openDaysDeadline(at('2026-12-23T15:00:00Z'), 2, holidays)).toEqual(
+      at('2026-12-29T15:00:00Z')
+    );
+  });
+
+  it('keeps to the day’s own hours when they are shorter', () => {
+    const halfFriday: BusinessHours = {
+      timeZone: 'Europe/Zurich',
+      weekly: { thu: [['08:00', '17:00']], fri: [['08:00', '12:00']] },
+    };
+    // Thursday 15:00 CET: Friday closes at 12:00, so that is the deadline.
+    expect(openDaysDeadline(at('2026-11-05T14:00:00Z'), 1, halfFriday)).toEqual(
+      at('2026-11-06T11:00:00Z')
+    );
   });
 });
