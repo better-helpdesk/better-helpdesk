@@ -304,6 +304,15 @@ function build(
                 (SELECT max(created_at) FROM helpdesk.conversation_event
                   WHERE conversation_id = c.id AND kind = 'assigneeId' AND data->>'to' = ${agentId}),
                 c.created_at)
+            UNION ALL
+            SELECT CASE e.kind WHEN 'sla.breach' THEN 'sla-breach' ELSE 'sla-warning' END,
+              e.conversation_id, e.created_at, e.data->>'target'
+            FROM helpdesk.conversation_event e
+            JOIN helpdesk.conversation c ON c.id = e.conversation_id
+            WHERE e.kind IN ('sla.warning', 'sla.breach') AND e.created_at > ${since}
+              AND (c.assignee_id = ${agentId}::uuid OR c.assignee_id IS NULL
+                OR EXISTS (SELECT 1 FROM helpdesk.agent s
+                  WHERE s.id = ${agentId}::uuid AND s.role = 'supervisor'))
           )
           SELECT n.kind, n.conversation_id, c.number, coalesce(c.title, c.subject) AS subject,
             n.who, to_char(n.at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at

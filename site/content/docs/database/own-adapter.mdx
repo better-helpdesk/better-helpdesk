@@ -148,7 +148,7 @@ With the CRUD methods alone, the helpdesk works, and some reads cost more querie
 | `lastMessages(conversationIds)` | The previews in conversation lists take one query per conversation. |
 | `topTags(limit)` | Tags are counted in memory, over the conversations active in the last 90 days. |
 | `contactIdsByActivity(where, limit)` | The contacts list shows the newest contacts first, not the most recently active. |
-| `notificationsFor(agentId, since, limit)` | An agent's notifications are worked out in memory from the last 30 days of events. |
+| `notificationsFor(agentId, since, limit)` | An agent's notifications are worked out in memory from the last 30 days of events. A native one returns the same kinds, service-level warnings and breaches included. |
 
 `DatabaseAdapter`, `Capabilities` and `Notification` in `better-helpdesk/adapters` give the exact signatures. The Postgres adapter implements all six, in `src/db/kysely.ts`.
 

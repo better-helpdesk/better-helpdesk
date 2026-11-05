@@ -885,6 +885,41 @@ describe('HelpdeskAdmin', () => {
     await waitFor(() => expect((select as HTMLSelectElement).value).toBe('a2'));
   });
 
+  it('shows a service-level warning and breach on the bell by their target', async () => {
+    routes['agent/notifications/'] = {
+      unread: 2,
+      notifications: [
+        {
+          kind: 'sla-breach',
+          conversationId: 'c1',
+          reference: 'DG-1000',
+          subject: 'Export broken',
+          who: 'reply',
+          at: new Date().toISOString(),
+        },
+        {
+          kind: 'sla-warning',
+          conversationId: 'c1',
+          reference: 'DG-1000',
+          subject: 'Export broken',
+          who: 'response',
+          at: new Date().toISOString(),
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/notifications/'] = { unread: 0, notifications: [] };
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    openMenu(await screen.findByLabelText('Notifications, 2 new'));
+    expect(
+      await screen.findByText('The next reply target for DG-1000 was missed')
+    ).toBeTruthy();
+    expect(
+      screen.getByText('The response target for DG-1000 is close')
+    ).toBeTruthy();
+  });
+
   it('counts new notifications on the bell and in the tab title, marks them seen when opened, and opens their conversation', async () => {
     routes['agent/notifications/'] = {
       unread: 2,

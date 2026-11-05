@@ -5,7 +5,7 @@ import { HELPDESK_CHANGED, useAdmin } from './context';
 import { Menu, paths, Svg, setTitleCountOn, useTitleCountOn } from './ui';
 
 type Notification = {
-  kind: 'assigned' | 'mentioned' | 'reply';
+  kind: 'assigned' | 'mentioned' | 'reply' | 'sla-warning' | 'sla-breach';
   conversationId: string;
   reference: string;
   subject: string | null;
@@ -15,7 +15,7 @@ type Notification = {
 
 const TITLE_PREFIX = /^\(\d+\) /;
 
-/** Assignments, mentions and customer replies for this agent, with the new ones counted. */
+/** Assignments, mentions, customer replies and service-level notices for this agent, with the new ones counted. */
 export function NotificationBell() {
   const { api, t, navigate } = useAdmin();
   const feed = useResource(
@@ -85,7 +85,9 @@ export function NotificationBell() {
                 }}>
                 <span>
                   {t(`admin.notify.${n.kind}`, {
-                    who: n.who ?? t('admin.someone'),
+                    who: n.kind.startsWith('sla-')
+                      ? t(`event.target.${n.who ?? 'response'}`)
+                      : (n.who ?? t('admin.someone')),
                     reference: n.reference,
                   })}
                 </span>

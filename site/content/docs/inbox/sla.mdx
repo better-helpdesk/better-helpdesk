@@ -127,6 +127,8 @@ The widget and the receipt tell the customer when a reply is due, the next reply
 
 Each `runJobs` looks at every open conversation with a deadline. Once `warnAt` of a target has passed, it queues an [`agent-sla`](/docs/email/messages#agent-sla) email with `stage: 'warning'` to the assignee, or the whole team when there is none, and to every [supervisor](/docs/inbox/team#roles). Once the deadline has passed, it queues one with `stage: 'breach'`. Each goes once per target, writes an `sla.warning` or `sla.breach` row on the conversation's timeline, and raises the [event](/docs/app/events#slawarning-and-slabreach) of the same name.
 
+The same warnings and breaches show on the notification bell in the agent UI, so they reach the team without an email adapter. The bell shows them to the conversation's assignee, to everyone while it has none, and to every supervisor, by who has it when the bell is opened.
+
 To page someone, hang it on the event:
 
 ```ts title="lib/helpdesk.ts"

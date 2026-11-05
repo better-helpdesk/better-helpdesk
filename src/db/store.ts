@@ -2,7 +2,12 @@ import { createHash } from 'node:crypto';
 
 import { DEFAULT_PRIORITIES } from '../config';
 import { type SlaClockFor, slaPatch, slaStart } from '../sla';
-import { clock, type DatabaseAdapter, type Where } from './adapter';
+import {
+  clock,
+  type DatabaseAdapter,
+  type Notification,
+  type Where,
+} from './adapter';
 import {
   type AgentRole,
   type ConversationContext,
@@ -1734,7 +1739,7 @@ export function createStore(
         return caps.notificationsFor(agentId, since, limit);
       }
       type Note = {
-        kind: 'assigned' | 'mentioned' | 'reply';
+        kind: Notification['kind'];
         conversation_id: string;
         who: string | null;
         at: Date;
@@ -1819,6 +1824,48 @@ export function createStore(
           who: contact ? (contact.name ?? contact.email) : null,
           at: m.createdAt,
         });
+      }
+      // The assignee's, or everyone's while nobody has it; every one for a supervisor.
+      const slaEvents = await adapter.findMany<ConversationEvent>(
+        'conversation_event',
+        {
+          where: and(
+            oneOf('kind', ['sla.warning', 'sla.breach']),
+            gt('createdAt', since)
+          ),
+        }
+      );
+      if (slaEvents.length) {
+        const me = await adapter.findOne<{ role: string }>('agent', {
+          where: eq('id', agentId),
+          select: ['role'],
+        });
+        const owners = new Map<string, string | null>();
+        for (const part of chunks([
+          ...new Set(slaEvents.map(e => e.conversationId)),
+        ])) {
+          for (const c of await adapter.findMany<{
+            id: string;
+            assigneeId: string | null;
+          }>('conversation', {
+            where: oneOf('id', part),
+            select: ['id', 'assigneeId'],
+          })) {
+            owners.set(c.id, c.assigneeId);
+          }
+        }
+        for (const e of slaEvents) {
+          if (!owners.has(e.conversationId)) continue;
+          const owner = owners.get(e.conversationId) ?? null;
+          if (me?.role !== 'supervisor' && owner !== null && owner !== agentId)
+            continue;
+          notes.push({
+            kind: e.kind === 'sla.breach' ? 'sla-breach' : 'sla-warning',
+            conversation_id: e.conversationId,
+            who: typeof e.data.target === 'string' ? e.data.target : null,
+            at: e.createdAt,
+          });
+        }
       }
       notes.sort((a, b) => b.at.getTime() - a.at.getTime());
       const page = notes.slice(0, limit);
