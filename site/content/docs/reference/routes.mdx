@@ -39,12 +39,12 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | `GET` | `widget/form` | Anyone | A form token, `{ token, minSeconds }`, for a visitor's first message; see [Keep bots out of the widget](/docs/widget/bot-protection). |
 | `POST` | `widget/conversations` | Customer, or a visitor on a `public` inbox | Opens a conversation; see [the body](#opening-a-conversation). |
 | `GET` | `widget/conversations/{id}` | Can see | The conversation, its public messages and its attachments. |
-| `POST` | `widget/conversations/{id}/messages` | Can see | Adds a message. |
+| `POST` | `widget/conversations/{id}/messages` | Can see | Adds a message. From the author, `attachments` takes up to 20 ids of uploads started below; each file must be in storage (409 otherwise) and on no message yet (400 otherwise). |
 | `PATCH` | `widget/conversations/{id}` | Author | Shares it with the company, or marks it resolved. |
 | `POST` | `widget/conversations/{id}/rating` | Author | Rates it `good` or `bad`, with an optional comment. |
 | `POST` | `widget/conversations/{id}/seen` | Can see | Marks it read by its author. |
 | `POST` | `widget/conversations/{id}/attachments` | Author | Starts an upload and answers a presigned form. |
-| `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done. |
+| `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done, as a file of the opening message. A file for a later message is sent with it instead. |
 | `GET` | `widget/conversations/{id}/attachments/{attachmentId}` | Can see | Redirects to a presigned download URL. |
 | `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
 | `GET` | `widget/events` | Customer | An event stream of changes to the conversations the caller can see, internal notes left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
@@ -105,7 +105,7 @@ Every request that is not a `GET` and succeeded is written to [`audit_log`](/doc
 
 | Method | Path | What it does |
 | --- | --- | --- |
-| `GET` | `agent/me` | The agent, and the configuration the agent UI needs; `aiFeatures` says which [AI switches](/docs/ai/suggestions#choose-what-the-ai-does) are on, all `false` without `ai`, and `auditLog` whether this agent may read the audit log. |
+| `GET` | `agent/me` | The agent, and the configuration the agent UI needs; `aiFeatures` says which [AI switches](/docs/ai/suggestions#choose-what-the-ai-does) are on, all `false` without `ai`, and `auditLog` whether this agent may read the audit log, and `uploads` whether there is a `storage` adapter to attach files with. |
 | `PATCH` | `agent/me` | Sets the agent's away time. |
 | `GET` | `agent/settings` | The settings agents change: `confirmation`, the widget's confirmation text per language; `ai`, the AI switches; `recipients`, the agent ids chosen to receive emails about new requests, empty for the default; and `closed`, the days closed, each `{ date, name? }`. |
 | `PUT` | `agent/settings` | Changes them. Any field may be left out; `ai` takes any of `classify`, `title`, `summary`, `duplicates`, `draft` and `rewrite` as booleans and keeps the others, `recipients` replaces the list, up to 200 ids, and `closed` replaces the closed days, up to 366, each a `YYYY-MM-DD` date with an optional name. |
@@ -120,7 +120,8 @@ Every request that is not a `GET` and succeeded is written to [`audit_log`](/doc
 | `POST` | `agent/conversations/bulk` | Changes several conversations at once; with `reply` or `note`, writes that text to each as a reply or an internal note. A reply assigns each unassigned conversation to the agent, unless the same request set `assigneeId`. |
 | `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
 | `PATCH` | `agent/conversations/{id}` | Changes its status, priority, tier, type, inbox, title, assignee, company, tags or snooze. |
-| `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. A reply on an unassigned conversation assigns it to the agent who replied. |
+| `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. A reply on an unassigned conversation assigns it to the agent who replied. `attachments` takes up to 20 ids from the route below; each file must be in storage (409 otherwise) and on no message yet (400 otherwise). |
+| `POST` | `agent/conversations/{id}/attachments` | Starts an upload and answers a presigned form. The file shows once a message is sent with its id. |
 | `POST` | `agent/conversations/{id}/typing` | Shows the customer that the agent is writing a reply, for a few seconds; the agent UI repeats it while the agent types. |
 | `GET` | `agent/events` | An event stream of every change, internal notes included. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 | `POST` | `agent/conversations/{id}/participants` | Adds a contact to it. |

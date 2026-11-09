@@ -728,12 +728,211 @@ describe('attachments', () => {
     );
     expect(res.status).toBe(400);
   });
+
+  async function stage(conversationId: string, filename: string) {
+    const start = await h.call(
+      'POST',
+      `agent/conversations/${conversationId}/attachments`,
+      {
+        user: 'agent',
+        body: { filename, contentType: 'image/png', size: 1000 },
+      }
+    );
+    expect(start.status).toBe(201);
+    return {
+      id: start.data.id as string,
+      key: start.data.upload.fields.key as string,
+    };
+  }
+
+  it('shows a file an agent attached under their reply, to the customer too, once it is sent', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada');
+    const { id, key } = await stage(conversation.id, 'fix.png');
+    const reply = () =>
+      h.call('POST', `agent/conversations/${conversation.id}/messages`, {
+        user: 'agent',
+        body: { body: 'See the screenshot', attachments: [id] },
+      });
+    const thread = () =>
+      h.call('GET', `widget/conversations/${conversation.id}`, { user: 'ada' });
+
+    expect((await reply()).status).toBe(409);
+    expect(await h.count('message')).toBe(1);
+
+    h.objects.set(key, new Uint8Array([1]));
+    expect((await thread()).data.attachments).toEqual([]);
+
+    const sent = await reply();
+    expect(sent.status).toBe(201);
+    expect((await thread()).data.attachments).toEqual([
+      {
+        id,
+        messageId: sent.data.id,
+        filename: 'fix.png',
+        contentType: 'image/png',
+        size: 1000,
+      },
+    ]);
+    const file = await h.call(
+      'GET',
+      `widget/conversations/${conversation.id}/attachments/${id}`,
+      { user: 'ada' }
+    );
+    expect(file.status).toBe(302);
+
+    expect((await reply()).status).toBe(400);
+    expect(await h.count('message')).toBe(2);
+  });
+
+  it('keeps a file on an internal note from the customer', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada');
+    const { id, key } = await stage(conversation.id, 'logs.png');
+    h.objects.set(key, new Uint8Array([1]));
+    const note = await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/messages`,
+      {
+        user: 'agent',
+        body: { body: 'From the logs', internal: true, attachments: [id] },
+      }
+    );
+    expect(note.status).toBe(201);
+
+    const customers = await h.call(
+      'GET',
+      `widget/conversations/${conversation.id}`,
+      { user: 'ada' }
+    );
+    expect(customers.data.attachments).toEqual([]);
+    const download = (side: string, user: string) =>
+      h.call(
+        'GET',
+        `${side}/conversations/${conversation.id}/attachments/${id}`,
+        { user }
+      );
+    expect((await download('widget', 'ada')).status).toBe(404);
+
+    const agents = await h.call(
+      'GET',
+      `agent/conversations/${conversation.id}`,
+      { user: 'agent' }
+    );
+    expect(
+      agents.data.attachments.map((a: { messageId: string }) => a.messageId)
+    ).toEqual([note.data.id]);
+    expect((await download('agent', 'agent')).status).toBe(302);
+  });
+
+  it('puts a file a customer adds to a reply under that reply, and takes none from a teammate', async () => {
+    h.addUser('ada', { orgs: [orgA] });
+    h.addUser('bob', { orgs: [orgA] });
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada', {
+      orgId: orgA.id,
+      sharedWithCompany: true,
+    });
+    const start = await h.call(
+      'POST',
+      `widget/conversations/${conversation.id}/attachments`,
+      {
+        user: 'ada',
+        body: { filename: 'again.png', contentType: 'image/png', size: 1000 },
+      }
+    );
+    const id = start.data.id as string;
+    h.objects.set(start.data.upload.fields.key, new Uint8Array([1]));
+    const reply = (user: string) =>
+      h.call('POST', `widget/conversations/${conversation.id}/messages`, {
+        user,
+        body: { body: 'It happened again', attachments: [id] },
+      });
+
+    expect((await reply('bob')).status).toBe(403);
+    expect(await h.count('message')).toBe(1);
+
+    const sent = await reply('ada');
+    expect(sent.status).toBe(201);
+    const thread = await h.call(
+      'GET',
+      `agent/conversations/${conversation.id}`,
+      { user: 'agent' }
+    );
+    expect(
+      thread.data.attachments.map((a: { id: string; messageId: string }) => [
+        a.id,
+        a.messageId,
+      ])
+    ).toEqual([[id, sent.data.id]]);
+  });
+
+  it('refuses a file staged on another conversation', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada');
+    const other = await openBug('ada');
+    const { id, key } = await stage(other.id, 'other.png');
+    h.objects.set(key, new Uint8Array([1]));
+    const res = await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/messages`,
+      { user: 'agent', body: { body: 'Here', attachments: [id] } }
+    );
+    expect(res.status).toBe(400);
+    expect(await h.count('message')).toBe(2);
+  });
 });
 
 describe('attachment limits', () => {
-  it('caps the files one conversation can hold', async () => {
+  it('caps the files a customer can add to one conversation, not an agent', async () => {
     h.addUser('ada');
     const conversation = await openBug('ada');
+    const start = () =>
+      h.call('POST', `widget/conversations/${conversation.id}/attachments`, {
+        user: 'ada',
+        body: { filename: 'a.png', contentType: 'image/png', size: 10 },
+      });
+    for (let i = 0; i < 20; i++) expect((await start()).status).toBe(201);
+    expect((await start()).status).toBe(429);
+
+    h.addUser('agent', { isAgent: true });
+    const agents = await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/attachments`,
+      {
+        user: 'agent',
+        body: { filename: 'a.png', contentType: 'image/png', size: 10 },
+      }
+    );
+    expect(agents.status).toBe(201);
+  });
+
+  it('leaves a customer their files when an agent has sent some', async () => {
+    h.addUser('ada');
+    h.addUser('agent', { isAgent: true });
+    const conversation = await openBug('ada');
+    const staged = await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/attachments`,
+      {
+        user: 'agent',
+        body: { filename: 'fix.png', contentType: 'image/png', size: 10 },
+      }
+    );
+    h.objects.set(staged.data.upload.fields.key, new Uint8Array([1]));
+    const sent = await h.call(
+      'POST',
+      `agent/conversations/${conversation.id}/messages`,
+      {
+        user: 'agent',
+        body: { body: 'Try this', attachments: [staged.data.id] },
+      }
+    );
+    expect(sent.status).toBe(201);
+
     const start = () =>
       h.call('POST', `widget/conversations/${conversation.id}/attachments`, {
         user: 'ada',

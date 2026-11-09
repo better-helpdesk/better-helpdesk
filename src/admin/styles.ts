@@ -335,6 +335,12 @@ export const adminCss = `
 .sa-composer { position: sticky; bottom: 0; z-index: 1; margin-top: auto; background: var(--a-bg); border: 1px solid var(--a-border); border-radius: var(--a-radius); padding: 12px; display: grid; gap: 8px; box-shadow: var(--a-highlight), 0 -4px 24px -8px var(--a-shadow-color); container-type: inline-size; }
 .sa-composer:has(.rt-input:focus) { border-color: color-mix(in srgb, var(--a-focus) 60%, var(--a-border)); }
 .sa-composer[data-internal="true"] { background: var(--a-note); border-color: var(--a-note-border); }
+.sa[data-dropping="true"] .sa-composer { outline: 2px dashed var(--a-focus); outline-offset: 2px; }
+.sa-staged { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.sa-staged li { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 2px 2px 8px; border: 1px solid var(--a-border); border-radius: var(--a-r-inner); }
+.sa-staged li[aria-busy="true"] { opacity: .55; }
+.sa-staged img { width: 28px; height: 28px; object-fit: cover; border-radius: var(--a-r-inner); }
+.sa-staged span { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sa .rt { display: grid; gap: 4px; min-width: 0; }
 .sa .rt-input { min-height: 90px; max-height: 400px; overflow-y: auto; padding: 6px 4px; line-height: 1.5; overflow-wrap: anywhere; cursor: text; outline: none; }
 .sa .rt-dialog { gap: 0; border: 1px solid var(--a-border); border-radius: var(--a-r-control); background: var(--a-bg); overflow: hidden; }

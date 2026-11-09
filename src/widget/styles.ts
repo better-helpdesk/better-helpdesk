@@ -319,6 +319,11 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--s-focus); o
 
 .composer { border-top: 1px solid var(--s-border); background: var(--s-subtle); padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end; }
 .rt-reply { flex: 1; min-width: 0; }
+.composer .icon-btn { color: var(--s-muted); }
+.composer-files { border-top: 1px solid var(--s-border); background: var(--s-subtle); padding: 10px 12px 0; }
+.composer-files + .composer { border-top: 0; }
+.composer[data-dropping="true"], .form[data-dropping="true"] { outline: 2px dashed var(--s-accent); outline-offset: -4px; }
+.thumb[aria-busy="true"] { opacity: .55; }
 .rt-reply .rt-input { min-height: 42px; max-height: 160px; }
 .send { width: 42px; height: 42px; border-radius: var(--s-r-round); border: 0; background: var(--s-accent); color: var(--s-accent-fg); display: grid; place-items: center; flex: none; }
 .send:disabled { background: var(--s-subtle); color: var(--s-muted); }

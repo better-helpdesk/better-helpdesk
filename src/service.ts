@@ -26,6 +26,7 @@ import { clock } from './db/adapter';
 import type { Channel, Insert } from './db/model';
 import type {
   Agent,
+  Attachment,
   Company,
   Contact,
   Conversation,
@@ -690,7 +691,8 @@ export function createHelpdesk(input: HelpdeskConfig) {
     request: Request,
     customer: Customer,
     conversation: Conversation,
-    body: string
+    body: string,
+    files: Attachment[] = []
   ) {
     if (!customer.contact) throw new HelpdeskError(401, 'Unauthenticated');
     await refuseBlocked(customer.contact);
@@ -707,6 +709,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       // A host user's words are theirs only if the host proved their address.
       verified: Boolean(customer.identity?.user.emailVerified),
     });
+    await sendWith(message, files);
     await afterCustomerMessage(conversation, message);
     return message;
   }
@@ -802,7 +805,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     internal: boolean,
     notify: string[] = [],
     /** `claim: false` leaves an unassigned conversation so, for a bulk change that set the assignee itself. */
-    { claim = true }: { claim?: boolean } = {}
+    { claim = true, files = [] }: { claim?: boolean; files?: Attachment[] } = {}
   ) {
     const message = await store.appendMessage({
       conversationId: conversation.id,
@@ -811,6 +814,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
       body,
       internal,
     });
+    await sendWith(message, files);
     const claimed =
       claim && !internal && !conversation.assigneeId
         ? await store.updateConversation(conversation.id, {
@@ -1500,6 +1504,16 @@ export function createHelpdesk(input: HelpdeskConfig) {
       });
     }
     return files;
+  }
+
+  /** Before the message is announced, so whoever reloads on it finds the files. */
+  async function sendWith(message: Message, files: Attachment[]) {
+    for (const file of files) {
+      await store.updateAttachment(file.id, {
+        messageId: message.id,
+        uploaded: true,
+      });
+    }
   }
 
   async function recordAttachments(

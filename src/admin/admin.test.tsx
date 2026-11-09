@@ -1240,6 +1240,74 @@ describe('HelpdeskAdmin', () => {
     ).toBe('Ask billing first');
   });
 
+  it('attaches a file dropped on the conversation and sends it with the reply', async () => {
+    const sent: unknown[] = [];
+    routes['agent/me/'] = { ...me, uploads: true };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.startsWith('https://s3.test/')) return new Response(null);
+        if (init?.method === 'POST' && url.includes('/attachments')) {
+          const { filename } = JSON.parse(String(init.body));
+          return filename === 'huge.png'
+            ? new Response('{"error":"File too large"}', { status: 413 })
+            : new Response(
+                '{"id":"f1","upload":{"url":"https://s3.test/up","fields":{}}}',
+                { status: 201 }
+              );
+        }
+        if (init?.method === 'POST' && url.includes('/messages')) {
+          sent.push(JSON.parse(String(init.body)));
+          return new Response('{"id":"m2"}', { status: 201 });
+        }
+        return respond(url);
+      })
+    );
+    const { createObjectURL, revokeObjectURL } = URL;
+    Object.assign(URL, {
+      createObjectURL: () => 'blob:shot',
+      revokeObjectURL: () => {},
+    });
+    try {
+      window.history.replaceState(null, '', '/support/conversations/c1/');
+      render(<HelpdeskAdmin basePath="/support" locale="en" />);
+      const composer = await screen.findByRole('textbox', { name: 'Reply' });
+      expect(screen.getByRole('button', { name: 'Attach file' })).toBeTruthy();
+      const drop = (name: string) =>
+        fireEvent.drop(screen.getByText('The CSV export fails'), {
+          dataTransfer: {
+            types: ['Files'],
+            files: [new File(['x'], name, { type: 'image/png' })],
+          },
+        });
+
+      drop('huge.png');
+      expect(
+        await screen.findByText(/^The file could not be attached\./)
+      ).toBeTruthy();
+      expect(screen.queryByText('huge.png')).toBeNull();
+
+      drop('shot.png');
+      const staged = (await screen.findByText('shot.png')).closest('li');
+      await waitFor(() =>
+        expect(staged?.getAttribute('aria-busy')).toBe('false')
+      );
+      composer.innerHTML = 'Here it is';
+      fireEvent.input(composer);
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await waitFor(() =>
+        expect(sent).toEqual([
+          { body: 'Here it is', internal: false, attachments: ['f1'] },
+        ])
+      );
+      await waitFor(() => expect(screen.queryByText('shot.png')).toBeNull());
+    } finally {
+      routes['agent/me/'] = me;
+      Object.assign(URL, { createObjectURL, revokeObjectURL });
+    }
+  });
+
   it('mentions a teammate picked with @ in a note and notifies only who is still named', async () => {
     const sent: unknown[] = [];
     routes['agent/agents/'] = {

@@ -15,6 +15,7 @@ import { clock } from './db/adapter';
 import type { Channel } from './db/model';
 import {
   type Agent,
+  type Attachment,
   type Company,
   type Contact,
   type Conversation,
@@ -326,7 +327,11 @@ export function createHandler(support: Helpdesk) {
     const messages = await store.listMessages(conversation.id, {
       includeInternal: false,
     });
-    const files = await store.listAttachments(conversation.id);
+    // A file on an internal note is the agents' alone, as the note is.
+    const shown = new Set(messages.map(m => m.message.id));
+    const files = (await store.listAttachments(conversation.id)).filter(
+      f => !f.messageId || shown.has(f.messageId)
+    );
     return json({
       conversation: customerView(customer, conversation),
       messages: messages.map(m => ({
@@ -364,13 +369,23 @@ export function createHandler(support: Helpdesk) {
         customer = await support.resolveCustomer(request, { create: true });
       }
       const data = z
-        .object({ body: z.string().trim().min(1).max(20_000) })
+        .object({
+          body: z.string().trim().min(1).max(20_000),
+          attachments: z.array(uuid).max(MAX_ATTACHMENTS).default([]),
+        })
         .parse(await body());
+      if (
+        data.attachments.length > 0 &&
+        conversation.contactId !== customer.contact?.id
+      ) {
+        throw new HelpdeskError(403, 'Only the author can attach files');
+      }
       const message = await support.addCustomerMessage(
         request,
         customer,
         conversation,
-        data.body
+        data.body,
+        await stagedUploads(conversation, data.attachments)
       );
       return json({ id: message.id }, 201);
     }
@@ -499,13 +514,21 @@ export function createHandler(support: Helpdesk) {
     size: z.number().int().positive(),
   });
 
-  async function startUpload(conversation: Conversation, raw: unknown) {
+  async function startUpload(
+    conversation: Conversation,
+    raw: unknown,
+    /** Off for an agent: the cap is there to bound what a customer can store. */
+    capped = true
+  ) {
     if (!config.storage) throw new HelpdeskError(400, 'Uploads are disabled');
     const data = uploadInput.parse(raw);
     if (data.size > config.maxAttachmentBytes) {
       throw new HelpdeskError(413, 'File too large');
     }
-    if ((await store.countAttachments(conversation.id)) >= MAX_ATTACHMENTS) {
+    if (
+      capped &&
+      (await store.countCustomerAttachments(conversation.id)) >= MAX_ATTACHMENTS
+    ) {
       throw new HelpdeskError(429, 'Too many attachments');
     }
     const key = support.attachmentKey(conversation.id, data.filename);
@@ -538,7 +561,30 @@ export function createHandler(support: Helpdesk) {
     return { ok: true };
   }
 
-  async function download(conversation: Conversation, id: string) {
+  /**
+   * A file for a reply or a note waits, unlisted, for the message it is sent
+   * with: until then it is a row that is not `uploaded`, on no message.
+   */
+  async function stagedUploads(conversation: Conversation, ids: string[]) {
+    const files: Attachment[] = [];
+    for (const id of new Set(ids)) {
+      const file = await store.getAttachment(id);
+      if (!file || file.conversationId !== conversation.id || file.uploaded) {
+        throw new HelpdeskError(400, 'Unknown attachment');
+      }
+      if (!(await config.storage?.exists(file.key))) {
+        throw new HelpdeskError(409, 'Upload missing');
+      }
+      files.push(file);
+    }
+    return files;
+  }
+
+  async function download(
+    conversation: Conversation,
+    id: string,
+    { notes = false } = {}
+  ) {
     const attachment = uuid.safeParse(id).success
       ? await store.getAttachment(id)
       : null;
@@ -546,6 +592,13 @@ export function createHandler(support: Helpdesk) {
       !attachment?.uploaded ||
       attachment.conversationId !== conversation.id ||
       !config.storage
+    ) {
+      throw new HelpdeskError(404, 'Not found');
+    }
+    if (
+      !notes &&
+      attachment.messageId &&
+      (await store.getMessage(attachment.messageId))?.internal
     ) {
       throw new HelpdeskError(404, 'Not found');
     }
@@ -858,6 +911,7 @@ export function createHandler(support: Helpdesk) {
         )
       ),
       ai: Boolean(config.ai),
+      uploads: Boolean(config.storage),
       aiFeatures: await support.aiSettings(),
       auditLog: await support.canReadAudit(agent),
       features: config.features,
@@ -1247,6 +1301,7 @@ export function createHandler(support: Helpdesk) {
           body: z.string().trim().min(1).max(20_000),
           internal: z.boolean().default(false),
           notify: z.array(uuid).max(20).default([]),
+          attachments: z.array(uuid).max(MAX_ATTACHMENTS).default([]),
         })
         .parse(await body());
       const message = await support.addAgentMessage(
@@ -1254,10 +1309,25 @@ export function createHandler(support: Helpdesk) {
         conversation,
         data.body,
         data.internal,
-        data.notify
+        data.notify,
+        { files: await stagedUploads(conversation, data.attachments) }
       );
       return json({ id: message.id }, 201);
     }
+  );
+
+  agentRoute(
+    'POST',
+    'conversations/:id/attachments',
+    async ({ params, body }) =>
+      json(
+        await startUpload(
+          await requireConversation(params.id),
+          await body(),
+          false
+        ),
+        201
+      )
   );
 
   agentRoute('POST', 'conversations/:id/typing', async ({ params }) => {
@@ -1396,7 +1466,9 @@ export function createHandler(support: Helpdesk) {
     'GET',
     'conversations/:id/attachments/:attachmentId',
     async ({ params }) =>
-      download(await requireConversation(params.id), params.attachmentId)
+      download(await requireConversation(params.id), params.attachmentId, {
+        notes: true,
+      })
   );
 
   cannedRoute('GET', 'canned', async () =>

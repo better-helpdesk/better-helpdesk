@@ -1034,6 +1034,159 @@ describe('Widget', () => {
     ).toBeTruthy();
   });
 
+  it('attaches a file dropped on an open thread and sends it with the reply', async () => {
+    const sent: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = String(input);
+        if (url.startsWith('https://s3.test/')) return new Response(null);
+        if (url.includes('widget/session')) {
+          return new Response(
+            JSON.stringify({ ...session, conversations: [ownThread] })
+          );
+        }
+        if (init?.method === 'POST' && url.endsWith('/attachments/')) {
+          const { filename } = JSON.parse(String(init.body));
+          return filename === 'huge.png'
+            ? new Response('{"error":"File too large"}', { status: 413 })
+            : new Response(
+                '{"id":"f1","upload":{"url":"https://s3.test/up","fields":{}}}',
+                { status: 201 }
+              );
+        }
+        if (init?.method === 'POST' && url.endsWith('/messages/')) {
+          sent.push(JSON.parse(String(init.body)));
+          return new Response('{"id":"m2"}', { status: 201 });
+        }
+        if (url.endsWith('widget/conversations/c1/')) {
+          return new Response(
+            JSON.stringify({
+              conversation: ownThread,
+              messages: [
+                {
+                  id: 'm1',
+                  author: 'agent',
+                  name: 'Angelo',
+                  own: false,
+                  body: 'Can you send a screenshot?',
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                },
+              ],
+              attachments: [],
+            })
+          );
+        }
+        return new Response(JSON.stringify({ ok: true }));
+      })
+    );
+    const { createObjectURL, revokeObjectURL } = URL;
+    Object.assign(URL, {
+      createObjectURL: () => 'blob:shot',
+      revokeObjectURL: () => {},
+    });
+    onTestFinished(() => {
+      Object.assign(URL, { createObjectURL, revokeObjectURL });
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Messages/ }));
+    fireEvent.click(await screen.findByText('Export broken'));
+    const message = await screen.findByText('Can you send a screenshot?');
+    expect(screen.getByRole('button', { name: 'Attach file' })).toBeTruthy();
+    const drop = (name: string) =>
+      fireEvent.drop(message, {
+        dataTransfer: {
+          types: ['Files'],
+          files: [new File(['x'], name, { type: 'image/png' })],
+        },
+      });
+
+    drop('huge.png');
+    expect((await screen.findByRole('alert')).textContent).toMatch(
+      /^The file could not be attached\./
+    );
+    expect(screen.queryByAltText('huge.png')).toBeNull();
+
+    drop('shot.png');
+    const thumb = (await screen.findByAltText('shot.png')).closest('.thumb');
+    await waitFor(() => expect(thumb?.getAttribute('aria-busy')).toBe('false'));
+    const reply = screen.getByRole('textbox', { name: 'Write a reply…' });
+    reply.innerHTML = 'Here it is';
+    fireEvent.input(reply);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(sent).toEqual([{ body: 'Here it is', attachments: ['f1'] }])
+    );
+    await waitFor(() => expect(screen.queryByAltText('shot.png')).toBeNull());
+  });
+
+  it('takes an image dropped on a new message, and says so of a file it cannot take', async () => {
+    const calls = mockApi({
+      'widget/session': session,
+      ...posted,
+      '/attachments/': {
+        id: 'f1',
+        upload: { url: 'https://s3.test/up', fields: {} },
+      },
+    });
+    const { createObjectURL } = URL;
+    Object.assign(URL, { createObjectURL: () => 'blob:shot' });
+    onTestFinished(() => {
+      Object.assign(URL, { createObjectURL });
+    });
+    render(
+      <Widget
+        api="/api/support"
+        inbox="support"
+        locale="en"
+        errors={() => []}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open support' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Send us a message' })
+    );
+    await waitFor(() =>
+      expect(document.querySelector('form.form')).toBeTruthy()
+    );
+    const form = document.querySelector('form.form') as HTMLElement;
+    const drop = (name: string, type: string) =>
+      fireEvent.drop(form, {
+        dataTransfer: {
+          types: ['Files'],
+          files: [new File(['x'], name, { type })],
+        },
+      });
+
+    drop('archive.zip', 'application/zip');
+    expect((await screen.findByRole('alert')).textContent).toMatch(
+      /^The file could not be attached\./
+    );
+    drop('shot.png', 'image/png');
+    expect(await screen.findByAltText('shot.png')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    const box = within(form).getByRole('textbox');
+    box.innerHTML = 'See the picture';
+    fireEvent.input(box);
+    fireEvent.submit(form);
+    await waitFor(() =>
+      expect(
+        calls
+          .filter(c => c.method === 'POST' && c.url.endsWith('/attachments/'))
+          .map(c => c.body)
+      ).toEqual([{ filename: 'shot.png', contentType: 'image/png', size: 1 }])
+    );
+  });
+
   it('lets the author mark a thread resolved and says so when that fails', async () => {
     const summary = ownThread;
     let status = 'open';

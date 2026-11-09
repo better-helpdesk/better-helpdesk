@@ -58,6 +58,8 @@ export type Me = {
     Record<'contact' | 'company' | 'deal', CustomFieldDef[]>
   >;
   ai: boolean;
+  /** The host passed a `storage` adapter, so agents can attach files. */
+  uploads: boolean;
   /** What the team lets the AI do; all off without an AI adapter. */
   aiFeatures: AiSettings;
   /** This agent may read the audit log. */

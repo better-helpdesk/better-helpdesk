@@ -106,6 +106,8 @@ const gte = (field: string, value: unknown): Where => ({
 /** Agent requests that change nothing worth a supervisor's look. */
 export const UNAUDITED = new Set([
   'POST conversations/:id/typing',
+  // The message a file is sent with is the change; staging it is not one.
+  'POST conversations/:id/attachments',
   'POST notifications/seen',
 ]);
 /** The route resource an audit entry names, and the table its id is in. */
@@ -2110,8 +2112,29 @@ export function createStore(
       return adapter.create<Attachment>('attachment', values);
     },
 
-    async countAttachments(conversationId: string) {
-      return adapter.count('attachment', eq('conversationId', conversationId));
+    /**
+     * What counts against a customer's cap: every file in the conversation
+     * that an agent has not sent, so started uploads count before they land.
+     */
+    async countCustomerAttachments(conversationId: string) {
+      return adapter.count(
+        'attachment',
+        and(
+          eq('conversationId', conversationId),
+          or(
+            eq('messageId', null),
+            inSelect(
+              'messageId',
+              'message',
+              'id',
+              and(
+                eq('conversationId', conversationId),
+                ne('authorType', 'agent')
+              )
+            )
+          )
+        )
+      );
     },
 
     async getAttachment(id: string) {
