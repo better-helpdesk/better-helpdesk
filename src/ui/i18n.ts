@@ -141,6 +141,8 @@ const en = {
   'form.attach': 'Attach file',
   'form.pasteHint': 'You can also paste an image.',
   'form.remove': 'Remove',
+  'form.attachFailed':
+    'The file could not be attached. It may be too large, or neither an image, a PDF nor plain text.',
   'context.url': 'Page',
   'context.title': 'Page title',
   'context.userAgent': 'Browser',
@@ -796,6 +798,8 @@ const de: Record<MessageKey, string> = {
   'form.attach': 'Datei anhängen',
   'form.pasteHint': 'Sie können auch ein Bild einfügen.',
   'form.remove': 'Entfernen',
+  'form.attachFailed':
+    'Die Datei konnte nicht angehängt werden. Möglicherweise ist sie zu gross oder weder ein Bild noch ein PDF noch reiner Text.',
   'context.url': 'Seite',
   'context.title': 'Seitentitel',
   'context.userAgent': 'Browser',
@@ -1461,6 +1465,8 @@ const fr: Record<MessageKey, string> = {
   'form.attach': 'Joindre un fichier',
   'form.pasteHint': 'Vous pouvez aussi coller une image.',
   'form.remove': 'Retirer',
+  'form.attachFailed':
+    'Le fichier n’a pas pu être joint. Il est peut-être trop volumineux, ou ce n’est ni une image, ni un PDF, ni du texte brut.',
   'context.url': 'Page',
   'context.title': 'Titre de la page',
   'context.userAgent': 'Navigateur',
@@ -2115,6 +2121,8 @@ const it: Record<MessageKey, string> = {
   'form.attach': 'Allega file',
   'form.pasteHint': 'Può anche incollare un’immagine.',
   'form.remove': 'Rimuovi',
+  'form.attachFailed':
+    'Non è stato possibile allegare il file. Forse è troppo grande, oppure non è né un’immagine, né un PDF, né testo semplice.',
   'context.url': 'Pagina',
   'context.title': 'Titolo della pagina',
   'context.userAgent': 'Browser',

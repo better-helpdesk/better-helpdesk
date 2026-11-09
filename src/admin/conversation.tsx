@@ -3,7 +3,14 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { HostLink } from '../config';
 import { useResource } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
-import { filesByMessage, isInlineImage } from '../ui/files';
+import {
+  ATTACHABLE,
+  filesByMessage,
+  isInlineImage,
+  pastedFiles,
+  useFileDrop,
+  useStagedFiles,
+} from '../ui/files';
 import { relativeTime, translated } from '../ui/i18n';
 import { plainText, RichText } from '../ui/rich';
 import { isMac, RichEditor, type RichEditorHandle } from '../ui/rich-editor';
@@ -264,6 +271,11 @@ export function ConversationView({ id }: { id: string }) {
   );
   const composer = useRef<RichEditorHandle>(null);
   const toast = useToast();
+  const canAttach = !readOnly && me.uploads;
+  const files = useStagedFiles(api, `agent/conversations/${id}/attachments`);
+  const { staged, uploading, attach, unstage } = files;
+  const drop = useFileDrop(canAttach, attach);
+  const picker = useRef<HTMLInputElement>(null);
 
   const patch = async (values: Record<string, unknown>) => {
     await api(`agent/conversations/${id}`, { method: 'PATCH', body: values });
@@ -343,7 +355,7 @@ export function ConversationView({ id }: { id: string }) {
   const c = data.conversation;
 
   const send = async (resolve: boolean) => {
-    if (!body.trim() || busy) return;
+    if (!body.trim() || busy || uploading) return;
     setBusy('send');
     setError(null);
     try {
@@ -351,7 +363,12 @@ export function ConversationView({ id }: { id: string }) {
         ? mentioned.filter(m => body.includes(`@${m.label}`)).map(m => m.id)
         : [];
       await api(`agent/conversations/${id}/messages`, {
-        body: { body, internal, ...(notify.length > 0 && { notify }) },
+        body: {
+          body,
+          internal,
+          ...(notify.length > 0 && { notify }),
+          ...(staged.length > 0 && { attachments: staged.map(f => f.id) }),
+        },
       });
     } catch {
       setError('send');
@@ -363,6 +380,7 @@ export function ConversationView({ id }: { id: string }) {
     const mode = internal ? 'note' : 'reply';
     writeUnsent(unsentKey, { ...readUnsent(unsentKey), [mode]: '' });
     setUnsent(d => ({ ...d, [mode]: '' }));
+    unstage(staged);
     if (internal) setMentioned([]);
     try {
       if (resolve) await patch({ status: 'resolved' });
@@ -593,7 +611,8 @@ export function ConversationView({ id }: { id: string }) {
   };
 
   return (
-    <div className="sa" ref={root}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: a file dropped anywhere on the conversation is attached; Attach file is the keyboard's way.
+    <div className="sa" ref={root} data-dropping={drop.dropping} {...drop.zone}>
       <div className="sa-page-head sa-convo-head">
         <a
           className="sa-btn sa-back"
@@ -1013,6 +1032,13 @@ export function ConversationView({ id }: { id: string }) {
             <form
               className="sa-composer"
               data-internal={internal}
+              onPasteCapture={e => {
+                const pasted = canAttach ? pastedFiles(e.clipboardData) : [];
+                if (pasted.length === 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                attach(pasted);
+              }}
               onSubmit={e => {
                 e.preventDefault();
                 void send(false);
@@ -1128,12 +1154,31 @@ export function ConversationView({ id }: { id: string }) {
                   ))}
                 </div>
               )}
-              {error && (
+              {staged.length > 0 && (
+                <ul className="sa-staged">
+                  {staged.map(file => (
+                    <li key={file.key} aria-busy={!file.id}>
+                      {file.url && <img src={file.url} alt="" />}
+                      <span>{file.name}</span>
+                      <button
+                        type="button"
+                        className="sa-btn sa-ghost sa-quiet"
+                        aria-label={`${t('form.remove')}: ${file.name}`}
+                        onClick={() => unstage([file])}>
+                        <Svg d={paths.x} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(error || files.failed) && (
                 <p className="sa-error" role="alert">
                   {t(
                     error === 'resolve'
                       ? 'admin.sentNotResolved'
-                      : 'admin.error'
+                      : error
+                        ? 'admin.error'
+                        : 'form.attachFailed'
                   )}
                 </p>
               )}
@@ -1143,7 +1188,7 @@ export function ConversationView({ id }: { id: string }) {
                     type="submit"
                     className="sa-btn sa-primary"
                     title={isMac() ? '⌘ ↵' : 'Ctrl ↵'}
-                    disabled={busy !== null || !body.trim()}>
+                    disabled={busy !== null || !body.trim() || uploading}>
                     {busy === 'send' ? t('admin.sending') : t('admin.send')}
                   </button>
                   {/* Live while Send is not: resolving needs no reply. */}
@@ -1164,7 +1209,9 @@ export function ConversationView({ id }: { id: string }) {
                                   ? 'Meta+Shift+Enter'
                                   : 'Control+Shift+Enter'
                               }
-                              disabled={busy !== null || !body.trim()}
+                              disabled={
+                                busy !== null || !body.trim() || uploading
+                              }
                               onClick={() => {
                                 close();
                                 void send(true);
@@ -1208,6 +1255,28 @@ export function ConversationView({ id }: { id: string }) {
                   <kbd>{isMac() ? '⌘' : 'Ctrl'} ↵</kbd> {t('admin.send')}
                 </span>
                 <span className="sa-grow" />
+                {canAttach && (
+                  <>
+                    <button
+                      type="button"
+                      className="sa-btn sa-ghost"
+                      onClick={() => picker.current?.click()}>
+                      <Svg d={paths.clip} />
+                      {t('form.attach')}
+                    </button>
+                    <input
+                      ref={picker}
+                      type="file"
+                      accept={ATTACHABLE}
+                      multiple
+                      hidden
+                      onChange={e => {
+                        attach(e.target.files ?? []);
+                        e.target.value = '';
+                      }}
+                    />
+                  </>
+                )}
                 {me.aiFeatures.draft && (
                   <button
                     type="button"

@@ -140,8 +140,8 @@ Point your status page at `GET {basePath}/health/`, which answers `{ ok: true }`
 If your app sends a `Content-Security-Policy`, the helpdesk needs these sources in it:
 
 - `style-src 'unsafe-inline'`: the widget puts a `<style>` element in its shadow root, and the agent UI renders one in the page. Neither takes a nonce.
-- `connect-src` with the origin of your storage bucket's upload URL, if you [store attachments](/docs/inbox/attachments): the widget posts files straight to it.
-- `img-src blob:` and the origin of your storage bucket's download URL: the widget previews an image the customer attaches from a local `blob:` URL before it is sent, and both the widget and the agent UI show image attachments from the URL `presignDownload` returns. Add the origin of your agents' avatars too, if `identify` returns an `image`.
+- `connect-src` with the origin of your storage bucket's upload URL, if you [store attachments](/docs/inbox/attachments): the widget and the agent UI post files straight to it.
+- `img-src blob:` and the origin of your storage bucket's download URL: the widget and the agent UI preview an attached image from a local `blob:` URL before it is sent, and both the widget and the agent UI show image attachments from the URL `presignDownload` returns. Add the origin of your agents' avatars too, if `identify` returns an `image`.
 
 With a [captcha](/docs/widget/bot-protection#in-your-content-security-policy), the provider's origin goes in `script-src` and `frame-src` too.
 

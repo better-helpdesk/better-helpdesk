@@ -197,7 +197,7 @@ The primary key is the pair.
 | `filename` | `text` | no | | |
 | `content_type` | `text` | no | | |
 | `size` | `integer` | no | | Bytes. |
-| `uploaded` | `boolean` | no | `false` | The file is in storage. |
+| `uploaded` | `boolean` | no | `false` | The file is in storage and shows in the conversation. A file added to a reply or a note stays `false` until its message is sent. |
 | `created_at` | `timestamptz` | no | `now()` | |
 
 The files themselves live with the [storage adapter](/docs/reference/adapters#storage).

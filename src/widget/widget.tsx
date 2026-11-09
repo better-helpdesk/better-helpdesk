@@ -19,7 +19,15 @@ import {
   useResource,
 } from '../ui/api';
 import { CodeBlock } from '../ui/code-block';
-import { filesByMessage, isInlineImage } from '../ui/files';
+import {
+  ATTACHABLE,
+  filesByMessage,
+  isAttachable,
+  isInlineImage,
+  pastedFiles,
+  useFileDrop,
+  useStagedFiles,
+} from '../ui/files';
 import {
   dateLocale,
   nextWorkday,
@@ -928,6 +936,7 @@ export function Widget(props: WidgetProps) {
               realtime={Boolean(data?.realtime)}
               who={who ?? null}
               ratingScale={data?.ratingScale ?? 2}
+              uploads={Boolean(data?.uploads)}
             />
           )}
           {showNav && (
@@ -1038,6 +1047,36 @@ const CONTEXT_KEYS = [
 ] as const;
 
 const TECHNICAL = new Set(['bug', 'feature', 'question']);
+
+function Thumbs({
+  files,
+  t,
+  onRemove,
+}: {
+  files: { id: string; name: string; url?: string; busy?: boolean }[];
+  t: Translate;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="thumbs">
+      {files.map(file => (
+        <div key={file.id} className="thumb" aria-busy={file.busy}>
+          {file.url ? (
+            <img src={file.url} alt={file.name} />
+          ) : (
+            <span>{file.name}</span>
+          )}
+          <button
+            type="button"
+            aria-label={t('form.remove')}
+            onClick={() => onRemove(file.id)}>
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type CaptchaApi = {
   render(
@@ -1289,6 +1328,21 @@ function NewMessage({
       },
     ]);
 
+  // A dropped file can be of any type; the picker and a paste already narrow theirs.
+  const [refused, setRefused] = useState(false);
+  const drop = useFileDrop(session.uploads, dropped => {
+    const taken = dropped.filter(isAttachable);
+    setRefused(taken.length < dropped.length);
+    for (const file of taken) addFile(file, file.name);
+  });
+  const thumbs = files.length > 0 && (
+    <Thumbs
+      files={files}
+      t={t}
+      onRemove={id => setFiles(list => list.filter(f => f.id !== id))}
+    />
+  );
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     // The editor is not a form control, so an empty message is caught here.
@@ -1456,9 +1510,11 @@ function NewMessage({
   return (
     <form
       className="form"
+      data-dropping={drop.dropping}
+      {...drop.zone}
       onSubmit={submit}
       onPaste={event => {
-        if (!technical || !session.uploads) return;
+        if (!session.uploads) return;
         for (const item of event.clipboardData.items) {
           const file = item.getAsFile();
           if (file?.type.startsWith('image/')) {
@@ -1645,7 +1701,7 @@ function NewMessage({
                   {t('form.attach')}
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain"
+                    accept={ATTACHABLE}
                     hidden
                     onChange={e => {
                       for (const file of e.target.files ?? []) {
@@ -1657,27 +1713,7 @@ function NewMessage({
                 </label>
               </div>
             )}
-            {files.length > 0 && (
-              <div className="thumbs">
-                {files.map(file => (
-                  <div key={file.id} className="thumb">
-                    {file.url ? (
-                      <img src={file.url} alt={file.name} />
-                    ) : (
-                      <span>{file.name}</span>
-                    )}
-                    <button
-                      type="button"
-                      aria-label={t('form.remove')}
-                      onClick={() =>
-                        setFiles(list => list.filter(f => f.id !== file.id))
-                      }>
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {thumbs}
             {contextKeys.length > 0 && (
               <fieldset className="sent-fields" disabled={sent}>
                 <details className="box context">
@@ -1749,6 +1785,12 @@ function NewMessage({
       </div>
       <div className="footer">
         {pinned && messageField}
+        {!technical && thumbs}
+        {refused && (
+          <p className="error" role="alert">
+            {t('form.attachFailed')}
+          </p>
+        )}
         {session.captcha && !sent && (
           <Captcha
             client={session.captcha}
@@ -1892,11 +1934,14 @@ function Thread({
   realtime,
   who,
   ratingScale,
+  uploads,
 }: {
   api: Api;
   apiBase: string;
   /** Only a cookie session can open a plain download link. */
   linkFiles: boolean;
+  /** The host stores attachments, so the thread's author can add files to a reply. */
+  uploads: boolean;
   t: Translate;
   locale: Locale;
   id: string;
@@ -1946,6 +1991,10 @@ function Thread({
   const end = useRef<HTMLDivElement>(null);
   const editor = useRef<RichEditorHandle>(null);
   const count = thread.data?.messages.length ?? 0;
+  const files = useStagedFiles(api, `widget/conversations/${id}/attachments`);
+  const canAttach = uploads && Boolean(thread.data?.conversation.own);
+  const drop = useFileDrop(canAttach, files.attach);
+  const picker = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (count === 0) return;
@@ -1957,14 +2006,20 @@ function Thread({
   }, [count, id, api, onSeen]);
 
   const send = async () => {
-    if (!reply.trim() || sending) return;
+    if (!reply.trim() || sending || files.uploading) return;
     setSending(true);
     setFailed(false);
     try {
       await api(`widget/conversations/${id}/messages`, {
-        body: { body: reply },
+        body: {
+          body: reply,
+          ...(files.staged.length > 0 && {
+            attachments: files.staged.map(f => f.id),
+          }),
+        },
       });
       setReply('');
+      files.unstage(files.staged);
       await thread.refresh();
     } catch {
       // The draft stays in the box so a retry sends the same text.
@@ -2023,7 +2078,8 @@ function Thread({
 
   return (
     <>
-      <div className="body">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: a file dropped on the thread is attached; the composer's button is the keyboard's way. */}
+      <div className="body" {...drop.zone}>
         {(typedSubject || status) && (
           <div>
             {typedSubject && (
@@ -2160,12 +2216,59 @@ function Thread({
         </div>
         <div ref={end} />
       </div>
+      {files.staged.length > 0 && (
+        <div className="composer-files">
+          <Thumbs
+            files={files.staged.map(f => ({
+              id: f.key,
+              name: f.name,
+              url: f.url,
+              busy: !f.id,
+            }))}
+            t={t}
+            onRemove={key =>
+              files.unstage(files.staged.filter(f => f.key === key))
+            }
+          />
+        </div>
+      )}
       <form
         className="composer"
+        data-dropping={drop.dropping}
+        {...drop.zone}
+        onPasteCapture={event => {
+          const pasted = canAttach ? pastedFiles(event.clipboardData) : [];
+          if (pasted.length === 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          files.attach(pasted);
+        }}
         onSubmit={event => {
           event.preventDefault();
           void send();
         }}>
+        {canAttach && (
+          <>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={t('form.attach')}
+              onClick={() => picker.current?.click()}>
+              <Svg d={Icon.clip} />
+            </button>
+            <input
+              ref={picker}
+              type="file"
+              accept={ATTACHABLE}
+              multiple
+              hidden
+              onChange={event => {
+                files.attach(event.target.files ?? []);
+                event.target.value = '';
+              }}
+            />
+          </>
+        )}
         <RichEditor
           ref={editor}
           className="rt-reply"
@@ -2187,13 +2290,18 @@ function Thread({
           type="submit"
           className="send"
           aria-label={failed ? t('thread.retry') : t('thread.send')}
-          disabled={sending || !reply.trim()}>
+          disabled={sending || !reply.trim() || files.uploading}>
           <Svg d={Icon.send} />
         </button>
       </form>
       {failed && (
         <p className="error composer-error" role="alert">
           {t('thread.failed')}
+        </p>
+      )}
+      {files.failed && (
+        <p className="error composer-error" role="alert">
+          {t('form.attachFailed')}
         </p>
       )}
       {data.conversation.own && data.conversation.status !== 'resolved' && (

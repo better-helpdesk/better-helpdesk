@@ -32,7 +32,7 @@ type StorageAdapter = {
   type={{
     presignUpload: {
       type: '(key, opts) => Promise<{ url, fields }>',
-      description: <>Called when a customer starts an upload. The browser sends a multipart <code>POST</code> to <code>url</code> with every entry of <code>fields</code>, then the file as <code>file</code>. <code>maxBytes</code> is <code>maxAttachmentBytes</code>. An S3 presigned POST has this shape. The package checks only the type and size the browser declares, so the signed upload must bind <code>contentType</code> and the length range up to <code>maxBytes</code>; a presigned POST does this with conditions.</>,
+      description: <>Called when a customer or an agent starts an upload. The browser sends a multipart <code>POST</code> to <code>url</code> with every entry of <code>fields</code>, then the file as <code>file</code>. <code>maxBytes</code> is <code>maxAttachmentBytes</code>. An S3 presigned POST has this shape. The package checks only the type and size the browser declares, so the signed upload must bind <code>contentType</code> and the length range up to <code>maxBytes</code>; a presigned POST does this with conditions.</>,
     },
     presignDownload: {
       type: '(key, filename) => Promise<string>',
@@ -57,8 +57,9 @@ Keys have the form `support/{conversationId}/{16 hex characters}-{filename}`, wh
 
 | Limit | Value |
 | --- | --- |
-| Content types a customer may upload | `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `application/pdf`, `text/plain` |
-| Attachments per conversation | 20 |
+| Content types a customer or an agent may upload | `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `application/pdf`, `text/plain` |
+| Attachments a customer may add to a conversation | 20 |
+| Attachments an agent may add to a message | 20 |
 | Size | `maxAttachmentBytes`, 10 MiB by default |
 
 Of an inbound email's first 20 attachments, those within the size are stored. A content type outside the list is stored as `application/octet-stream`.
