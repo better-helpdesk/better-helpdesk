@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { PiBookOpenTextBold } from 'react-icons/pi';
+import { PiBookOpenTextBold, PiHeartFill } from 'react-icons/pi';
 import { SiGithub, SiNpm } from 'react-icons/si';
 
 import { ButtonIcon } from './icons';
@@ -69,6 +69,11 @@ export function SiteFooter() {
         <div>
           <b>Better Helpdesk</b>
           <p>The open-source helpdesk that lives inside your Next.js app.</p>
+          <p className="f-made">
+            Made with <PiHeartFill role="img" aria-label="love" /> by{' '}
+            <a href="https://www.devguard.ch">devguard</a> and hosted at{' '}
+            <a href="https://www.divio.com">Divio</a>.
+          </p>
         </div>
       </div>
       <ul>
