@@ -534,6 +534,30 @@ describe('bounded input', () => {
     expect(stored.every(a => a.contentType !== 'text/html')).toBe(true);
   });
 
+  it('drops a mail’s attachments when its inbox has uploads off', async () => {
+    const closed = createHarness({
+      inboxes: { support: { uploads: false } },
+    });
+    try {
+      await closed.support.handleInbound(
+        mail({
+          attachments: [
+            {
+              filename: 'f.png',
+              contentType: 'image/png',
+              content: new Uint8Array([1]),
+            },
+          ],
+        })
+      );
+      expect(await closed.count('conversation')).toBe(1);
+      expect(await closed.count('attachment')).toBe(0);
+      expect(closed.objects.size).toBe(0);
+    } finally {
+      await closed.close();
+    }
+  });
+
   it('ignores a plus-address reference too large for a conversation number', async () => {
     await h.support.handleInbound(
       mail({ to: ['support+DG-99999999999@devguard.test'] })

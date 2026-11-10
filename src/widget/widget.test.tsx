@@ -106,6 +106,7 @@ const ownThread = {
   status: 'open',
   inbox: 'support',
   own: true,
+  uploads: true,
   unread: false,
   sharedWithCompany: false,
   lastMessageAt: '2026-01-01T00:00:00.000Z',

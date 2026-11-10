@@ -73,6 +73,11 @@ inboxes: {
       default: 'false',
       description: <>Send a <a href="/docs/email/messages#customer-receipt"><code>customer-receipt</code></a> when a conversation opens here, for inboxes whose people are not signed in.</>,
     },
+    uploads: {
+      type: 'boolean',
+      default: 'true',
+      description: <>Whether the people writing in here may attach files. <code>false</code> hides the widget's attach controls and ignores dropped and pasted files on this inbox, refuses an upload request for one of its conversations with 400, and drops the attachments of inbound email that lands here, as a host without <code>storage</code> does. Agents still attach files to their replies. For a <code>public</code> inbox whose visitors should not fill your bucket; see <a href="/docs/inbox/attachments">Attachments</a>.</>,
+    },
     bookingUrl: {
       type: 'string',
       description: 'A link, such as a meeting calendar, offered in the widget once someone has written, and in the receipt.',

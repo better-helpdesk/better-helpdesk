@@ -1399,7 +1399,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
             },
           ]);
         }
-        const files = await uploadInbound(conversation.id, mail);
+        const files = await uploadInbound(
+          conversation.id,
+          conversation.inbox,
+          mail
+        );
         const message = await store.appendMessage({
           conversationId: conversation.id,
           authorType: 'contact',
@@ -1415,7 +1419,10 @@ export function createHelpdesk(input: HelpdeskConfig) {
     }
 
     const conversationId = randomUUID();
-    const files = await uploadInbound(conversationId, mail);
+    const inbox = config.inboundInbox ?? Object.keys(config.inboxes)[0];
+    const type = config.types[0];
+    if (!inbox || !type) throw new Error('No inbox or type configured');
+    const files = await uploadInbound(conversationId, inbox, mail);
     let contact = mail.verified
       ? await store.findContactByIdentity('email', from, { verifiedOnly: true })
       : null;
@@ -1425,9 +1432,6 @@ export function createHelpdesk(input: HelpdeskConfig) {
         { channel: 'email', externalId: from, verified: mail.verified }
       );
     }
-    const inbox = config.inboundInbox ?? Object.keys(config.inboxes)[0];
-    const type = config.types[0];
-    if (!inbox || !type) throw new Error('No inbox or type configured');
     const company = contact.companyId
       ? await store.getCompany(contact.companyId)
       : null;
@@ -1483,9 +1487,13 @@ export function createHelpdesk(input: HelpdeskConfig) {
    * and a retry skips a message already stored, so a write that came first
    * would lose the files and the follow-ups for good.
    */
-  async function uploadInbound(conversationId: string, mail: InboundMessage) {
+  async function uploadInbound(
+    conversationId: string,
+    inbox: string,
+    mail: InboundMessage
+  ) {
     const files: Omit<Insert<'attachment'>, 'messageId'>[] = [];
-    if (!config.storage) return files;
+    if (!config.storage || !config.customerUploads(inbox)) return files;
     for (const file of mail.attachments.slice(0, MAX_ATTACHMENTS)) {
       if (file.content.byteLength > config.maxAttachmentBytes) continue;
       // Kept, but never served as a type the widget would refuse.

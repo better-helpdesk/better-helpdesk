@@ -565,6 +565,52 @@ describe('anonymous visitors', () => {
     }
   });
 
+  it('refuses customer uploads on an inbox with uploads off, and leaves agents theirs', async () => {
+    const closed = createHarness({
+      inboxes: {
+        support: {},
+        sales: { public: true, uploads: false },
+      },
+    });
+    try {
+      const session = await closed.call('GET', 'widget/session?inbox=sales');
+      expect(session.data.uploads).toBe(false);
+      expect(
+        (await closed.call('GET', 'widget/session?inbox=support')).data.uploads
+      ).toBe(true);
+
+      const opened = await closed.call('POST', 'widget/conversations', {
+        body: salesBody,
+      });
+      const { conversation, visitorToken } = opened.data;
+      const headers = { 'x-helpdesk-visitor': visitorToken };
+      const thread = await closed.call(
+        'GET',
+        `widget/conversations/${conversation.id}`,
+        { headers }
+      );
+      expect(thread.data.conversation.uploads).toBe(false);
+      const file = { filename: 'a.png', contentType: 'image/png', size: 10 };
+      const refused = await closed.call(
+        'POST',
+        `widget/conversations/${conversation.id}/attachments`,
+        { headers, body: file }
+      );
+      expect(refused.status).toBe(400);
+
+      closed.addUser('agent', { isAgent: true });
+      const agents = await closed.call(
+        'POST',
+        `agent/conversations/${conversation.id}/attachments`,
+        { user: 'agent', body: file }
+      );
+      expect(agents.status).toBe(201);
+      expect(await closed.count('attachment')).toBe(1);
+    } finally {
+      await closed.close();
+    }
+  });
+
   it('rate-limits anonymous posts per IP', async () => {
     const limited = createHarness({ anonymousRateLimit: 2 });
     try {

@@ -43,7 +43,7 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | `PATCH` | `widget/conversations/{id}` | Author | Shares it with the company, or marks it resolved. |
 | `POST` | `widget/conversations/{id}/rating` | Author | Rates it `good` or `bad`, with an optional comment. |
 | `POST` | `widget/conversations/{id}/seen` | Can see | Marks it read by its author. |
-| `POST` | `widget/conversations/{id}/attachments` | Author | Starts an upload and answers a presigned form. |
+| `POST` | `widget/conversations/{id}/attachments` | Author | Starts an upload and answers a presigned form; 400 without `storage` or on an inbox with `uploads: false`. |
 | `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done, as a file of the opening message. A file for a later message is sent with it instead. |
 | `GET` | `widget/conversations/{id}/attachments/{attachmentId}` | Can see | Redirects to a presigned download URL. |
 | `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
