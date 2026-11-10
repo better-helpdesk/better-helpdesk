@@ -172,7 +172,8 @@ Because the helpdesk runs in your app, three things work that a helpdesk
 next to your app cannot offer.
 
 **Support data joins your own tables.** Open conversations per plan, in the
-database you already query:
+database you already query (Postgres here; the
+[reporting guide](https://better-helpdesk.com/docs/database/reporting) covers the others):
 
 ```sql
 select o.plan, count(*) as open
@@ -199,7 +200,7 @@ lands on their timeline:
 
 ```ts
 const token = signIdentityToken(
-  { sub: user.id, email: user.email, email_verified: true, name: user.name },
+  { sub: user.id, email: user.email, email_verified: user.emailVerified, name: user.name },
   process.env.HELPDESK_IDENTITY_SECRET!,
   { expiresInSeconds: 60 }
 );
