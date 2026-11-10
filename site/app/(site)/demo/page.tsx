@@ -12,7 +12,7 @@ import { pageMeta } from '../../../lib/seo';
 import { ButtonIcon } from '../components/icons';
 import { SiteFooter, SiteHeader } from '../components/site-chrome';
 import { currentRole, RoleSwitcher } from './chrome';
-import { BrokenButton, ResetCountdown } from './parts';
+import { BrokenButton, ResetCountdown, RowsSeen } from './parts';
 
 export const metadata: Metadata = pageMeta({
   title: 'Demo · Better Helpdesk',
@@ -105,6 +105,7 @@ export default async function Demo() {
                   <pre>
                     <code>{NEWEST_ROWS_SQL}</code>
                   </pre>
+                  <RowsSeen />
                   {rows === null ? (
                     <p>The database did not answer just now.</p>
                   ) : rows.length === 0 ? (

@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://better-helpdesk.com/demo/"><img alt="A customer asks a question in the widget, an agent answers from the inbox, and the reply appears in the widget" src="https://raw.githubusercontent.com/better-helpdesk/better-helpdesk/main/.github/assets/loop.gif" width="880"></a>
+  <a href="https://better-helpdesk.com/demo/?utm_source=readme"><img alt="A customer asks a question in the widget, an agent answers from the inbox, and the reply appears in the widget" src="https://raw.githubusercontent.com/better-helpdesk/better-helpdesk/main/.github/assets/loop.gif" width="880"></a>
 </p>
 
 <p align="center">
-  <a href="https://better-helpdesk.com/demo/"><b>Try the live demo, no install</b></a>
+  <a href="https://better-helpdesk.com/demo/?utm_source=readme"><b>Try the live demo, no install</b></a>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
   <a href="#features">Features</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="https://better-helpdesk.com/docs">Docs</a> ·
-  <a href="https://better-helpdesk.com/demo/">Demo</a> ·
+  <a href="https://better-helpdesk.com/demo/?utm_source=readme">Demo</a> ·
   <a href="https://github.com/better-helpdesk/better-helpdesk/releases">Releases</a>
 </p>
 
@@ -165,6 +165,65 @@ import { HelpdeskWidget } from 'better-helpdesk/widget';
 
 `lib/helpdesk.ts` builds the helpdesk from your database and your session;
 step 4 below has it in full.
+
+## Inside, not next to
+
+Because the helpdesk runs in your app, three things work that a helpdesk
+next to your app cannot offer.
+
+**Support data joins your own tables.** Open conversations per plan, in the
+database you already query (Postgres here; the
+[reporting guide](https://better-helpdesk.com/docs/database/reporting) covers the others):
+
+```sql
+select o.plan, count(*) as open
+from helpdesk.conversation c
+join helpdesk.company co on co.id = c.company_id
+join organizations o on o.id::text = co.external_org_id  -- your table
+where c.status = 'open'
+group by o.plan;
+```
+
+**Agents see what your app knows.** `resolveContext` reads your own tables,
+and the result shows beside every conversation of that organization:
+
+```ts
+resolveContext: async externalOrgId => {
+  const org = await db.organization.findUnique({ where: { id: externalOrgId } });
+  return org ? { Plan: org.plan, Seats: `${org.seatsUsed} of ${org.seats}` } : {};
+},
+```
+
+**Your code calls it as a function.** No API token, no webhook, no network
+hop. A billing webhook opens a conversation for the customer, and an upgrade
+lands on their timeline:
+
+```ts
+const token = signIdentityToken(
+  { sub: user.id, email: user.email, email_verified: user.emailVerified, name: user.name },
+  process.env.HELPDESK_IDENTITY_SECRET!,
+  { expiresInSeconds: 60 }
+);
+await helpdesk.createConversation(
+  new Request(request.url, { headers: { 'x-helpdesk-identity': token } }),
+  {
+    inbox: 'billing',
+    type: 'question',
+    subject: `Payment failed for invoice ${invoice.number}`,
+    body: `The card on file was declined for invoice ${invoice.number}.`,
+  }
+);
+
+await helpdesk.track({
+  externalUserId: user.id,
+  event: 'plan.upgraded',
+  props: { from: 'starter', to: 'team' },
+});
+```
+
+[Report from your own database](https://better-helpdesk.com/docs/database/reporting) and
+[Call the helpdesk from your own code](https://better-helpdesk.com/docs/app/own-code)
+have the rest.
 
 ## Quickstart
 
@@ -309,7 +368,7 @@ The pages are MDX in [`site/content/docs`](site/content/docs).
 ## Demo
 
 Try it without installing anything at
-[better-helpdesk.com/demo](https://better-helpdesk.com/demo/): write in as a
+[better-helpdesk.com/demo](https://better-helpdesk.com/demo/?utm_source=readme): write in as a
 customer, answer as the agent, and see the rows land in Postgres. Everyone
 shares that inbox, and it starts over every quarter hour.
 

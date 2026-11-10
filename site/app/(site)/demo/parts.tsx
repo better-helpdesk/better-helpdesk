@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import posthog from 'posthog-js';
+import { useEffect, useRef, useState } from 'react';
 
 import { shatter } from './glass';
 
@@ -72,4 +73,19 @@ export function BrokenButton() {
       Press the broken button
     </button>
   );
+}
+
+/** Reports once that the visitor scrolled as far as the database rows. */
+export function RowsSeen() {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const seen = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      posthog.capture('demo_db_peeked');
+      seen.disconnect();
+    });
+    if (ref.current) seen.observe(ref.current);
+    return () => seen.disconnect();
+  }, []);
+  return <span ref={ref} />;
 }
