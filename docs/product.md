@@ -68,7 +68,8 @@ npm publish on 28 September 2026 and the 0.x releases between. The website
 at better-helpdesk.com runs the package for its own widget and inbox, and
 the documentation lives at better-helpdesk.com/docs (sources in
 `site/content/docs/`). From 1.0, a minor release adds and a major release
-may change the API or the schema. No production deployments yet. Two
+may change the API or the schema. devguard, the maintainer's own company,
+runs it in production. Two
 companies are about to deploy it as design partners, and their feedback
 drives the roadmap. They are not named in this repository, and nothing of
 theirs goes into tests, fixtures, issues or pull requests.
