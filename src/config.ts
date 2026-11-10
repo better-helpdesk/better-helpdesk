@@ -195,6 +195,12 @@ export type InboxConfig = {
   privacyUrl?: Partial<Record<Locale, string>>;
   /** Send a receipt when someone writes in; for inboxes whose people are not signed in. */
   receipt?: boolean;
+  /**
+   * False, and nobody writing in here can attach files, by widget or email,
+   * even with `storage` set; agents still can. For a public inbox whose
+   * visitors should not fill the host's bucket.
+   */
+  uploads?: boolean;
   /** Offered once someone has written, in the widget and the receipt; e.g. a meeting calendar. */
   bookingUrl?: string;
   /** The booking link in emails, e.g. through a redirect that counts clicks; `bookingUrl` when unset. */
@@ -488,6 +494,8 @@ export type ResolvedConfig = HelpdeskConfig & {
   teamClosed: string[];
   /** An inbox's hours with the team's closed days added; undefined when it has none. */
   hoursOf(inbox: string): BusinessHours | undefined;
+  /** Whether people writing in on this inbox may attach files. */
+  customerUploads(inbox: string): boolean;
 };
 
 export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
@@ -574,6 +582,11 @@ export function resolveConfig(config: HelpdeskConfig): ResolvedConfig {
         : undefined;
       return hours && withClosed(hours, resolved.teamClosed);
     },
+    customerUploads: inbox =>
+      Boolean(config.storage) &&
+      (Object.hasOwn(config.inboxes, inbox)
+        ? config.inboxes[inbox]?.uploads !== false
+        : true),
   };
   // The store starts and pauses the clocks itself, so every status change keeps them right.
   resolved.slaClock = slaClockFor(resolved);

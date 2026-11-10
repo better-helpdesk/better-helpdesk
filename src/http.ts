@@ -163,6 +163,7 @@ export function createHandler(support: Helpdesk) {
           ? 'open'
           : 'pending',
     inbox: c.inbox,
+    uploads: config.customerUploads(c.inbox),
     sharedWithCompany: c.sharedWithCompany,
     own: c.contactId === customer.contact?.id,
     lastMessageAt: c.lastMessageAt,
@@ -256,7 +257,7 @@ export function createHandler(support: Helpdesk) {
       orgs: await support.namedOrgs(customer.identity),
       types: config.types,
       help: Boolean(config.help),
-      uploads: Boolean(config.storage),
+      uploads: config.customerUploads(key),
       realtime: Boolean(config.realtime),
       captcha:
         config.captcha &&
@@ -517,16 +518,21 @@ export function createHandler(support: Helpdesk) {
   async function startUpload(
     conversation: Conversation,
     raw: unknown,
-    /** Off for an agent: the cap is there to bound what a customer can store. */
-    capped = true
+    /** Off for an agent: the cap and an inbox's `uploads: false` bound what a customer can store. */
+    customer = true
   ) {
-    if (!config.storage) throw new HelpdeskError(400, 'Uploads are disabled');
+    if (
+      !config.storage ||
+      (customer && !config.customerUploads(conversation.inbox))
+    ) {
+      throw new HelpdeskError(400, 'Uploads are disabled');
+    }
     const data = uploadInput.parse(raw);
     if (data.size > config.maxAttachmentBytes) {
       throw new HelpdeskError(413, 'File too large');
     }
     if (
-      capped &&
+      customer &&
       (await store.countCustomerAttachments(conversation.id)) >= MAX_ATTACHMENTS
     ) {
       throw new HelpdeskError(429, 'Too many attachments');

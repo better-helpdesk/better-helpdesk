@@ -88,6 +88,8 @@ type Summary = {
   kind?: 'chat' | 'ticket';
   status: string;
   own: boolean;
+  /** The host stores attachments and this inbox takes them, so the author can add files to a reply. */
+  uploads?: boolean;
   unread: boolean;
   sharedWithCompany: boolean;
   lastMessageAt: string;
@@ -936,7 +938,6 @@ export function Widget(props: WidgetProps) {
               realtime={Boolean(data?.realtime)}
               who={who ?? null}
               ratingScale={data?.ratingScale ?? 2}
-              uploads={Boolean(data?.uploads)}
             />
           )}
           {showNav && (
@@ -1934,14 +1935,11 @@ function Thread({
   realtime,
   who,
   ratingScale,
-  uploads,
 }: {
   api: Api;
   apiBase: string;
   /** Only a cookie session can open a plain download link. */
   linkFiles: boolean;
-  /** The host stores attachments, so the thread's author can add files to a reply. */
-  uploads: boolean;
   t: Translate;
   locale: Locale;
   id: string;
@@ -1992,7 +1990,9 @@ function Thread({
   const editor = useRef<RichEditorHandle>(null);
   const count = thread.data?.messages.length ?? 0;
   const files = useStagedFiles(api, `widget/conversations/${id}/attachments`);
-  const canAttach = uploads && Boolean(thread.data?.conversation.own);
+  const canAttach = Boolean(
+    thread.data?.conversation.uploads && thread.data.conversation.own
+  );
   const drop = useFileDrop(canAttach, files.attach);
   const picker = useRef<HTMLInputElement>(null);
 
