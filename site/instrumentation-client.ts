@@ -23,4 +23,21 @@ if (process.env.NODE_ENV === 'production') {
     ).detail;
     posthog.capture('widget_message_sent', { inbox, type });
   });
+  // The agent UI emits no event for a reply, so the demo's own API call is the signal.
+  // ponytail: wraps fetch; listen for an agent UI event instead once the package has one.
+  const send = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    const response = await send(input, init);
+    if (
+      response.ok &&
+      init?.method === 'POST' &&
+      typeof input === 'string' &&
+      /^\/demo\/api\/agent\/conversations\/[^/]+\/messages\/?$/.test(input)
+    ) {
+      posthog.capture('demo_agent_replied', {
+        internal: String(init.body).includes('"internal":true'),
+      });
+    }
+    return response;
+  };
 }
