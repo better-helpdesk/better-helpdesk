@@ -282,7 +282,7 @@ export function createHandler(support: Helpdesk) {
     }
     const seen = new Map<string, { ok: boolean; at: number }>();
     const visible = async (change: RealtimeChange) => {
-      if (change.internal) return false;
+      if (change.internal || change.by === 'customer') return false;
       const known = seen.get(change.conversationId);
       if (known && Date.now() - known.at < 60_000) return known.ok;
       const conversation = await store.getConversation(change.conversationId);
@@ -389,6 +389,21 @@ export function createHandler(support: Helpdesk) {
         await stagedUploads(conversation, data.attachments)
       );
       return json({ id: message.id }, 201);
+    }
+  );
+
+  define(
+    'POST',
+    'widget/conversations/:id/typing',
+    async ({ request, params }) => {
+      const customer = await support.resolveCustomer(request, {
+        create: false,
+      });
+      await support.customerTyping(
+        customer,
+        await support.requireVisible(customer, params.id)
+      );
+      return json({ ok: true });
     }
   );
 
@@ -763,6 +778,9 @@ export function createHandler(support: Helpdesk) {
     unread:
       c.waitingSince !== null &&
       (!c.agentSeenAt || c.agentSeenAt < c.lastMessageAt),
+    customerTyping: Boolean(
+      c.customerTypingUntil && c.customerTypingUntil > clock()
+    ),
   });
 
   agentRoute('GET', 'settings', async () =>
@@ -1345,7 +1363,8 @@ export function createHandler(support: Helpdesk) {
     if (!config.realtime) throw new HelpdeskError(404, 'Not found');
     return eventStream(config.realtime, {
       request,
-      visible: () => true,
+      // An agent typing is the customer's to see.
+      visible: change => change.kind !== 'typing' || change.by === 'customer',
     });
   });
 

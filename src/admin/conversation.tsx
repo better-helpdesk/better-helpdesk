@@ -67,6 +67,7 @@ type Detail = {
     resolveBy: string | null;
     replyBy: string | null;
     slaPausedAt: string | null;
+    customerTyping: boolean;
     context: {
       url?: string;
       title?: string;
@@ -216,17 +217,19 @@ export function ConversationView({ id }: { id: string }) {
   const refreshDetail = detail.refresh;
   useEffect(() => {
     const onRemote = (event: Event) => {
-      const change = (
-        event as CustomEvent<{ conversationId: string; kind: string }>
-      ).detail;
-      // Typing is the customer's to see, not a change to this thread.
-      if (change.conversationId === id && change.kind !== 'typing') {
-        void refreshDetail();
-      }
+      const change = (event as CustomEvent<{ conversationId: string }>).detail;
+      if (change.conversationId === id) void refreshDetail();
     };
     window.addEventListener(HELPDESK_REMOTE, onRemote);
     return () => window.removeEventListener(HELPDESK_REMOTE, onRemote);
   }, [id, refreshDetail]);
+  const customerTyping = Boolean(detail.data?.conversation.customerTyping);
+  // Typing lapses on the server without an event, so the thread looks again once it would have.
+  useEffect(() => {
+    if (!customerTyping) return;
+    const timer = setTimeout(() => void refreshDetail(), 7000);
+    return () => clearTimeout(timer);
+  }, [customerTyping, refreshDetail]);
   // Each keystroke would be a request; one every few seconds keeps the customer's line lit.
   const lastTyping = useRef(0);
   const typing = () => {
@@ -966,6 +969,11 @@ export function ConversationView({ id }: { id: string }) {
                 </article>
               );
             })}
+            {c.customerTyping && (
+              <p className="sa-event" role="status">
+                {t('admin.customerTyping')}
+              </p>
+            )}
           </div>
 
           {showSuggestion && (

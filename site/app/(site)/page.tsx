@@ -166,8 +166,8 @@ export default function Home() {
           <div className="sh split rv">
             <h2 id="sc-h">One inbox for every conversation.</h2>
             <p className="sub">
-              Widget, email and CRM, inside the app your team already signs in
-              to.
+              Live chat, email and CRM, inside the app your team already signs
+              in to.
             </p>
           </div>
           <Showcase />
@@ -188,9 +188,9 @@ export default function Home() {
           <div className="sh split rv">
             <h2 id="w-h">A widget you understand.</h2>
             <p className="sub">
-              One web component, themed with your CSS variables. The customer
-              sees the page, browser and last error it attaches, and can untick
-              any of it.
+              Live chat in one web component, themed with your CSS variables.
+              The customer sees the page, browser and last error it attaches,
+              and can untick any of it.
             </p>
           </div>
           <WidgetDemo />

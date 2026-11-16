@@ -185,7 +185,72 @@ describe('an agent typing', () => {
   });
 });
 
+describe('a customer typing', () => {
+  it('shows to the agents until the message lands', async () => {
+    h.addUser('ada');
+    h.addUser('sam', { isAgent: true });
+    const id = await open('ada', {});
+    const typing = async () =>
+      (await h.call('GET', `agent/conversations/${id}`, { user: 'sam' })).data
+        .conversation.customerTyping;
+
+    expect(await typing()).toBe(false);
+    const ping = await h.call('POST', `widget/conversations/${id}/typing`, {
+      user: 'ada',
+      body: {},
+    });
+    expect(ping.status).toBe(200);
+    expect(await typing()).toBe(true);
+
+    await h.call('POST', `widget/conversations/${id}/messages`, {
+      user: 'ada',
+      body: { body: 'Still there?' },
+    });
+    expect(await typing()).toBe(false);
+  });
+
+  it('is refused to a customer who cannot see the conversation', async () => {
+    h.addUser('ada');
+    h.addUser('bob');
+    const id = await open('ada', {});
+    const res = await h.call('POST', `widget/conversations/${id}/typing`, {
+      user: 'bob',
+      body: {},
+    });
+
+    expect(res.status).toBe(404);
+    expect((await h.findOne('conversation', { id }))?.customerTypingUntil).toBe(
+      null
+    );
+  });
+});
+
 describe('event streams', () => {
+  it('carries each side’s typing only to the other side', async () => {
+    h.addUser('ada');
+    h.addUser('sam', { isAgent: true });
+    const id = await open('ada', {});
+    const agents = await follow('agent/events', 'sam');
+    const customer = await follow('widget/events', 'ada');
+
+    await h.call('POST', `widget/conversations/${id}/typing`, {
+      user: 'ada',
+      body: {},
+    });
+    await h.call('POST', `agent/conversations/${id}/typing`, {
+      user: 'sam',
+      body: {},
+    });
+    await agents.settle();
+    await agents.stop();
+    await customer.stop();
+
+    expect(agents.changes).toEqual([
+      { conversationId: id, kind: 'typing', by: 'customer' },
+    ]);
+    expect(customer.changes).toEqual([{ conversationId: id, kind: 'typing' }]);
+  });
+
   it('tells the customer about a reply and typing in their thread', async () => {
     h.addUser('ada');
     h.addUser('sam', { isAgent: true });

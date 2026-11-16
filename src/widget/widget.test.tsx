@@ -2209,6 +2209,34 @@ describe('home, messages and help', () => {
     expect(await within(panel).findByText('Angelo is typing…')).toBeTruthy();
   });
 
+  it('tells the team the customer is writing a reply, at most every few seconds', async () => {
+    const calls = mockApi({
+      'widget/session': { ...session, conversations: [ownThread] },
+      ...posted,
+    });
+    const panel = await opened();
+    fireEvent.click(
+      await within(panel).findByRole('button', { name: /Export broken/ })
+    );
+    const reply = await within(panel).findByRole('textbox', {
+      name: 'Write a reply…',
+    });
+    const type = (text: string) => {
+      reply.innerHTML = text;
+      fireEvent.input(reply);
+    };
+
+    type('Hello');
+    type('Hello there');
+    type('');
+
+    await waitFor(() =>
+      expect(
+        calls.filter(c => c.url.includes('widget/conversations/c1/typing'))
+      ).toEqual([expect.objectContaining({ method: 'POST', body: {} })])
+    );
+  });
+
   it('reloads an open thread when the stream says it changed, and the list only for more than typing', async () => {
     const encoder = new TextEncoder();
     let push: (text: string) => void = () => {};

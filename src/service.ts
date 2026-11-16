@@ -710,6 +710,11 @@ export function createHelpdesk(input: HelpdeskConfig) {
       verified: Boolean(customer.identity?.user.emailVerified),
     });
     await sendWith(message, files);
+    if (conversation.customerTypingUntil) {
+      await store.updateConversation(conversation.id, {
+        customerTypingUntil: null,
+      });
+    }
     await afterCustomerMessage(conversation, message);
     return message;
   }
@@ -882,6 +887,29 @@ export function createHelpdesk(input: HelpdeskConfig) {
     await publishChange(config.realtime, {
       conversationId: conversation.id,
       kind: 'typing',
+    });
+  }
+
+  /** `agentTyping` the other way: the agents see the customer writing in the widget. */
+  async function customerTyping(
+    customer: Customer,
+    conversation: Conversation
+  ) {
+    const now = clock().getTime();
+    if (
+      conversation.customerTypingUntil &&
+      conversation.customerTypingUntil.getTime() - now > TYPING_MS / 2
+    ) {
+      return;
+    }
+    if (customer.contact) await refuseBlocked(customer.contact);
+    await store.updateConversation(conversation.id, {
+      customerTypingUntil: new Date(now + TYPING_MS),
+    });
+    await publishChange(config.realtime, {
+      conversationId: conversation.id,
+      kind: 'typing',
+      by: 'customer',
     });
   }
 
@@ -2494,6 +2522,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     addCustomerMessage,
     addAgentMessage,
     agentTyping,
+    customerTyping,
     limitCustomer,
     handleInbound,
     attachmentKey,

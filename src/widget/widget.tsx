@@ -1982,6 +1982,15 @@ function Thread({
     return () => clearTimeout(timer);
   }, [typing, refresh]);
   const [reply, setReply] = useState('');
+  // Each keystroke would be a request; one every few seconds keeps the agents' line lit.
+  const lastTyping = useRef(0);
+  const write = (next: string) => {
+    setReply(next);
+    const now = Date.now();
+    if (!next.trim() || now - lastTyping.current < 3000) return;
+    lastTyping.current = now;
+    void api(`widget/conversations/${id}/typing`, { body: {} }).catch(() => {});
+  };
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -2275,7 +2284,7 @@ function Thread({
           label={t('thread.reply')}
           placeholder={t('thread.reply')}
           value={reply}
-          onChange={setReply}
+          onChange={write}
           t={t}
           toolbar={false}
           onKeyDown={e => {

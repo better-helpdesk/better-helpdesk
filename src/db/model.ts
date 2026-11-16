@@ -219,6 +219,8 @@ export const helpdeskModel = {
       agentSeenAt: f.date().orNull(),
       /** Set while an agent writes a reply; the customer sees them typing until it passes. */
       agentTypingUntil: f.date().orNull(),
+      /** Set while the customer writes in the widget; agents see them typing until it passes. */
+      customerTypingUntil: f.date().orNull(),
       lastMessageAt: f.date().withDefault('now'),
       resolvedAt: f.date().orNull(),
       mergedIntoId: f.uuid().orNull().ref('conversation', 'set null'),

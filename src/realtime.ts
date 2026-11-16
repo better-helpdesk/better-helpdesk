@@ -4,6 +4,8 @@ export type RealtimeChange = {
   kind: 'message' | 'conversation' | 'typing';
   /** An internal note; only agents' streams carry it. */
   internal?: boolean;
+  /** The customer typing; only agents' streams carry it, and only it of the typing. */
+  by?: 'customer';
 };
 
 /**

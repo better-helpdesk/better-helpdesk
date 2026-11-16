@@ -920,6 +920,37 @@ describe('HelpdeskAdmin', () => {
     ).toBeTruthy();
   });
 
+  it('shows a chat nobody has taken on the bell, from a visitor without a name too', async () => {
+    routes['agent/notifications/'] = {
+      unread: 2,
+      notifications: [
+        {
+          kind: 'chat',
+          conversationId: 'c1',
+          reference: 'DG-1000',
+          subject: null,
+          who: 'Ada',
+          at: new Date().toISOString(),
+        },
+        {
+          kind: 'chat',
+          conversationId: 'c2',
+          reference: 'DG-1001',
+          subject: null,
+          who: null,
+          at: new Date().toISOString(),
+        },
+      ],
+    };
+    onTestFinished(() => {
+      routes['agent/notifications/'] = { unread: 0, notifications: [] };
+    });
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    openMenu(await screen.findByLabelText('Notifications, 2 new'));
+    expect(await screen.findByText('Ada started chat DG-1000')).toBeTruthy();
+    expect(screen.getByText('Someone started chat DG-1001')).toBeTruthy();
+  });
+
   it('counts new notifications on the bell and in the tab title, marks them seen when opened, and opens their conversation', async () => {
     routes['agent/notifications/'] = {
       unread: 2,
@@ -3801,6 +3832,52 @@ describe('typing', () => {
     type(screen.getByRole('textbox', { name: 'Internal note' }), 'Ask billing');
 
     await waitFor(() => expect(pings).toEqual(['POST']));
+  });
+
+  it('shows the customer typing in the open thread as soon as the stream says so', async () => {
+    const encoder = new TextEncoder();
+    let push: (text: string) => void = () => {};
+    const detail = routes['agent/conversations/c1/'] as {
+      conversation: object;
+    };
+    onTestFinished(() => {
+      routes['agent/conversations/c1/'] = detail;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.includes('agent/events')) {
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                push = text => controller.enqueue(encoder.encode(text));
+              },
+            }),
+            { headers: { 'content-type': 'text/event-stream' } }
+          );
+        }
+        if (url.includes('agent/me/'))
+          return new Response(JSON.stringify({ ...me, realtime: true }));
+        return respond(url);
+      })
+    );
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    await screen.findByRole('textbox', { name: 'Reply' });
+    expect(screen.queryByText('The customer is typing…')).toBeNull();
+
+    routes['agent/conversations/c1/'] = {
+      ...detail,
+      conversation: { ...detail.conversation, customerTyping: true },
+    };
+    await act(async () => {
+      push(
+        `event: change\ndata: ${JSON.stringify({ conversationId: 'c1', kind: 'typing', by: 'customer' })}\n\n`
+      );
+    });
+
+    expect(await screen.findByText('The customer is typing…')).toBeTruthy();
   });
 });
 

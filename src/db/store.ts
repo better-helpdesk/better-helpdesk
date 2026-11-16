@@ -1732,8 +1732,9 @@ export function createStore(
 
     /**
      * What happened for an agent lately: assignments and mentions by
-     * colleagues, and customer replies on conversations assigned to them since
-     * they got them. Derived from events and messages, newest first.
+     * colleagues, customer replies on conversations assigned to them since
+     * they got them, and open chats nobody has taken. Derived from events,
+     * messages and conversations, newest first.
      */
     async notificationsFor(agentId: string, limit = 30) {
       const since = ago(30 * DAY);
@@ -1868,6 +1869,33 @@ export function createStore(
             at: e.createdAt,
           });
         }
+      }
+      // A chat is everyone's news until someone takes it or it closes.
+      const chats = await adapter.findMany<{
+        id: string;
+        contactId: string;
+        createdAt: Date;
+      }>('conversation', {
+        where: and(
+          eq('kind', 'chat'),
+          eq('assigneeId', null),
+          eq('status', 'open'),
+          gt('createdAt', since)
+        ),
+        select: ['id', 'contactId', 'createdAt'],
+      });
+      const starters = await namesOf(
+        'contact',
+        chats.map(c => c.contactId)
+      );
+      for (const c of chats) {
+        const contact = starters.get(c.contactId);
+        notes.push({
+          kind: 'chat',
+          conversation_id: c.id,
+          who: contact ? (contact.name ?? contact.email) : null,
+          at: c.createdAt,
+        });
       }
       notes.sort((a, b) => b.at.getTime() - a.at.getTime());
       const page = notes.slice(0, limit);

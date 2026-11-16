@@ -74,6 +74,8 @@ says **conversation**. Each has:
   SLA policy, and is the one thing besides priority the policy keys on.
 - **Typing**: `agentTypingUntil` is set while an agent writes a reply, and
   the customer sees them typing until it passes or the reply lands.
+  `customerTypingUntil` is the same for the customer writing in the widget,
+  shown to the agents.
 - **Tags**, free text the team adds, lower-cased and unique per
   conversation; the inbox filters by one.
 - **Messages** by a `contact`, an `agent` or the `system`. An **internal**

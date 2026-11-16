@@ -80,11 +80,14 @@ database, its deploy and its design tokens.
 - **Lightweight CRM.** Contacts and companies taken from your app's identity,
   lead stages, deals with stages and values, logged activities, tags and
   custom fields.
-- **Widget.** A `<helpdesk-widget>` web component with a React wrapper and a
-  standalone script for sites that are not React. Cross-origin capable, with
-  one qualifying question, a privacy link, a booking link, receipts for
-  anonymous visitors, captured page context (URL, viewport, recent errors,
-  referrer, UTM) and a dark theme.
+- **Live chat.** A `<helpdesk-widget>` web component with a React wrapper
+  and a standalone script for sites that are not React. Chats land in the
+  same inbox as email. Each side sees the other typing, the customer sees
+  "Seen" once an agent has opened their message, and with `realtime` set,
+  replies arrive over server-sent events instead of the next poll.
+  Cross-origin capable, with one qualifying question, a privacy link, a
+  booking link, receipts for anonymous visitors, captured page context (URL,
+  viewport, recent errors, referrer, UTM) and a dark theme.
 - **Email.** Outbound through your own sender. Inbound through a webhook from
   any relay, verified against DKIM and threaded back into the conversation.
 - **No lock-in.** Conversation history exports and imports as JSON Lines,

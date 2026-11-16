@@ -5,7 +5,13 @@ import { HELPDESK_CHANGED, useAdmin } from './context';
 import { Menu, paths, Svg, setTitleCountOn, useTitleCountOn } from './ui';
 
 type Notification = {
-  kind: 'assigned' | 'mentioned' | 'reply' | 'sla-warning' | 'sla-breach';
+  kind:
+    | 'assigned'
+    | 'mentioned'
+    | 'reply'
+    | 'chat'
+    | 'sla-warning'
+    | 'sla-breach';
   conversationId: string;
   reference: string;
   subject: string | null;

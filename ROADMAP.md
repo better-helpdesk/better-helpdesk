@@ -87,8 +87,8 @@ The design partners' feedback sets the order, so items move between waves.
 Built when a team running Better Helpdesk asks for it:
 
 - Saved views, personal or shared (shipped)
-- "Seen" under the customer's last message
-- An in-app notification bell
+- "Seen" under the customer's last message (shipped)
+- An in-app notification bell (shipped)
 - CSV import of contacts, companies and canned replies
 - Deep links into your app from the contact and company cards
 - References like `ACME-1042` linked in notes and replies
