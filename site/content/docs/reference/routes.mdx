@@ -131,7 +131,7 @@ Every request that is not a `GET` and succeeded is written to [`audit_log`](/doc
 | `POST` | `agent/conversations/{id}/triage` | Runs AI triage now. |
 | `POST` | `agent/conversations/{id}/suggestion` | Accepts or dismisses the AI suggestion. |
 | `GET` | `agent/conversations/{id}/attachments/{attachmentId}` | Redirects to a presigned download URL. |
-| `GET` | `agent/notifications` | The agent's notifications from the last 30 days: assignments, mentions, customer replies on their conversations, open chats nobody has taken (`chat`, with the customer in `who`), and service-level warnings and breaches (`sla-warning`, `sla-breach`, with the target in `who`). |
+| `GET` | `agent/notifications` | The agent's notifications from the last 30 days: assignments, mentions, customer replies on their conversations, open chats nobody has taken (`chat`, with the customer in `who`), and service-level warnings and breaches (`sla-warning`, `sla-breach`, with the target in `who`). `unread` counts those since the agent last marked them read, and every open chat until someone takes it or it is resolved. |
 | `POST` | `agent/notifications/seen` | Marks them read. |
 | `GET` | `agent/views` | Saved views. |
 | `POST` | `agent/views` | Saves a view. |

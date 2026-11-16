@@ -1054,7 +1054,9 @@ export function createHandler(support: Helpdesk) {
       store.notificationsSeenAt(agent.id),
     ]);
     return json({
-      unread: rows.filter(r => !seenAt || r.at > seenAt).length,
+      // An open chat is a customer waiting, so it counts until someone takes it.
+      unread: rows.filter(r => r.kind === 'chat' || !seenAt || r.at > seenAt)
+        .length,
       notifications: rows.map(r => ({
         kind: r.kind,
         conversationId: r.conversation_id,

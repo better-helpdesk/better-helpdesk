@@ -309,7 +309,7 @@ function build(
             FROM helpdesk.conversation c
             LEFT JOIN helpdesk.contact ct ON ct.id = c.contact_id
             WHERE c.kind = 'chat' AND c.assignee_id IS NULL AND c.status = 'open'
-              AND c.created_at > ${since}
+              AND c.created_at > ${since} AND ct.blocked IS NOT TRUE
             UNION ALL
             SELECT CASE e.kind WHEN 'sla.breach' THEN 'sla-breach' ELSE 'sla-warning' END,
               e.conversation_id, e.created_at, e.data->>'target'

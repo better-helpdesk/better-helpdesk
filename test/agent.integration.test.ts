@@ -614,6 +614,12 @@ describe('notifications', () => {
         ].sort()
       );
     }
+    // A customer is still waiting, so having looked does not clear the count.
+    await h.call('POST', 'agent/notifications/seen', {
+      user: 'agent',
+      body: {},
+    });
+    expect((await feed('agent')).unread).toBe(2);
 
     await h.call('PATCH', `agent/conversations/${taken.id}`, {
       user: 'agent',
@@ -625,6 +631,24 @@ describe('notifications', () => {
     });
     expect(await feed('agent')).toEqual({ unread: 0, notifications: [] });
     expect(await feed('lead')).toEqual({ unread: 0, notifications: [] });
+  });
+
+  it('leaves a blocked contact’s chat off the bell', async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('ada');
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    const chat = await open('ada', { kind: 'chat' });
+    const contactId = (await h.findOne('conversation', { id: chat.id }))
+      ?.contactId;
+
+    await h.call('PATCH', `agent/contacts/${contactId}`, {
+      user: 'agent',
+      body: { blocked: true },
+    });
+
+    expect(
+      (await h.call('GET', 'agent/notifications', { user: 'agent' })).data
+    ).toEqual({ unread: 0, notifications: [] });
   });
 });
 

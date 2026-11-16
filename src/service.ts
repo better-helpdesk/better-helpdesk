@@ -710,11 +710,6 @@ export function createHelpdesk(input: HelpdeskConfig) {
       verified: Boolean(customer.identity?.user.emailVerified),
     });
     await sendWith(message, files);
-    if (conversation.customerTypingUntil) {
-      await store.updateConversation(conversation.id, {
-        customerTypingUntil: null,
-      });
-    }
     await afterCustomerMessage(conversation, message);
     return message;
   }

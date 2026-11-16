@@ -223,13 +223,14 @@ export function ConversationView({ id }: { id: string }) {
     window.addEventListener(HELPDESK_REMOTE, onRemote);
     return () => window.removeEventListener(HELPDESK_REMOTE, onRemote);
   }, [id, refreshDetail]);
-  const customerTyping = Boolean(detail.data?.conversation.customerTyping);
-  // Typing lapses on the server without an event, so the thread looks again once it would have.
+  // Typing lapses on the server without an event, so the thread looks again
+  // once it would have, after every load that still shows it.
+  const latestDetail = detail.data;
   useEffect(() => {
-    if (!customerTyping) return;
+    if (!latestDetail?.conversation.customerTyping) return;
     const timer = setTimeout(() => void refreshDetail(), 7000);
     return () => clearTimeout(timer);
-  }, [customerTyping, refreshDetail]);
+  }, [latestDetail, refreshDetail]);
   // Each keystroke would be a request; one every few seconds keeps the customer's line lit.
   const lastTyping = useRef(0);
   const typing = () => {

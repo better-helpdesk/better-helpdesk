@@ -1880,7 +1880,8 @@ export function createStore(
           eq('kind', 'chat'),
           eq('assigneeId', null),
           eq('status', 'open'),
-          gt('createdAt', since)
+          gt('createdAt', since),
+          notBlocked
         ),
         select: ['id', 'contactId', 'createdAt'],
       });
@@ -2057,6 +2058,7 @@ export function createStore(
           patch.waitingSince = conversation?.waitingSince ?? now;
           patch.status = 'open';
           patch.snoozedUntil = null;
+          patch.customerTypingUntil = null;
           if (conversation?.status === 'resolved') patch.resolvedAt = null;
         } else if (values.authorType === 'agent' && !values.internal) {
           patch.waitingSince = null;

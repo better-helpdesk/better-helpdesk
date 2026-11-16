@@ -3879,6 +3879,49 @@ describe('typing', () => {
 
     expect(await screen.findByText('The customer is typing…')).toBeTruthy();
   });
+
+  it('looks again after every load that still shows the customer typing, so the line goes once they stop', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const detail = routes['agent/conversations/c1/'] as {
+      conversation: object;
+    };
+    onTestFinished(() => {
+      vi.useRealTimers();
+      routes['agent/conversations/c1/'] = detail;
+    });
+    const typing = (on: boolean) => {
+      routes['agent/conversations/c1/'] = {
+        ...detail,
+        conversation: { ...detail.conversation, customerTyping: on },
+      };
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        // With a stream the thread polls only every 30 seconds.
+        if (url.includes('agent/events'))
+          return new Response(new ReadableStream(), {
+            headers: { 'content-type': 'text/event-stream' },
+          });
+        if (url.includes('agent/me/'))
+          return new Response(JSON.stringify({ ...me, realtime: true }));
+        return respond(url);
+      })
+    );
+    typing(true);
+    window.history.replaceState(null, '', '/support/conversations/c1/');
+    render(<HelpdeskAdmin basePath="/support" locale="en" />);
+    expect(await screen.findByText('The customer is typing…')).toBeTruthy();
+
+    await act(() => vi.advanceTimersByTimeAsync(7000));
+    typing(false);
+    await act(() => vi.advanceTimersByTimeAsync(7000));
+
+    await waitFor(() =>
+      expect(screen.queryByText('The customer is typing…')).toBeNull()
+    );
+  });
 });
 
 describe('a viewer', () => {
