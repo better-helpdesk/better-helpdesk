@@ -36,7 +36,7 @@ export const helpdesk = buildHelpdesk({
 
 A change names the conversation and what happened: `message`, `conversation` or `typing`. The client reloads what it shows of that conversation through the routes it already uses, so a stream never carries more than the caller may read. A customer's stream only carries the conversations they can see, and never an internal note.
 
-An agent typing a reply, not a note, tells the customer through `agent/conversations/{id}/typing`. The agent UI repeats it every few seconds while the agent types, and the widget shows "… is typing" until the reply lands or the agent stops.
+An agent typing a reply, not a note, tells the customer through `agent/conversations/{id}/typing`. The agent UI repeats it every few seconds while the agent types, and the widget shows "… is typing" until the reply lands or the agent stops. The customer typing in the widget's thread tells the agents the same way, through `widget/conversations/{id}/typing`, and the open conversation in the agent UI shows "The customer is typing…". Each side's typing travels only on the other side's stream, marked `by: 'customer'` when it is the customer's. Without `realtime`, both still show, at the next poll.
 
 ## Hosting
 

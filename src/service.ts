@@ -885,6 +885,29 @@ export function createHelpdesk(input: HelpdeskConfig) {
     });
   }
 
+  /** `agentTyping` the other way: the agents see the customer writing in the widget. */
+  async function customerTyping(
+    customer: Customer,
+    conversation: Conversation
+  ) {
+    const now = clock().getTime();
+    if (
+      conversation.customerTypingUntil &&
+      conversation.customerTypingUntil.getTime() - now > TYPING_MS / 2
+    ) {
+      return;
+    }
+    if (customer.contact) await refuseBlocked(customer.contact);
+    await store.updateConversation(conversation.id, {
+      customerTypingUntil: new Date(now + TYPING_MS),
+    });
+    await publishChange(config.realtime, {
+      conversationId: conversation.id,
+      kind: 'typing',
+      by: 'customer',
+    });
+  }
+
   function clientIp(request: Request) {
     if (config.clientIp) return config.clientIp(request) ?? 'unknown';
     // A proxy appends the address it saw; everything left of it is the client's to forge.
@@ -2494,6 +2517,7 @@ export function createHelpdesk(input: HelpdeskConfig) {
     addCustomerMessage,
     addAgentMessage,
     agentTyping,
+    customerTyping,
     limitCustomer,
     handleInbound,
     attachmentKey,

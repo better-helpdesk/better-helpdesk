@@ -584,6 +584,72 @@ describe('notifications', () => {
         .notifications
     ).toEqual([]);
   });
+
+  it('tells every agent about a chat until someone takes it or it is resolved', async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('lead', { isAgent: true });
+    h.addUser('ada');
+    const me = (await h.call('GET', 'agent/me', { user: 'agent' })).data.agent
+      .id as string;
+    await h.call('GET', 'agent/me', { user: 'lead' });
+    const taken = await open('ada', { kind: 'chat' });
+    const closed = await open('ada', { kind: 'chat' });
+    // A ticket waits in the inbox, not in the bell.
+    await open('ada');
+    const feed = async (user: string) =>
+      (await h.call('GET', 'agent/notifications', { user })).data as {
+        unread: number;
+        notifications: { kind: string; reference: string; who: string }[];
+      };
+
+    for (const user of ['agent', 'lead']) {
+      const all = await feed(user);
+      expect(all.unread).toBe(2);
+      expect(
+        all.notifications.map(n => [n.kind, n.reference, n.who]).sort()
+      ).toEqual(
+        [
+          ['chat', closed.reference, 'ada'],
+          ['chat', taken.reference, 'ada'],
+        ].sort()
+      );
+    }
+    // A customer is still waiting, so having looked does not clear the count.
+    await h.call('POST', 'agent/notifications/seen', {
+      user: 'agent',
+      body: {},
+    });
+    expect((await feed('agent')).unread).toBe(2);
+
+    await h.call('PATCH', `agent/conversations/${taken.id}`, {
+      user: 'agent',
+      body: { assigneeId: me },
+    });
+    await h.call('PATCH', `agent/conversations/${closed.id}`, {
+      user: 'lead',
+      body: { status: 'resolved' },
+    });
+    expect(await feed('agent')).toEqual({ unread: 0, notifications: [] });
+    expect(await feed('lead')).toEqual({ unread: 0, notifications: [] });
+  });
+
+  it('leaves a blocked contact’s chat off the bell', async () => {
+    h.addUser('agent', { isAgent: true });
+    h.addUser('ada');
+    await h.call('GET', 'agent/me', { user: 'agent' });
+    const chat = await open('ada', { kind: 'chat' });
+    const contactId = (await h.findOne('conversation', { id: chat.id }))
+      ?.contactId;
+
+    await h.call('PATCH', `agent/contacts/${contactId}`, {
+      user: 'agent',
+      body: { blocked: true },
+    });
+
+    expect(
+      (await h.call('GET', 'agent/notifications', { user: 'agent' })).data
+    ).toEqual({ unread: 0, notifications: [] });
+  });
 });
 
 describe('saved views', () => {

@@ -237,6 +237,7 @@ const en = {
   'admin.sourceLine': 'Source: {source}',
   'admin.lastSeen': 'Last seen {when}',
   'admin.customerSees': 'Customer sees: {subject}',
+  'admin.customerTyping': 'The customer is typing…',
   'admin.showDetails': 'Details',
   'admin.hideDetails': 'Hide details',
   'admin.confirmMerge':
@@ -384,6 +385,7 @@ const en = {
   'admin.notify.assigned': '{who} assigned {reference} to you',
   'admin.notify.mentioned': '{who} mentioned you in {reference}',
   'admin.notify.reply': '{who} replied in {reference}',
+  'admin.notify.chat': '{who} started chat {reference}',
   'admin.notify.sla-warning': 'The {who} target for {reference} is close',
   'admin.notify.sla-breach': 'The {who} target for {reference} was missed',
   'admin.someone': 'Someone',
@@ -895,6 +897,7 @@ const de: Record<MessageKey, string> = {
   'admin.sourceLine': 'Quelle: {source}',
   'admin.lastSeen': 'Zuletzt gesehen {when}',
   'admin.customerSees': 'Die Kundschaft sieht: {subject}',
+  'admin.customerTyping': 'Die Kundschaft schreibt…',
   'admin.showDetails': 'Details',
   'admin.hideDetails': 'Details ausblenden',
   'admin.confirmMerge':
@@ -1047,6 +1050,7 @@ const de: Record<MessageKey, string> = {
   'admin.notify.assigned': '{who} hat Ihnen {reference} zugewiesen',
   'admin.notify.mentioned': '{who} hat Sie in {reference} erwähnt',
   'admin.notify.reply': '{who} hat in {reference} geantwortet',
+  'admin.notify.chat': '{who} hat den Chat {reference} begonnen',
   'admin.notify.sla-warning':
     'Das Ziel für {who} bei {reference} läuft bald ab',
   'admin.notify.sla-breach':
@@ -1561,6 +1565,7 @@ const fr: Record<MessageKey, string> = {
   'admin.sourceLine': 'Source : {source}',
   'admin.lastSeen': 'Vu pour la dernière fois {when}',
   'admin.customerSees': 'Le client voit : {subject}',
+  'admin.customerTyping': 'Le client écrit…',
   'admin.showDetails': 'Détails',
   'admin.hideDetails': 'Masquer les détails',
   'admin.confirmMerge':
@@ -1709,6 +1714,7 @@ const fr: Record<MessageKey, string> = {
   'admin.notify.assigned': '{who} vous a assigné {reference}',
   'admin.notify.mentioned': '{who} vous a mentionné dans {reference}',
   'admin.notify.reply': '{who} a répondu dans {reference}',
+  'admin.notify.chat': '{who} a lancé le chat {reference}',
   'admin.notify.sla-warning': 'L’objectif de {who} pour {reference} approche',
   'admin.notify.sla-breach': 'L’objectif de {who} pour {reference} est dépassé',
   'admin.someone': 'Quelqu’un',
@@ -2217,6 +2223,7 @@ const it: Record<MessageKey, string> = {
   'admin.sourceLine': 'Origine: {source}',
   'admin.lastSeen': 'Ultima attività {when}',
   'admin.customerSees': 'Il cliente vede: {subject}',
+  'admin.customerTyping': 'Il cliente sta scrivendo…',
   'admin.showDetails': 'Dettagli',
   'admin.hideDetails': 'Nascondi i dettagli',
   'admin.confirmMerge':
@@ -2368,6 +2375,7 @@ const it: Record<MessageKey, string> = {
   'admin.notify.assigned': '{who} Le ha assegnato {reference}',
   'admin.notify.mentioned': '{who} ha menzionato il Suo nome in {reference}',
   'admin.notify.reply': '{who} ha risposto in {reference}',
+  'admin.notify.chat': '{who} ha avviato la chat {reference}',
   'admin.notify.sla-warning':
     'L’obiettivo di {who} per {reference} sta per scadere',
   'admin.notify.sla-breach':

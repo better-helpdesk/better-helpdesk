@@ -1974,14 +1974,25 @@ function Thread({
     changes.addEventListener('change', onChange);
     return () => changes.removeEventListener('change', onChange);
   }, [changes, id, refresh]);
-  const typing = Boolean(thread.data?.conversation.typing);
-  // Typing lapses on the server without an event, so the thread looks again once it would have.
+  const loaded = thread.data;
+  const typing = Boolean(loaded?.conversation.typing);
+  // Typing lapses on the server without an event, so the thread looks again
+  // once it would have, after every load that still shows it.
   useEffect(() => {
-    if (!typing) return;
+    if (!loaded?.conversation.typing) return;
     const timer = setTimeout(() => void refresh(), 7000);
     return () => clearTimeout(timer);
-  }, [typing, refresh]);
+  }, [loaded, refresh]);
   const [reply, setReply] = useState('');
+  // Each keystroke would be a request; one every few seconds keeps the agents' line lit.
+  const lastTyping = useRef(0);
+  const write = (next: string) => {
+    setReply(next);
+    const now = Date.now();
+    if (!next.trim() || now - lastTyping.current < 3000) return;
+    lastTyping.current = now;
+    void api(`widget/conversations/${id}/typing`, { body: {} }).catch(() => {});
+  };
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -2275,7 +2286,7 @@ function Thread({
           label={t('thread.reply')}
           placeholder={t('thread.reply')}
           value={reply}
-          onChange={setReply}
+          onChange={write}
           t={t}
           toolbar={false}
           onKeyDown={e => {

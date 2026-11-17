@@ -91,7 +91,13 @@ export type Capabilities = {
 };
 
 export type Notification = {
-  kind: 'assigned' | 'mentioned' | 'reply' | 'sla-warning' | 'sla-breach';
+  kind:
+    | 'assigned'
+    | 'mentioned'
+    | 'reply'
+    | 'chat'
+    | 'sla-warning'
+    | 'sla-breach';
   conversation_id: string;
   number: number;
   subject: string | null;

@@ -43,11 +43,12 @@ A customer **can see** a conversation they opened, one they were added to as a p
 | `PATCH` | `widget/conversations/{id}` | Author | Shares it with the company, or marks it resolved. |
 | `POST` | `widget/conversations/{id}/rating` | Author | Rates it `good` or `bad`, with an optional comment. |
 | `POST` | `widget/conversations/{id}/seen` | Can see | Marks it read by its author. |
+| `POST` | `widget/conversations/{id}/typing` | Can see | Shows the agents that the customer is writing, for a few seconds; the widget repeats it while the customer types a reply. |
 | `POST` | `widget/conversations/{id}/attachments` | Author | Starts an upload and answers a presigned form; 400 without `storage` or on an inbox with `uploads: false`. |
 | `POST` | `widget/conversations/{id}/attachments/{attachmentId}/complete` | Author | Marks the upload done, as a file of the opening message. A file for a later message is sent with it instead. |
 | `GET` | `widget/conversations/{id}/attachments/{attachmentId}` | Can see | Redirects to a presigned download URL. |
 | `GET` | `widget/help` | Anyone | Searches the host's documentation through `help`; `?q=` and `?locale=`. |
-| `GET` | `widget/events` | Customer | An event stream of changes to the conversations the caller can see, internal notes left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
+| `GET` | `widget/events` | Customer | An event stream of changes to the conversations the caller can see, internal notes and the customer's own typing left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 
 A conversation in `widget/session` and `widget/conversations/{id}` carries its `kind`, `chat` or `ticket`, `typing`, true while an agent writes a reply, `respondBy`, the time the team aims to answer by while nobody has, and `ratingScore`. `widget/session` says with `realtime` whether `widget/events` is there, carries with `captcha` the adapter's `client` when this caller must solve it (`null` otherwise), lists under the inbox the `priorities` this caller may pick with their descriptions (`null` for a visitor or a tier the inbox does not offer them to), and carries `priorityLabels` and `ratingScale`.
 
@@ -118,19 +119,19 @@ Every request that is not a `GET` and succeeded is written to [`audit_log`](/doc
 | `GET` | `agent/conversations` | The inbox list, filtered by the query string, with the counts of all, the agent's own and unassigned conversations under the same filters. |
 | `POST` | `agent/conversations` | Opens a conversation in the agent's name; see [the body](#opening-a-conversation-as-an-agent). |
 | `POST` | `agent/conversations/bulk` | Changes several conversations at once; with `reply` or `note`, writes that text to each as a reply or an internal note. A reply assigns each unassigned conversation to the agent, unless the same request set `assigneeId`. |
-| `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. |
+| `GET` | `agent/conversations/{id}` | One conversation with its messages, contact, company and timeline. Its `customerTyping` is true while the customer writes in the widget. |
 | `PATCH` | `agent/conversations/{id}` | Changes its status, priority, tier, type, inbox, title, assignee, company, tags or snooze. |
 | `POST` | `agent/conversations/{id}/messages` | Adds a reply or an internal note. A reply on an unassigned conversation assigns it to the agent who replied. `attachments` takes up to 20 ids from the route below; each file must be in storage (409 otherwise) and on no message yet (400 otherwise). |
 | `POST` | `agent/conversations/{id}/attachments` | Starts an upload and answers a presigned form. The file shows once a message is sent with its id. |
 | `POST` | `agent/conversations/{id}/typing` | Shows the customer that the agent is writing a reply, for a few seconds; the agent UI repeats it while the agent types. |
-| `GET` | `agent/events` | An event stream of every change, internal notes included. 404 without [`realtime`](/docs/reference/configuration#conversations). |
+| `GET` | `agent/events` | An event stream of every change, internal notes and the customer typing included, agents typing left out. 404 without [`realtime`](/docs/reference/configuration#conversations). |
 | `POST` | `agent/conversations/{id}/participants` | Adds a contact to it. |
 | `POST` | `agent/conversations/{id}/merge` | Merges it into another. |
 | `POST` | `agent/conversations/{id}/draft` | An AI draft reply, or a rewrite of the agent's text. 403 while the team has turned that switch off. |
 | `POST` | `agent/conversations/{id}/triage` | Runs AI triage now. |
 | `POST` | `agent/conversations/{id}/suggestion` | Accepts or dismisses the AI suggestion. |
 | `GET` | `agent/conversations/{id}/attachments/{attachmentId}` | Redirects to a presigned download URL. |
-| `GET` | `agent/notifications` | The agent's notifications from the last 30 days: assignments, mentions, customer replies on their conversations, and service-level warnings and breaches (`sla-warning`, `sla-breach`, with the target in `who`). |
+| `GET` | `agent/notifications` | The agent's notifications from the last 30 days: assignments, mentions, customer replies on their conversations, open chats nobody has taken (`chat`, with the customer in `who`), and service-level warnings and breaches (`sla-warning`, `sla-breach`, with the target in `who`). `unread` counts those since the agent last marked them read, and every open chat until someone takes it or it is resolved. |
 | `POST` | `agent/notifications/seen` | Marks them read. |
 | `GET` | `agent/views` | Saved views. |
 | `POST` | `agent/views` | Saves a view. |

@@ -280,6 +280,35 @@ const replyTarget: Record<Family, Migration> = {
   },
 };
 
+const CUSTOMER_TYPING = '0005_customer_typing';
+
+const customerTyping: Record<Family, Migration> = {
+  postgres: {
+    up: db =>
+      run(db, [
+        'ALTER TABLE helpdesk.conversation ADD COLUMN customer_typing_until timestamp with time zone',
+      ]),
+  },
+  mysql: {
+    up: db =>
+      run(db, [
+        'ALTER TABLE helpdesk_conversation ADD COLUMN customer_typing_until datetime(3) NULL',
+      ]),
+  },
+  sqlite: {
+    up: db =>
+      run(db, [
+        'ALTER TABLE helpdesk_conversation ADD COLUMN customer_typing_until text',
+      ]),
+  },
+  mssql: {
+    up: db =>
+      run(db, [
+        'ALTER TABLE helpdesk.conversation ADD customer_typing_until datetime2(3) NULL',
+      ]),
+  },
+};
+
 export const migrations: Record<Family, Record<string, Migration>> = {
   postgres: {
     ...postgres,
@@ -292,6 +321,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
     },
     [ENTERPRISE]: enterprise.postgres,
     [REPLY_TARGET]: replyTarget.postgres,
+    [CUSTOMER_TYPING]: customerTyping.postgres,
   },
   mysql: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'mysql') },
@@ -304,6 +334,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
     },
     [ENTERPRISE]: enterprise.mysql,
     [REPLY_TARGET]: replyTarget.mysql,
+    [CUSTOMER_TYPING]: customerTyping.mysql,
   },
   sqlite: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'sqlite') },
@@ -319,6 +350,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
     },
     [ENTERPRISE]: enterprise.sqlite,
     [REPLY_TARGET]: replyTarget.sqlite,
+    [CUSTOMER_TYPING]: customerTyping.sqlite,
   },
   mssql: {
     '0000_baseline': { up: (db: Db) => createBaseline(db, 'mssql') },
@@ -332,6 +364,7 @@ export const migrations: Record<Family, Record<string, Migration>> = {
     },
     [ENTERPRISE]: enterprise.mssql,
     [REPLY_TARGET]: replyTarget.mssql,
+    [CUSTOMER_TYPING]: customerTyping.mssql,
   },
 };
 

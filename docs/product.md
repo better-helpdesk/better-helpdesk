@@ -44,9 +44,11 @@ package.
   navigation.
 - A lightweight CRM: contacts and organisations taken from the host app's
   identity, lead stages, deal stages and custom fields.
-- An embeddable widget as a React component or a standalone script,
-  cross-origin capable, with one qualifying question, a privacy link, a
-  booking link, receipts for anonymous visitors and a dark theme.
+- Live chat through an embeddable widget, as a React component or a
+  standalone script, with chats in the same inbox as email, typing shown
+  both ways, "Seen" receipts and real-time delivery. Cross-origin capable,
+  with one qualifying question, a privacy link, a booking link, receipts for
+  anonymous visitors and a dark theme.
 - Email: outbound through your own sender, inbound through a webhook from
   any relay with DKIM verification, replies threaded back into the
   conversation.
