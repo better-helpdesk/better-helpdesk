@@ -121,6 +121,22 @@
       }
     },
     {
+      "includes": [
+        "examples/**/*.astro",
+        "examples/**/*.svelte",
+        "examples/**/*.vue"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedImports": "off",
+            "noUnusedVariables": "off",
+            "useHookAtTopLevel": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["site/**/*.css"],
       "css": {
         "parser": {
