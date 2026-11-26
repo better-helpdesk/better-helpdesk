@@ -30,7 +30,7 @@ TEST_DB=sqlite pnpm test:integration
 ```
 
 `--filter better-helpdesk` skips the demo app's Next.js download; drop it if
-you want to run `examples/demo`. The SQLite integration suite runs
+you want to run `examples/nextjs`. The SQLite integration suite runs
 in-process, so there is no database to start.
 
 ## Integration tests on the other databases

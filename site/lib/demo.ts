@@ -224,7 +224,7 @@ const browser = (
   ...extra,
 });
 
-// Invented people on .test domains, as in examples/demo/scripts/seed.ts.
+// Invented people on .test domains, as in examples/nextjs/scripts/seed.ts.
 const THREADS: Thread[] = [
   {
     from: {

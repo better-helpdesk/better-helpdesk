@@ -106,7 +106,7 @@ code already does. Concretely:
 - `test/`: integration tests against a real database through
   `createHarness`; they reach the database only through the harness, so the
   same suite runs on every built-in adapter. Unit tests sit next to their source as `*.test.ts(x)`.
-- `examples/demo`: "Harbor", a Next.js app with the package installed the
+- `examples/nextjs`: "Harbor", a Next.js app with the package installed the
   way the README describes; its README says how to run it. It is a workspace
   package, so a root `pnpm install` also downloads its Next.js, which is why
   CI installs with `--filter better-helpdesk`. CI builds the demo against

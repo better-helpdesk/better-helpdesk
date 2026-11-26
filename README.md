@@ -356,7 +356,7 @@ Send a message from the widget, open `/helpdesk` as an agent and answer it.
 That is the whole loop, and the
 [docs](https://better-helpdesk.com/docs/operations/production) take it from
 there: sign-in, production, email, jobs, attachments, AI and theming.
-[`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
+[`examples/nextjs`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/nextjs)
 has it wired up end to end.
 
 ## Documentation
@@ -375,16 +375,16 @@ Try it without installing anything at
 customer, answer as the agent, and see the rows land in Postgres. Everyone
 shares that inbox, and it starts over every quarter hour.
 
-[`examples/demo`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/demo)
+[`examples/nextjs`](https://github.com/better-helpdesk/better-helpdesk/tree/main/examples/nextjs)
 is Harbor, a pretend shipping product with the package installed the way the
 quickstart describes: one route handler, the agent UI at `/helpdesk`, the widget
 in the corner. With a local Postgres running:
 
 ```sh
 pnpm install
-cp examples/demo/.env.example examples/demo/.env.local
-pnpm --filter better-helpdesk-demo db:migrate
-pnpm --filter better-helpdesk-demo dev
+cp examples/nextjs/.env.example examples/nextjs/.env.local
+pnpm --filter better-helpdesk-nextjs db:migrate
+pnpm --filter better-helpdesk-nextjs dev
 ```
 
 Its README explains the role switcher and what the demo deliberately gets

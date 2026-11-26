@@ -1,9 +1,9 @@
 /**
  * What a pager or an issue tracker does from host code: writes what it
  * learned onto the conversation, with events and timeline rows.
- *   pnpm --filter better-helpdesk-demo pager HRB-1000 "PagerDuty: acknowledged by Sam"
- *   pnpm --filter better-helpdesk-demo pager HRB-1000 --resolve "GitLab issue #42 closed"
- *   pnpm --filter better-helpdesk-demo pager --open ops@nordkai.test "Incident INC-7: we are looking into it"
+ *   pnpm --filter better-helpdesk-nextjs pager HRB-1000 "PagerDuty: acknowledged by Sam"
+ *   pnpm --filter better-helpdesk-nextjs pager HRB-1000 --resolve "GitLab issue #42 closed"
+ *   pnpm --filter better-helpdesk-nextjs pager --open ops@nordkai.test "Incident INC-7: we are looking into it"
  */
 import { helpdesk, pool } from '../lib/helpdesk';
 

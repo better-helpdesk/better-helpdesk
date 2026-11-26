@@ -1,6 +1,6 @@
 /**
  * Fills the inbox so the demo has something to show before anyone writes in.
- * Run with `pnpm --filter better-helpdesk-demo seed`. Every person here is
+ * Run with `pnpm --filter better-helpdesk-nextjs seed`. Every person here is
  * invented and lives on a `.test` domain.
  */
 import { helpdesk, pool } from '../lib/helpdesk';
