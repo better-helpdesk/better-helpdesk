@@ -74,10 +74,12 @@
       },
       "./widget": {
         "types": "./dist/widget/index.d.ts",
+        "react-server": "./dist/widget/index.react-server.js",
         "default": "./dist/widget/index.js"
       },
       "./admin": {
         "types": "./dist/admin/index.d.ts",
+        "react-server": "./dist/admin/index.react-server.js",
         "default": "./dist/admin/index.js"
       },
       "./next": "./next.mjs",

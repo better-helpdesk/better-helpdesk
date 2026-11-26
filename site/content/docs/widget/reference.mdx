@@ -10,7 +10,7 @@ The widget is the customer side of the helpdesk. It comes in two forms over the 
 | A launcher and a floating panel | `HelpdeskWidget` | `<helpdesk-widget>` | `defineHelpdeskWidget()` |
 | The panel in the page, always open, without a launcher | `HelpdeskConversations` | `<helpdesk-conversations>` | `defineHelpdeskConversations()` |
 
-All four exports come from `better-helpdesk/widget`, which starts with `'use client'`. Each element renders into its own open shadow root, so the host's styles do not reach it. Related guides: [Add the widget](/docs/widget/add), [Add a support page](/docs/widget/support-page), [Theme the widget and the agent UI](/docs/customize/theming).
+All four exports come from `better-helpdesk/widget`. A Server Component, such as a Next.js page, imports it as a `'use client'` module, so it can render the React components directly; other bundlers get it without the directive. Each element renders into its own open shadow root, so the host's styles do not reach it. Related guides: [Add the widget](/docs/widget/add), [Add a support page](/docs/widget/support-page), [Theme the widget and the agent UI](/docs/customize/theming).
 
 ## React props
 

@@ -201,11 +201,11 @@ What a host needs to pick or write a database adapter, without the rest of the s
 
 ## better-helpdesk/widget
 
-`HelpdeskWidget`, `HelpdeskConversations`, `defineHelpdeskWidget` and `defineHelpdeskConversations`. See [Widget](/docs/widget/reference).
+`HelpdeskWidget`, `HelpdeskConversations`, `defineHelpdeskWidget` and `defineHelpdeskConversations`. Under the `react-server` export condition, which Server Component bundlers such as Next.js resolve, the module is marked `'use client'`; under every other condition it carries no directive. See [Widget](/docs/widget/reference).
 
 ## better-helpdesk/admin
 
-`HelpdeskAdmin`, `HELPDESK_SECTIONS` and `HELPDESK_CHANGED`. See [Agent UI](/docs/inbox/agent-ui).
+`HelpdeskAdmin`, `HELPDESK_SECTIONS` and `HELPDESK_CHANGED`. Marked `'use client'` under the `react-server` condition only, as `better-helpdesk/widget` is. See [Agent UI](/docs/inbox/agent-ui).
 
 ## better-helpdesk/rich
 
