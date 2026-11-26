@@ -4,7 +4,7 @@
 FROM node:24-alpine AS build
 ENV CI=1 NEXT_TELEMETRY_DISABLED=1
 WORKDIR /repo
-RUN npm install --global pnpm@11.24.0
+RUN npm install --global pnpm@12.23.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY site/package.json site/
 RUN pnpm install --frozen-lockfile --filter better-helpdesk-site

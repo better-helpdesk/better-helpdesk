@@ -3330,15 +3330,18 @@ describe('inbox beside a conversation', () => {
       '',
       '/support/conversations/c1/?tag=billing'
     );
+    // jsdom lays nothing out, so the wide container rule that shows the list never
+    // matches, and a row that is not rendered cannot take focus.
+    const wide = document.createElement('style');
+    wide.textContent =
+      '.sa-panes[data-open] > .sa-list-pane { display: block !important; }';
+    document.head.append(wide);
+    onTestFinished(() => wide.remove());
     const { container } = render(
       <HelpdeskAdmin basePath="/support" locale="en" />
     );
     await screen.findByText('The CSV export fails');
-    // jsdom ignores container queries, so the narrow rule hides the list.
-    const row = await screen.findByRole('link', {
-      name: /DG-1000/,
-      hidden: true,
-    });
+    const row = await screen.findByRole('link', { name: /DG-1000/ });
     expect(row.closest('tr')?.getAttribute('aria-current')).toBe('true');
     expect(
       screen.getByRole('link', { name: 'Inbox' }).getAttribute('href')
