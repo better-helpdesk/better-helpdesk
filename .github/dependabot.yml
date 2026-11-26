@@ -92,9 +92,10 @@ updates:
       day: monday
       time: '05:00'
       timezone: Europe/Zurich
+    # Actions are not SemVer to Dependabot, so it takes no per-type cooldown.
+    # The workflows pin major tags, so nearly every update here is a major.
     cooldown:
-      default-days: 3
-      semver-major-days: 30
+      default-days: 30
     groups:
       actions:
         patterns: ['*']
