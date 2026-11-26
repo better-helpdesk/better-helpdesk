@@ -1,0 +1,30 @@
+---
+import { HelpdeskAdmin } from 'better-helpdesk/admin';
+
+import Page from '../../layouts/Page.astro';
+import { isAgent } from '../../lib/helpdesk';
+
+const agent = isAgent(Astro.request);
+---
+
+<Page title="Agent inbox">
+  {
+    agent ? (
+      <HelpdeskAdmin
+        client:only="react"
+        api="/api/helpdesk"
+        basePath="/helpdesk"
+        locale="en"
+      />
+    ) : (
+      <>
+        <h1>Only agents get this far</h1>
+        <p>
+          The agent routes refuse anyone <code>identify</code> does not call an
+          agent.
+          <a href="/">Sign in as an agent</a> on the home page first.
+        </p>
+      </>
+    )
+  }
+</Page>

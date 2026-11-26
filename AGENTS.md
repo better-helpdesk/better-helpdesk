@@ -106,11 +106,15 @@ code already does. Concretely:
 - `test/`: integration tests against a real database through
   `createHarness`; they reach the database only through the harness, so the
   same suite runs on every built-in adapter. Unit tests sit next to their source as `*.test.ts(x)`.
-- `examples/demo`: "Harbor", a Next.js app with the package installed the
+- `examples/nextjs`: "Harbor", a Next.js app with the package installed the
   way the README describes; its README says how to run it. It is a workspace
   package, so a root `pnpm install` also downloads its Next.js, which is why
   CI installs with `--filter better-helpdesk`. CI builds the demo against
   the packed tarball on the current and the previous Next.js major.
+- `examples/astro`, `examples/nuxt`, `examples/sveltekit`: the handler and
+  the widget in other frameworks, each on the published package from npm;
+  Astro renders the agent UI too. CI builds each against the packed tarball,
+  starts it and sends a widget message.
 - `site/`: the marketing website, a Next.js app on Divio Cloud that runs
   the published package for its own widget and inbox. `site/Dockerfile`
   builds it and nothing else, from the repository root; its README covers
@@ -149,7 +153,7 @@ tarball into a scratch directory outside the repository and import it.
 - **Quality over speed.** There is no deadline and no release cadence; a
   release ships when it is ready. When the two conflict, quality wins.
 - **Green CI is the bar for every PR**: lint, unit tests, integration tests,
-  the tarball smoke test and the demo build.
+  the tarball smoke test and the example builds.
 - **Tests assert outcomes**: the response, the rows in the test database, the
   rendered output, the email the fake adapter received. A test that only
   checks what was called proves nothing. UI tests put

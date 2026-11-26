@@ -85,7 +85,7 @@ jobs skip what already exists, the npm version and the GitHub Release.
 
 `site/` runs the published package, so it moves only once npm has the new
 version; for a `0.x` version the caret in `site/package.json` never reaches
-the next minor on its own. `examples/demo` follows the workspace and needs
+the next minor on its own. `examples/nextjs` follows the workspace and needs
 nothing.
 
 ```sh

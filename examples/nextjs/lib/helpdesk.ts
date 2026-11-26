@@ -26,7 +26,7 @@ if (
 const connectionString = process.env.HELPDESK_DATABASE_URL;
 if (!connectionString) {
   throw new Error(
-    'Set HELPDESK_DATABASE_URL (see examples/demo/README.md) and run `npm run db:migrate` first.'
+    'Set HELPDESK_DATABASE_URL (see examples/nextjs/README.md) and run `npm run db:migrate` first.'
   );
 }
 

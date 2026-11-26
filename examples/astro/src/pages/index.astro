@@ -1,0 +1,36 @@
+---
+import Page from '../layouts/Page.astro';
+import { isAgent } from '../lib/helpdesk';
+
+const agent = isAgent(Astro.request);
+---
+
+<Page title="Astro with Better Helpdesk">
+  <h1>Astro with Better Helpdesk</h1>
+  <p>The launcher is in the corner.</p>
+  <form method="post" action="/role/">
+    {
+      agent ? (
+        <p>
+          You are Alex, an agent: answer from <a href="/helpdesk/">the agent inbox</a>.
+          <button type="submit" name="role" value="visitor">
+            Sign out
+          </button>
+        </p>
+      ) : (
+        <p>
+          <button type="submit" name="role" value="agent">
+            Sign in as an agent
+          </button>
+        </p>
+      )
+    }
+  </form>
+
+  <helpdesk-widget api="/api/helpdesk" inbox="support"></helpdesk-widget>
+  <script>
+    import { defineHelpdeskWidget } from 'better-helpdesk/widget';
+
+    defineHelpdeskWidget();
+  </script>
+</Page>

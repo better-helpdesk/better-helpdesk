@@ -16,10 +16,10 @@ Then, from the repository root:
 
 ```sh
 pnpm install
-cp examples/demo/.env.example examples/demo/.env.local
-pnpm --filter better-helpdesk-demo db:migrate
-pnpm --filter better-helpdesk-demo seed
-pnpm --filter better-helpdesk-demo dev
+cp examples/nextjs/.env.example examples/nextjs/.env.local
+pnpm --filter better-helpdesk-nextjs db:migrate
+pnpm --filter better-helpdesk-nextjs seed
+pnpm --filter better-helpdesk-nextjs dev
 ```
 
 `seed` writes a dozen invented conversations across both inboxes, and does

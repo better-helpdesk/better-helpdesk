@@ -17,7 +17,7 @@ Report it privately through
 [GitHub's private vulnerability reporting](https://github.com/better-helpdesk/better-helpdesk/security/advisories/new).
 Include the version, the affected route, component or adapter, the steps to
 reproduce, and what an attacker gains. A proof of concept against the demo
-in `examples/demo` or a local install is ideal; please do not test against
+in `examples/nextjs` or a local install is ideal; please do not test against
 someone else's deployment.
 
 ## What happens next
@@ -37,6 +37,6 @@ adapters, the migrations and the CLIs.
 
 Out of scope is code the host writes and owns: its `identify` function, its
 session handling, and the storage, email, AI or help-search adapters it
-implements. The example relay in `relays/` and the demo in `examples/demo`
+implements. The example relay in `relays/` and the demo in `examples/nextjs`
 are examples; report a flaw in them all the same if a host copying them
 would inherit it.
