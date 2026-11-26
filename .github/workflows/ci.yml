@@ -11,6 +11,20 @@ on:
   workflow_call:
 
 jobs:
+  # Dependabot raises no alerts for this repository (see dependabot.yml), so
+  # the Monday run asks the registry instead and fails on a high or critical
+  # advisory anywhere in the lockfile.
+  audit:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - run: pnpm audit --audit-level=high
+
   check:
     name: check (node ${{ matrix.node }})
     if: github.event_name != 'schedule'

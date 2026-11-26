@@ -1,0 +1,46 @@
+# Weekly update pull requests. They cannot replace the advisory check in
+# ci.yml: pnpm 12 writes the lockfile as two YAML documents, which GitHub's
+# dependency graph does not read, so Dependabot raises no alerts here.
+version: 2
+updates:
+  - package-ecosystem: npm
+    # The root and every workspace package in pnpm-workspace.yaml.
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:00'
+      timezone: Europe/Zurich
+    # pnpm refuses versions younger than its minimum release age anyway.
+    cooldown:
+      default-days: 3
+    # The package's own ranges are what hosts install: a release that already
+    # fits them only moves the lockfile.
+    versioning-strategy: increase-if-necessary
+    ignore:
+      # The site and the examples move to a new release in the release's own
+      # last step.
+      - dependency-name: better-helpdesk
+    groups:
+      production:
+        dependency-type: production
+        update-types: [minor, patch]
+      development:
+        dependency-type: development
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:00'
+      timezone: Europe/Zurich
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
