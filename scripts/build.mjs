@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
@@ -39,14 +39,35 @@ await build({
   chunkNames: 'chunks/server-[hash]',
 });
 
-// Entries keep their 'use client'; the ones esbuild drops sit inside the client boundary.
-await build({
+// The ones esbuild drops sit inside the client boundary.
+const client = await build({
   ...library,
   platform: 'browser',
   entryPoints: ['src/widget/index.ts', 'src/admin/index.tsx'],
   chunkNames: 'chunks/client-[hash]',
   logOverride: { 'module-level-directive': 'silent' },
+  metafile: true,
 });
+
+// Only a Server Component needs the client boundary marked, and only React
+// Server Component bundlers such as Next.js resolve the `react-server` export
+// condition: that file carries 'use client' and re-exports the entry by name,
+// since a boundary cannot `export *`. The entry leaves the directive out, which
+// Vite and Rollup would otherwise warn they cannot keep.
+for (const [file, output] of Object.entries(client.metafile.outputs)) {
+  if (!output.entryPoint) continue;
+  const path = join(root, file);
+  const code = await readFile(path, 'utf8');
+  const directive = '"use client";\n';
+  if (!code.startsWith(directive)) {
+    throw new Error(`${file} no longer starts with ${directive.trim()}`);
+  }
+  await writeFile(path, code.slice(directive.length));
+  await writeFile(
+    path.replace(/\.js$/, '.react-server.js'),
+    `${directive}export { ${output.exports.join(', ')} } from "./${basename(path)}";\n`
+  );
+}
 
 await build({
   absWorkingDir: root,

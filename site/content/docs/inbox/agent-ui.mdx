@@ -3,7 +3,7 @@ title: Agent UI
 description: HelpdeskAdmin's props, its sections and URLs, its keyboard shortcuts, and the CSS custom properties it reads.
 ---
 
-`better-helpdesk/admin` exports the agent UI, `HelpdeskAdmin`, and two constants. The module starts with `'use client'`. The UI calls the [`agent/*` routes](/docs/reference/routes#agent), which answer only an agent. Related guide: [Theme the widget and the agent UI](/docs/customize/theming).
+`better-helpdesk/admin` exports the agent UI, `HelpdeskAdmin`, and two constants. A Server Component, such as a Next.js page, imports it as a `'use client'` module, so it can render `HelpdeskAdmin` directly; other bundlers get it without the directive. The UI calls the [`agent/*` routes](/docs/reference/routes#agent), which answer only an agent. Related guide: [Theme the widget and the agent UI](/docs/customize/theming).
 
 ```tsx title="app/helpdesk/[[...slug]]/page.tsx"
 import { HelpdeskAdmin } from 'better-helpdesk/admin';
