@@ -98,29 +98,28 @@
     "prepack": "node scripts/build.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.8",
-    "@testing-library/react": "^16.3.2",
-    "@types/mailparser": "^3.4.6",
-    "@types/node": "^24",
-    "@types/pg": "^8.18.0",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "19.2.7",
-    "esbuild": "^0.28.1",
-    "jsdom": "^29.1.1",
-    "mysql2": "^3.24.5",
-    "pg": "^8.16.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "@biomejs/biome": "2.6.9",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.1",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^31.0.1",
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tarn": "^3.1.2",
-    "tedious": "^20.3.3",
+    "tedious": "^20.4.3",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.1"
   },
   "dependencies": {
-    "kysely": "~0.29.6",
-    "mailauth": "^7.1.1",
-    "mailparser": "^3.9.0",
-    "zod": "^4.6.5"
+    "kysely": "~0.29.9",
+    "mailauth": "^8.1.0",
+    "mailparser": "^3.15.0",
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "mysql2": "^3.24.0",
@@ -148,5 +147,5 @@
       "optional": true
     }
   },
-  "packageManager": "pnpm@11.24.0"
+  "packageManager": "pnpm@12.23.0"
 }

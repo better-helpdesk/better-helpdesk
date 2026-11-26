@@ -390,32 +390,35 @@ function storedSwitch(key: string, byDefault: boolean) {
     } catch {}
     window.dispatchEvent(new Event(changed));
   };
-  const useSwitch = () =>
-    useSyncExternalStore(
-      change => {
-        window.addEventListener(changed, change);
-        return () => window.removeEventListener(changed, change);
-      },
-      read,
-      () => byDefault
-    );
-  return { read, set, useSwitch };
+  const subscribe = (change: () => void) => {
+    window.addEventListener(changed, change);
+    return () => window.removeEventListener(changed, change);
+  };
+  return { read, set, subscribe, byDefault };
+}
+
+function useStoredSwitch(stored: ReturnType<typeof storedSwitch>) {
+  return useSyncExternalStore(
+    stored.subscribe,
+    stored.read,
+    () => stored.byDefault
+  );
 }
 
 const keys = storedSwitch('helpdesk.keys', true);
 export const setKeysOn = keys.set;
 /** Whether the agent left single-key shortcuts on (WCAG 2.1.4). */
-export const useKeysOn = keys.useSwitch;
+export const useKeysOn = () => useStoredSwitch(keys);
 
 const queue = storedSwitch('helpdesk.queue', false);
 export const setQueueOn = queue.set;
 /** "Work the queue": after a reply, the next conversation in the inbox's order opens. */
-export const useQueueOn = queue.useSwitch;
+export const useQueueOn = () => useStoredSwitch(queue);
 
 const titleCount = storedSwitch('helpdesk.titleCount', true);
 export const setTitleCountOn = titleCount.set;
 /** Whether new notifications are counted in the tab title; muted per browser. */
-export const useTitleCountOn = titleCount.useSwitch;
+export const useTitleCountOn = () => useStoredSwitch(titleCount);
 
 /**
  * Single-key shortcuts on the window, keyed by `KeyboardEvent.key` with letters

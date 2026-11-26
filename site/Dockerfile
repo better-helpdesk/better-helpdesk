@@ -1,10 +1,10 @@
 # The marketing site in site/, for Divio Cloud, built with the repository root
 # as the context (the workspace lockfile lives there). The package itself ships no image: it runs inside
 # its host's app, and this site is one such host.
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 ENV CI=1 NEXT_TELEMETRY_DISABLED=1
 WORKDIR /repo
-RUN npm install --global pnpm@11.24.0
+RUN npm install --global pnpm@12.23.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY site/package.json site/
 RUN pnpm install --frozen-lockfile --filter better-helpdesk-site
@@ -22,7 +22,7 @@ RUN find site/.next/node_modules -type l | while read -r link; do \
       ln -s "/app/node_modules/${target##*/node_modules/}" "$dest"; \
     done
 
-FROM node:24-alpine
+FROM node:26-alpine
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 COPY --from=build /out ./

@@ -2089,7 +2089,7 @@ function Thread({
 
   return (
     <>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: a file dropped on the thread is attached; the composer's button is the keyboard's way. */}
+      {/* A file dropped on the thread is attached; the composer's button is the keyboard's way. */}
       <div className="body" {...drop.zone}>
         {(typedSubject || status) && (
           <div>
