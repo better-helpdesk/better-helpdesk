@@ -615,7 +615,7 @@ export function ConversationView({ id }: { id: string }) {
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: a file dropped anywhere on the conversation is attached; Attach file is the keyboard's way.
+    // A file dropped anywhere on the conversation is attached; Attach file is the keyboard's way.
     <div className="sa" ref={root} data-dropping={drop.dropping} {...drop.zone}>
       <div className="sa-page-head sa-convo-head">
         <a

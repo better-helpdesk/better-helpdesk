@@ -379,7 +379,7 @@ const onPostgres =
 
 describe.skipIf(!onPostgres)('postgresRealtime', () => {
   it('carries a change from one process’s adapter to another’s subscriber', async () => {
-    // biome-ignore lint/style/noNonNullAssertion: the suite is skipped without a pool
+    // The suite is skipped without a pool.
     const pool = h.pool!;
     const writer = postgresRealtime({ pool });
     const reader = postgresRealtime({ pool });

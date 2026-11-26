@@ -99,7 +99,7 @@ const waveWhy = {
 function footer(t, ref, epicRef) {
   const lines = [];
   lines.push(
-    `**Size:** ${sizeWord[t.size]} · **${t.wave === 'backlog' ? 'Backlog' : 'Wave ' + t.wave}** · **Epic:** ${epicRef(t.epic)}`
+    `**Size:** ${sizeWord[t.size]} · **${t.wave === 'backlog' ? 'Backlog' : `Wave ${t.wave}`}** · **Epic:** ${epicRef(t.epic)}`
   );
   if (t.depends.length)
     lines.push(`**Depends on:** ${t.depends.map(ref).join(', ')}`);
@@ -116,7 +116,7 @@ if (process.argv[2] === 'render') {
   const ref = id => `[${byId[id].title}](#${id})`;
   const epicRef = key => `[${epics[key].title}](#epic-${key})`;
   let md = `# Better Helpdesk against Zendesk, Intercom, Chatwoot and Libredesk\n\nResearched 2 October 2026. ${tickets.length} GitHub issues in seven epics, scheduled in four waves and a backlog, each completable on its own.\n\n`;
-  md += method + '\n\n' + part1 + '\n\n';
+  md += `${method}\n\n${part1}\n\n`;
   md += '## The epics\n\n';
   for (const [key, e] of Object.entries(epics)) {
     md += `<a id="epic-${key}"></a>\n**${e.title}.** ${e.body} Issues: ${tickets
@@ -132,11 +132,11 @@ if (process.argv[2] === 'render') {
       .join(', ');
     md += `| ${waveName[w]} | ${ids} | ${waveWhy[w]} |\n`;
   }
-  md += '\n' + declined + '\n\n## The issues\n\n';
+  md += `\n${declined}\n\n## The issues\n\n`;
   for (const w of ['1', '2', '3', '4', 'backlog']) {
     md += `### ${waveName[w]}\n\n`;
     for (const t of tickets.filter(t => t.wave === w)) {
-      md += `<a id="${t.id}"></a>\n#### ${t.title}\n\nLabels: ${t.labels.map(l => '`' + l + '`').join(' ')}\n\n${t.body}\n\n${footer(t, ref, epicRef)}\n\n---\n\n`;
+      md += `<a id="${t.id}"></a>\n#### ${t.title}\n\nLabels: ${t.labels.map(l => `\`${l}\``).join(' ')}\n\n${t.body}\n\n${footer(t, ref, epicRef)}\n\n---\n\n`;
     }
   }
   writeFileSync(out, md);
@@ -148,16 +148,14 @@ if (process.argv[2] === 'render') {
   const waves = wavesArg
     ? wavesArg.slice(8).split(',')
     : ['1', '2', '3', '4', 'backlog'];
-  const gh = (...a) =>
-    dry
-      ? (console.log(
-          'gh',
-          a
-            .map(s => (/\s/.test(s) ? JSON.stringify(s.slice(0, 60)) : s))
-            .join(' ')
-        ),
-        '')
-      : execFileSync('gh', a, { encoding: 'utf8' }).trim();
+  const gh = (...a) => {
+    if (!dry) return execFileSync('gh', a, { encoding: 'utf8' }).trim();
+    console.log(
+      'gh',
+      a.map(s => (/\s/.test(s) ? JSON.stringify(s.slice(0, 60)) : s)).join(' ')
+    );
+    return '';
+  };
   const repo = dry
     ? 'OWNER/REPO'
     : gh('repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner');
