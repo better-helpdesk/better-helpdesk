@@ -1,16 +1,13 @@
 # Weekly update pull requests. They cannot replace the advisory check in
 # ci.yml: pnpm 12 writes the lockfile as two YAML documents, which GitHub's
 # dependency graph does not read, so Dependabot raises no alerts here.
-#
-# One workspace, three entries that do not overlap: the package's own
-# dependencies one pull request each, the examples together in one, the site
-# in one. Dependabot runs pnpm in a full clone, so an entry that leaves the
-# other packages out still keeps them in the shared lockfile.
 version: 2
 updates:
+  # One entry for the whole workspace: Dependabot refuses to update a pnpm
+  # workspace from a member's directory, so the split between the package
+  # and the rest is by dependency name, in `groups` below.
   - package-ecosystem: npm
     directory: /
-    exclude-paths: [site, examples]
     schedule:
       interval: weekly
       day: monday
@@ -21,66 +18,49 @@ updates:
     cooldown:
       default-days: 3
       semver-major-days: 30
-    # These ranges are what hosts install: a release that already fits them
-    # only moves the lockfile.
+    # The package's ranges are what hosts install: a release that already
+    # fits them only moves the lockfile.
     versioning-strategy: increase-if-necessary
-    ignore:
-      # The types of the oldest Node the engines field promises, so code
-      # cannot reach for what that Node lacks.
-      - dependency-name: '@types/node'
-        update-types: ['version-update:semver-major']
-    commit-message:
-      prefix: chore
-      include: scope
-
-  - package-ecosystem: npm
-    # Named one by one: examples/adapters holds no package.json.
-    directories:
-      - /examples/astro
-      - /examples/nextjs
-      - /examples/nuxt
-      - /examples/sveltekit
-    schedule:
-      interval: weekly
-      day: monday
-      time: '05:00'
-      timezone: Europe/Zurich
-    cooldown:
-      default-days: 3
-      semver-major-days: 30
     ignore:
       # The site and the examples move to a new release in the release's own
       # last step.
       - dependency-name: better-helpdesk
+      # The types of the oldest Node the engines field promises, so code
+      # cannot reach for what that Node lacks.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
-      # The Astro, Nuxt and SvelteKit checkers cannot drive TypeScript 7.
+      # A migration to take on purpose; the Astro, Nuxt and SvelteKit checkers
+      # cannot drive TypeScript 7 yet.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
     groups:
-      examples:
+      # Everything the examples and the site use beyond the package's own
+      # dependencies, in one pull request. The package's own dependencies,
+      # the names in the root package.json, stay out of it and come one pull
+      # request each: keep this list in step with that file.
+      examples-and-site:
         patterns: ['*']
-    commit-message:
-      prefix: chore
-      include: scope
-
-  - package-ecosystem: npm
-    directory: /site
-    schedule:
-      interval: weekly
-      day: monday
-      time: '05:00'
-      timezone: Europe/Zurich
-    cooldown:
-      default-days: 3
-      semver-major-days: 30
-    ignore:
-      - dependency-name: better-helpdesk
-      - dependency-name: '@types/node'
-        update-types: ['version-update:semver-major']
-    groups:
-      site:
-        patterns: ['*']
+        exclude-patterns:
+          - '@biomejs/biome'
+          - '@testing-library/react'
+          - '@types/node'
+          - '@types/pg'
+          - '@types/react'
+          - '@types/react-dom'
+          - esbuild
+          - jsdom
+          - kysely
+          - mailauth
+          - mailparser
+          - mysql2
+          - pg
+          - react
+          - react-dom
+          - tarn
+          - tedious
+          - typescript
+          - vitest
+          - zod
     commit-message:
       prefix: chore
       include: scope
