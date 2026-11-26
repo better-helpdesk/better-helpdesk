@@ -85,12 +85,15 @@ jobs skip what already exists, the npm version and the GitHub Release.
 
 `site/` runs the published package, so it moves only once npm has the new
 version; for a `0.x` version the caret in `site/package.json` never reaches
-the next minor on its own. `examples/nextjs` follows the workspace and needs
-nothing.
+the next minor on its own. `examples/astro`, `examples/nuxt` and
+`examples/sveltekit` install from npm too and move with it;
+`examples/nextjs` follows the workspace and needs nothing.
 
 ```sh
 git switch -c site-better-helpdesk-X-Y-Z origin/main
-pnpm --filter better-helpdesk-site add better-helpdesk@^X.Y.Z
+pnpm --filter better-helpdesk-site --filter better-helpdesk-astro \
+  --filter better-helpdesk-nuxt --filter better-helpdesk-sveltekit \
+  add better-helpdesk@^X.Y.Z
 pnpm --filter better-helpdesk-site exec tsc --noEmit
 pnpm --filter better-helpdesk-site run build
 ```
