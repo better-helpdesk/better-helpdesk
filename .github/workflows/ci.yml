@@ -232,6 +232,12 @@ jobs:
           cd "$RUNNER_TEMP/app"
           npm pkg set dependencies.better-helpdesk="file:$(echo "$RUNNER_TEMP"/pack/*.tgz)"
           npm install --no-audit --no-fund
+      # The build does not type-check, and a checker can install fine and still
+      # fail to run, as vue-tsc does on TypeScript 7.
+      - name: Type-check
+        run: |
+          cd "$RUNNER_TEMP/app"
+          npm run check
       - name: Build, start
         run: |
           cd "$RUNNER_TEMP/app"
