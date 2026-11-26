@@ -1,6 +1,9 @@
 @import "../tokens.css";
 @import "../chrome.css";
 
+/* A state or an ancestor inside :where() still decides which elements match but
+   adds no specificity, so no rule outranks an unrelated one further down. */
+
 /* Layout: everything is cut from the mark's own cell, an 8px module. Notched corners, dot-matrix
    headlines, a wall of faces in the hero. Inside the product frame: no pixels, just the product. */
 *,
@@ -115,9 +118,6 @@ main,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.inst .pr {
-  color: var(--fg-3);
 }
 .cp {
   all: unset;
@@ -441,7 +441,7 @@ main,
   background: var(--fg);
   color: var(--bg);
 }
-.sc-tabs button:focus-visible {
+.sc-tabs button:where(:focus-visible) {
   box-shadow: inset 0 0 0 2px var(--mint);
 }
 .mood {
@@ -528,17 +528,17 @@ main,
 .a-side .a-off {
   color: var(--fg-3);
 }
-.a-side button:hover {
+.a-side button:where(:hover) {
   background: var(--s3);
 }
-.a-side button:focus-visible {
+.a-side button:where(:focus-visible) {
   box-shadow: inset 0 0 0 2px var(--mint);
 }
-.a-side button.on {
+.a-side button:where(.on) {
   background: var(--s3);
   color: var(--fg);
 }
-.a-side button span {
+.a-side :where(button) span {
   font: 500 11px / 1.6 var(--f-m);
   color: var(--wait);
 }
@@ -597,6 +597,7 @@ main,
   all: unset;
   box-sizing: border-box;
   width: 100%;
+  height: 64px;
   cursor: pointer;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto 72px;
@@ -697,8 +698,8 @@ kbd {
   color: var(--fg-2);
 }
 .av {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -1183,7 +1184,7 @@ dd.err {
   background: var(--s3);
   color: var(--fg);
 }
-.code-tabs button:focus-visible {
+.code-tabs button:where(:focus-visible) {
   box-shadow: inset 0 0 0 2px var(--mint);
 }
 .code pre {
@@ -1286,7 +1287,7 @@ dd.err {
   background: #fff;
   font-size: 14px;
 }
-.inv span:last-child {
+.inv span:where(:last-child) {
   color: #2b7a54;
   font-weight: 500;
 }
@@ -1337,7 +1338,7 @@ dd.err {
   background: var(--fg);
   color: var(--bg);
 }
-.seg button:focus-visible {
+.seg button:where(:focus-visible) {
   box-shadow: inset 0 0 0 2px var(--mint);
 }
 .wpanel {
@@ -1407,13 +1408,6 @@ dd.err {
   font-size: 12px;
   color: var(--fg-3);
   line-height: 1.4;
-}
-.w-type:focus-visible,
-.w-back:focus-visible,
-.w-ctx:focus-visible,
-.w-btn:focus-visible,
-.w-x:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--mint);
 }
 .w-back {
   all: unset;
@@ -1487,6 +1481,13 @@ dd.err {
   font-weight: 600;
   font-size: 13px;
 }
+.w-type:focus-visible,
+.w-back:focus-visible,
+.w-ctx:focus-visible,
+.w-btn:focus-visible,
+.w-x:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--mint);
+}
 .w-sent {
   display: grid;
   gap: 8px;
@@ -1523,20 +1524,22 @@ dd.err {
   color: var(--mint);
   font-weight: 600;
 }
-.w-agent:hover b {
+.w-agent:where(:hover) b {
   text-decoration: underline;
 }
 .launch {
   all: unset;
   cursor: pointer;
-  width: 64px;
-  height: 64px;
-  display: block;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  background: var(--mint);
   transition: transform 0.12s;
 }
 .launch svg {
-  width: 100%;
-  height: 100%;
+  width: 48px;
+  height: 48px;
   display: block;
 }
 .launch:active {
@@ -1607,9 +1610,6 @@ dd.err {
 }
 .c-ad {
   grid-column: span 4;
-}
-.c-ad .adl {
-  margin-top: 8px;
 }
 .c-inbox {
   --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 6 6' shape-rendering='crispEdges'%3E%3Cpath d='M.5 .5h5v1h-5zM.5 1.5h1v4h-1zM4.5 1.5h1v4h-1zM1.5 4.5h3v1h-3zM1.5 3.5h1v1h-1zM3.5 3.5h1v1h-1z'/%3E%3C/svg%3E");
@@ -1703,6 +1703,9 @@ dd.err {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
+}
+.c-ad .adl {
+  margin-top: 8px;
 }
 .adl li {
   padding: 12px 14px;
@@ -1847,6 +1850,7 @@ dd.err {
   font: 500 14px / 1 var(--f-m);
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .c-row.us {
   background: var(--mint-dim);
@@ -1902,16 +1906,16 @@ dd.err {
   padding: 16px 18px;
   border-bottom: 1px solid var(--line);
 }
-.tbl tr:last-child > * {
+.tbl tr:last-child > :is(th, td) {
   border-bottom: 0;
 }
-.tbl thead th {
+.tbl :where(thead) th {
   font: 500 10.5px / 1.3 var(--f-m);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--fg-3);
 }
-.tbl tbody th {
+.tbl :where(tbody) th {
   font-weight: 500;
   color: var(--fg-3);
   width: 18%;
@@ -2129,10 +2133,6 @@ dd.err {
 .partner {
   position: relative;
 }
-.partner .btn:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
 .f-msg.err {
   color: var(--late);
 }
@@ -2214,6 +2214,7 @@ dd.err {
   padding: 20px 22px;
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 18px;
   font: 600 17px / 1.4 var(--f-b);
 }
@@ -2224,21 +2225,7 @@ dd.err {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--mint);
 }
-.qa summary::after {
-  content: "+";
-  width: 28px;
-  height: 28px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  background: var(--s3);
-  color: var(--mint);
-  font: 500 16px / 1 var(--f-m);
-}
-.qa details[open] summary::after {
-  content: "−";
-}
-.qa details p {
+.qa p {
   padding: 0 22px 22px;
   color: var(--fg-2);
   max-width: 70ch;
@@ -2292,7 +2279,7 @@ dd.err {
 .f-made {
   margin-top: 10px;
 }
-.f-brand .f-made svg {
+.f-made svg {
   display: inline;
   width: 14px;
   height: 14px;
@@ -2315,7 +2302,7 @@ dd.err {
 .foot li {
   display: flex;
 }
-.foot a:hover {
+.foot a:where(:hover) {
   color: var(--mint);
 }
 @media (max-width: 760px) {
@@ -2328,6 +2315,7 @@ dd.err {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* biome-ignore-start lint/complexity/noImportantStyles: reduced motion has to win over every component's own animation. */
   *,
   *::before,
   *::after {
@@ -2335,6 +2323,7 @@ dd.err {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+  /* biome-ignore-end lint/complexity/noImportantStyles: the block above */
   .rv.pre,
   .tile.pre {
     opacity: 1;
@@ -2401,20 +2390,12 @@ dd.err {
   }
 }
 
-.av {
-  width: 32px;
-  height: 32px;
-}
-
 /* Inbox: one selection that steps between rows, a row that arrives, a reminder that lands. */
 .a-rows {
   position: relative;
 }
-.a-rows > li:not(.a-sel) {
+.a-rows > li:where(:not(.a-sel)) {
   position: relative;
-}
-.a-row {
-  height: 64px;
 }
 .a-row.on,
 .a-row.kb {
@@ -2487,7 +2468,7 @@ kbd.on {
 .layer.now {
   background: var(--mint-dim);
 }
-.layer.lit b {
+.layer:where(.lit) b {
   color: var(--mint);
 }
 .wire {
@@ -2506,7 +2487,7 @@ kbd.on {
   background: var(--s4);
   transition: background-color 0s;
 }
-.layer.lit .wire i {
+:where(.layer.lit) .wire i {
   background: var(--mint);
 }
 .path-cap {
@@ -2571,7 +2552,7 @@ kbd.on {
 .inv {
   background: var(--s3);
 }
-.inv span:last-child {
+.inv span:where(:last-child) {
   color: var(--mint);
 }
 .inv span.bad {
@@ -2580,17 +2561,6 @@ kbd.on {
 .wcol {
   gap: 16px;
   padding: 24px;
-}
-.launch {
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  background: var(--mint);
-}
-.launch svg {
-  width: 48px;
-  height: 48px;
 }
 
 /* FAQ with its aside */
@@ -2649,9 +2619,6 @@ kbd.on {
 }
 .sg-sec {
   padding-top: clamp(80px, 10vw, 136px);
-}
-.sg-sec .sh h2 {
-  font-size: clamp(2rem, 1.2rem + 2.8vw, 3.5rem);
 }
 .sg-grid {
   display: grid;
@@ -2764,7 +2731,7 @@ kbd.on {
   font: 400 12px / 40px var(--f-m);
   color: var(--fg-2);
 }
-.sg-rows li:not(.a-sel) {
+.sg-rows li:where(:not(.a-sel)) {
   position: relative;
   height: 40px;
   padding-left: 16px;
@@ -2924,12 +2891,12 @@ kbd.on {
   background: var(--fg);
   color: var(--bg);
 }
-.mini-tabs button span {
+.mini-tabs :where(button) span {
   font: 500 10.5px / 1 var(--f-m);
   color: var(--wait);
   margin-left: 6px;
 }
-.mini-tabs button:focus-visible {
+.mini-tabs button:where(:focus-visible) {
   box-shadow: inset 0 0 0 2px var(--mint);
 }
 .mini {
@@ -2962,11 +2929,6 @@ kbd.on {
   animation: wipe 0.32s steps(4) both;
 }
 
-/* FAQ toggle icon */
-.qa summary::after {
-  content: none;
-}
-
 /* Supporter form, sponsor, continuity list */
 .opt {
   color: var(--fg-3);
@@ -2975,7 +2937,7 @@ kbd.on {
 .ti-l {
   margin: 0 6px 0 0;
 }
-.btn-sm > svg:first-child {
+.btn-sm > svg:where(:first-child) {
   width: 16px;
   height: 16px;
 }
@@ -3063,10 +3025,6 @@ kbd.on {
 .cont-form .btn .bi {
   width: 40px;
   height: 40px;
-}
-.cont-form .btn:disabled {
-  opacity: 0.6;
-  cursor: progress;
 }
 .cont-form .chk,
 .cont-form .f-msg {
@@ -3225,13 +3183,6 @@ kbd.on {
 }
 
 /* FAQ: the toggle keeps its square at the right; only the plus turns into a cross. */
-.qa summary {
-  align-items: center;
-}
-.qa summary::after,
-.qa details[open] summary::after {
-  content: none;
-}
 .qa-i {
   width: 32px;
   height: 32px;
@@ -3276,9 +3227,6 @@ kbd.on {
     transform: translateY(-8px);
     clip-path: inset(0 0 100% 0);
   }
-}
-.c-v {
-  white-space: nowrap;
 }
 .c-v small {
   margin-left: 4px;

@@ -8,6 +8,9 @@
    (app/chrome.css), and these rules over Fumadocs. They are unlayered, so they
    win over Tailwind's layered utilities without !important. */
 
+/* A state or an ancestor inside :where() still decides which elements match but
+   adds no specificity, so no rule outranks an unrelated one further down. */
+
 @theme {
   --font-sans: var(--font-rethink), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-martian), ui-monospace, Menlo, monospace;
@@ -71,13 +74,13 @@ body {
 }
 
 /* One radius system: square; keys keep their 4px. */
-#nd-docs-layout *,
 [role="dialog"],
-[role="dialog"] * {
+[role="dialog"] *,
+#nd-docs-layout * {
   border-radius: 0;
 }
-#nd-docs-layout kbd,
-[role="dialog"] kbd {
+[role="dialog"] kbd,
+#nd-docs-layout kbd {
   font: 500 10.5px / 1 var(--f-m);
   padding: 3px 6px;
   border: 0;
@@ -134,6 +137,361 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+.docs-phone-links {
+  display: grid;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.docs-phone-links a {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 14px;
+  font: 400 13px / 1 var(--f-m);
+  color: var(--fg-2);
+}
+.docs-phone-links a:hover {
+  color: var(--fg);
+  background: var(--s3);
+}
+@media (min-width: 768px) {
+  /* …and the site links. */
+  .docs-phone-links {
+    display: none;
+  }
+}
+
+/* The page: title, description, reading. */
+#nd-page {
+  padding-top: 48px;
+}
+#nd-page h1 {
+  font: 900 clamp(2rem, 1.3rem + 2vw, 3rem) / 0.95 var(--f-dot);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  color: var(--fg);
+}
+:where(#nd-page) h1 + p {
+  margin: 16px 0 48px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  max-width: 56ch;
+  text-wrap: pretty;
+}
+#nd-page .prose {
+  --tw-prose-body: var(--fg-2);
+  --tw-prose-headings: var(--fg);
+  --tw-prose-lead: var(--fg-2);
+  --tw-prose-links: var(--mint);
+  --tw-prose-bold: var(--fg);
+  --tw-prose-counters: var(--fg-3);
+  --tw-prose-bullets: var(--fg-3);
+  --tw-prose-hr: var(--line);
+  --tw-prose-quotes: var(--fg);
+  --tw-prose-quote-borders: var(--line-2);
+  --tw-prose-captions: var(--fg-3);
+  --tw-prose-code: var(--fg);
+  --tw-prose-th-borders: var(--line);
+  --tw-prose-td-borders: var(--line);
+  --tw-prose-kbd: var(--fg-2);
+  font-size: 16px;
+  line-height: 1.7;
+}
+.prose :is(p, li, blockquote, dd) {
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+.prose :is(h2, h3, h4) {
+  color: var(--fg);
+  text-wrap: balance;
+  scroll-margin-top: calc(var(--fd-docs-row-1) + 24px);
+}
+.prose h2 {
+  font: 700 26px / 1.2 var(--f-b);
+  letter-spacing: -0.015em;
+  margin: 64px 0 16px;
+}
+.prose h3 {
+  font: 600 19px / 1.3 var(--f-b);
+  letter-spacing: -0.01em;
+  margin: 40px 0 12px;
+}
+.prose h4 {
+  font: 600 16px / 1.4 var(--f-b);
+  margin: 28px 0 8px;
+}
+.prose :is(h2, h3, h4) > a[data-card] {
+  color: inherit;
+  text-decoration: none;
+}
+.prose a:not([data-card]) {
+  color: var(--mint);
+  font-weight: 500;
+  text-decoration: underline dotted 2px rgba(154, 217, 184, 0.4);
+  text-underline-offset: 4px;
+  transition:
+    color 0.15s var(--ease),
+    text-decoration-color 0.15s var(--ease);
+}
+.prose a:not([data-card]):hover {
+  color: var(--mint-2);
+  text-decoration-style: solid;
+  text-decoration-color: var(--mint-2);
+}
+.prose ul {
+  list-style: square;
+}
+.prose li {
+  margin-block: 6px;
+}
+.prose li::marker {
+  color: var(--fg-3);
+}
+.prose ol > li::marker {
+  font: 500 0.84em var(--f-m);
+}
+.prose blockquote {
+  border-inline-start: 2px solid var(--line-2);
+  padding-inline-start: 16px;
+  font-style: normal;
+  color: var(--fg-2);
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin-block: 48px;
+}
+
+/* Inline code: Martian Mono is wide, so it runs smaller than the text around it. */
+.prose :where(:not(pre, .not-prose, .not-prose *)) > code {
+  font: 400 0.8em / 1.4 var(--f-m);
+  color: var(--fg);
+  background: var(--s2);
+  padding: 0.15em 0.4em;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow-wrap: break-word;
+}
+.prose :not(pre) > code::before,
+.prose :not(pre) > code::after {
+  content: none;
+}
+.prose :where(a) code {
+  color: inherit;
+}
+
+/* Callouts: a tray with a bar in the kind's colour. The icon stays, so the kind
+   never rests on colour alone. */
+.bh-callout {
+  background: var(--s1);
+  border: 0;
+  box-shadow: none;
+  padding: 14px 18px 14px 14px;
+  gap: 12px;
+  margin-block: 24px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--fg-2);
+}
+.bh-callout > div:where(:first-child) {
+  width: 2px;
+  background: var(--callout-color);
+}
+.bh-callout > svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 4px;
+}
+.bh-callout:is([data-type="warn"], [data-type="warning"], [data-type="idea"]) {
+  background: rgba(241, 210, 122, 0.07);
+}
+.bh-callout[data-type="error"] {
+  background: rgba(240, 144, 127, 0.07);
+}
+
+/* Tables, as the home page's comparison table. */
+.prose div:where(:has(> table)) {
+  border: 0;
+  background: none;
+  overflow-x: auto;
+}
+.prose table {
+  border: 0;
+  background: none;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.prose :is(th, td) {
+  text-align: left;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.prose :is(thead, tr) {
+  background: none;
+}
+.prose thead th {
+  font: 500 10.5px / 1.3 var(--f-m);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  background: none;
+}
+.prose td {
+  color: var(--fg-2);
+}
+.prose tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+/* Type tables: a tray, rows on hairlines. */
+.bh-typetable > div {
+  background: var(--s1);
+  border: 0;
+  box-shadow: none;
+}
+
+/* Header row as the tables' labels; property names in paper, not the accent. */
+.bh-typetable > div > div:first-child p {
+  font: 500 10.5px / 1.3 var(--f-m);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+.bh-typetable :where(button) > code {
+  font-size: 12.5px;
+  color: var(--fg);
+}
+.bh-typetable button {
+  min-height: 40px;
+}
+
+/* Heading anchors: the link button beside each heading. */
+.prose :is(h2, h3, h4) > button {
+  width: 24px;
+  height: 24px;
+  color: var(--fg-3);
+  opacity: 0;
+  transition: opacity 0.15s steps(2);
+}
+.prose :is(h2, h3, h4):hover > button,
+.prose :is(h2, h3, h4) > button:focus-visible {
+  opacity: 1;
+}
+.prose :is(h2, h3, h4) > button:hover {
+  color: var(--mint);
+  background: var(--s3);
+}
+@media (hover: none) {
+  .prose :is(h2, h3, h4) > button {
+    opacity: 1;
+  }
+}
+
+/* Code blocks: a tray (--s1) around a core on the ground, as .code on the home page. */
+#nd-page figure.shiki {
+  background: var(--s1);
+  border: 0;
+  box-shadow: none;
+  padding: 4px;
+  margin-block: 20px 24px;
+  --padding-left: 20px;
+  --padding-right: 20px;
+}
+#nd-page figure.shiki > div:has(> figcaption) {
+  height: 40px;
+  padding: 0 0 0 4px;
+  border: 0;
+  background: none;
+}
+#nd-page figure.shiki figcaption {
+  flex: none;
+  max-width: calc(100% - 48px);
+  display: block;
+  height: 32px;
+  margin-inline-end: auto;
+  padding: 0 12px;
+  background: var(--s3);
+  color: var(--fg);
+  font: 500 11.5px / 32px var(--f-m);
+}
+#nd-page figure.shiki > div:last-child {
+  background: var(--bg);
+}
+/* The language badge: the filename already says it, in the one icon family we keep. */
+#nd-page
+  figure.shiki
+  > div:has(> figcaption)
+  > div:first-child:not(:has(button)) {
+  display: none;
+}
+#nd-page figure.shiki pre {
+  padding-block: 16px;
+  font: 400 12.5px / 1.8 var(--f-m);
+}
+#nd-page figure.shiki button[data-checked] {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-3);
+}
+#nd-page figure.shiki button[data-checked]:hover {
+  color: var(--fg);
+  background: var(--s3);
+}
+#nd-page figure.shiki button[data-checked="true"] {
+  color: var(--mint);
+}
+.shiki .highlighted {
+  background: var(--mint-dim);
+}
+.shiki .highlighted::after {
+  width: 2px;
+  background: var(--mint);
+}
+.shiki .highlighted-word {
+  background: var(--s3);
+  color: var(--fg);
+  padding: 1px 3px;
+  box-shadow: inset 0 -2px 0 var(--mint);
+}
+.shiki.has-focused .line:not(.focused) {
+  filter: none;
+  opacity: 0.45;
+}
+
+/* Tabs and code groups, as the home page's .code-tabs. */
+#nd-page [role="tablist"] {
+  gap: 4px;
+  padding: 4px;
+  background: var(--s1);
+  border: 0;
+}
+#nd-page [role="tab"] {
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  font: 500 11.5px / 1 var(--f-m);
+  color: var(--fg-3);
+}
+#nd-page [role="tab"]::after {
+  display: none;
+}
+#nd-page [role="tab"]:hover {
+  color: var(--fg);
+}
+#nd-page [role="tab"][aria-selected="true"] {
+  background: var(--s3);
+  color: var(--fg);
 }
 
 /* Sidebar */
@@ -226,30 +584,6 @@ body {
     min-height: 44px;
   }
 }
-.docs-phone-links {
-  display: grid;
-  gap: 2px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-.docs-phone-links a {
-  display: flex;
-  align-items: center;
-  min-height: 48px;
-  padding: 0 14px;
-  font: 400 13px / 1 var(--f-m);
-  color: var(--fg-2);
-}
-.docs-phone-links a:hover {
-  color: var(--fg);
-  background: var(--s3);
-}
-@media (min-width: 768px) {
-  /* …and the site links. */
-  .docs-phone-links {
-    display: none;
-  }
-}
 
 /* Table of contents */
 #nd-toc h3,
@@ -267,334 +601,6 @@ body {
 }
 #nd-toc a[data-active="true"] {
   color: var(--fg);
-}
-
-/* The page: title, description, reading. */
-#nd-page {
-  padding-top: 48px;
-}
-#nd-page h1 {
-  font: 900 clamp(2rem, 1.3rem + 2vw, 3rem) / 0.95 var(--f-dot);
-  text-transform: uppercase;
-  letter-spacing: -0.01em;
-  text-wrap: balance;
-  color: var(--fg);
-}
-#nd-page h1 + p {
-  margin: 16px 0 48px;
-  font-size: 18px;
-  line-height: 1.5;
-  color: var(--fg-2);
-  max-width: 56ch;
-  text-wrap: pretty;
-}
-#nd-page .prose {
-  --tw-prose-body: var(--fg-2);
-  --tw-prose-headings: var(--fg);
-  --tw-prose-lead: var(--fg-2);
-  --tw-prose-links: var(--mint);
-  --tw-prose-bold: var(--fg);
-  --tw-prose-counters: var(--fg-3);
-  --tw-prose-bullets: var(--fg-3);
-  --tw-prose-hr: var(--line);
-  --tw-prose-quotes: var(--fg);
-  --tw-prose-quote-borders: var(--line-2);
-  --tw-prose-captions: var(--fg-3);
-  --tw-prose-code: var(--fg);
-  --tw-prose-th-borders: var(--line);
-  --tw-prose-td-borders: var(--line);
-  --tw-prose-kbd: var(--fg-2);
-  font-size: 16px;
-  line-height: 1.7;
-}
-.prose :is(p, li, blockquote, dd) {
-  max-width: 68ch;
-  text-wrap: pretty;
-}
-.prose :is(h2, h3, h4) {
-  color: var(--fg);
-  text-wrap: balance;
-  scroll-margin-top: calc(var(--fd-docs-row-1) + 24px);
-}
-.prose h2 {
-  font: 700 26px / 1.2 var(--f-b);
-  letter-spacing: -0.015em;
-  margin: 64px 0 16px;
-}
-.prose h3 {
-  font: 600 19px / 1.3 var(--f-b);
-  letter-spacing: -0.01em;
-  margin: 40px 0 12px;
-}
-.prose h4 {
-  font: 600 16px / 1.4 var(--f-b);
-  margin: 28px 0 8px;
-}
-.prose :is(h2, h3, h4) > a[data-card] {
-  color: inherit;
-  text-decoration: none;
-}
-.prose :is(h2, h3, h4) > button {
-  width: 24px;
-  height: 24px;
-  color: var(--fg-3);
-  opacity: 0;
-  transition: opacity 0.15s steps(2);
-}
-.prose :is(h2, h3, h4):hover > button,
-.prose :is(h2, h3, h4) > button:focus-visible {
-  opacity: 1;
-}
-.prose :is(h2, h3, h4) > button:hover {
-  color: var(--mint);
-  background: var(--s3);
-}
-@media (hover: none) {
-  .prose :is(h2, h3, h4) > button {
-    opacity: 1;
-  }
-}
-.prose a:not([data-card]) {
-  color: var(--mint);
-  font-weight: 500;
-  text-decoration: underline dotted 2px rgba(154, 217, 184, 0.4);
-  text-underline-offset: 4px;
-  transition:
-    color 0.15s var(--ease),
-    text-decoration-color 0.15s var(--ease);
-}
-.prose a:not([data-card]):hover {
-  color: var(--mint-2);
-  text-decoration-style: solid;
-  text-decoration-color: var(--mint-2);
-}
-.prose ul {
-  list-style: square;
-}
-.prose li {
-  margin-block: 6px;
-}
-.prose li::marker {
-  color: var(--fg-3);
-}
-.prose ol > li::marker {
-  font: 500 0.84em var(--f-m);
-}
-.prose blockquote {
-  border-inline-start: 2px solid var(--line-2);
-  padding-inline-start: 16px;
-  font-style: normal;
-  color: var(--fg-2);
-}
-.prose hr {
-  border: 0;
-  border-top: 1px solid var(--line);
-  margin-block: 48px;
-}
-
-/* Inline code: Martian Mono is wide, so it runs smaller than the text around it. */
-.prose :not(pre, .not-prose, .not-prose *) > code {
-  font: 400 0.8em / 1.4 var(--f-m);
-  color: var(--fg);
-  background: var(--s2);
-  padding: 0.15em 0.4em;
-  border: 0;
-  box-shadow: inset 0 0 0 1px var(--line);
-  overflow-wrap: break-word;
-}
-.prose :not(pre) > code::before,
-.prose :not(pre) > code::after {
-  content: none;
-}
-.prose a code {
-  color: inherit;
-}
-
-/* Code blocks: a tray (--s1) around a core on the ground, as .code on the home page. */
-#nd-page figure.shiki {
-  background: var(--s1);
-  border: 0;
-  box-shadow: none;
-  padding: 4px;
-  margin-block: 20px 24px;
-  --padding-left: 20px;
-  --padding-right: 20px;
-}
-#nd-page figure.shiki > div:has(> figcaption) {
-  height: 40px;
-  padding: 0 0 0 4px;
-  border: 0;
-  background: none;
-}
-#nd-page figure.shiki figcaption {
-  flex: none;
-  max-width: calc(100% - 48px);
-  display: block;
-  height: 32px;
-  margin-inline-end: auto;
-  padding: 0 12px;
-  background: var(--s3);
-  color: var(--fg);
-  font: 500 11.5px / 32px var(--f-m);
-}
-/* The language badge: the filename already says it, in the one icon family we keep. */
-#nd-page
-  figure.shiki
-  > div:has(> figcaption)
-  > div:first-child:not(:has(button)) {
-  display: none;
-}
-#nd-page figure.shiki > div:last-child {
-  background: var(--bg);
-}
-#nd-page figure.shiki pre {
-  padding-block: 16px;
-  font: 400 12.5px / 1.8 var(--f-m);
-}
-#nd-page figure.shiki button[data-checked] {
-  width: 32px;
-  height: 32px;
-  border: 0;
-  background: transparent;
-  color: var(--fg-3);
-}
-#nd-page figure.shiki button[data-checked]:hover {
-  color: var(--fg);
-  background: var(--s3);
-}
-#nd-page figure.shiki button[data-checked="true"] {
-  color: var(--mint);
-}
-.shiki .highlighted {
-  background: var(--mint-dim);
-}
-.shiki .highlighted::after {
-  width: 2px;
-  background: var(--mint);
-}
-.shiki .highlighted-word {
-  background: var(--s3);
-  color: var(--fg);
-  padding: 1px 3px;
-  box-shadow: inset 0 -2px 0 var(--mint);
-}
-.shiki.has-focused .line:not(.focused) {
-  filter: none;
-  opacity: 0.45;
-}
-
-/* Tabs and code groups, as the home page's .code-tabs. */
-#nd-page [role="tablist"] {
-  gap: 4px;
-  padding: 4px;
-  background: var(--s1);
-  border: 0;
-}
-#nd-page [role="tab"] {
-  padding: 9px 12px;
-  border: 0;
-  background: transparent;
-  font: 500 11.5px / 1 var(--f-m);
-  color: var(--fg-3);
-}
-#nd-page [role="tab"]::after {
-  display: none;
-}
-#nd-page [role="tab"]:hover {
-  color: var(--fg);
-}
-#nd-page [role="tab"][aria-selected="true"] {
-  background: var(--s3);
-  color: var(--fg);
-}
-
-/* Callouts: a tray with a bar in the kind's colour. The icon stays, so the kind
-   never rests on colour alone. */
-.bh-callout {
-  background: var(--s1);
-  border: 0;
-  box-shadow: none;
-  padding: 14px 18px 14px 14px;
-  gap: 12px;
-  margin-block: 24px;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--fg-2);
-}
-.bh-callout > div:first-child {
-  width: 2px;
-  background: var(--callout-color);
-}
-.bh-callout > svg {
-  width: 16px;
-  height: 16px;
-  margin-top: 4px;
-}
-.bh-callout:is([data-type="warn"], [data-type="warning"], [data-type="idea"]) {
-  background: rgba(241, 210, 122, 0.07);
-}
-.bh-callout[data-type="error"] {
-  background: rgba(240, 144, 127, 0.07);
-}
-
-/* Tables, as the home page's comparison table. */
-.prose div:has(> table) {
-  border: 0;
-  background: none;
-  overflow-x: auto;
-}
-.prose table {
-  border: 0;
-  background: none;
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-.prose :is(th, td) {
-  text-align: left;
-  padding: 12px 16px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
-}
-.prose :is(thead, tr) {
-  background: none;
-}
-.prose thead th {
-  font: 500 10.5px / 1.3 var(--f-m);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-3);
-  background: none;
-}
-.prose td {
-  color: var(--fg-2);
-}
-.prose tbody tr:last-child > td {
-  border-bottom: 0;
-}
-
-/* Type tables: a tray, rows on hairlines. */
-.bh-typetable > div {
-  background: var(--s1);
-  border: 0;
-  box-shadow: none;
-}
-
-/* Header row as the tables' labels; property names in paper, not the accent. */
-.bh-typetable > div > div:first-child p {
-  font: 500 10.5px / 1.3 var(--f-m);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-3);
-}
-.bh-typetable button > code {
-  font-size: 12.5px;
-  color: var(--fg);
-}
-.bh-typetable button {
-  min-height: 40px;
 }
 
 /* Cards and the previous/next links. */
@@ -640,9 +646,11 @@ body {
   html {
     scroll-behavior: auto;
   }
-  #nd-docs-layout *,
-  [role="dialog"] * {
+  /* biome-ignore-start lint/complexity/noImportantStyles: reduced motion has to win over every component's own animation. */
+  [role="dialog"] *,
+  #nd-docs-layout * {
     animation: none !important;
     transition: none !important;
   }
+  /* biome-ignore-end lint/complexity/noImportantStyles: the block above */
 }

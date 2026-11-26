@@ -178,7 +178,9 @@ code {
   gap: 4px;
 }
 
-.bar nav a {
+/* :where() still picks the nav's links but adds no specificity, so the
+   footer's link rules further down are not outranked. */
+.bar :where(nav) a {
   padding: 8px 14px;
   border-radius: 999px;
   font-size: 14px;
@@ -190,12 +192,12 @@ code {
     background-color var(--state) var(--ease);
 }
 
-.bar nav a:hover {
+.bar :where(nav) a:where(:hover) {
   color: var(--ink);
   background: var(--bg-sunk);
 }
 
-.bar nav a[aria-current="page"] {
+.bar :where(nav) a[aria-current="page"] {
   color: var(--ink);
   background: var(--bg-sunk);
 }
@@ -703,7 +705,7 @@ footer {
     gap: 2px;
   }
 
-  .bar nav a {
+  .bar :where(nav) a {
     padding: 8px 7px;
     font-size: 13px;
   }
