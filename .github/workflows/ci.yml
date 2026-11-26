@@ -176,3 +176,81 @@ jobs:
             http://localhost:3000/api/helpdesk/agent/settings/
           curl -fsS -H 'Cookie: demo-role=agent' \
             http://localhost:3000/api/helpdesk/agent/settings/ | grep -q 'Saved by CI'
+
+  # The other framework examples, installed against the packed tarball the same
+  # way. They take each framework's latest release in their ranges, so the
+  # weekly run finds out what a new release broke.
+  framework:
+    name: framework (${{ matrix.example }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - example: astro
+            start: node dist/server/entry.mjs
+            agent: true
+          - example: nuxt
+            start: node .output/server/index.mjs
+          - example: sveltekit
+            start: node build
+    env:
+      PORT: '3000'
+      # The app's own origin: APP_URL for Astro and Nuxt, ORIGIN for
+      # SvelteKit, which bakes it into the build.
+      APP_URL: http://localhost:3000
+      ORIGIN: http://localhost:3000
+      # Astro's sign-in is a cookie anyone can set; its build insists on this.
+      DEMO_UNSAFE_AUTH: '1'
+      NUXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --filter better-helpdesk --frozen-lockfile
+      - run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+      - name: Install the example against the tarball
+        run: |
+          cp -r "examples/${{ matrix.example }}" "$RUNNER_TEMP/app"
+          cd "$RUNNER_TEMP/app"
+          npm pkg set dependencies.better-helpdesk="file:$(echo "$RUNNER_TEMP"/pack/*.tgz)"
+          npm install --no-audit --no-fund
+      - name: Build, start
+        run: |
+          cd "$RUNNER_TEMP/app"
+          npm run build
+          ${{ matrix.start }} &
+          for _ in $(seq 1 30); do
+            sleep 2
+            curl -fsS -o /dev/null http://localhost:3000/ && break
+          done
+      - name: Use it as a visitor
+        run: |
+          curl -fsS http://localhost:3000/ | grep -q '<helpdesk-widget'
+          curl -fsS -o /dev/null 'http://localhost:3000/api/helpdesk/widget/session/?inbox=support'
+          # A visitor's first message needs a form token at least 3 seconds old.
+          TOKEN=$(curl -fsS 'http://localhost:3000/api/helpdesk/widget/form/' | sed -E 's/.*"token":"([^"]+)".*/\1/')
+          sleep 4
+          curl -fsS -o /dev/null -X POST \
+            -H 'content-type: application/json' \
+            -H 'Origin: http://localhost:3000' \
+            -d "{\"inbox\":\"support\",\"type\":\"question\",\"body\":\"Does this install still work?\",\"email\":\"ci@example.test\",\"formToken\":\"$TOKEN\"}" \
+            http://localhost:3000/api/helpdesk/widget/conversations/
+      - name: Use it as an agent
+        if: matrix.agent
+        run: |
+          curl -fsS -o /dev/null -c jar -X POST \
+            -H 'Origin: http://localhost:3000' --data 'role=agent' \
+            http://localhost:3000/role/
+          curl -fsS -b jar http://localhost:3000/helpdesk/ | grep -q 'astro-island'
+          curl -fsS -b jar http://localhost:3000/api/helpdesk/agent/conversations/ |
+            grep -q 'Does this install still work?'
+          curl -fsS -o /dev/null -b jar -X PUT \
+            -H 'content-type: application/json' \
+            -H 'Origin: http://localhost:3000' \
+            -d '{"confirmation":{"en":"Saved by CI"}}' \
+            http://localhost:3000/api/helpdesk/agent/settings/
+          curl -fsS -b jar http://localhost:3000/api/helpdesk/agent/settings/ | grep -q 'Saved by CI'
